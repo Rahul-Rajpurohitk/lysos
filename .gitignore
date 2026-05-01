@@ -1,0 +1,103 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Models / checkpoints (too large for git)
+checkpoints/
+*.bin
+*.pt
+*.pth
+*.safetensors
+*.ckpt
+models/
+weights/
+
+# Data (should live on HF Hub or S3, not in repo)
+data/raw/
+data/processed/
+data/cache/
+*.parquet
+*.csv.gz
+*.jsonl
+
+# Logs
+*.log
+logs/
+runs/
+wandb/
+tensorboard/
+mlruns/
+
+# Secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+secrets/
+
+# Outputs
+outputs/
+generated/
+results/
+
+# Frontend
+node_modules/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+.cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# uv
+.uv/
+uv.lock
+
+# Misc
+*.tmp
+*.bak
+*.orig
