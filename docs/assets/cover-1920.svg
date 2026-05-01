@@ -84,7 +84,7 @@
   <!-- stats row -->
   <g transform="translate(80,790)" font-family="JetBrains Mono, monospace">
     <g>
-      <text x="0" y="0" font-size="46" font-weight="700" fill="#00e6b9">31,855</text>
+      <text x="0" y="0" font-size="46" font-weight="700" fill="#00e6b9">96,975</text>
       <text x="0" y="32" font-size="14" fill="#7da5a0" letter-spacing="2">SFT INSTRUCTIONS</text>
     </g>
     <g transform="translate(290,0)">
