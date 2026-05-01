@@ -85,3 +85,20 @@ export async function scoreSmiles(smiles: string, target = "MRSA") {
   if (!r.ok) throw new Error(`score failed: ${r.status}`);
   return r.json();
 }
+
+export interface SimilarHit {
+  smiles: string;
+  name: string;
+  indication: string;
+  similarity: number;
+}
+
+export async function findSimilar(smiles: string, k = 5): Promise<SimilarHit[]> {
+  const r = await fetch(`${API_BASE}/api/similar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ smiles, k }),
+  });
+  if (!r.ok) throw new Error(`similar lookup failed: ${r.status}`);
+  return r.json();
+}

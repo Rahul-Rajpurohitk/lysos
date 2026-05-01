@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Beaker, Cpu, Github, Loader2, Sparkles, Zap } from "lucide-react";
+import { Beaker, Cpu, Github, Loader2, Search, Sparkles, X, Zap } from "lucide-react";
 import clsx from "clsx";
 import {
   type Candidate,
   type DesignResponse,
   type Pathogen,
+  type SimilarHit,
   design,
   fetchHealth,
   fetchPathogens,
+  findSimilar,
   type Health,
 } from "./api";
 
@@ -418,6 +420,24 @@ function CandidateCard({ index, candidate }: { index: number; candidate: Candida
   const score = candidate.combined;
   const tone =
     score > 0.6 ? "good" : score > 0.4 ? "warn" : "bad";
+  const [similar, setSimilar] = useState<SimilarHit[] | null>(null);
+  const [loadingSim, setLoadingSim] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
+
+  async function onFindSimilar() {
+    if (!candidate.smiles) return;
+    setLoadingSim(true);
+    setSimError(null);
+    try {
+      const hits = await findSimilar(candidate.smiles, 5);
+      setSimilar(hits);
+    } catch (e) {
+      setSimError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoadingSim(false);
+    }
+  }
+
   return (
     <div className="card card-hover">
       <div className="flex items-start justify-between gap-3">
@@ -439,22 +459,77 @@ function CandidateCard({ index, candidate }: { index: number; candidate: Candida
             <ScoresStrip scores={candidate.scores} />
           </div>
         </div>
-        <div className="text-right">
-          <div className="text-xs uppercase tracking-widest text-slate-500 font-mono">
-            score
-          </div>
-          <div
-            className={clsx(
-              "text-xl font-mono mt-0.5",
-              tone === "good" && "text-good-400",
-              tone === "warn" && "text-warn-400",
-              tone === "bad" && "text-bad-400"
-            )}
-          >
-            {score.toFixed(2)}
+        <div className="flex items-center gap-3">
+          {candidate.smiles && (
+            <button
+              onClick={onFindSimilar}
+              disabled={loadingSim}
+              title="Find known antibiotics most similar to this generated molecule"
+              className="btn-ghost flex items-center gap-1 text-xs disabled:opacity-50"
+            >
+              {loadingSim ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Search className="w-3 h-3" />
+              )}
+              <span>similar</span>
+            </button>
+          )}
+          <div className="text-right">
+            <div className="text-xs uppercase tracking-widest text-slate-500 font-mono">
+              score
+            </div>
+            <div
+              className={clsx(
+                "text-xl font-mono mt-0.5",
+                tone === "good" && "text-good-400",
+                tone === "warn" && "text-warn-400",
+                tone === "bad" && "text-bad-400"
+              )}
+            >
+              {score.toFixed(2)}
+            </div>
           </div>
         </div>
       </div>
+
+      {(similar || simError) && (
+        <div className="mt-3 pt-3 border-t border-ink-700/50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] uppercase tracking-widest text-slate-500 font-mono">
+              top {similar?.length ?? 0} known antibiotics (EmbeddingGemma cosine)
+            </span>
+            <button
+              onClick={() => { setSimilar(null); setSimError(null); }}
+              className="text-slate-500 hover:text-slate-300"
+              title="Close similar panel"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+          {simError && (
+            <div className="text-xs text-bad-400 font-mono">⚠ {simError}</div>
+          )}
+          {similar?.map((h, i) => (
+            <div key={i} className="flex items-center justify-between gap-3 text-xs py-1">
+              <span className="font-mono truncate min-w-0 flex-1 text-slate-300">
+                {h.name || h.smiles.slice(0, 40)}
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="w-20 h-1 bg-ink-900 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-accent-500"
+                    style={{ width: `${Math.max(0, Math.min(1, h.similarity)) * 100}%` }}
+                  />
+                </div>
+                <span className="font-mono text-accent-400 w-12 text-right">
+                  {(h.similarity * 100).toFixed(0)}%
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
