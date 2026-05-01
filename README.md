@@ -60,7 +60,7 @@ Three-stage training pipeline + two-model coresident inference, all on a single 
 | Stage | Goal | Hardware | Output |
 |---|---|---|---|
 | **1. TxGemma-4** | Build a chemistry-aware Gemma 4 base by replicating Google's TxGemma recipe on Therapeutics Data Commons (~50 tasks) | Large 8× MI300X | Open-source foundation model |
-| **2. AMR specialization** | Fine-tune TxGemma-4 on antibiotic-specific data (ChEMBL, DBAASP, APD3, DRAMP, CARD targets) — 31,855 instruction examples | Small 1× MI300X | AMR-specialized SFT model |
+| **2. AMR specialization** | Fine-tune TxGemma-4 on antibiotic-specific data (ChEMBL, DBAASP, DRAMP, DrugBank, CARD, PDB) — 96,975 instruction examples | Small 1× MI300X | AMR-specialized SFT model |
 | **3. RL with verifiable rewards** | GRPO training with multi-objective rewards (activity + safety + novelty + semantic novelty) | Small 1× MI300X | Final Lysos generator |
 
 Two Gemma-family models coresident at inference:
@@ -106,7 +106,7 @@ This repo is currently private; will be public-source by submission. Watch this 
 | **HF Model — TxGemma-4 (Stage 1)** | https://huggingface.co/rahul24raj/txgemma-4-31b | reserved |
 | **HF Model — Lysos base (Stage 2 SFT)** | https://huggingface.co/rahul24raj/lysos-base | reserved |
 | **HF Model — Lysos RL (final)** | https://huggingface.co/rahul24raj/lysos-rl | reserved |
-| **HF Dataset — Stage 2 AMR** | https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 31,855 examples** |
+| **HF Dataset — Stage 2 AMR** | https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 96,975 examples** |
 | **HF Dataset — Stage 3 RL prompts** | https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts | **LIVE — 3,200 prompts** |
 
 ---

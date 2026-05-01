@@ -18,7 +18,7 @@ tags:
 
 # lysos-amr-stage2
 
-A 31,855-example instruction-tuning dataset for fine-tuning generative drug
+A 96,975-example instruction-tuning dataset for fine-tuning generative drug
 design models on antimicrobial resistance.
 
 ## Sources
@@ -26,8 +26,9 @@ design models on antimicrobial resistance.
 | Source | Records | API / format |
 |---|---|---|
 | ChEMBL | 16,462 | REST · per-pathogen activity (MIC, MBC, IC50, Ki) |
-| DBAASP | growing | REST + N+1 detail · antimicrobial peptides + hemolysis |
+| DBAASP | 6,256 | REST + N+1 detail · antimicrobial peptides + hemolysis |
 | DRAMP | 8,532 | XLSX bulk · curated AMP records |
+| DrugBank | 14,630 | Open Vocabulary CSV · drug names + synonyms + InChI Keys + CAS |
 | CARD | 3,543 | tarball · resistance-determinant proteins |
 | ZINC | 100 | subsets · FDA + in-trials drug-like SMILES |
 | PDB (RCSB) | 3,136 | GraphQL · AMR-pathogen target metadata |
@@ -58,8 +59,22 @@ loaders should consume directly.
 
 | Split | Rows |
 |---|---|
-| train | 30,263 |
-| valid | 1,592 |
+| train | 92,127 |
+| valid | 4,848 |
+
+## Task slice breakdown
+
+| Task | Train | Source |
+|---|---|---|
+| safety_prediction | 14,004 | DBAASP hemolysis labels |
+| drug_id_lookup | 13,937 | DrugBank vocabulary |
+| drug_inchi_key | 13,915 | DrugBank vocabulary |
+| drug_synonyms | 13,012 | DrugBank vocabulary |
+| drug_cas_lookup | 10,557 | DrugBank vocabulary |
+| drug_reverse_cas | 10,516 | DrugBank vocabulary |
+| activity_prediction | 8,789 | ChEMBL MIC measurements |
+| peptide_design | 4,621 | DBAASP + DRAMP |
+| generation_for_target | 2,776 | ChEMBL high-activity SMILES |
 
 ## Tasks covered
 

@@ -61,11 +61,12 @@ ADMET, binding, and toxicity tasks). Outputs a chemistry-aware Gemma 4 base.
 
 Supervised fine-tune on
 [`rahul24raj/lysos-amr-stage2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2)
-— 31,855 instruction-tuning examples drawn from real public sources:
+— 96,975 instruction-tuning examples drawn from real public sources:
 
 - ChEMBL (REST API) — 16,462 bacterial activity records
-- DBAASP — antimicrobial peptides with per-strain MIC + hemolysis
+- DBAASP — 6,256 antimicrobial peptides with per-strain MIC + hemolysis
 - DRAMP — 8,532 peptide records
+- DrugBank Open — 14,630 drug names + synonyms + InChI Keys + CAS
 - CARD — 3,543 resistance-target proteins
 - PDB (RCSB) — 3,136 AMR-pathogen target structures
 - ZINC — FDA-approved + investigational drug-like SMILES
