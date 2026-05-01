@@ -18,7 +18,7 @@ tags:
 
 # lysos-amr-stage2
 
-A 96,975-example instruction-tuning dataset for fine-tuning generative drug
+A 222,606-example instruction-tuning dataset for fine-tuning generative drug
 design models on antimicrobial resistance.
 
 ## Sources

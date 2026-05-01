@@ -112,7 +112,7 @@ Where a source doesn't have a field, it's left null.
 1. **`scripts/fetch_all_data.py`** — orchestrator that runs all 10 loaders + builders.
    Cheap/fast loaders first, expensive last.
 2. **`scripts/prepare_amr_data.py`** — build the Stage 2 SFT dataset from raw CSVs.
-   Currently produces **96,975 examples** across 9 task types.
+   Currently produces **222,606 examples** across 9 task types.
 3. **`scripts/prepare_stage3_prompts.py`** — build the 3,200-prompt RL set.
 4. **`scripts/build_known_antibiotics_index.py`** — build the 20,489-row reference
    index used by EmbeddingGemma novelty + RAG + similar-drugs UI.

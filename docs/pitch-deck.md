@@ -93,7 +93,7 @@ Insert: `docs/assets/workspace-screenshot.png` (real screenshot of the local bui
 - **Embedder**: EmbeddingGemma 300m (Matryoshka 768→128 dims, Gemma 3 architecture).
 - **Three-stage training**:
   1. Stage 1 — TxGemma-4 chemistry foundation (TDC ~50 tasks).
-  2. Stage 2 — AMR specialization SFT on 96,975 real instruction-tuning examples (ChEMBL + DBAASP + DRAMP + DrugBank + CARD + PDB).
+  2. Stage 2 — AMR specialization SFT on 222,606 real instruction-tuning examples (ChEMBL + DBAASP + DRAMP + DrugBank + CARD + PDB).
   3. Stage 3 — GRPO RL with 6-component verifiable reward.
 - **Memory needs (during RL)**: ~150 GB → busts H100 80 GB → MI300X 192 GB is the prerequisite, not optional.
 

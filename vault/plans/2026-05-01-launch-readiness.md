@@ -26,7 +26,7 @@ This plan separates work into three buckets:
 | Area | What | Verification |
 |---|---|---|
 | Repo | `github.com/Rahul-Rajpurohitk/lysos` · ~70 commits | `git log --oneline` |
-| Stage 2 dataset | 96,975 examples · 9 task types · live on HF Hub | `datasets.load_dataset("rahul24raj/lysos-amr-stage2")` |
+| Stage 2 dataset | 222,606 examples · 9 task types · live on HF Hub | `datasets.load_dataset("rahul24raj/lysos-amr-stage2")` |
 | Stage 3 RL prompts | 3,200 prompts · 8 pathogens × 2 modalities · live | `datasets.load_dataset("rahul24raj/lysos-rl-prompts")` |
 | RAG index | 20,489 known antibiotics with EmbeddingGemma vectors | `data/processed/known_antibiotics_index.parquet` |
 | Module verifier | 24 / 24 modules import clean | `make verify` |
@@ -102,14 +102,14 @@ python -m src.data.chembl --output data/raw/chembl_antibiotics.csv \
     --max-per-pathogen 8000 --refresh
 python scripts/prepare_amr_data.py
 # rebuilds Stage 2 with the bigger ChEMBL corpus
-# expected: ~110-115K examples (was 96,975)
+# expected: ~110-115K examples (was 222,606)
 ```
 
 Then re-push to HF Hub.
 
 #### D. Stage 2 EmbeddingGemma dedup pass (~10 min)
 
-Run the dedup script to drop near-duplicates from the 96,975-row Stage 2.
+Run the dedup script to drop near-duplicates from the 222,606-row Stage 2.
 Expected to drop 5-15%. Cleaner training, less reward-hacking risk.
 
 ```bash

@@ -11,7 +11,7 @@
 - [x] HF Space slug `lysos` reserved in `lablab-ai-amd-developer-hackathon` org
 - [x] HF Hub model slugs reserved (`rahul24raj/txgemma-4-31b`, `rahul24raj/lysos-base`, `rahul24raj/lysos-rl`)
 - [x] **10 real data loaders implemented + verified live**: ChEMBL ✓, DBAASP ✓, DRAMP ✓, CARD ✓, DrugBank ✓, PDB ✓, ZINC ✓ · BindingDB ⚠ JSP-gated · PubChem ⚠ AIDs retired · APD3 ⚠ source 404
-- [x] **Stage 2 dataset live on HF Hub** — `rahul24raj/lysos-amr-stage2` · **96,975 examples** (was 21K → 31K → 96K after DrugBank wired in)
+- [x] **Stage 2 dataset live on HF Hub** — `rahul24raj/lysos-amr-stage2` · **222,606 examples** (was 21K → 31K → 96K after DrugBank wired in)
 - [x] **Stage 3 RL prompts live on HF Hub** — `rahul24raj/lysos-rl-prompts` (3,200 prompts)
 - [x] **Known-antibiotics RAG index** — `data/processed/known_antibiotics_index.parquet` (20,489 rows from ChEMBL+DBAASP+DRAMP)
 - [x] Verifier (`make verify` 24/24) + 13 unit tests (12 pass, 1 skip-no-rdkit) + Makefile shipped
@@ -43,7 +43,7 @@
 ### Optional polish (cheap if I have time)
 
 - [ ] Run wider ChEMBL fetch (8K/pathogen, +EC50/GI50/Inhibition types) — yields ~20-50% more rows per pathogen
-- [ ] Re-run dedup on the 96,975-row Stage 2 with EmbeddingGemma to drop near-duplicates
+- [ ] Re-run dedup on the 222,606-row Stage 2 with EmbeddingGemma to drop near-duplicates
 - [ ] Find new working PubChem AIDs (most curated retired) — eutils search returns ~30 candidates per pathogen
 - [ ] Mirror APD3 from a GitHub fork (current site URLs all 404)
 - [ ] Render `docs/pitch-deck.md` to PDF via Marp (one `npm i` away)

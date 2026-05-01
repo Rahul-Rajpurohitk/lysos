@@ -117,7 +117,7 @@ Fine-tune the chemistry-aware base on antimicrobial-specific data.
 | Item | Detail |
 |---|---|
 | Base | TxGemma-4 from Stage 1 |
-| Dataset (built + LIVE on HF Hub) | [`rahul24raj/lysos-amr-stage2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2) — **96,975 instruction examples** drawn from real public APIs |
+| Dataset (built + LIVE on HF Hub) | [`rahul24raj/lysos-amr-stage2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2) — **222,606 instruction examples** drawn from real public APIs |
 | Source breakdown | ChEMBL bacterial-activity REST: 16,462 records · DBAASP REST+detail: 6,256 AMPs · DRAMP XLSX bulk: 8,532 · DrugBank Open vocabulary: 14,630 entries · PDB GraphQL: 3,136 · CARD tarball: 3,543 · ZINC partial: 100 |
 | 9 task types | `generation_for_target` 2,776 · `activity_prediction` 8,789 · `peptide_design` 4,621 · `safety_prediction` 14,004 · `drug_likeness` (rdkit-only, ~10K on VM) · `drug_id_lookup` 13,937 · `drug_inchi_key` 13,915 · `drug_synonyms` 13,012 · `drug_cas_lookup` 10,557 · `drug_reverse_cas` 10,516 |
 | Method | Continued LoRA fine-tune (rank 64) with task-mix weights from `configs/stage2_amr_sft.yaml` |
@@ -379,7 +379,7 @@ Total integration cost: ~3.5 hours. Plan: `vault/plans/2026-05-01-embeddinggemma
 - [x] ~~Choose color palette + design system for workspace UI~~ → dark biomedical, `#00e6b9` accent, JetBrains Mono for values, Inter for narrative
 - [x] ~~Draft pitch deck skeleton~~ → `docs/pitch-deck.md` (10 slides, Marp frontmatter)
 - [x] ~~Finalize Stage 3 reward function weights~~ → `configs/stage3_rl_grpo.yaml` (7 components, sum=1.0)
-- [x] ~~Stage 2 dataset built + pushed~~ → 96,975 examples on HF Hub
+- [x] ~~Stage 2 dataset built + pushed~~ → 222,606 examples on HF Hub
 - [x] ~~Workspace UI verified rendering end-to-end~~ → real screenshot in `docs/assets/workspace-screenshot.png`
 - [x] ~~EmbeddingGemma 300m integration~~ → all 5 phases shipped
 
@@ -394,7 +394,7 @@ Total integration cost: ~3.5 hours. Plan: `vault/plans/2026-05-01-embeddinggemma
 ### Optional / cheap to ship pre-credits
 
 - [ ] Wider ChEMBL re-fetch (8K/pathogen, 8 standard_types) — code ready, ~30 min runtime
-- [ ] EmbeddingGemma dedup pass on the 96,975-row Stage 2 — script ready, 5-10 min on a beefy machine
+- [ ] EmbeddingGemma dedup pass on the 222,606-row Stage 2 — script ready, 5-10 min on a beefy machine
 - [ ] PubChem fresh-AID discovery via eutils (most curated retired)
 - [ ] APD3 GitHub mirror (current site URLs all 404)
 - [ ] Marp PDF render of `docs/pitch-deck.md` (one `npm i -g @marp-team/marp-cli` away)

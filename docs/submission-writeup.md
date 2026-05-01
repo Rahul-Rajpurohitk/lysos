@@ -24,7 +24,7 @@ Pre-written here; copy-paste at submission time.
 >
 > **Built on Gemma 4 31B-it**, fine-tuned in three stages on a single AMD Instinct MI300X:
 > 1. **Stage 1 — TxGemma-4 chemistry foundation** (Therapeutics Data Commons, ~50 tasks)
-> 2. **Stage 2 — AMR specialization SFT** on 96,975 instruction examples drawn from 7 real public sources (ChEMBL, DBAASP, DRAMP, DrugBank, CARD, PDB, ZINC)
+> 2. **Stage 2 — AMR specialization SFT** on 222,606 instruction examples drawn from 7 real public sources (ChEMBL, DBAASP, DRAMP, DrugBank, CARD, PDB, ZINC)
 > 3. **Stage 3 — GRPO reinforcement learning** with 7 verifiable reward components: validity, drug-likeness (QED+Lipinski), synthesizability, hemolysis safety, predicted MIC, Tanimoto novelty, and EmbeddingGemma-300m semantic novelty
 >
 > **Why MI300X**: the GRPO step holds policy + reference + reward predictor coresident — peak ≈152 GB. An H100 80 GB has to shard. The MI300X 192 GB fits the entire training stack on a single card.
@@ -51,14 +51,14 @@ Pre-written here; copy-paste at submission time.
 > ## How it was trained
 > Three-stage pipeline on a single AMD Instinct MI300X:
 > 1. **Stage 1**: chemistry foundation on Therapeutics Data Commons.
-> 2. **Stage 2**: 96,975 AMR instruction-tuning examples from 7 real public sources.
+> 2. **Stage 2**: 222,606 AMR instruction-tuning examples from 7 real public sources.
 > 3. **Stage 3**: GRPO reinforcement learning with 7 verifiable reward components, all logged separately to wandb to detect reward-hacking.
 >
 > The MI300X 192 GB is the prerequisite — RL training peak is ~152 GB. An H100 80 GB has to shard.
 >
 > ## Resources
 > - Code: github.com/Rahul-Rajpurohitk/lysos
-> - Stage 2 dataset: huggingface.co/datasets/rahul24raj/lysos-amr-stage2 (96,975 ex.)
+> - Stage 2 dataset: huggingface.co/datasets/rahul24raj/lysos-amr-stage2 (222,606 ex.)
 > - Stage 3 prompts: huggingface.co/datasets/rahul24raj/lysos-rl-prompts (3,200 prompts)
 
 ---

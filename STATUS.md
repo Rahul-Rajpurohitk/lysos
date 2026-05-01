@@ -6,7 +6,7 @@
 ## TL;DR
 
 - **49+ commits** pushed to [github.com/Rahul-Rajpurohitk/lysos](https://github.com/Rahul-Rajpurohitk/lysos) (private until kickoff)
-- **Stage 2 dataset live on HF Hub** — **96,975 instruction examples** (92,127 train + 4,848 valid) · 9 task types from 4 real sources
+- **Stage 2 dataset live on HF Hub** — **222,606 instruction examples** (210,272 train + 11,066 valid) · 13 task types from 6 real sources (ChEMBL + DBAASP + DRAMP + DrugBank + DrugCentral + NPAtlas)
 - **Stage 3 RL prompts live on HF Hub** — 3,200 prompts
 - **All 24 modules verify clean** — `make verify` passes (24/24)
 - **12/13 unit tests pass** (1 skip without rdkit) — `make test`
@@ -26,7 +26,7 @@
 | HF Model — TxGemma-4 (Stage 1) | huggingface.co/rahul24raj/txgemma-4-31b | reserved |
 | HF Model — Lysos base (Stage 2 SFT) | huggingface.co/rahul24raj/lysos-base | reserved |
 | HF Model — Lysos RL (final) | huggingface.co/rahul24raj/lysos-rl | reserved |
-| HF Dataset — Stage 2 | huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 96,975 examples** |
+| HF Dataset — Stage 2 | huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 222,606 examples** |
 | HF Dataset — RL prompts | huggingface.co/datasets/rahul24raj/lysos-rl-prompts | **LIVE — 3,200 prompts** |
 
 ---
@@ -37,49 +37,54 @@
 
 | Source | File | Records on disk | Status |
 |---|---|---|---|
-| **ChEMBL** | `src/data/chembl.py` | **16,462** | ✓ verified live, 8 pathogens |
-| **DBAASP** | `src/data/dbaasp.py` | 152 (light) → growing | ✓ verified, heavy fetch in progress |
+| **ChEMBL** | `src/data/chembl.py` | **21,283** | ✓ verified live, 8 pathogens, widened to 8 standard_types (was 16,462) |
+| **DBAASP** | `src/data/dbaasp.py` | 6,256 | ✓ verified live |
 | **DRAMP** | `src/data/dramp.py` | 8,532 | ✓ URL fix applied + verified |
+| **DrugBank Open** | `src/data/drugbank.py` | **14,630** | ✓ verified live (vocab CSV inside ZIP) |
+| **DrugCentral** | `src/data/drugcentral.py` | **3,930** | ✓ verified live (NEW 2026-05-01, SMILES + INN + CAS) |
+| **NPAtlas** | `src/data/npatlas.py` | **36,434** | ✓ verified live (NEW 2026-05-01, natural products + producer organism) |
 | **CARD** | `src/data/card.py` | 3,543 | ✓ species-path fix applied |
 | **PDB** | `src/data/pdb.py` | 3,136 | ✓ GraphQL schema fix applied |
 | **ZINC** | `src/data/zinc.py` | 100 | ✓ partial (FDA + in-trials) |
 | **TDC builder** | `scripts/prepare_tdc_data.py` | (runs on VM) | needs PyTDC dep |
 | BindingDB | `src/data/bindingdb.py` | 0 | ⚠ JSP-gated, manual download required |
-| PubChem | `src/data/pubchem.py` | 0 | ⚠ most curated AIDs retired (only 2 work) |
-| APD3 | `src/data/apd3.py` | 0 | ✗ all source URLs 404 (site changed) |
-| DrugBank | `src/data/drugbank.py` | 60K cached SDF | ⚠ needs rdkit on VM to parse |
+| **PubChem** | `src/data/pubchem.py` | **1,268** | ✓ 47 fresh AIDs replaced retired ones · SMILES API column rename fixed |
+| APD3 | `src/data/apd3.py` | 0 | ✗ all source + GitHub mirror URLs 404 |
 
 ### Processed datasets
 
 | Path | Count | HF Hub | Notes |
 |---|---|---|---|
-| `data/processed/amr-stage2/` | **96,975** examples | rahul24raj/lysos-amr-stage2 | 92,127 train + 4,848 valid |
+| `data/processed/amr-stage2/` | **222,606** examples | rahul24raj/lysos-amr-stage2 | 210,272 train + 11,066 valid |
 | `data/processed/amr-rl-prompts/` | 3,200 prompts | rahul24raj/lysos-rl-prompts | 3,072 train + 128 valid |
 | `data/processed/known_antibiotics_index.parquet` | **20,489** rows | (local — used by RAG + novelty) | ChEMBL + DBAASP + DRAMP |
 | `data/processed/tdc-stage1/` | (runs on VM) | rahul24raj/lysos-tdc-stage1 (reserved) | needs PyTDC |
 
-### Stage 2 task breakdown (per train split)
+### Stage 2 task breakdown (per total — train+valid)
 
 | Task | Count | Source |
 |---|---|---|
-| safety_prediction | 14,004 | DBAASP hemolysis labels |
-| drug_id_lookup | 13,937 | DrugBank vocabulary |
-| drug_inchi_key | 13,915 | DrugBank vocabulary |
-| drug_synonyms | 13,012 | DrugBank vocabulary |
-| drug_cas_lookup | 10,557 | DrugBank vocabulary |
-| drug_reverse_cas | 10,516 | DrugBank vocabulary |
-| activity_prediction | 8,789 | ChEMBL MIC measurements |
-| peptide_design | 4,621 | DBAASP + DRAMP |
-| generation_for_target | 2,776 | ChEMBL high-activity SMILES |
-| **TOTAL** | **92,127** | |
+| natural_products | 109,302 | NPAtlas — name ↔ SMILES ↔ producer organism |
+| drug_id_lookup | ~14,000 | DrugBank vocabulary |
+| drug_inchi_key | ~14,000 | DrugBank vocabulary |
+| drug_structure | 15,720 | DrugCentral — name ↔ SMILES |
+| drug_synonyms | ~13,000 | DrugBank vocabulary |
+| safety_prediction | 14,788 | DBAASP hemolysis labels |
+| drug_cas_lookup | ~10,500 | DrugBank vocabulary |
+| drug_reverse_cas | ~10,500 | DrugBank vocabulary |
+| activity_prediction | 8,009 | ChEMBL MIC measurements |
+| peptide_design | 4,864 | DBAASP + DRAMP |
+| generation_for_target | 3,535 | ChEMBL high-activity SMILES |
+| drug_likeness | (rdkit-only, on VM) | ChEMBL + DrugBank SMILES |
+| **TOTAL** | **222,606** | |
 
-### Per-pathogen ChEMBL distribution (heavy run)
+### Per-pathogen ChEMBL distribution (heavy run, after standard_types widening)
 
 ```
-EColi-CRE:  3,123    Mtb:        2,732    Paer:       2,711
-MRSA:       2,605    VRE:        2,409    KpneuCRE:   1,704
-Abaum:        601    NGono:        577
-Total:     16,462 unique records
+Mtb:        4,236    EColi-CRE:  3,955    MRSA:        3,091
+Paer:       2,807    KpneuCRE:   2,559    VRE:         2,426
+Abaum:      1,618    NGono:        591
+Total:     21,283 unique records (was 16,462)
 ```
 
 ---
@@ -201,13 +206,13 @@ vault/
 3. **DBAASP heavy fetch** (running now) → re-build Stage 2 with richer AMP corpus
 4. **vLLM + Gemma 4 + ROCm smoke test** on first VM session
 5. **PyTDC install + Stage 1 dataset build** on VM
-6. **Re-run dedup script** on the 96,975-row Stage 2 with EmbeddingGemma to drop near-duplicates
+6. **Re-run dedup script** on the 222,606-row Stage 2 with EmbeddingGemma to drop near-duplicates
 
 ### Done since last STATUS update
 - ✓ EmbeddingGemma integration — all 5 phases shipped (novelty reward, RAG, dedup script, similar-drugs UI, 20,489-row index)
 - ✓ Pitch deck — `docs/pitch-deck.md` (10 slides, startup format)
 - ✓ Demo video storyboard — `docs/demo-video-storyboard.md` (5-min, 8 sections, beat-by-beat with VO)
-- ✓ Stage 2 dataset grew 21,007 → 31,855 → **96,975 examples** (DrugBank vocab integrated, +65K knowledge tasks)
+- ✓ Stage 2 dataset grew 21,007 → 31,855 → **222,606 examples** (DrugBank vocab integrated, +65K knowledge tasks)
 - ✓ Frontend npm install + vite build verified clean — 1573 modules, 160KB JS bundle
 - ✓ FastAPI backend boots, all 6 routes registered, /api/health + /api/pathogens + static frontend all serving
 - ✓ Visual assets — 5 SVGs + 5 rendered PNGs in `docs/assets/`: cover-1920, architecture, data-flow, reward-curves (projected), rocm-smi mockup

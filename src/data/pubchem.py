@@ -143,27 +143,42 @@ class PubChemClient:
             return None
 
     def get_smiles_batch(self, cids: list[int]) -> dict[int, str]:
-        """Batch fetch canonical SMILES for a list of CIDs."""
+        """Batch fetch canonical SMILES for a list of CIDs.
+
+        2025+ PubChem renamed `CanonicalSMILES` → `SMILES` /
+        `ConnectivitySMILES`. We try both column names so we keep working
+        through future renames.
+        """
         out: dict[int, str] = {}
-        # PubChem accepts up to ~500 CIDs per batch via comma-separated path
         BATCH = 100
         for i in range(0, len(cids), BATCH):
             batch = cids[i:i + BATCH]
             cid_str = ",".join(str(c) for c in batch)
-            try:
-                r = self._get(f"/compound/cid/{cid_str}/property/CanonicalSMILES/CSV",
-                              accept="text/csv")
-                df = pd.read_csv(io.StringIO(r.text))
-                if "CID" in df.columns and "CanonicalSMILES" in df.columns:
+            for prop in ("SMILES", "CanonicalSMILES", "ConnectivitySMILES"):
+                try:
+                    r = self._get(
+                        f"/compound/cid/{cid_str}/property/{prop}/CSV",
+                        accept="text/csv",
+                    )
+                    df = pd.read_csv(io.StringIO(r.text))
+                    if "CID" not in df.columns:
+                        continue
+                    smi_col = next(
+                        (c for c in df.columns if "SMILES" in c.upper()),
+                        None,
+                    )
+                    if smi_col is None:
+                        continue
                     for _, row in df.iterrows():
                         try:
-                            out[int(row["CID"])] = str(row["CanonicalSMILES"])
+                            out[int(row["CID"])] = str(row[smi_col])
                         except (TypeError, ValueError):
                             pass
-            except RuntimeError as exc:
-                log.warning("  SMILES batch %d-%d failed: %s",
-                            i, i + BATCH, exc)
-                continue
+                    break  # found the right column, no need to retry
+                except RuntimeError as exc:
+                    log.warning("  SMILES batch %d-%d (%s) failed: %s",
+                                i, i + BATCH, prop, exc)
+                    continue
             log.info("  fetched SMILES for %d / %d CIDs",
                      len(out), min(len(cids), i + BATCH))
         return out

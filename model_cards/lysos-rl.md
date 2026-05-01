@@ -61,7 +61,7 @@ ADMET, binding, and toxicity tasks). Outputs a chemistry-aware Gemma 4 base.
 
 Supervised fine-tune on
 [`rahul24raj/lysos-amr-stage2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2)
-— 96,975 instruction-tuning examples drawn from real public sources:
+— 222,606 instruction-tuning examples drawn from real public sources:
 
 - ChEMBL (REST API) — 16,462 bacterial activity records
 - DBAASP — 6,256 antimicrobial peptides with per-strain MIC + hemolysis
