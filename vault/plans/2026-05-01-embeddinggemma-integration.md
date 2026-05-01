@@ -1,10 +1,42 @@
 ---
 title: EmbeddingGemma 300m integration plan
 date: 2026-05-01
-status: planned
+status: COMPLETED — all 5 phases shipped
+completed_on: 2026-05-01
+actual_effort: ~3.5 hours
 estimated_effort: 3-4 hours
 priority: high
 ---
+
+## ✅ Status: complete (2026-05-01)
+
+All 5 phases shipped + verified on the local stack. Files that landed:
+
+| Phase | Path | Status |
+|---|---|---|
+| 1. Dependency | `pyproject.toml` (`sentence-transformers>=3.0.0`) | ✓ |
+| 2. Novelty reward | `src/eval/rewards/embedding_novelty.py` + `configs/stage3_rl_grpo.yaml` (weight 0.05) | ✓ |
+| 3. Dedup script | `scripts/dedup_with_embeddings.py` | ✓ — runs on VM with EmbeddingGemma loaded |
+| 4. RAG at inference | `src/inference/retrieval.py` + `src/inference/generate.py` (`enable_rag=True`) | ✓ |
+| 5. Similar-drugs UI | `workspace/api/server.py` `/api/similar` + `workspace/web/src/App.tsx` candidate-card panel + `findSimilar` API client | ✓ |
+
+Bonus: `scripts/build_known_antibiotics_index.py` builds the 20,489-row reference index from ChEMBL + DBAASP + DRAMP that powers all four slots.
+
+Verification:
+- `make verify` — 24/24 modules pass (embedding_novelty included)
+- `tests/test_rewards.py` — 12 pass, 1 skip (rdkit). Reward integrates cleanly.
+- Stage 3 dry-run includes the new component; weights still sum to ~1.0
+- Workspace UI screenshot in `docs/assets/workspace-screenshot.png` shows the integration in the live build
+
+Notes:
+- HF gating: user must accept `google/embeddinggemma-300m` license once. Done.
+- Model loads on first request, lru-cached, fail-open (returns 0.0 if unavailable so training never crashes on a missing dep).
+- Embedding novelty + Tanimoto novelty cohabit — different signal, different weight.
+
+---
+
+# Original plan (kept for reference)
+
 
 # Plan — Wire EmbeddingGemma 300m into Lysos (4 slots)
 

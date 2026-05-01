@@ -4,77 +4,106 @@
 
 ## Pre-kickoff (Apr 30 → May 3)
 
-- [x] Tech spec locked
-- [x] GitHub repo initialized
+### Done (verified)
+
+- [x] Tech spec locked (`docs/tech-spec.md`)
+- [x] GitHub repo initialized — 70+ commits on `main`
 - [x] HF Space slug `lysos` reserved in `lablab-ai-amd-developer-hackathon` org
 - [x] HF Hub model slugs reserved (`rahul24raj/txgemma-4-31b`, `rahul24raj/lysos-base`, `rahul24raj/lysos-rl`)
-- [x] **10 real data loaders implemented** (chembl, dbaasp, dramp, card, bindingdb, pubchem, zinc, apd3, drugbank, pdb)
-- [x] **Stage 2 dataset built and pushed to HF Hub** — `rahul24raj/lysos-amr-stage2` (21,007 examples)
-- [x] **Stage 3 RL prompts pushed to HF Hub** — `rahul24raj/lysos-rl-prompts` (3,200 prompts)
-- [x] Verifier + 13 unit tests + Makefile shipped
-- [x] Workspace API (FastAPI) + UI (Vite/React/Tailwind) + Docker — full demo stack
-- [x] EmbeddingGemma 300m research + integration plan (vault/research, vault/plans)
-- [x] AMR dataset URLs + DUA paths confirmed (no DUA dependencies)
-- [ ] AMD Dev Cloud credits confirmed in DigitalOcean (expected Sat May 2)
-- [ ] All 5 official AMD/lablab workshop videos watched
-- [ ] ROCm + Gemma 4 + Optimum-AMD compatibility smoke-tested (waits for credits)
-- [ ] TRL GRPO trainer ROCm compat verified (waits for credits)
-- [ ] EmbeddingGemma 300m integration (Phases 1–5 of vault/plans)
-- [ ] DBAASP heavy-fetch finish + Stage 2 re-build with bigger AMP corpus
-- [ ] Pitch deck skeleton drafted
-- [ ] Cover image draft v1
-- [ ] Demo video storyboard
+- [x] **10 real data loaders implemented + verified live**: ChEMBL ✓, DBAASP ✓, DRAMP ✓, CARD ✓, DrugBank ✓, PDB ✓, ZINC ✓ · BindingDB ⚠ JSP-gated · PubChem ⚠ AIDs retired · APD3 ⚠ source 404
+- [x] **Stage 2 dataset live on HF Hub** — `rahul24raj/lysos-amr-stage2` · **96,975 examples** (was 21K → 31K → 96K after DrugBank wired in)
+- [x] **Stage 3 RL prompts live on HF Hub** — `rahul24raj/lysos-rl-prompts` (3,200 prompts)
+- [x] **Known-antibiotics RAG index** — `data/processed/known_antibiotics_index.parquet` (20,489 rows from ChEMBL+DBAASP+DRAMP)
+- [x] Verifier (`make verify` 24/24) + 13 unit tests (12 pass, 1 skip-no-rdkit) + Makefile shipped
+- [x] **Workspace verified end-to-end** — FastAPI boots, all 6 routes register, frontend builds clean (1573 modules, 160KB JS), real screenshot captured
+- [x] **EmbeddingGemma 300m integration — all 5 phases shipped** (novelty reward + RAG + dedup + similar-drugs UI + index)
+- [x] **Pitch deck (10 slides, Marp-PDF-ready)** — `docs/pitch-deck.md` with frontmatter
+- [x] **Demo video storyboard** — `docs/demo-video-storyboard.md` (5-min, 8 sections, beat-by-beat)
+- [x] **Visual assets (5 SVG + 6 PNG)** — cover, thumbnail, architecture, data-flow, reward-curves, ROCm-SMI, workspace screenshot
+- [x] **Build-in-Public posts drafted** — `docs/build-in-public.md` (day -3 → submission)
+- [x] **Judging-criteria map** — `docs/judging-criteria-map.md` (artifact-by-axis index)
+- [x] **HF model + dataset cards** — `model_cards/lysos-rl.md` + `model_cards/lysos-amr-stage2.md`
+- [x] **VM bootstrap script** — `scripts/vm_bootstrap.sh` (one-shot AMD VM setup)
+- [x] **HF Space deploy script** — `scripts/deploy_to_hf_space.py` + `make space-deploy`
+- [x] **Asset renderer** — `scripts/render_assets.py` (rsvg → inkscape → headless-chrome chain)
+- [x] **CITATION.cff** — academic-citation file for the GitHub repo
+- [x] **examples/** — quickstart.py, score_smiles.py, find_similar_drugs.py + README
+- [x] AMR dataset URLs + licensing confirmed (no DUA dependencies)
 
-## Day 1 — Mon May 4 (Foundation training)
+### GPU-blocked / waiting on credits (Sat May 2 expected)
 
-- [ ] 12pm ET: kickoff stream watched
-- [ ] Spin up Large 8× MI300X
-- [ ] Stage 1 (TxGemma-4) training kicks off
-- [ ] Workspace UI scaffold deployed (no model needed yet)
-- [ ] AMR dataset preparation started
-- [ ] First social post (Build-in-Public)
-- [ ] Stage 1 finishes by EOD
+- [ ] AMD Dev Cloud credits confirmed in DigitalOcean
+- [ ] ROCm + Gemma 4 + Optimum-AMD smoke test (`scripts/smoke_test_rocm.py` ready)
+- [ ] TRL GRPO trainer ROCm compatibility verified
+- [ ] vLLM/ROCm Docker boots cleanly on MI300X (1hr smoke)
+- [ ] Stage 1 (TxGemma-4) dry-run with PyTDC installed
+- [ ] Real `rocm-smi` capture during Stage 3 (replaces `rocm-smi-mockup.svg`)
+- [ ] Real wandb screenshots of reward curves (replaces `reward-curves.svg`)
 
-## Day 2 — Tue May 5 (AMR specialization)
+### Optional polish (cheap if I have time)
 
-- [ ] Stage 2 (AMR SFT) on Small MI300X
-- [ ] Workspace UI: first end-to-end with Stage 1 model
-- [ ] Scoring engine integrations (RDKit, DiffDock)
-- [ ] Daily social post
+- [ ] Run wider ChEMBL fetch (8K/pathogen, +EC50/GI50/Inhibition types) — yields ~20-50% more rows per pathogen
+- [ ] Re-run dedup on the 96,975-row Stage 2 with EmbeddingGemma to drop near-duplicates
+- [ ] Find new working PubChem AIDs (most curated retired) — eutils search returns ~30 candidates per pathogen
+- [ ] Mirror APD3 from a GitHub fork (current site URLs all 404)
+- [ ] Render `docs/pitch-deck.md` to PDF via Marp (one `npm i` away)
 
-## Day 3 — Wed May 6 (RL training)
+## Day 1 — Mon May 4 (kickoff + Stage 1)
 
-- [ ] Stage 3 (GRPO) kicks off
-- [ ] Workspace UI: scoring + 3D viz integrated
-- [ ] First end-to-end generation working
-- [ ] Daily social post
+- [ ] 12pm EDT: kickoff stream watched
+- [ ] `git tag pre-training-baseline` on laptop
+- [ ] Spin up Small 1× MI300X for smoke test ($1.99/hr)
+- [ ] `bash scripts/vm_bootstrap.sh` — full VM setup (~25 min)
+- [ ] `scripts/smoke_test_rocm.py` passes
+- [ ] First inference smoke: generate 2 SMILES from base Gemma 4 31B
+- [ ] PyTDC install + `prepare_tdc_data.py` → push `lysos-tdc-stage1`
+- [ ] Tear down Small, spin up Large 8× MI300X ($15.04/hr)
+- [ ] Stage 1 (TxGemma-4) kicks off
+- [ ] Day 0 social post per `docs/build-in-public.md`
+- [ ] Stage 1 finishes by EOD (6-8 hr wall-clock); push `txgemma-4-31b` to HF Hub
+- [ ] Tear down Large; spin Small back up
 
-## Day 4 — Thu May 7 (Integration + polish)
+## Day 2 — Tue May 5 (Stage 2 + workspace)
 
-- [ ] Stage 3 completes; final model on HF Hub
-- [ ] Workspace UI polished, pre-loaded targets working
-- [ ] Demo dry-run #1
-- [ ] Slides locked
-- [ ] Daily social post
+- [ ] Stage 2 (AMR SFT) on Small MI300X — 15-20 hr wall-clock
+- [ ] Workspace polishing: ensure Stage 1 model serves correctly
+- [ ] Day 1 social post — architecture explainer + `architecture.png`
+- [ ] Stage 2 finishes EOD-ish; push `lysos-base` to HF Hub
 
-## Day 5 — Fri May 8 (Record + polish)
+## Day 3 — Wed May 6 (Stage 3 RL)
 
-- [ ] Demo video shot + edited
-- [ ] Cover image finalized
-- [ ] Submission writeup drafted
+- [ ] Stage 3 (GRPO) kicks off on Small — 15-25 hr wall-clock
+- [ ] **Capture real `rocm-smi` output during a GRPO step → swap into mockup**
+- [ ] **Capture wandb screenshots of per-component reward → swap into reward-curves.png**
+- [ ] Day 2 social post — Stage 1 + 2 done, RL in progress
+- [ ] Workspace deploy dry-run via `make space-deploy`
+
+## Day 4 — Thu May 7 (RL finalization)
+
+- [ ] Stage 3 completes; push final `lysos-rl` to HF Hub
+- [ ] Workspace HF Space goes live with the trained model
+- [ ] Demo dry-run #1 against the live Space
+- [ ] Pitch deck refresh: substitute mockups with real wandb / rocm-smi screenshots
+- [ ] Day 3 social post — Stage 3 done, side-by-side numbers
+
+## Day 5 — Fri May 8 (record + polish)
+
+- [ ] Demo video shot + edited per `docs/demo-video-storyboard.md` (target ≤4:45)
+- [ ] Cover image final pass (already shipped at 1920×1080)
+- [ ] Submission writeup at all three lengths (280 chars / 1500 chars / 250 words)
 - [ ] Buffer day for bugs
-- [ ] Daily social post
+- [ ] Day 4 social post — workspace demo
 
-## Day 6 — Sat May 9 (Submission)
+## Day 6 — Sat May 9 (submit early)
 
 - [ ] Final submission package assembled
-- [ ] Submitted to lablab.ai (24h before deadline)
+- [ ] Submitted to lablab.ai (24h before the deadline)
 - [ ] If on-site invitation: travel to SF
-- [ ] Daily social post
+- [ ] Day 5 social post — submission day
 
-## Day 7 — Sun May 10 (Deadline + pitch)
+## Day 7 — Sun May 10 (deadline + pitch)
 
-- [ ] 3pm EDT: submission deadline
+- [ ] 3pm EDT: submission deadline (we're already in)
 - [ ] If on-site: 5pm EDT on-stage pitch
 
 ## Stretch goals (if Day 4 ahead of schedule)

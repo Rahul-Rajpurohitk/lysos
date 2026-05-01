@@ -2,7 +2,8 @@
 
 **Author**: Rahul
 **Project**: AMD Developer Hackathon 2026
-**Date**: 2026-04-30 (T-4 to kickoff Mon May 4 12pm EDT)
+**Date**: 2026-04-30 · last refreshed 2026-05-01 (T-3 to kickoff Mon May 4 12pm EDT)
+**Status**: pre-kickoff, all non-GPU artifacts shipped, awaiting AMD MI300X credits
 
 ---
 
@@ -38,36 +39,57 @@ This is the kind of tool that should exist. We're building it.
 
 ## 4. Architecture
 
+Reference render: `docs/assets/architecture.{svg,png}` (built component-by-component,
+shows the MI300X 192 GB memory budget bar).
+
 ```
 ┌───────────────────────────────────────────────────┐
 │                   LYSOS WORKSPACE                 │
+│                                                   │
 │  ┌──────────────────────────────────────────────┐ │
-│  │ "Design antibacterial molecules for [target]"│ │
+│  │  React + Vite + Tailwind frontend            │ │
+│  │  "Design antibacterial molecules for [target]" │
 │  └──────────────────┬───────────────────────────┘ │
 │                     ▼                             │
 │  ┌──────────────────────────────────────────────┐ │
-│  │ Lysos generative model (Gemma 4 + RL)        │ │
-│  │ Input: target protein / pathogen + spec      │ │
-│  │ Output: 50-100 candidate SMILES / sequences  │ │
+│  │  FastAPI backend  (workspace/api/server.py)  │ │
+│  │  6 routes — health · pathogens · design ·    │ │
+│  │  design/stream (SSE) · score · similar       │ │
 │  └──────────────────┬───────────────────────────┘ │
 │                     ▼                             │
 │  ┌──────────────────────────────────────────────┐ │
-│  │ Scoring engines (coresident on MI300X)       │ │
-│  │ • Predicted MIC (antibacterial activity)     │ │
-│  │ • Drug-likeness (QED, Lipinski)              │ │
-│  │ • Synthesizability (SA score)                │ │
-│  │ • Hemolysis / safety                         │ │
-│  │ • Novelty vs known antibiotics               │ │
-│  │ • DiffDock binding pose prediction           │ │
+│  │  Two Gemma-family models, coresident         │ │
+│  │  ─────────────────────────────────────       │ │
+│  │  • Gemma 4 31B-it     — generator (62 GB)    │ │
+│  │  • EmbeddingGemma 300m — RAG + novelty (1 GB)│ │
+│  │  Input:  target pathogen + modality + RAG ex │ │
+│  │  Output: N candidate SMILES / peptides       │ │
 │  └──────────────────┬───────────────────────────┘ │
 │                     ▼                             │
 │  ┌──────────────────────────────────────────────┐ │
-│  │ Ranked candidate list w/ 3D viz, downloads   │ │
+│  │  Scoring (coresident, no separate process)   │ │
+│  │  • predicted MIC (heuristic v1; ML predictor │ │
+│  │    Stage 1 output substituted post-train)    │ │
+│  │  • QED + Lipinski drug-likeness  (rdkit)     │ │
+│  │  • SA score synthesizability     (rdkit)     │ │
+│  │  • hemolysis safety              (DBAASP-trained heuristic)
+│  │  • Tanimoto novelty              (Morgan FP)  │ │
+│  │  • semantic novelty              (EmbeddingGemma cosine vs 20,489-row index)
+│  │  • validity                      (rdkit parse)│ │
+│  └──────────────────┬───────────────────────────┘ │
+│                     ▼                             │
+│  ┌──────────────────────────────────────────────┐ │
+│  │  Ranked candidate cards · find-similar-drugs │ │
+│  │  panel (top-k known antibiotics by cosine)   │ │
 │  └──────────────────────────────────────────────┘ │
 │                                                   │
-│  All running on AMD Instinct MI300X 192GB         │
+│  All running on AMD Instinct MI300X · 192 GB HBM3 │
+│  RL training peak ≈ 152 GB (policy + ref + reward)│
 └───────────────────────────────────────────────────┘
 ```
+
+DiffDock-based docking is intentionally not in v1 — adds 10+ GB and ~30s latency
+per candidate; out of scope for the hackathon submission. Listed in "stretch goals."
 
 ---
 
@@ -95,13 +117,14 @@ Fine-tune the chemistry-aware base on antimicrobial-specific data.
 | Item | Detail |
 |---|---|
 | Base | TxGemma-4 from Stage 1 |
-| Data | • ChEMBL antibiotic subset (~50K compounds with MIC data)<br>• DBAASP antimicrobial peptides (~17K AMPs)<br>• APD3 (~3K AMPs)<br>• DRAMP (~22K AMPs)<br>• PDB structures of resistant pathogen targets (MRSA PBPs, M. tuberculosis InhA, gram-neg porins)<br>• Curated negative examples (off-target binding, hemolytic peptides) |
-| Method | Continued LoRA fine-tune with new specialty data |
+| Dataset (built + LIVE on HF Hub) | [`rahul24raj/lysos-amr-stage2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2) — **96,975 instruction examples** drawn from real public APIs |
+| Source breakdown | ChEMBL bacterial-activity REST: 16,462 records · DBAASP REST+detail: 6,256 AMPs · DRAMP XLSX bulk: 8,532 · DrugBank Open vocabulary: 14,630 entries · PDB GraphQL: 3,136 · CARD tarball: 3,543 · ZINC partial: 100 |
+| 9 task types | `generation_for_target` 2,776 · `activity_prediction` 8,789 · `peptide_design` 4,621 · `safety_prediction` 14,004 · `drug_likeness` (rdkit-only, ~10K on VM) · `drug_id_lookup` 13,937 · `drug_inchi_key` 13,915 · `drug_synonyms` 13,012 · `drug_cas_lookup` 10,557 · `drug_reverse_cas` 10,516 |
+| Method | Continued LoRA fine-tune (rank 64) with task-mix weights from `configs/stage2_amr_sft.yaml` |
 | Hardware | Small 1× MI300X |
 | Time | 15-20 GPU-hours |
 | Cost | $30-40 |
 | Output | `rahul24raj/lysos-base` on HF Hub |
-| Tasks | • Predict MIC for given molecule + pathogen<br>• Generate antibacterial molecule for target<br>• Generate AMP sequence for target<br>• Predict hemolytic activity<br>• Score drug-likeness |
 
 ### Stage 3 — RL with verifiable rewards (GRPO)
 
@@ -110,12 +133,13 @@ Train the generator to produce molecules that score well on multiple objectives.
 | Item | Detail |
 |---|---|
 | Algorithm | GRPO (Group Relative Policy Optimization, DeepSeek-R1 style) — no value model needed |
-| Reward components | • Predicted MIC against target pathogen (use Stage 2 model itself as predictor + external models like CARD-RGI) → 0.4 weight<br>• QED drug-likeness (RDKit deterministic) → 0.15<br>• SA score synthesizability (RDKit) → 0.10<br>• Hemolysis prediction (HemoPI / DBAASP) → 0.15<br>• Novelty (Tanimoto distance to nearest known antibiotic) → 0.15<br>• Validity (RDKit can parse SMILES) → 0.05 |
-| Hardware | Small 1× MI300X — but RL holds policy + reference + reward predictor coresident (~150GB) — this is THE MI300X-specific moment |
+| Prompts (LIVE on HF Hub) | [`rahul24raj/lysos-rl-prompts`](https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts) — 3,200 prompts (3,072 train + 128 valid) across 8 priority pathogens × 2 modalities |
+| Reward components (configs/stage3_rl_grpo.yaml) | • predicted MIC → 0.40 (heuristic v1; Stage-2 ML predictor swap-in post-training)<br>• drug_likeness QED → 0.15<br>• synthesizability SA → 0.10<br>• hemolysis_safety → 0.15<br>• novelty (Tanimoto Morgan FP) → 0.10<br>• embedding_novelty (EmbeddingGemma cosine vs 20,489-row index) → 0.05<br>• validity (rdkit parse) → 0.05 |
+| Hardware | Small 1× MI300X — but RL holds policy + frozen reference + reward predictor + KV-cache + grads coresident (~152 GB peak) — this is THE MI300X-specific moment, busts H100 80 GB |
 | Time | 15-25 GPU-hours |
 | Cost | $30-50 |
 | Output | `rahul24raj/lysos-rl` on HF Hub (final model) |
-| Eval | Side-by-side: Stage 2 model vs Stage 3 model on 10 standardized AMR design tasks |
+| Eval | Side-by-side: Stage 2 model vs Stage 3 model on 6-component composite reward, log per component to wandb to detect reward-hacking |
 
 ---
 
@@ -171,12 +195,14 @@ Train the generator to produce molecules that score well on multiple objectives.
 - **vLLM ROCm** — `rocm/vllm:latest` Docker for fast inference at demo time
 - **HF Optimum-AMD** for quantized inference if needed
 
-### Frontend / workspace
-- **Next.js + Tailwind + shadcn/ui** — clean modern web UI
-- **3Dmol.js** or **Mol***  — 3D molecule visualization in browser
-- **Plotly** for property charts
-- **Server-Sent Events (SSE)** for streaming generation
-- **FastAPI** backend connecting UI to model
+### Frontend / workspace (CHOSEN, BUILT, VERIFIED)
+- **Vite + React 18 + TypeScript (strict)** — `workspace/web/` (Next.js abandoned in favor of leaner stack)
+- **Tailwind 3** + custom dark biomedical color palette
+- **lucide-react** for icons; no shadcn/ui (kept the bundle tiny)
+- **Server-Sent Events (SSE)** via `sse-starlette` for streaming generation
+- **FastAPI** backend at `workspace/api/server.py`
+- Build verified: 1573 modules, 160 KB JS / 51 KB gzipped + 15 KB CSS / 4 KB gzipped
+- 3D molecule viz deferred to Q3 (Mol*/3Dmol.js post-hackathon)
 
 ### Deployment
 - **HF Spaces** — final demo deployment
@@ -344,12 +370,32 @@ Total integration cost: ~3.5 hours. Plan: `vault/plans/2026-05-01-embeddinggemma
 
 ---
 
-## 14. Open items still to do
+## 14. Open items — status as of 2026-05-01
 
-- [ ] Verify ROCm + Gemma 4 + Optimum-AMD compatibility with smoke test
+### Done (struck-through, kept as record)
+
+- [x] ~~Reserve project name / HF Space slug `lysos` in event org~~ → reserved
+- [x] ~~Reserve GitHub repo name~~ → `github.com/Rahul-Rajpurohitk/lysos`
+- [x] ~~Choose color palette + design system for workspace UI~~ → dark biomedical, `#00e6b9` accent, JetBrains Mono for values, Inter for narrative
+- [x] ~~Draft pitch deck skeleton~~ → `docs/pitch-deck.md` (10 slides, Marp frontmatter)
+- [x] ~~Finalize Stage 3 reward function weights~~ → `configs/stage3_rl_grpo.yaml` (7 components, sum=1.0)
+- [x] ~~Stage 2 dataset built + pushed~~ → 96,975 examples on HF Hub
+- [x] ~~Workspace UI verified rendering end-to-end~~ → real screenshot in `docs/assets/workspace-screenshot.png`
+- [x] ~~EmbeddingGemma 300m integration~~ → all 5 phases shipped
+
+### GPU-blocked (need MI300X — Sat May 2 expected)
+
+- [ ] Verify ROCm + Gemma 4 + Optimum-AMD compatibility — `scripts/smoke_test_rocm.py` ready
 - [ ] Verify TRL GRPO trainer works on ROCm
-- [ ] Reserve project name / HF Space slug `lysos` in event org
-- [ ] Reserve GitHub repo name
-- [ ] Choose color palette + design system for workspace UI
-- [ ] Draft pitch deck skeleton
-- [ ] Finalize Stage 3 reward function weights via small-scale test
+- [ ] Stage 1 (TxGemma-4) actual training — needs PyTDC installed on VM
+- [ ] Real wandb screenshots → swap into `reward-curves.svg`
+- [ ] Real `rocm-smi` capture → swap into `rocm-smi-mockup.svg`
+
+### Optional / cheap to ship pre-credits
+
+- [ ] Wider ChEMBL re-fetch (8K/pathogen, 8 standard_types) — code ready, ~30 min runtime
+- [ ] EmbeddingGemma dedup pass on the 96,975-row Stage 2 — script ready, 5-10 min on a beefy machine
+- [ ] PubChem fresh-AID discovery via eutils (most curated retired)
+- [ ] APD3 GitHub mirror (current site URLs all 404)
+- [ ] Marp PDF render of `docs/pitch-deck.md` (one `npm i -g @marp-team/marp-cli` away)
+- [ ] Submission writeup ≤ 1500 chars at `docs/submission-writeup.md`

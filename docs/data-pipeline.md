@@ -46,32 +46,33 @@ A reference for the end-to-end flow from public APIs to Stage-2 ready training d
                             └───────────────────────────────────────┘
 ```
 
-## Source-by-source
+## Source-by-source (status = 2026-05-01)
 
 ### Small molecules
 
-| Source | Loader | API style | What we extract |
-|---|---|---|---|
-| **ChEMBL** | `src/data/chembl.py` | REST (paginated) | bacterial activity records (MIC/MBC/IC50/Ki) — SMILES + value + units, normalized to `mic_log_ug_per_ml` |
-| **BindingDB** | `src/data/bindingdb.py` | bulk TSV download (streaming) | bacterial-target binding affinities (Ki/Kd/IC50/EC50) |
-| **PubChem** | `src/data/pubchem.py` | PUG REST | curated antibacterial bioassay panels (AID lists), active compounds + SMILES |
-| **DrugBank** | `src/data/drugbank.py` | open data CSVs | drug knowledge: SMILES, name, indication |
-| **ZINC** | `src/data/zinc.py` | bulk SMI files | drug-like / FDA / investigational SMILES (chemistry prior) |
+| Source | Loader | API style | Live rows | Status |
+|---|---|---|---|---|
+| **ChEMBL** | `src/data/chembl.py` | REST (paginated) | **16,462** | ✅ verified live; widened to 8 standard_types in May-01 commit (test pull yielded +19-55%) |
+| **DrugBank** | `src/data/drugbank.py` | open vocabulary CSV (ZIP) | **14,630** | ✅ verified live; vocab CSV path fixed May-01 (was failing on ZIP magic-bytes); structures SDF needs rdkit on VM |
+| **ZINC** | `src/data/zinc.py` | bulk SMI files | 100 | ⚠ partial — only `fda` + `in-trials` subsets pulled |
+| **BindingDB** | `src/data/bindingdb.py` | bulk TSV stream | 0 | ⚠ JSP-gated (`/access` page returns HTML, not the file) — manual download required |
+| **PubChem** | `src/data/pubchem.py` | PUG REST | 0 | ⚠ most curated AIDs (2842, 540317, 720596, 488, 588352, 1626, 2098) retired by NCBI; only 1853, 1958 still active. Eutils search returns ~30 candidates per pathogen but they're small (<100 actives each) |
 
 ### Antimicrobial peptides
 
-| Source | Loader | API style | What we extract |
-|---|---|---|---|
-| **DBAASP** | `src/data/dbaasp.py` | REST listing + per-peptide detail | sequence + per-strain MIC + hemolysis (with µM → µg/mL conversion via computed peptide MW) |
-| **APD3** | `src/data/apd3.py` | bulk export + GitHub mirror | curated AMP sequences + activity free-text |
-| **DRAMP** | `src/data/dramp.py` | ZIP downloads | ~22K AMPs across General/Patent/Clinical sets |
+| Source | Loader | API style | Live rows | Status |
+|---|---|---|---|---|
+| **DBAASP** | `src/data/dbaasp.py` | REST listing + per-peptide detail | **6,256** | ✅ verified live; nested-dict schema fix applied; µM → µg/mL via peptide-MW computation |
+| **DRAMP** | `src/data/dramp.py` | ZIP/XLSX downloads | **8,532** | ✅ verified live; `download.php?filename=...` path fix applied |
+| **APD3** | `src/data/apd3.py` | bulk export | 0 | ❌ source URLs all 404 (site reorganized); mirror search pending |
 
 ### Targets / context
 
-| Source | Loader | API style | What we extract |
-|---|---|---|---|
-| **CARD** | `src/data/card.py` | bulk tarball + ARO ontology | resistance gene catalog: gene name, drug class, mechanism, pathogen |
-| **PDB** | `src/data/pdb.py` | RCSB Search + GraphQL | protein structure metadata for AMR pathogens, ligand SMILES per entry |
+| Source | Loader | API style | Live rows | Status |
+|---|---|---|---|---|
+| **CARD** | `src/data/card.py` | bulk tarball + ARO ontology | **3,543** | ✅ verified live; species-path fix applied (`model_sequences.sequence[seq_id].NCBI_taxonomy.NCBI_taxonomy_name`) |
+| **PDB** | `src/data/pdb.py` | RCSB Search + GraphQL | **3,136** | ✅ verified live; GraphQL schema fix applied (`polymer_entities[].rcsb_entity_source_organism[]`) |
+| **TDC** | `scripts/prepare_tdc_data.py` | PyTDC builders | (runs on VM) | needs `PyTDC>=1.1.0` installed; runs from VM after `pip install -e .` |
 
 ## Standard schemas
 
@@ -110,9 +111,25 @@ Where a source doesn't have a field, it's left null.
 
 1. **`scripts/fetch_all_data.py`** — orchestrator that runs all 10 loaders + builders.
    Cheap/fast loaders first, expensive last.
-2. **`scripts/data_inventory.py`** — report what's actually on disk + per-pathogen counts.
-3. **Push to HF Hub**: `--push-to-hub` flag on the orchestrator pushes the 3 processed
-   datasets (TDC Stage 1, AMR Stage 2, RL Stage 3 prompts).
+2. **`scripts/prepare_amr_data.py`** — build the Stage 2 SFT dataset from raw CSVs.
+   Currently produces **96,975 examples** across 9 task types.
+3. **`scripts/prepare_stage3_prompts.py`** — build the 3,200-prompt RL set.
+4. **`scripts/build_known_antibiotics_index.py`** — build the 20,489-row reference
+   index used by EmbeddingGemma novelty + RAG + similar-drugs UI.
+5. **`scripts/dedup_with_embeddings.py`** — (optional, VM-side) cluster Stage 2
+   examples by semantic similarity, drop near-duplicates.
+6. **`scripts/data_inventory.py`** — report what's on disk + per-pathogen counts.
+7. **Push to HF Hub**: `--push-to-hub` on the prepare scripts pushes the 3 processed
+   datasets (TDC Stage 1 — VM-side, AMR Stage 2 — LIVE, RL Stage 3 prompts — LIVE).
+
+## Dataset sizes (real, post-DrugBank wiring)
+
+| Dataset | Rows | HF Hub | Last updated |
+|---|---|---|---|
+| `data/processed/amr-stage2/{train,valid}` | 92,127 + 4,848 | [`rahul24raj/lysos-amr-stage2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2) (live) | 2026-05-01 |
+| `data/processed/amr-rl-prompts/{train,valid}` | 3,072 + 128 | [`rahul24raj/lysos-rl-prompts`](https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts) (live) | 2026-05-01 |
+| `data/processed/known_antibiotics_index.parquet` | 20,489 | (local — RAG / novelty) | 2026-05-01 |
+| `data/processed/tdc-stage1/` | TBD | `rahul24raj/lysos-tdc-stage1` (reserved) | runs on VM |
 
 ## Caching strategy
 
