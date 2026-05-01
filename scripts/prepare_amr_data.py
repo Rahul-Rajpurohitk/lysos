@@ -225,8 +225,10 @@ class Sources:
     out_dir: Path
 
 
-REQUIRED_SOURCES = ["chembl", "dbaasp"]
-OPTIONAL_SOURCES = ["bindingdb", "pubchem", "apd3", "dramp", "drugbank"]
+# Only ChEMBL is strictly required — every other source is best-effort
+# enrichment. We can train Stage 2 on ChEMBL alone if needed.
+REQUIRED_SOURCES = ["chembl"]
+OPTIONAL_SOURCES = ["dbaasp", "bindingdb", "pubchem", "apd3", "dramp", "drugbank"]
 
 
 def _ensure_data(srcs: Sources, fetch: bool) -> dict[str, bool]:
@@ -412,10 +414,15 @@ def build_safety_examples(srcs: Sources, max_rows: int | None,
 def build_drug_likeness_examples(srcs: Sources, max_rows: int | None,
                                  present: dict[str, bool]) -> list[dict]:
     import pandas as pd
-    from rdkit import Chem, RDLogger
-    from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
 
-    RDLogger.DisableLog("rdApp.*")
+    try:
+        from rdkit import Chem, RDLogger
+        from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
+        RDLogger.DisableLog("rdApp.*")
+    except ImportError:
+        log.warning("rdkit not installed; skipping drug_likeness task slice. "
+                    "(Run on the AMD VM Docker container where rdkit is present.)")
+        return []
 
     # Drug-likeness training pulls from ChEMBL + DrugBank (broad drug knowledge)
     frames = []
