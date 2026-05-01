@@ -101,3 +101,6 @@ uv.lock
 *.tmp
 *.bak
 *.orig
+
+# HF Space deployment scratch (assembled by scripts/deploy_to_hf_space.py)
+.deploy/

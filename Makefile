@@ -92,7 +92,11 @@ api-dev:
 
 .PHONY: docker
 docker:
-	cd workspace && docker build -t lysos-workspace .
+	docker build -t lysos-workspace -f workspace/Dockerfile .
+
+.PHONY: space-deploy
+space-deploy:
+	@$(PYTHON) scripts/deploy_to_hf_space.py
 
 # ---- training ------------------------------------------------------------
 .PHONY: stage1-dry
