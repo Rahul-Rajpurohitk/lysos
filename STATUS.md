@@ -193,12 +193,17 @@ vault/
 - ✓ Pitch deck — `docs/pitch-deck.md` (10 slides, startup format)
 - ✓ Demo video storyboard — `docs/demo-video-storyboard.md` (5-min, 8 sections, beat-by-beat with VO)
 - ✓ Stage 2 dataset grew 21,007 → 31,855 examples
+- ✓ Visual assets — 5 SVGs + 5 rendered PNGs in `docs/assets/`: cover-1920, architecture, data-flow, reward-curves (projected), rocm-smi mockup
+- ✓ Asset renderer — `scripts/render_assets.py` with rsvg → inkscape → headless-chrome fallback chain
+- ✓ Makefile targets — `make assets`, `make pitch-pdf`
 
 ### Polish + submission (remaining)
-7. 16:9 cover image (Slide 1 of pitch deck → PNG export)
-8. README polish for public-on-kickoff
+7. ~~16:9 cover image~~ ✓ done — `docs/assets/cover-1920.{svg,png}`
+8. ~~README polish for public-on-kickoff~~ ✓ done — embedded hero image + quickstart
 9. Build-in-Public social posts (daily, starting kickoff day)
-10. Convert pitch deck markdown → PDF (Marp)
+10. Convert pitch deck markdown → PDF (Marp) — `make pitch-pdf` ready, run after Marp is on $PATH
+11. Real wandb screenshot (post-Stage 3) → swap in for `reward-curves.svg`
+12. Real rocm-smi capture (post-VM session) → swap in for `rocm-smi-mockup.svg`
 
 ---
 

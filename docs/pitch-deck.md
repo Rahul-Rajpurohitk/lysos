@@ -9,6 +9,8 @@
 
 ## Slide 1 — Title + tagline
 
+![cover](assets/cover-1920.png)
+
 **Lysos**
 
 Generative drug designer for antimicrobial resistance.
@@ -71,6 +73,8 @@ Insert: workspace screenshot showing 5 candidates with score panels.
 - **Memory needs (during RL)**: ~150 GB → busts H100 80 GB → MI300X 192 GB is the prerequisite, not optional.
 
 Insert: `docs/assets/architecture.svg` — full pipeline diagram with the MI300X "192 GB" memory-budget bar.
+
+![architecture](assets/architecture.png)
 
 ---
 
