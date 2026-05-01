@@ -172,48 +172,85 @@ def fetch_organism_activities(
     organism: str,
     *,
     standard_types: tuple[str, ...] = ("MIC", "MBC", "IC50", "Ki"),
-    pchembl_min: float | None = 4.0,
+    pchembl_min: float | None = None,
     max_records: int | None = 5000,
     client: ChEMBLClient | None = None,
 ) -> list[dict]:
     """Fetch activity records for one target organism.
 
     Filters:
-      - standard_type in MIC / MBC / IC50 / Ki
+      - standard_type in MIC / MBC / IC50 / Ki  (queried one at a time —
+        ChEMBL's `__in` filter is slow/times out when combined with others)
       - canonical_smiles not null (we need the SMILES)
-      - pchembl_value >= pchembl_min (filter out inactive measurements)
+      - pchembl_value >= pchembl_min — OPTIONAL, default None.
+        Most ChEMBL records don't have pchembl_value computed (it's a derived
+        column), so requiring it filters out 95% of real data. We default to
+        None and rely on standard_value+units normalization for quality.
 
     Returns a list of dicts (raw ChEMBL records, with derived fields added).
     """
     client = client or ChEMBLClient()
+    log.info("Fetching ChEMBL activities for organism=%s (types=%s, max %s)",
+             organism, list(standard_types), max_records)
 
-    params = {
-        "target_organism__iexact": organism,
-        "standard_type__in": ",".join(standard_types),
-        "canonical_smiles__isnull": "false",
-        "format": "json",
-    }
-    if pchembl_min is not None:
-        params["pchembl_value__gte"] = pchembl_min
+    all_records: list[dict] = []
+    per_type_cap = max_records // max(1, len(standard_types)) if max_records else None
 
-    log.info("Fetching ChEMBL activities for organism=%s (max %s records)",
-             organism, max_records)
-    records: list[dict] = []
-    for rec in client.paginated(
-        "/activity.json", params, page_size=1000, key="activities",
-        max_records=max_records,
-    ):
-        # Sometimes canonical_smiles is on the record, sometimes nested
-        smi = rec.get("canonical_smiles") or (
-            rec.get("molecule") or {}
-        ).get("molecule_structures", {}).get("canonical_smiles")
-        if not smi:
-            continue
-        rec["canonical_smiles"] = smi
-        rec["_target_organism"] = organism
-        records.append(rec)
-    log.info("  got %d activity records for %s", len(records), organism)
-    return records
+    for s_type in standard_types:
+        params = {
+            "target_organism": organism,         # no __iexact (returns 0)
+            "standard_type": s_type,             # one type at a time (avoid __in timeout)
+            "canonical_smiles__isnull": "false",
+            "format": "json",
+        }
+
+        type_records = 0
+        type_skipped = 0
+        for rec in client.paginated(
+            "/activity.json", params, page_size=1000, key="activities",
+            max_records=per_type_cap,
+        ):
+            # Optional client-side pchembl filter
+            if pchembl_min is not None:
+                pv = rec.get("pchembl_value")
+                try:
+                    if pv is None or float(pv) < pchembl_min:
+                        type_skipped += 1
+                        continue
+                except (TypeError, ValueError):
+                    type_skipped += 1
+                    continue
+
+            smi = rec.get("canonical_smiles") or (
+                rec.get("molecule") or {}
+            ).get("molecule_structures", {}).get("canonical_smiles")
+            if not smi:
+                continue
+
+            # Quality gate: must have a numeric standard_value and a known unit.
+            # Otherwise the record is unusable for training.
+            try:
+                _ = float(rec.get("standard_value"))
+            except (TypeError, ValueError):
+                type_skipped += 1
+                continue
+            if not rec.get("standard_units"):
+                type_skipped += 1
+                continue
+
+            rec["canonical_smiles"] = smi
+            rec["_target_organism"] = organism
+            all_records.append(rec)
+            type_records += 1
+        log.info("  %s/%s: %d kept, %d skipped",
+                 organism, s_type, type_records, type_skipped)
+
+        if max_records and len(all_records) >= max_records:
+            log.info("  hit max_records=%d, stopping early", max_records)
+            break
+
+    log.info("  → %d total activity records for %s", len(all_records), organism)
+    return all_records
 
 
 def fetch_amr_activities(
@@ -221,7 +258,7 @@ def fetch_amr_activities(
     out_path: Path | str | None = None,
     pathogens: list[str] | None = None,
     max_per_pathogen: int = 5000,
-    pchembl_min: float = 4.0,
+    pchembl_min: float | None = None,
 ) -> pd.DataFrame:
     """Fetch ChEMBL activities for all AMR pathogens.
 
@@ -353,8 +390,8 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Fetch ChEMBL antibacterial activities")
     p.add_argument("--output", type=Path, default=Path("data/raw/chembl_antibiotics.csv"))
     p.add_argument("--max-per-pathogen", type=int, default=5000)
-    p.add_argument("--pchembl-min", type=float, default=4.0,
-                   help="Minimum pchembl_value (default 4.0 → IC50 ≤ 100µM)")
+    p.add_argument("--pchembl-min", type=float, default=None,
+                   help="Optional minimum pchembl_value (most records lack it; default off)")
     p.add_argument("--pathogens", type=str, default=None,
                    help=f"Comma-separated subset of {list(AMR_TARGET_ORGANISMS)}")
     return p.parse_args()
