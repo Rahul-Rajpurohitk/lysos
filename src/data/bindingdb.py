@@ -104,10 +104,24 @@ def _try_download(cache_dir: Path) -> Path | None:
                 if r.status_code != 200:
                     log.info("  ✗ %d", r.status_code)
                     continue
+                # Stream first chunk into a peek buffer; if it's HTML (BindingDB
+                # JSP error page disguising as 200 OK), bail out before we save.
+                content_iter = r.iter_content(chunk_size=1024 * 1024)
+                first = next(content_iter, b"")
+                if first[:5] in (b"<!DOC", b"<HTML", b"<html"):
+                    log.warning("  ✗ %s/%s: server returned HTML (gated/error page)",
+                                flavor, rel)
+                    log.warning("  → BindingDB now requires browser-cookies/Referer to download. "
+                                "Manual workaround: download via browser from https://www.bindingdb.org/"
+                                " and place at %s", zip_path)
+                    continue
+
+                bytes_written = 0
+                last_log = 0
                 with open(zip_path, "wb") as f:
-                    bytes_written = 0
-                    last_log = 0
-                    for chunk in r.iter_content(chunk_size=1024 * 1024):
+                    f.write(first)
+                    bytes_written += len(first)
+                    for chunk in content_iter:
                         if chunk:
                             f.write(chunk)
                             bytes_written += len(chunk)
