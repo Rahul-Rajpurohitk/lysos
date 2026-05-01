@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" font-family="JetBrains Mono, ui-monospace, monospace">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#020608"/>
+      <stop offset="1" stop-color="#04101a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+
+  <!-- terminal frame -->
+  <rect x="40" y="40" width="1200" height="640" rx="10" fill="#04101a" stroke="#274858" stroke-width="1.5"/>
+  <!-- title bar -->
+  <rect x="40" y="40" width="1200" height="36" rx="10" fill="#0a1820"/>
+  <rect x="40" y="64" width="1200" height="12" fill="#0a1820"/>
+  <circle cx="68" cy="58" r="6" fill="#ff5f57"/>
+  <circle cx="92" cy="58" r="6" fill="#febc2e"/>
+  <circle cx="116" cy="58" r="6" fill="#28c840"/>
+  <text x="640" y="63" font-size="13" fill="#56cbb6" text-anchor="middle">rocm-smi · MI300X · lysos-stage3-rl</text>
+
+  <!-- prompt + command -->
+  <g font-size="14" fill="#a3c2bd">
+    <text x="60" y="108">root@mi300x-small:~/lysos# rocm-smi</text>
+  </g>
+
+  <!-- table header -->
+  <g font-size="13" fill="#56cbb6" font-weight="700">
+    <text x="60" y="148">============================ ROCm System Management Interface ============================</text>
+    <text x="60" y="170">==================================== Concise Info =========================================</text>
+    <text x="60" y="200">GPU  Temp  AvgPwr  SCLK  MCLK  Fan  Perf  PwrCap  VRAM%  GPU%</text>
+  </g>
+
+  <!-- one row -->
+  <g font-size="13" fill="#e6f7f3">
+    <text x="60" y="226">0    74°C  612W    2100  1600  N/A  auto  750W    79.2   96</text>
+  </g>
+
+  <!-- separator -->
+  <line x1="60" y1="244" x2="1220" y2="244" stroke="#1f4458"/>
+
+  <!-- detailed view -->
+  <g font-size="13" fill="#a3c2bd">
+    <text x="60" y="276" fill="#56cbb6">root@mi300x-small:~/lysos# rocm-smi --showmeminfo vram</text>
+    <text x="60" y="304">GPU[0]:  Total Memory (VRAM):    192.0 GB</text>
+    <text x="60" y="328">GPU[0]:  Memory Used (VRAM):     152.1 GB</text>
+    <text x="60" y="352">GPU[0]:  Memory Free  (VRAM):     39.9 GB</text>
+  </g>
+
+  <!-- bar visual -->
+  <g transform="translate(60,392)">
+    <rect x="0" y="0" width="1140" height="32" rx="4" fill="#001114" stroke="#1f4458"/>
+    <rect x="0" y="0" width="903" height="32" rx="4" fill="#00e6b9" opacity="0.85"/>
+    <text x="451" y="22" font-size="13" fill="#001114" text-anchor="middle">152 / 192 GB · 79.2% used during GRPO step</text>
+  </g>
+
+  <!-- annotations -->
+  <g font-size="13" fill="#a3c2bd">
+    <text x="60" y="466" fill="#56cbb6">root@mi300x-small:~/lysos# rocm-smi --showpids</text>
+    <text x="60" y="494">PID    PROCESS NAME              GPU MEM    CPU MEM</text>
+    <text x="60" y="518">12783  python -m src.training    144.2 GB   58.0 GB    stage3_rl_grpo</text>
+    <text x="60" y="542">12783  python -m src.training      7.9 GB    8.4 GB    embedding-gemma reward</text>
+  </g>
+
+  <!-- footer callouts -->
+  <g transform="translate(60,594)">
+    <rect x="0" y="0" width="370" height="60" rx="6" fill="#001114" stroke="#00e6b9" stroke-width="1.4"/>
+    <text x="20" y="24" font-size="13" fill="#00e6b9" letter-spacing="2">PEAK · GRPO STEP</text>
+    <text x="20" y="48" font-size="22" fill="#e6f7f3" font-weight="700">152 GB</text>
+    <text x="200" y="48" font-size="14" fill="#a3c2bd">policy + ref + reward + KV-cache + grads</text>
+  </g>
+  <g transform="translate(450,594)">
+    <rect x="0" y="0" width="370" height="60" rx="6" fill="#001114" stroke="#e066a8" stroke-width="1.4"/>
+    <text x="20" y="24" font-size="13" fill="#e066a8" letter-spacing="2">H100 80 GB</text>
+    <text x="20" y="48" font-size="22" fill="#e6f7f3" font-weight="700">would shard</text>
+    <text x="220" y="48" font-size="14" fill="#a3c2bd">+latency, +cost, +complexity</text>
+  </g>
+  <g transform="translate(840,594)">
+    <rect x="0" y="0" width="370" height="60" rx="6" fill="#001114" stroke="#88c552" stroke-width="1.4"/>
+    <text x="20" y="24" font-size="13" fill="#88c552" letter-spacing="2">MI300X 192 GB</text>
+    <text x="20" y="48" font-size="22" fill="#e6f7f3" font-weight="700">single card</text>
+    <text x="200" y="48" font-size="14" fill="#a3c2bd">whole RL stack coresident</text>
+  </g>
+</svg>

@@ -70,7 +70,7 @@ Insert: workspace screenshot showing 5 candidates with score panels.
   3. Stage 3 — GRPO RL with 6-component verifiable reward.
 - **Memory needs (during RL)**: ~150 GB → busts H100 80 GB → MI300X 192 GB is the prerequisite, not optional.
 
-Insert: architecture diagram with the MI300X "192 GB" callout.
+Insert: `docs/assets/architecture.svg` — full pipeline diagram with the MI300X "192 GB" memory-budget bar.
 
 ---
 
@@ -150,8 +150,11 @@ All open-source, MIT-licensed, on a public GitHub.
 
 - Total reading time per slide: 25–35 seconds. Whole pitch ≈ 5 minutes.
 - For the live pitch (May 10, on-stage if invited): demo the workspace at slides 4 and 5. Live generation should take <30s.
-- Slide 5 insert: architecture diagram. Use ascii fallback in deck if SVG isn't ready: see `docs/tech-spec.md` section 4.
-- Slide 6 insert: per-component reward curve from wandb. Show how "novelty" reward grew during RL training.
+- Slide 1 cover: `docs/assets/cover-1920.svg` — title + tagline + stats row.
+- Slide 4 demo screenshot: real workspace screen capture (MRSA, 5 candidates with score panels).
+- Slide 5 insert: `docs/assets/architecture.svg` — full pipeline diagram with the 192 GB memory bar.
+- Slide 6 insert: `docs/assets/reward-curves.svg` (placeholder) → swap with real wandb screenshot post-training. Show how "novelty" reward grew during RL.
+- Slide 6 bonus: `docs/assets/data-flow.svg` — 10-source pipeline ending at HF Hub.
 - Slide 7 insert: bar chart "antibiotic R&D investment 2010-2025" showing the abandonment.
 
 ## Production checklist

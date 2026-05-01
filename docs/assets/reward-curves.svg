@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04101a"/>
+      <stop offset="1" stop-color="#001114"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+
+  <!-- title -->
+  <text x="60" y="58" font-family="JetBrains Mono, monospace" font-size="22" font-weight="700" fill="#e6f7f3">Stage 3 GRPO — per-component reward · steps 0..3000</text>
+  <text x="60" y="84" font-size="14" fill="#7da5a0">Each component logged separately to wandb to detect reward-hacking. Curves below are projected targets — replaced with real wandb screenshot after training completes.</text>
+
+  <!-- projected badge -->
+  <g transform="translate(1080,40)">
+    <rect x="-2" y="-22" width="160" height="38" rx="6" fill="#e066a8" opacity="0.15"/>
+    <text x="78" y="2" font-family="JetBrains Mono, monospace" font-size="14" font-weight="700" fill="#e066a8" text-anchor="middle">PROJECTED — MOCKUP</text>
+  </g>
+
+  <!-- 2x3 grid of mini-charts -->
+  <g font-family="JetBrains Mono, monospace" font-size="11">
+
+    <!-- Validity -->
+    <g transform="translate(60,130)">
+      <rect width="370" height="240" rx="6" fill="#0a1820" stroke="#1f4458"/>
+      <text x="16" y="22" font-size="12" fill="#56cbb6" letter-spacing="2">VALIDITY · RDKit-parseable</text>
+      <text x="354" y="22" font-size="11" fill="#56cbb6" text-anchor="end">0.94 final</text>
+      <!-- gridlines -->
+      <line x1="20" y1="60" x2="350" y2="60" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="120" x2="350" y2="120" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="180" x2="350" y2="180" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <!-- curve -->
+      <path d="M 20 150 C 50 145 90 135 130 122 S 220 102 280 88 S 340 76 350 70" fill="none" stroke="#00e6b9" stroke-width="2.4"/>
+      <!-- baseline marker -->
+      <line x1="20" y1="150" x2="350" y2="150" stroke="#56cbb6" stroke-dasharray="4 4" opacity="0.4"/>
+      <text x="354" y="148" font-size="10" fill="#56cbb6" text-anchor="end">SFT 0.87</text>
+      <text x="16" y="222" font-size="10" fill="#7da5a0">step 0</text>
+      <text x="354" y="222" font-size="10" fill="#7da5a0" text-anchor="end">step 3000</text>
+    </g>
+
+    <!-- QED -->
+    <g transform="translate(450,130)">
+      <rect width="370" height="240" rx="6" fill="#0a1820" stroke="#1f4458"/>
+      <text x="16" y="22" font-size="12" fill="#56cbb6" letter-spacing="2">QED · drug-likeness</text>
+      <text x="354" y="22" font-size="11" fill="#56cbb6" text-anchor="end">0.61 final</text>
+      <line x1="20" y1="60" x2="350" y2="60" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="120" x2="350" y2="120" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="180" x2="350" y2="180" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <path d="M 20 175 C 60 170 120 162 170 150 S 240 134 290 126 S 340 122 350 119" fill="none" stroke="#00e6b9" stroke-width="2.4"/>
+      <line x1="20" y1="175" x2="350" y2="175" stroke="#56cbb6" stroke-dasharray="4 4" opacity="0.4"/>
+      <text x="354" y="173" font-size="10" fill="#56cbb6" text-anchor="end">SFT 0.54</text>
+    </g>
+
+    <!-- predicted MIC -->
+    <g transform="translate(840,130)">
+      <rect width="370" height="240" rx="6" fill="#0a1820" stroke="#1f4458"/>
+      <text x="16" y="22" font-size="12" fill="#56cbb6" letter-spacing="2">PREDICTED MIC · log10 1/MIC</text>
+      <text x="354" y="22" font-size="11" fill="#56cbb6" text-anchor="end">0.62 final</text>
+      <line x1="20" y1="60" x2="350" y2="60" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="120" x2="350" y2="120" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="180" x2="350" y2="180" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <path d="M 20 178 C 60 172 110 156 160 138 S 240 102 290 88 S 340 76 350 72" fill="none" stroke="#00e6b9" stroke-width="2.4"/>
+      <line x1="20" y1="178" x2="350" y2="178" stroke="#56cbb6" stroke-dasharray="4 4" opacity="0.4"/>
+      <text x="354" y="176" font-size="10" fill="#56cbb6" text-anchor="end">SFT 0.41</text>
+    </g>
+
+    <!-- SA score -->
+    <g transform="translate(60,400)">
+      <rect width="370" height="240" rx="6" fill="#0a1820" stroke="#1f4458"/>
+      <text x="16" y="22" font-size="12" fill="#56cbb6" letter-spacing="2">SA · synthetic accessibility</text>
+      <text x="354" y="22" font-size="11" fill="#56cbb6" text-anchor="end">0.66 final</text>
+      <line x1="20" y1="60" x2="350" y2="60" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="120" x2="350" y2="120" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="180" x2="350" y2="180" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <path d="M 20 162 C 80 158 140 150 200 138 S 290 110 350 98" fill="none" stroke="#88c552" stroke-width="2.4"/>
+      <line x1="20" y1="162" x2="350" y2="162" stroke="#56cbb6" stroke-dasharray="4 4" opacity="0.4"/>
+      <text x="354" y="160" font-size="10" fill="#56cbb6" text-anchor="end">SFT 0.58</text>
+    </g>
+
+    <!-- Hemolysis safety -->
+    <g transform="translate(450,400)">
+      <rect width="370" height="240" rx="6" fill="#0a1820" stroke="#1f4458"/>
+      <text x="16" y="22" font-size="12" fill="#56cbb6" letter-spacing="2">HEMOLYSIS — INVERSE SAFETY</text>
+      <text x="354" y="22" font-size="11" fill="#56cbb6" text-anchor="end">0.73 final</text>
+      <line x1="20" y1="60" x2="350" y2="60" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="120" x2="350" y2="120" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="180" x2="350" y2="180" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <path d="M 20 152 C 80 148 140 140 200 130 S 270 108 350 88" fill="none" stroke="#88c552" stroke-width="2.4"/>
+      <line x1="20" y1="152" x2="350" y2="152" stroke="#56cbb6" stroke-dasharray="4 4" opacity="0.4"/>
+      <text x="354" y="150" font-size="10" fill="#56cbb6" text-anchor="end">SFT 0.62</text>
+    </g>
+
+    <!-- Novelty (semantic — embedding) -->
+    <g transform="translate(840,400)">
+      <rect width="370" height="240" rx="6" fill="#0a1820" stroke="#1f4458"/>
+      <text x="16" y="22" font-size="12" fill="#3a86c0" letter-spacing="2">NOVELTY · EmbeddingGemma cosine</text>
+      <text x="354" y="22" font-size="11" fill="#3a86c0" text-anchor="end">0.79 final</text>
+      <line x1="20" y1="60" x2="350" y2="60" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="120" x2="350" y2="120" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <line x1="20" y1="180" x2="350" y2="180" stroke="#1f4458" stroke-dasharray="2 4"/>
+      <path d="M 20 152 C 60 148 110 140 160 128 S 240 100 290 78 S 340 64 350 60" fill="none" stroke="#3a86c0" stroke-width="2.4"/>
+      <line x1="20" y1="152" x2="350" y2="152" stroke="#56cbb6" stroke-dasharray="4 4" opacity="0.4"/>
+      <text x="354" y="150" font-size="10" fill="#56cbb6" text-anchor="end">SFT 0.68</text>
+    </g>
+
+  </g>
+
+  <!-- footer / disclaimer -->
+  <g font-family="JetBrains Mono, monospace" font-size="11" fill="#56cbb6" letter-spacing="1">
+    <text x="60" y="690">SOURCE: src.eval.rewards.* logged per-step to wandb. Composite = weighted sum, weights in configs/stage3_rl_grpo.yaml.</text>
+  </g>
+</svg>

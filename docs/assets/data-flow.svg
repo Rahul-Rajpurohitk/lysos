@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06121a"/>
+      <stop offset="1" stop-color="#0a1d27"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#00e6b9"/>
+    </marker>
+    <marker id="arrowDim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#56cbb6" opacity="0.7"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+
+  <!-- title -->
+  <text x="60" y="62" font-family="JetBrains Mono, monospace" font-size="32" font-weight="700" fill="#e6f7f3">LYSOS — data pipeline</text>
+  <text x="60" y="92" font-size="17" fill="#7da5a0">10 real public sources · 11 loaders · 31,855 SFT examples + 3,200 RL prompts on Hugging Face Hub</text>
+
+  <!-- column headers -->
+  <g font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="3" fill="#56cbb6" font-weight="600">
+    <text x="80" y="170">SOURCE · public, open license</text>
+    <text x="540" y="170">LOADER · src/data/*.py</text>
+    <text x="950" y="170">PROCESSED · data/processed/*</text>
+    <text x="1290" y="170">HF HUB · public datasets</text>
+  </g>
+
+  <!-- ============ SOURCE BOXES (left) ============ -->
+  <g font-size="14" fill="#a3c2bd">
+    <!-- ChEMBL -->
+    <g>
+      <rect x="60" y="190" width="240" height="48" rx="6" fill="#0c2030" stroke="#00e6b9" stroke-width="1.4"/>
+      <text x="80" y="218" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">ChEMBL</text>
+      <text x="288" y="218" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" text-anchor="end">REST · 16,462</text>
+    </g>
+    <!-- DBAASP -->
+    <g>
+      <rect x="60" y="248" width="240" height="48" rx="6" fill="#0c2030" stroke="#1f4458"/>
+      <text x="80" y="276" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">DBAASP</text>
+      <text x="288" y="276" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" text-anchor="end">REST + N+1 · AMPs</text>
+    </g>
+    <!-- DRAMP -->
+    <g>
+      <rect x="60" y="306" width="240" height="48" rx="6" fill="#0c2030" stroke="#1f4458"/>
+      <text x="80" y="334" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">DRAMP</text>
+      <text x="288" y="334" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" text-anchor="end">XLSX · 8,532</text>
+    </g>
+    <!-- CARD -->
+    <g>
+      <rect x="60" y="364" width="240" height="48" rx="6" fill="#0c2030" stroke="#1f4458"/>
+      <text x="80" y="392" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">CARD</text>
+      <text x="288" y="392" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" text-anchor="end">tarball · 3,543</text>
+    </g>
+    <!-- BindingDB -->
+    <g>
+      <rect x="60" y="422" width="240" height="48" rx="6" fill="#0c2030" stroke="#274858" stroke-dasharray="4 4"/>
+      <text x="80" y="450" font-family="JetBrains Mono, monospace" font-size="14" fill="#a3c2bd" font-weight="700">BindingDB</text>
+      <text x="288" y="450" font-family="JetBrains Mono, monospace" font-size="13" fill="#7da5a0" text-anchor="end">JSP-gated</text>
+    </g>
+    <!-- PubChem -->
+    <g>
+      <rect x="60" y="480" width="240" height="48" rx="6" fill="#0c2030" stroke="#274858" stroke-dasharray="4 4"/>
+      <text x="80" y="508" font-family="JetBrains Mono, monospace" font-size="14" fill="#a3c2bd" font-weight="700">PubChem</text>
+      <text x="288" y="508" font-family="JetBrains Mono, monospace" font-size="13" fill="#7da5a0" text-anchor="end">PUG REST</text>
+    </g>
+    <!-- ZINC -->
+    <g>
+      <rect x="60" y="538" width="240" height="48" rx="6" fill="#0c2030" stroke="#1f4458"/>
+      <text x="80" y="566" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">ZINC</text>
+      <text x="288" y="566" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" text-anchor="end">subsets · FDA + trials</text>
+    </g>
+    <!-- DrugBank -->
+    <g>
+      <rect x="60" y="596" width="240" height="48" rx="6" fill="#0c2030" stroke="#274858" stroke-dasharray="4 4"/>
+      <text x="80" y="624" font-family="JetBrains Mono, monospace" font-size="14" fill="#a3c2bd" font-weight="700">DrugBank</text>
+      <text x="288" y="624" font-family="JetBrains Mono, monospace" font-size="13" fill="#7da5a0" text-anchor="end">SDF · needs rdkit</text>
+    </g>
+    <!-- PDB -->
+    <g>
+      <rect x="60" y="654" width="240" height="48" rx="6" fill="#0c2030" stroke="#1f4458"/>
+      <text x="80" y="682" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">PDB (RCSB)</text>
+      <text x="288" y="682" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" text-anchor="end">GraphQL · 3,136</text>
+    </g>
+    <!-- TDC -->
+    <g>
+      <rect x="60" y="712" width="240" height="48" rx="6" fill="#0c2030" stroke="#1f4458"/>
+      <text x="80" y="740" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">TDC (PyTDC)</text>
+      <text x="288" y="740" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" text-anchor="end">~50 tasks</text>
+    </g>
+  </g>
+
+  <!-- ============ ORCHESTRATOR (middle) ============ -->
+  <g>
+    <rect x="500" y="280" width="320" height="380" rx="8" fill="#0c2030" stroke="#00e6b9" stroke-width="1.6"/>
+    <text x="660" y="316" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#00e6b9" text-anchor="middle">ORCHESTRATOR</text>
+    <text x="660" y="360" font-size="22" fill="#e6f7f3" font-weight="700" text-anchor="middle">scripts/fetch_all_data.py</text>
+    <line x1="540" y1="380" x2="780" y2="380" stroke="#1f4458"/>
+
+    <text x="540" y="412" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">@step decorator</text>
+    <text x="540" y="436" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">retry + backoff</text>
+    <text x="540" y="460" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">polite delay 0.25–1.0 s</text>
+    <text x="540" y="484" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">caching · skip on hit</text>
+    <text x="540" y="508" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">--refresh to force</text>
+    <text x="540" y="532" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">--max-per-pathogen N</text>
+    <text x="540" y="556" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">CSV / JSON / SDF out</text>
+    <text x="540" y="580" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">unified schema</text>
+
+    <rect x="520" y="600" width="280" height="40" rx="4" fill="#001114" stroke="#1f4458"/>
+    <text x="660" y="624" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" text-anchor="middle">data/raw/{source}.csv</text>
+  </g>
+
+  <!-- arrows source -> orchestrator -->
+  <g stroke="#56cbb6" stroke-width="1.2" opacity="0.7" fill="none">
+    <path d="M 304 214 C 400 214 420 380 500 410" marker-end="url(#arrowDim)"/>
+    <path d="M 304 272 C 400 272 420 410 500 425" marker-end="url(#arrowDim)"/>
+    <path d="M 304 330 L 500 440" marker-end="url(#arrowDim)"/>
+    <path d="M 304 388 L 500 460" marker-end="url(#arrowDim)"/>
+    <path d="M 304 446 L 500 480" marker-end="url(#arrowDim)"/>
+    <path d="M 304 504 L 500 500" marker-end="url(#arrowDim)"/>
+    <path d="M 304 562 L 500 520" marker-end="url(#arrowDim)"/>
+    <path d="M 304 620 C 400 620 420 540 500 545" marker-end="url(#arrowDim)"/>
+    <path d="M 304 678 C 400 678 420 565 500 570" marker-end="url(#arrowDim)"/>
+    <path d="M 304 736 C 400 736 420 590 500 595" marker-end="url(#arrowDim)"/>
+  </g>
+
+  <!-- ============ PROCESSED (right-mid) ============ -->
+  <g>
+    <!-- Stage 2 -->
+    <rect x="900" y="240" width="320" height="120" rx="8" fill="#0c2030" stroke="#00e6b9" stroke-width="1.4"/>
+    <text x="920" y="268" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#00e6b9">STAGE 2 SFT</text>
+    <text x="920" y="298" font-size="22" fill="#e6f7f3" font-weight="700">31,855 instructions</text>
+    <text x="920" y="320" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">prepare_amr_data.py</text>
+    <text x="920" y="340" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">→ amr-stage2/{train,valid}</text>
+
+    <!-- Stage 3 -->
+    <rect x="900" y="380" width="320" height="120" rx="8" fill="#0c2030" stroke="#e066a8" stroke-width="1.4"/>
+    <text x="920" y="408" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#e066a8">STAGE 3 RL PROMPTS</text>
+    <text x="920" y="438" font-size="22" fill="#e6f7f3" font-weight="700">3,200 prompts</text>
+    <text x="920" y="460" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">prepare_stage3_prompts.py</text>
+    <text x="920" y="480" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">→ amr-rl-prompts/</text>
+
+    <!-- known antibiotics index -->
+    <rect x="900" y="520" width="320" height="120" rx="8" fill="#0c2030" stroke="#88c552" stroke-width="1.4"/>
+    <text x="920" y="548" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#88c552">RAG / NOVELTY INDEX</text>
+    <text x="920" y="578" font-size="22" fill="#e6f7f3" font-weight="700">20,489 known antibiotics</text>
+    <text x="920" y="600" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">build_known_antibiotics_index.py</text>
+    <text x="920" y="620" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">→ EmbeddingGemma · 768d</text>
+  </g>
+
+  <!-- arrow orchestrator -> processed -->
+  <line x1="820" y1="380" x2="900" y2="300" stroke="#00e6b9" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="820" y1="450" x2="900" y2="440" stroke="#e066a8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="820" y1="500" x2="900" y2="580" stroke="#88c552" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ============ HF HUB (right) ============ -->
+  <g>
+    <rect x="1280" y="240" width="280" height="120" rx="8" fill="#0c2030" stroke="#00e6b9" stroke-width="1.6"/>
+    <text x="1300" y="268" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#00e6b9">LIVE</text>
+    <text x="1300" y="298" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">rahul24raj/</text>
+    <text x="1300" y="320" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">  lysos-amr-stage2</text>
+    <text x="1300" y="346" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6">31,855 ex · public</text>
+
+    <rect x="1280" y="380" width="280" height="120" rx="8" fill="#0c2030" stroke="#e066a8" stroke-width="1.6"/>
+    <text x="1300" y="408" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#e066a8">LIVE</text>
+    <text x="1300" y="438" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">rahul24raj/</text>
+    <text x="1300" y="460" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">  lysos-rl-prompts</text>
+    <text x="1300" y="486" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6">3,200 prompts · public</text>
+
+    <rect x="1280" y="520" width="280" height="120" rx="8" fill="#0c2030" stroke="#88c552" stroke-width="1.6"/>
+    <text x="1300" y="548" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#88c552">LIVE on workspace</text>
+    <text x="1300" y="578" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">RAG · novelty · UI</text>
+    <text x="1300" y="600" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6">find-similar drug button</text>
+    <text x="1300" y="620" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6">EmbeddingGemma 300m</text>
+  </g>
+
+  <!-- arrows processed -> hf hub -->
+  <line x1="1220" y1="300" x2="1280" y2="300" stroke="#00e6b9" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1220" y1="440" x2="1280" y2="440" stroke="#e066a8" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1220" y1="580" x2="1280" y2="580" stroke="#88c552" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- legend -->
+  <g transform="translate(60,820)" font-family="JetBrains Mono, monospace" font-size="12" fill="#7da5a0" letter-spacing="1">
+    <text x="0" y="0">SOLID:  pulled live + verified  ·  DASHED:  partial / gated  ·  TEAL = generation path  ·  PINK = RL path  ·  GREEN = embedding path</text>
+    <text x="0" y="22" fill="#56cbb6">data sizes from STATUS.md (2026-05-01) — totals expand as DBAASP heavy fetch completes</text>
+  </g>
+
+</svg>

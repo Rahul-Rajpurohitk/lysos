@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04101a"/>
+      <stop offset="0.55" stop-color="#06121a"/>
+      <stop offset="1" stop-color="#001114"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.85" cy="0.15" r="0.7">
+      <stop offset="0" stop-color="#00e6b9" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#00e6b9" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="halo2" cx="0.05" cy="0.85" r="0.7">
+      <stop offset="0" stop-color="#3a86c0" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#3a86c0" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#0a2030" stroke-width="0.6"/>
+    </pattern>
+  </defs>
+
+  <!-- background -->
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#grid)"/>
+  <rect width="1920" height="1080" fill="url(#halo)"/>
+  <rect width="1920" height="1080" fill="url(#halo2)"/>
+
+  <!-- corner badge -->
+  <g transform="translate(80,80)">
+    <rect x="-2" y="-26" width="320" height="46" rx="4" fill="#00e6b9" opacity="0.10"/>
+    <text x="0" y="6" font-family="JetBrains Mono, monospace" font-size="16" letter-spacing="3" fill="#00e6b9" font-weight="700">AMD DEVELOPER HACKATHON · 2026</text>
+  </g>
+
+  <!-- molecule sketch (top-right) -->
+  <g transform="translate(1340,180)" stroke="#00e6b9" stroke-width="1.6" fill="none" opacity="0.85">
+    <!-- six-membered ring -->
+    <path d="M 0 0 L 60 0 L 90 52 L 60 104 L 0 104 L -30 52 Z"/>
+    <!-- substituents -->
+    <line x1="0" y1="0" x2="-50" y2="-30"/>
+    <circle cx="-50" cy="-30" r="4" fill="#00e6b9"/>
+    <line x1="60" y1="0" x2="110" y2="-30"/>
+    <circle cx="110" cy="-30" r="4" fill="#00e6b9"/>
+    <!-- second ring fused -->
+    <path d="M 90 52 L 150 52 L 180 104 L 150 156 L 90 156 L 60 104 Z" opacity="0.55"/>
+    <!-- bond accents -->
+    <line x1="2" y1="6" x2="58" y2="6" stroke-width="1"/>
+    <line x1="92" y1="58" x2="148" y2="58" stroke-width="1"/>
+    <!-- tail -->
+    <line x1="180" y1="104" x2="225" y2="135"/>
+    <circle cx="225" cy="135" r="5" fill="#56cbb6"/>
+    <line x1="225" y1="135" x2="265" y2="120"/>
+    <circle cx="265" cy="120" r="3" fill="#56cbb6"/>
+  </g>
+
+  <!-- vector grid (bottom-left small) -->
+  <g transform="translate(110,820)" font-family="JetBrains Mono, monospace" fill="#3a86c0">
+    <text x="0" y="-8" font-size="13" letter-spacing="2" opacity="0.9">embedding · 768d</text>
+    <g>
+      <rect width="22" height="22" fill="#3a86c0" opacity="0.95"/>
+      <rect x="28" width="22" height="22" fill="#3a86c0" opacity="0.65"/>
+      <rect x="56" width="22" height="22" fill="#3a86c0" opacity="0.45"/>
+      <rect x="84" width="22" height="22" fill="#3a86c0" opacity="0.85"/>
+      <rect x="112" width="22" height="22" fill="#3a86c0" opacity="0.55"/>
+      <rect x="140" width="22" height="22" fill="#3a86c0" opacity="0.30"/>
+      <rect x="168" width="22" height="22" fill="#3a86c0" opacity="0.70"/>
+      <rect x="196" width="22" height="22" fill="#3a86c0" opacity="0.90"/>
+      <rect x="224" width="22" height="22" fill="#3a86c0" opacity="0.40"/>
+      <rect x="252" width="22" height="22" fill="#3a86c0" opacity="0.75"/>
+    </g>
+  </g>
+
+  <!-- main title -->
+  <text x="80" y="540" font-family="JetBrains Mono, monospace" font-size="280" font-weight="800" fill="#e6f7f3" letter-spacing="-6">LYSOS</text>
+
+  <!-- accent stripe -->
+  <rect x="80" y="558" width="200" height="6" fill="#00e6b9"/>
+
+  <!-- tagline -->
+  <text x="80" y="640" font-size="40" fill="#a3c2bd" font-weight="500">Generative drug designer for antimicrobial resistance</text>
+
+  <!-- subtitle -->
+  <text x="80" y="700" font-family="JetBrains Mono, monospace" font-size="22" fill="#56cbb6" letter-spacing="1">Built on Gemma 4 31B · RL-tuned on AMD Instinct™ MI300X</text>
+
+  <!-- stats row -->
+  <g transform="translate(80,790)" font-family="JetBrains Mono, monospace">
+    <g>
+      <text x="0" y="0" font-size="46" font-weight="700" fill="#00e6b9">31,855</text>
+      <text x="0" y="32" font-size="14" fill="#7da5a0" letter-spacing="2">SFT INSTRUCTIONS</text>
+    </g>
+    <g transform="translate(290,0)">
+      <text x="0" y="0" font-size="46" font-weight="700" fill="#00e6b9">8</text>
+      <text x="0" y="32" font-size="14" fill="#7da5a0" letter-spacing="2">PRIORITY PATHOGENS</text>
+    </g>
+    <g transform="translate(550,0)">
+      <text x="0" y="0" font-size="46" font-weight="700" fill="#00e6b9">192 GB</text>
+      <text x="0" y="32" font-size="14" fill="#7da5a0" letter-spacing="2">SINGLE-GPU MEMORY</text>
+    </g>
+    <g transform="translate(870,0)">
+      <text x="0" y="0" font-size="46" font-weight="700" fill="#00e6b9">6</text>
+      <text x="0" y="32" font-size="14" fill="#7da5a0" letter-spacing="2">REWARD COMPONENTS</text>
+    </g>
+  </g>
+
+  <!-- footer -->
+  <g transform="translate(80,1020)" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6">
+    <text x="0" y="0" letter-spacing="2">github.com/Rahul-Rajpurohitk/lysos</text>
+    <text x="450" y="0" letter-spacing="2">huggingface.co/spaces/lablab-ai-amd-developer-hackathon/lysos</text>
+    <text x="1840" y="0" text-anchor="end" letter-spacing="2">v1 · 2026-05</text>
+  </g>
+</svg>

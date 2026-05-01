@@ -18,6 +18,10 @@
 
 ---
 
+## Cover / hero asset
+
+**Asset:** `docs/assets/cover-1920.svg` — Slide 1 cover (also lablab submission cover image).
+
 ## Section 1 — Cold open (0:00 – 0:15)
 
 **On screen:**
@@ -67,6 +71,8 @@
 ---
 
 ## Section 4 — Architecture (1:15 – 1:45)
+
+**Asset:** `docs/assets/architecture.svg` (animate the GPU box growing, then components fading in left → right). Has the memory-budget bar that dramatizes the "152 / 192 GB" callout.
 
 **On screen:**
 > Animated diagram appears, building up component by component.
@@ -148,6 +154,8 @@
 
 ## Section 6 — AMD utilization story (3:30 – 4:15)
 
+**Asset:** `docs/assets/rocm-smi-mockup.svg` (placeholder — swap with real `rocm-smi` capture once training is on the VM).
+
 **On screen:**
 > ROCm SMI screenshot from the MI300X during training:
 > ```
@@ -163,6 +171,8 @@
 ---
 
 ## Section 7 — Results / numbers (4:15 – 4:45)
+
+**Asset:** `docs/assets/reward-curves.svg` (projected mockup) — replace with real wandb panel after Stage 3 RL completes.
 
 **On screen:**
 > Comparison panel:
