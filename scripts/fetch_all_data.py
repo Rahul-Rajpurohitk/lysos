@@ -36,6 +36,11 @@ import sys
 import time
 from pathlib import Path
 
+# Make `from src.data...` imports work regardless of cwd
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] fetch_all | %(message)s",

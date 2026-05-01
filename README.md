@@ -113,10 +113,37 @@ MIT — see [LICENSE](./LICENSE)
 
 ---
 
+## Data sources (10 real loaders, all open license)
+
+| Source | Loader | What | Typical size |
+|---|---|---|---|
+| **TDC** | `scripts/prepare_tdc_data.py` | Therapeutics Data Commons (~50 ADMET, binding, tox tasks) | ~500 MB |
+| **ChEMBL** | `src/data/chembl.py` | ChEMBL REST API — bacterial activity (MIC, MBC, IC50, Ki) | ~30 MB |
+| **DBAASP** | `src/data/dbaasp.py` | DBAASP — antimicrobial peptides + per-strain MIC + hemolysis | ~5 MB |
+| **APD3** | `src/data/apd3.py` | Antimicrobial Peptide DB (curated AMPs) | ~1 MB |
+| **DRAMP** | `src/data/dramp.py` | Data Repository of Antimicrobial Peptides (~22K peptides) | ~10 MB |
+| **CARD** | `src/data/card.py` | Comprehensive Antibiotic Resistance Database | ~10 MB |
+| **BindingDB** | `src/data/bindingdb.py` | Binding affinities (Ki/Kd/IC50/EC50) — bacterial subset streamed from full TSV | ~200 MB |
+| **PubChem** | `src/data/pubchem.py` | Curated antibacterial bioassays via PUG REST | ~50-500 MB |
+| **ZINC** | `src/data/zinc.py` | FDA-approved + investigational + world drug-like SMILES | ~50 MB |
+| **DrugBank** | `src/data/drugbank.py` | DrugBank Open Data (free-tier; SMILES + indications) | ~5 MB |
+| **PDB** | `src/data/pdb.py` | RCSB metadata for AMR pathogen target structures | ~5 MB |
+
+Run all of them at once with:
+
+```bash
+python scripts/fetch_all_data.py --max-per-pathogen 2000
+```
+
+After fetching, see what's on disk:
+
+```bash
+python scripts/data_inventory.py
+```
+
 ## Acknowledgments
 
 - Built on [Gemma 4](https://huggingface.co/google/gemma-4-31B-it) (Google)
 - Inspired by [TxGemma](https://huggingface.co/collections/google/txgemma-release-67dd92e931c857d15e4d1e87) (Google)
 - Compute by [AMD Developer Cloud](https://www.amd.com/en/developer/resources/cloud-access/amd-developer-cloud.html) on AMD Instinct™ MI300X
-- Data: [ChEMBL](https://www.ebi.ac.uk/chembl/), [DBAASP](https://dbaasp.org/), [Therapeutics Data Commons](https://tdcommons.ai), [CARD](https://card.mcmaster.ca/), [PDB](https://www.rcsb.org/)
 - Submitted to: [AMD Developer Hackathon](https://lablab.ai/ai-hackathons/amd-developer) by [lablab.ai](https://lablab.ai)
