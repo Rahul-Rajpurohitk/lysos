@@ -183,8 +183,11 @@ make api-dev
 - `docs/data-pipeline.md` — end-to-end data flow (sources → loaders → processed → HF Hub)
 - `docs/pitch-deck.md` — 10-slide submission deck (problem, solution, demo, architecture, business, ask)
 - `docs/demo-video-storyboard.md` — beat-by-beat 5-min MP4 plan with on-screen + voiceover
+- `docs/build-in-public.md` — pre-written social posts, day -3 through submission day
 - `docs/ROADMAP.md` — pre-kickoff checklist
 - `STATUS.md` — single-page snapshot of where the project stands today
+- `examples/` — minimal scripts: quickstart, score-one-smiles, find-similar-drugs
+- `model_cards/` — Hugging Face model + dataset cards (pushed to HF Hub at submission)
 - `vault/` — research notes, ADRs, session logs (Obsidian-style)
 
 ## Acknowledgments
