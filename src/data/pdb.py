@@ -90,6 +90,8 @@ def _batch_metadata(pdb_ids: list[str], batch: int = 50) -> dict[str, dict]:
     if not pdb_ids:
         return out
 
+    # Note: organism is on polymer_entities[].rcsb_entity_source_organism,
+    # NOT on entries directly (verified via introspection of RCSB GraphQL).
     query_template = """
     query Q($ids: [String!]!) {
       entries(entry_ids: $ids) {
@@ -98,12 +100,14 @@ def _batch_metadata(pdb_ids: list[str], batch: int = 50) -> dict[str, dict]:
           title
           pdbx_descriptor
         }
-        rcsb_entity_source_organism {
-          ncbi_scientific_name
-        }
         struct_keywords {
           pdbx_keywords
           text
+        }
+        polymer_entities {
+          rcsb_entity_source_organism {
+            ncbi_scientific_name
+          }
         }
         nonpolymer_entities {
           rcsb_nonpolymer_entity {
@@ -150,13 +154,23 @@ def _flatten_entry(entry: dict, *, pathogen_short: str, organism: str) -> list[d
     title = (entry.get("struct") or {}).get("title", "")
     keywords = (entry.get("struct_keywords") or {}).get("pdbx_keywords", "")
 
+    # Pull all source organisms from polymer_entities (de-duped)
+    polymer_entities = entry.get("polymer_entities") or []
+    pe_organisms: set[str] = set()
+    for pe in polymer_entities:
+        for org in (pe.get("rcsb_entity_source_organism") or []):
+            name = org.get("ncbi_scientific_name") if isinstance(org, dict) else None
+            if name:
+                pe_organisms.add(str(name))
+    organism_str = ", ".join(sorted(pe_organisms)) if pe_organisms else organism
+
     rows = []
     nonpolymers = entry.get("nonpolymer_entities") or []
     if not nonpolymers:
         rows.append({
             "pdb_id": pdb_id,
             "pathogen_short": pathogen_short,
-            "organism": organism,
+            "organism": organism_str,
             "title": title,
             "keywords": keywords,
             "ligand_id": "",
@@ -174,7 +188,7 @@ def _flatten_entry(entry: dict, *, pathogen_short: str, organism: str) -> list[d
         rows.append({
             "pdb_id": pdb_id,
             "pathogen_short": pathogen_short,
-            "organism": organism,
+            "organism": organism_str,
             "title": title,
             "keywords": keywords,
             "ligand_id": chem_comp.get("id", ""),
