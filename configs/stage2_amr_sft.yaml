@@ -32,24 +32,25 @@ dataset:
   max_seq_length: 4096
   packing: true
   # Multi-task mixing weights (sum = 1.0). Recalibrated 2026-05-01 after
-  # DrugBank knowledge tasks added — total 9 task types in lysos-amr-stage2.
+  # DrugCentral + NPAtlas wiring — total 13 task types, 221,338 examples.
   task_mix:
-    # Core chemistry (60%) — these directly serve the design objective
-    generation_for_target: 0.30  # given pathogen → SMILES
-    activity_prediction: 0.20    # given molecule + pathogen → MIC
-    peptide_design: 0.10         # given pathogen → AMP sequence
+    # Core chemistry (50%) — these directly serve the design objective
+    generation_for_target: 0.20  # given pathogen → SMILES
+    activity_prediction: 0.18    # given molecule + pathogen → MIC
+    peptide_design: 0.08         # given pathogen → AMP sequence
+    drug_structure: 0.04         # name ↔ SMILES (DrugCentral)
 
-    # Safety + properties (15%)
-    safety_prediction: 0.10      # given molecule → hemolysis
-    drug_likeness: 0.05          # given molecule → QED + Lipinski (rdkit-side)
+    # Safety + properties (12%)
+    safety_prediction: 0.08      # given molecule → hemolysis
+    drug_likeness: 0.04          # given molecule → QED + Lipinski (rdkit-side)
 
-    # Pharma knowledge (25%) — DrugBank vocabulary tasks. Lower per-task weight
-    # because they're shorter/simpler than the chemistry tasks.
-    drug_id_lookup: 0.05         # name → DrugBank ID
+    # Drug + natural product knowledge (38%) — vocabulary tasks
+    natural_products: 0.10       # NPAtlas — name ↔ SMILES ↔ producer organism
+    drug_id_lookup: 0.06         # name → DrugBank ID
     drug_inchi_key: 0.05         # name → Standard InChI Key
     drug_synonyms: 0.05          # name → synonym list
-    drug_cas_lookup: 0.05        # name → CAS
-    drug_reverse_cas: 0.05       # CAS → name
+    drug_cas_lookup: 0.06        # name → CAS
+    drug_reverse_cas: 0.06       # CAS → name
 
 # -----------------------------------------------------------------------------
 # Training — gentler LR than Stage 1, fewer epochs (avoid forgetting Stage 1)
