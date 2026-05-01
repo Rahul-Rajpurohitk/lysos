@@ -217,38 +217,70 @@ class Sources:
 
     chembl_csv: Path
     dbaasp_csv: Path
+    bindingdb_csv: Path
+    pubchem_csv: Path
+    apd3_csv: Path
+    dramp_csv: Path
+    drugbank_csv: Path
     out_dir: Path
 
 
-def _ensure_data(srcs: Sources, fetch: bool) -> None:
-    """Verify raw data exists; optionally fetch it from real APIs."""
-    if not srcs.chembl_csv.exists():
-        if fetch:
-            log.info("Fetching ChEMBL antibacterial activities...")
-            from src.data.chembl import fetch_amr_activities
-            fetch_amr_activities(out_path=srcs.chembl_csv)
-        else:
-            log.error(
-                "ChEMBL data not found at %s\n"
-                "  Run: python -m src.data.chembl --output %s\n"
-                "  Or:  python scripts/prepare_amr_data.py --fetch",
-                srcs.chembl_csv, srcs.chembl_csv,
-            )
-            raise FileNotFoundError(srcs.chembl_csv)
+REQUIRED_SOURCES = ["chembl", "dbaasp"]
+OPTIONAL_SOURCES = ["bindingdb", "pubchem", "apd3", "dramp", "drugbank"]
 
-    if not srcs.dbaasp_csv.exists():
+
+def _ensure_data(srcs: Sources, fetch: bool) -> dict[str, bool]:
+    """Verify raw data exists; optionally fetch from real APIs.
+
+    Required sources missing → FileNotFoundError.
+    Optional sources missing → log + return present-map.
+    """
+    present: dict[str, bool] = {}
+    fetchers = {
+        "chembl": ("src.data.chembl", "fetch_amr_activities"),
+        "dbaasp": ("src.data.dbaasp", "fetch_amps"),
+        "bindingdb": ("src.data.bindingdb", "fetch_bindingdb"),
+        "pubchem": ("src.data.pubchem", "fetch_pubchem_antibacterial"),
+        "apd3": ("src.data.apd3", "fetch_apd3_amps"),
+        "dramp": ("src.data.dramp", "fetch_amps"),
+        "drugbank": ("src.data.drugbank", "fetch_drugbank_open"),
+    }
+    paths = {
+        "chembl": srcs.chembl_csv,
+        "dbaasp": srcs.dbaasp_csv,
+        "bindingdb": srcs.bindingdb_csv,
+        "pubchem": srcs.pubchem_csv,
+        "apd3": srcs.apd3_csv,
+        "dramp": srcs.dramp_csv,
+        "drugbank": srcs.drugbank_csv,
+    }
+    for name, path in paths.items():
+        if path.exists():
+            present[name] = True
+            continue
         if fetch:
-            log.info("Fetching DBAASP antimicrobial peptides...")
-            from src.data.dbaasp import fetch_amps
-            fetch_amps(out_path=srcs.dbaasp_csv)
+            mod_name, fn_name = fetchers[name]
+            log.info("Fetching %s ...", name)
+            try:
+                mod = __import__(mod_name, fromlist=[fn_name])
+                fn = getattr(mod, fn_name)
+                fn(out_path=path)
+                present[name] = path.exists()
+            except Exception as exc:  # noqa: BLE001
+                log.warning("  ✗ %s fetch failed: %s", name, exc)
+                present[name] = False
         else:
-            log.error(
-                "DBAASP data not found at %s\n"
-                "  Run: python -m src.data.dbaasp --output %s\n"
-                "  Or:  python scripts/prepare_amr_data.py --fetch",
-                srcs.dbaasp_csv, srcs.dbaasp_csv,
-            )
-            raise FileNotFoundError(srcs.dbaasp_csv)
+            present[name] = False
+            if name in REQUIRED_SOURCES:
+                log.error(
+                    "%s data not found at %s\n"
+                    "  Run: python -m %s --output %s\n"
+                    "  Or:  python scripts/prepare_amr_data.py --fetch",
+                    name, path, fetchers[name][0], path,
+                )
+                raise FileNotFoundError(path)
+            log.warning("optional source %s missing at %s (skipping)", name, path)
+    return present
 
 
 # -----------------------------------------------------------------------------
@@ -256,65 +288,118 @@ def _ensure_data(srcs: Sources, fetch: bool) -> None:
 # -----------------------------------------------------------------------------
 
 
-def build_activity_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
+def _load_activity_csv(path: Path, present: dict[str, bool], name: str):
+    """Load a CSV if its source was fetched successfully, else None."""
     import pandas as pd
 
-    df = pd.read_csv(srcs.chembl_csv)
-    # Drop rows where MIC didn't normalize
+    if not present.get(name) or not path.exists():
+        return None
+    return pd.read_csv(path)
+
+
+def build_activity_examples(srcs: Sources, max_rows: int | None,
+                            present: dict[str, bool]) -> list[dict]:
+    import pandas as pd
+
+    # ChEMBL is the canonical source; BindingDB adds binding affinity data
+    frames = []
+    for name, path in [("chembl", srcs.chembl_csv), ("bindingdb", srcs.bindingdb_csv)]:
+        df = _load_activity_csv(path, present, name)
+        if df is not None and not df.empty:
+            frames.append(df)
+    if not frames:
+        return []
+    df = pd.concat(frames, ignore_index=True)
     df = df.dropna(subset=["smiles", "pathogen_short", "mic_log_ug_per_ml"])
     if max_rows:
         df = df.head(max_rows)
     out = []
     for _, row in df.iterrows():
-        path = PATHOGENS_BY_SHORT.get(row["pathogen_short"])
-        if not path:
+        pathogen = PATHOGENS_BY_SHORT.get(row["pathogen_short"])
+        if not pathogen:
             continue
-        out.append(t_activity_prediction(row["smiles"], path, float(row["mic_log_ug_per_ml"])))
+        out.append(t_activity_prediction(row["smiles"], pathogen, float(row["mic_log_ug_per_ml"])))
     return out
 
 
-def build_generation_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
+def build_generation_examples(srcs: Sources, max_rows: int | None,
+                              present: dict[str, bool]) -> list[dict]:
     import pandas as pd
 
-    df = pd.read_csv(srcs.chembl_csv)
-    # Only generate from highly potent compounds (pchembl >= 5, ie IC50 <= 10µM)
-    if "pchembl_value" in df.columns:
-        df = df[df["pchembl_value"] >= 5.0]
-    df = df.dropna(subset=["smiles", "pathogen_short"])
+    # Use ChEMBL potent compounds + BindingDB high-affinity binders + PubChem actives
+    frames = []
+    df_chembl = _load_activity_csv(srcs.chembl_csv, present, "chembl")
+    if df_chembl is not None:
+        if "pchembl_value" in df_chembl.columns:
+            df_chembl = df_chembl[df_chembl["pchembl_value"] >= 5.0]
+        frames.append(df_chembl.dropna(subset=["smiles", "pathogen_short"]))
+
+    df_bdb = _load_activity_csv(srcs.bindingdb_csv, present, "bindingdb")
+    if df_bdb is not None:
+        # Keep all BindingDB rows (they're already filtered to bacterial)
+        frames.append(df_bdb.dropna(subset=["smiles", "pathogen_short"]))
+
+    df_pubchem = _load_activity_csv(srcs.pubchem_csv, present, "pubchem")
+    if df_pubchem is not None:
+        frames.append(df_pubchem.dropna(subset=["smiles", "pathogen_short"]))
+
+    if not frames:
+        return []
+    df = pd.concat(frames, ignore_index=True)
     if max_rows:
         df = df.head(max_rows)
     out = []
     for _, row in df.iterrows():
-        path = PATHOGENS_BY_SHORT.get(row["pathogen_short"])
-        if not path:
+        pathogen = PATHOGENS_BY_SHORT.get(row["pathogen_short"])
+        if not pathogen:
             continue
-        out.append(t_generation_for_target(path, row["smiles"]))
+        out.append(t_generation_for_target(pathogen, row["smiles"]))
     return out
 
 
-def build_peptide_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
+def build_peptide_examples(srcs: Sources, max_rows: int | None,
+                           present: dict[str, bool]) -> list[dict]:
     import pandas as pd
 
-    df = pd.read_csv(srcs.dbaasp_csv)
+    # AMP sources: DBAASP + APD3 + DRAMP — all share the same schema
+    frames = []
+    for name, path in [("dbaasp", srcs.dbaasp_csv),
+                       ("apd3", srcs.apd3_csv),
+                       ("dramp", srcs.dramp_csv)]:
+        df = _load_activity_csv(path, present, name)
+        if df is not None and not df.empty:
+            frames.append(df)
+    if not frames:
+        return []
+    df = pd.concat(frames, ignore_index=True)
     df = df.dropna(subset=["sequence", "pathogen_short"])
-    # Only use peptides with non-hemolytic activity for generation training
     if "hemolytic_int" in df.columns:
         df = df[df["hemolytic_int"] == 0]
     if max_rows:
         df = df.head(max_rows)
     out = []
     for _, row in df.iterrows():
-        path = PATHOGENS_BY_SHORT.get(row["pathogen_short"])
-        if not path:
+        pathogen = PATHOGENS_BY_SHORT.get(row["pathogen_short"])
+        if not pathogen:
             continue
-        out.append(t_peptide_design(path, row["sequence"]))
+        out.append(t_peptide_design(pathogen, row["sequence"]))
     return out
 
 
-def build_safety_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
+def build_safety_examples(srcs: Sources, max_rows: int | None,
+                          present: dict[str, bool]) -> list[dict]:
     import pandas as pd
 
-    df = pd.read_csv(srcs.dbaasp_csv)
+    frames = []
+    for name, path in [("dbaasp", srcs.dbaasp_csv),
+                       ("apd3", srcs.apd3_csv),
+                       ("dramp", srcs.dramp_csv)]:
+        df = _load_activity_csv(path, present, name)
+        if df is not None and not df.empty:
+            frames.append(df)
+    if not frames:
+        return []
+    df = pd.concat(frames, ignore_index=True)
     df = df.dropna(subset=["sequence"])
     rows = []
     for _, row in df.iterrows():
@@ -324,14 +409,24 @@ def build_safety_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
     return rows
 
 
-def build_drug_likeness_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
+def build_drug_likeness_examples(srcs: Sources, max_rows: int | None,
+                                 present: dict[str, bool]) -> list[dict]:
     import pandas as pd
     from rdkit import Chem, RDLogger
     from rdkit.Chem import QED, Crippen, Descriptors, Lipinski
 
     RDLogger.DisableLog("rdApp.*")
 
-    df = pd.read_csv(srcs.chembl_csv)
+    # Drug-likeness training pulls from ChEMBL + DrugBank (broad drug knowledge)
+    frames = []
+    for name, path in [("chembl", srcs.chembl_csv), ("drugbank", srcs.drugbank_csv)]:
+        df = _load_activity_csv(path, present, name)
+        if df is not None and not df.empty:
+            frames.append(df[["smiles"]] if "smiles" in df.columns else None)
+    frames = [f for f in frames if f is not None]
+    if not frames:
+        return []
+    df = pd.concat(frames, ignore_index=True)
     df = df.dropna(subset=["smiles"])
     df = df.drop_duplicates(subset=["smiles"])
     if max_rows:
@@ -380,18 +475,25 @@ def main() -> int:
     srcs = Sources(
         chembl_csv=args.data_root / "chembl_antibiotics.csv",
         dbaasp_csv=args.data_root / "dbaasp_amps.csv",
+        bindingdb_csv=args.data_root / "bindingdb_antibacterial.csv",
+        pubchem_csv=args.data_root / "pubchem_antibacterial.csv",
+        apd3_csv=args.data_root / "apd3_amps.csv",
+        dramp_csv=args.data_root / "dramp_amps.csv",
+        drugbank_csv=args.data_root / "drugbank_open.csv",
         out_dir=args.output_dir,
     )
 
-    # Verify (or fetch) real data
-    _ensure_data(srcs, fetch=args.fetch)
+    # Verify (or fetch) real data; returns presence map for optional sources
+    present = _ensure_data(srcs, fetch=args.fetch)
+    log.info("Sources present: %s",
+             {k: v for k, v in present.items() if v})
 
     log.info("Building task slices from real data...")
-    activity = build_activity_examples(srcs, args.max_rows_per_task)
-    generation = build_generation_examples(srcs, args.max_rows_per_task)
-    peptide = build_peptide_examples(srcs, args.max_rows_per_task)
-    safety = build_safety_examples(srcs, args.max_rows_per_task)
-    drug_like = build_drug_likeness_examples(srcs, args.max_rows_per_task)
+    activity = build_activity_examples(srcs, args.max_rows_per_task, present)
+    generation = build_generation_examples(srcs, args.max_rows_per_task, present)
+    peptide = build_peptide_examples(srcs, args.max_rows_per_task, present)
+    safety = build_safety_examples(srcs, args.max_rows_per_task, present)
+    drug_like = build_drug_likeness_examples(srcs, args.max_rows_per_task, present)
 
     log.info("  activity_prediction:   %d", len(activity))
     log.info("  generation_for_target: %d", len(generation))
