@@ -16,10 +16,31 @@ Output PNGs land next to each SVG with the same basename:
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
+
+
+_VIEWBOX_RE = re.compile(r'viewBox="([\d.\s-]+)"')
+_WIDTH_RE = re.compile(r'\bwidth="(\d+)"')
+_HEIGHT_RE = re.compile(r'\bheight="(\d+)"')
+
+
+def svg_size(svg: Path) -> tuple[int, int]:
+    """Return (width, height) of the SVG's natural canvas size."""
+    text = svg.read_text(errors="ignore")[:1500]
+    m = _VIEWBOX_RE.search(text)
+    if m:
+        parts = m.group(1).split()
+        if len(parts) == 4:
+            return int(float(parts[2])), int(float(parts[3]))
+    w = _WIDTH_RE.search(text)
+    h = _HEIGHT_RE.search(text)
+    if w and h:
+        return int(w.group(1)), int(h.group(1))
+    return 1920, 1080
 
 
 def has(tool: str) -> bool:
@@ -55,20 +76,43 @@ def render_with_chrome(svg: Path, png: Path, width: int) -> None:
     if not Path(chrome).exists() and not shutil.which(chrome):
         raise RuntimeError("no chrome / chromium binary found")
 
-    height = int(width * 9 / 16)
-    subprocess.run(
-        [
-            chrome,
-            "--headless",
-            "--disable-gpu",
-            "--hide-scrollbars",
-            "--default-background-color=00000000",
-            f"--screenshot={png}",
-            f"--window-size={width},{height}",
-            f"file://{svg.resolve()}",
-        ],
-        check=True,
-    )
+    nat_w, nat_h = svg_size(svg)
+    out_w = width
+    out_h = int(round(nat_h * (width / nat_w)))
+
+    import tempfile
+    html = f"""<!doctype html>
+<html><head><meta charset=utf-8>
+<style>
+  html,body {{ margin:0; padding:0; background:transparent; }}
+  body {{ display:flex; align-items:flex-start; justify-content:flex-start; }}
+  object {{ width:100vw; height:100vh; display:block; }}
+</style>
+</head><body>
+<object type="image/svg+xml" data="{svg.resolve()}"></object>
+</body></html>
+"""
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".html", delete=False, encoding="utf-8"
+    ) as fh:
+        fh.write(html)
+        wrapper = Path(fh.name)
+    try:
+        subprocess.run(
+            [
+                chrome,
+                "--headless",
+                "--disable-gpu",
+                "--hide-scrollbars",
+                "--default-background-color=00000000",
+                f"--screenshot={png}",
+                f"--window-size={out_w},{out_h}",
+                f"file://{wrapper}",
+            ],
+            check=True,
+        )
+    finally:
+        wrapper.unlink(missing_ok=True)
 
 
 def pick_renderer():
