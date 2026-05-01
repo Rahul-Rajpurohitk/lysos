@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+title: "Lysos: An open-source generative drug designer for antimicrobial resistance"
+message: "If you use Lysos in academic work, please cite it as below."
+authors:
+  - family-names: Rajpurohit
+    given-names: Rahul
+    email: rahulrajpurohitk@gmail.com
+type: software
+date-released: 2026-05-04
+version: "0.1.0"
+license: Apache-2.0
+url: https://github.com/Rahul-Rajpurohitk/lysos
+repository-code: https://github.com/Rahul-Rajpurohitk/lysos
+keywords:
+  - antimicrobial resistance
+  - drug design
+  - generative ai
+  - reinforcement learning
+  - gemma
+  - amd
+  - mi300x
+abstract: >-
+  Lysos is an open-source generative drug designer specialized for designing
+  novel antibiotics against drug-resistant bacteria. It is built on Google's
+  Gemma 4 31B large language model, fine-tuned with reinforcement learning
+  using publicly verifiable rewards (predicted MIC, drug-likeness,
+  synthesizability, hemolytic safety, novelty). Training runs entirely on a
+  single AMD Instinct MI300X GPU, leveraging its 192 GB HBM3 memory to keep
+  the policy, reference, and reward models coresident during GRPO updates.
+  The training pipeline integrates 31,855 instruction-tuning examples drawn
+  from ten real public sources (ChEMBL, DBAASP, DRAMP, CARD, PDB, ZINC, and
+  others) and an embedding-based novelty signal computed against a 20,489-row
+  index of known antibiotics. Lysos was built for the AMD Developer Hackathon
+  (May 4-10, 2026).
