@@ -314,6 +314,25 @@ Within $300 budget. Comfortable cushion.
 
 ---
 
+## 12.5 EmbeddingGemma 300m — retrieval + novelty layer (added 2026-05-01)
+
+We add `google/embeddinggemma-300m` (308M params, Gemma 3 architecture, Matryoshka 768→128 dims, 2K context, open weights) as a second model in the stack. Coexists with Gemma 4 31B on the same MI300X (~63 GB total).
+
+Four integration slots:
+
+| Slot | Where | Why |
+|---|---|---|
+| **Novelty reward** | `src/eval/rewards/embedding_novelty.py` (new) | Semantic novelty complements Morgan-fingerprint Tanimoto — catches paraphrase-level similarity that bit-vectors miss |
+| **RAG at inference** | `src/inference/retrieval.py` (new) | Top-k known antibiotics injected into prompt as in-context examples |
+| **Training dedup** | `scripts/dedup_with_embeddings.py` (new) | Cluster Stage 2 training corpus; 10–20% smaller dataset, no near-dupe over-fit |
+| **"Similar drugs" UI** | `workspace/api/server.py` + workspace UI | Each generated candidate gets a "Find similar known drugs" panel — viral demo feature |
+
+Total integration cost: ~3.5 hours. Plan: `vault/plans/2026-05-01-embeddinggemma-integration.md`.
+
+`gemini-embedding-2` (closed multimodal API) deferred — revisit only if we add image-based molecule similarity.
+
+---
+
 ## 13. Stretch goals (if Day 4 is ahead of schedule)
 
 - 26B-A4B MoE variant comparison (the "MoE on MI300X" angle)

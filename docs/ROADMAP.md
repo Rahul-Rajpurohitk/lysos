@@ -8,15 +8,22 @@
 - [x] GitHub repo initialized
 - [x] HF Space slug `lysos` reserved in `lablab-ai-amd-developer-hackathon` org
 - [x] HF Hub model slugs reserved (`rahul24raj/txgemma-4-31b`, `rahul24raj/lysos-base`, `rahul24raj/lysos-rl`)
-- [ ] AMD Dev Cloud credits confirmed in DigitalOcean
+- [x] **10 real data loaders implemented** (chembl, dbaasp, dramp, card, bindingdb, pubchem, zinc, apd3, drugbank, pdb)
+- [x] **Stage 2 dataset built and pushed to HF Hub** — `rahul24raj/lysos-amr-stage2` (21,007 examples)
+- [x] **Stage 3 RL prompts pushed to HF Hub** — `rahul24raj/lysos-rl-prompts` (3,200 prompts)
+- [x] Verifier + 13 unit tests + Makefile shipped
+- [x] Workspace API (FastAPI) + UI (Vite/React/Tailwind) + Docker — full demo stack
+- [x] EmbeddingGemma 300m research + integration plan (vault/research, vault/plans)
+- [x] AMR dataset URLs + DUA paths confirmed (no DUA dependencies)
+- [ ] AMD Dev Cloud credits confirmed in DigitalOcean (expected Sat May 2)
 - [ ] All 5 official AMD/lablab workshop videos watched
-- [ ] ROCm + Gemma 4 + Optimum-AMD compatibility smoke-tested
-- [ ] TRL GRPO trainer ROCm compat verified
-- [ ] Workspace UI design system locked (color palette, components)
+- [ ] ROCm + Gemma 4 + Optimum-AMD compatibility smoke-tested (waits for credits)
+- [ ] TRL GRPO trainer ROCm compat verified (waits for credits)
+- [ ] EmbeddingGemma 300m integration (Phases 1–5 of vault/plans)
+- [ ] DBAASP heavy-fetch finish + Stage 2 re-build with bigger AMP corpus
 - [ ] Pitch deck skeleton drafted
 - [ ] Cover image draft v1
 - [ ] Demo video storyboard
-- [ ] AMR dataset URLs + DUA paths confirmed (no DUA dependencies)
 
 ## Day 1 — Mon May 4 (Foundation training)
 
