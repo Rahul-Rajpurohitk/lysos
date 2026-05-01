@@ -113,6 +113,88 @@ def fetch_card(args: argparse.Namespace) -> bool:
     return bool(rows)
 
 
+@step("BindingDB binding affinities (bacterial subset)")
+def fetch_bindingdb(args: argparse.Namespace) -> bool:
+    from src.data.bindingdb import fetch_bindingdb as _fetch
+
+    out = args.data_root / "bindingdb_antibacterial.csv"
+    if out.exists() and not args.refresh:
+        log.info("Using cached %s", out)
+        return True
+    df = _fetch(out_path=out, cache_dir=args.data_root / "bindingdb_cache")
+    return not df.empty
+
+
+@step("PubChem antibacterial bioassays")
+def fetch_pubchem(args: argparse.Namespace) -> bool:
+    from src.data.pubchem import fetch_pubchem_antibacterial
+
+    out = args.data_root / "pubchem_antibacterial.csv"
+    if out.exists() and not args.refresh:
+        log.info("Using cached %s", out)
+        return True
+    df = fetch_pubchem_antibacterial(
+        out_path=out,
+        max_assays_per_pathogen=min(args.max_per_pathogen // 100 + 1, 5),
+    )
+    return not df.empty
+
+
+@step("ZINC drug-like / FDA chemical space")
+def fetch_zinc(args: argparse.Namespace) -> bool:
+    from src.data.zinc import fetch_zinc_subsets
+
+    out = args.data_root / "zinc_drug_like.csv"
+    if out.exists() and not args.refresh:
+        log.info("Using cached %s", out)
+        return True
+    # FDA + investigational + in-trials are small (~10K total) and very useful;
+    # "world" is ~250K and still manageable. Skip the giant in-stock-druglike
+    # by default — that's a separate opt-in.
+    df = fetch_zinc_subsets(
+        out_path=out,
+        cache_dir=args.data_root / "zinc_cache",
+        subsets=["fda", "investigational", "in-trials", "world"],
+    )
+    return not df.empty
+
+
+@step("APD3 antimicrobial peptides")
+def fetch_apd3(args: argparse.Namespace) -> bool:
+    from src.data.apd3 import fetch_apd3_amps
+
+    out = args.data_root / "apd3_amps.csv"
+    if out.exists() and not args.refresh:
+        log.info("Using cached %s", out)
+        return True
+    df = fetch_apd3_amps(out_path=out, cache_dir=args.data_root / "apd3_cache")
+    return not df.empty
+
+
+@step("DrugBank Open Data (free tier)")
+def fetch_drugbank(args: argparse.Namespace) -> bool:
+    from src.data.drugbank import fetch_drugbank_open
+
+    out = args.data_root / "drugbank_open.csv"
+    if out.exists() and not args.refresh:
+        log.info("Using cached %s", out)
+        return True
+    df = fetch_drugbank_open(out_path=out, cache_dir=args.data_root / "drugbank_cache")
+    return not df.empty
+
+
+@step("PDB structures for AMR targets")
+def fetch_pdb(args: argparse.Namespace) -> bool:
+    from src.data.pdb import fetch_pdb_targets
+
+    out = args.data_root / "pdb_amr_targets.csv"
+    if out.exists() and not args.refresh:
+        log.info("Using cached %s", out)
+        return True
+    df = fetch_pdb_targets(out_path=out, max_per_pathogen=args.max_per_pathogen)
+    return not df.empty
+
+
 @step("Build Stage 1 TDC corpus")
 def build_tdc(args: argparse.Namespace) -> bool:
     cmd = [
@@ -188,12 +270,19 @@ def main() -> int:
     successes = []
     failures = []
 
-    # Raw data fetches
+    # Raw data fetches — order matters: cheap/fast ones first so a failure
+    # late in the chain doesn't waste 30 min on the expensive sources.
     fetches = [
-        ("chembl", fetch_chembl),
-        ("dbaasp", fetch_dbaasp),
-        ("dramp", fetch_dramp),
-        ("card", fetch_card),
+        ("zinc", fetch_zinc),                # ~5 MB, fast (uses ZINC subsets)
+        ("apd3", fetch_apd3),                # ~1 MB, fast
+        ("card", fetch_card),                # ~10 MB, single bulk download
+        ("dramp", fetch_dramp),              # ~10 MB, bulk download
+        ("drugbank", fetch_drugbank),        # ~5 MB, free-tier
+        ("chembl", fetch_chembl),            # ~30 MB, REST API + pagination
+        ("dbaasp", fetch_dbaasp),            # ~5 MB but SLOW (N+1 detail fetches)
+        ("pubchem", fetch_pubchem),          # ~50-500 MB depending on assays
+        ("bindingdb", fetch_bindingdb),      # ~200 MB, bulk download + filter
+        ("pdb", fetch_pdb),                  # ~5 MB metadata
     ]
     for name, fn in fetches:
         if name in skipped:
