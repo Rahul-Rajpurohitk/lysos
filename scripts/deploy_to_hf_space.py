@@ -47,9 +47,12 @@ def main() -> int:
     print("[1/5] copy workspace/ → .deploy/ ...")
     shutil.copytree(REPO_ROOT / "workspace", DEPLOY_DIR, dirs_exist_ok=True)
 
-    print("[2/5] copy pyproject.toml + src/ ...")
+    print("[2/5] copy pyproject.toml + src/ + thumbnail ...")
     shutil.copy2(REPO_ROOT / "pyproject.toml", DEPLOY_DIR / "pyproject.toml")
     shutil.copytree(REPO_ROOT / "src", DEPLOY_DIR / "src")
+    thumb = REPO_ROOT / "docs" / "assets" / "thumbnail-square.png"
+    if thumb.exists():
+        shutil.copy2(thumb, DEPLOY_DIR / "thumbnail.png")
 
     print("[3/5] write README.md (HF Space card) ...")
     (DEPLOY_DIR / "README.md").write_text(
@@ -63,6 +66,7 @@ app_port: 7860
 pinned: true
 license: apache-2.0
 short_description: Generative drug designer for antimicrobial resistance
+thumbnail: thumbnail.png
 ---
 
 # Lysos — generative drug designer for AMR
