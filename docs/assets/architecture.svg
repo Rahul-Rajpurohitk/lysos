@@ -67,7 +67,7 @@
     <rect x="430" y="180" width="320" height="120" rx="8" fill="#0c2030" stroke="#1f4458" stroke-width="1.2"/>
     <text x="450" y="210" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6" letter-spacing="2">STAGE 2</text>
     <text x="450" y="240" font-size="20" fill="#e6f7f3" font-weight="700">AMR specialization</text>
-    <text x="450" y="266" font-size="14" fill="#a3c2bd">96,975 instructions · ChEMBL +</text>
+    <text x="450" y="266" font-size="14" fill="#a3c2bd">222,606 instructions · ChEMBL +</text>
     <text x="450" y="284" font-size="14" fill="#a3c2bd">DBAASP + DRAMP + DrugBank + CARD</text>
   </g>
 

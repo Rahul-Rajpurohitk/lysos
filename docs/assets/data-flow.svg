@@ -17,7 +17,7 @@
 
   <!-- title -->
   <text x="60" y="62" font-family="JetBrains Mono, monospace" font-size="32" font-weight="700" fill="#e6f7f3">LYSOS — data pipeline</text>
-  <text x="60" y="92" font-size="17" fill="#7da5a0">10 real public sources · 11 loaders · 96,975 SFT examples + 3,200 RL prompts on Hugging Face Hub</text>
+  <text x="60" y="92" font-size="17" fill="#7da5a0">10 real public sources · 11 loaders · 222,606 SFT examples + 3,200 RL prompts on Hugging Face Hub</text>
 
   <!-- column headers -->
   <g font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="3" fill="#56cbb6" font-weight="600">
@@ -130,7 +130,7 @@
     <!-- Stage 2 -->
     <rect x="900" y="240" width="320" height="120" rx="8" fill="#0c2030" stroke="#00e6b9" stroke-width="1.4"/>
     <text x="920" y="268" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#00e6b9">STAGE 2 SFT</text>
-    <text x="920" y="298" font-size="22" fill="#e6f7f3" font-weight="700">96,975 instructions</text>
+    <text x="920" y="298" font-size="22" fill="#e6f7f3" font-weight="700">222,606 instructions</text>
     <text x="920" y="320" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">prepare_amr_data.py</text>
     <text x="920" y="340" font-family="JetBrains Mono, monospace" font-size="13" fill="#a3c2bd">→ amr-stage2/{train,valid}</text>
 
@@ -160,7 +160,7 @@
     <text x="1300" y="268" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#00e6b9">LIVE</text>
     <text x="1300" y="298" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">rahul24raj/</text>
     <text x="1300" y="320" font-family="JetBrains Mono, monospace" font-size="14" fill="#e6f7f3" font-weight="700">  lysos-amr-stage2</text>
-    <text x="1300" y="346" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6">96,975 ex · public</text>
+    <text x="1300" y="346" font-family="JetBrains Mono, monospace" font-size="13" fill="#56cbb6">222,606 ex · public</text>
 
     <rect x="1280" y="380" width="280" height="120" rx="8" fill="#0c2030" stroke="#e066a8" stroke-width="1.6"/>
     <text x="1300" y="408" font-family="JetBrains Mono, monospace" font-size="13" letter-spacing="2" fill="#e066a8">LIVE</text>
