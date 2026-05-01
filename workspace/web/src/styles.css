@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(
+      ellipse at top left,
+      rgba(0, 230, 185, 0.06) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse at bottom right,
+      rgba(255, 122, 26, 0.04) 0%,
+      transparent 50%
+    ),
+    #05060a;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #262b3a;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a4154;
+}
+
+/* Component utilities */
+@layer components {
+  .card {
+    @apply rounded-xl bg-ink-800/60 backdrop-blur border border-ink-600/40 p-4 shadow-lg;
+  }
+
+  .card-hover {
+    @apply hover:border-accent-500/40 hover:bg-ink-700/60 transition-colors;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 rounded-lg bg-accent-500 text-ink-950 font-medium
+           hover:bg-accent-400 active:bg-accent-600
+           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+  }
+
+  .btn-ghost {
+    @apply px-3 py-1.5 rounded-lg bg-transparent text-slate-300
+           hover:bg-ink-700 hover:text-slate-100 transition-colors;
+  }
+
+  .pill {
+    @apply px-2 py-0.5 rounded-md text-xs font-medium;
+  }
+
+  .pill-critical {
+    @apply pill bg-bad-500/15 text-bad-400 border border-bad-500/20;
+  }
+
+  .pill-high {
+    @apply pill bg-warn-500/15 text-warn-400 border border-warn-500/20;
+  }
+
+  .pill-good {
+    @apply pill bg-good-500/15 text-good-400 border border-good-500/20;
+  }
+}
