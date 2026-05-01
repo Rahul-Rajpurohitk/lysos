@@ -1,0 +1,106 @@
+# Lysos training environment on AMD ROCm
+#
+# Base: rocm/pytorch — official ROCm + PyTorch image with all GPU drivers,
+# HIP, ROCBLAS, ROCSOLVER, etc. preinstalled. We add HF stack on top.
+#
+# Build:
+#   docker build -f docker/Dockerfile.rocm -t lysos:rocm .
+#
+# Run on AMD Dev Cloud (1× MI300X):
+#   docker run --rm -it \
+#     --device=/dev/kfd --device=/dev/dri \
+#     --group-add render --group-add video \
+#     --ipc=host --network=host --privileged \
+#     --cap-add=CAP_SYS_ADMIN --security-opt seccomp=unconfined \
+#     -e HF_TOKEN=$HF_TOKEN -e HF_HOME=/workspace/.hf-cache \
+#     -v $(pwd):/workspace -w /workspace \
+#     lysos:rocm bash
+
+ARG ROCM_PYTORCH_BASE=rocm/pytorch:latest
+FROM ${ROCM_PYTORCH_BASE}
+
+LABEL org.opencontainers.image.title="lysos" \
+      org.opencontainers.image.description="Generative drug designer for AMR — training environment (ROCm)" \
+      org.opencontainers.image.source="https://github.com/Rahul-Rajpurohitk/lysos" \
+      org.opencontainers.image.licenses="MIT"
+
+# OS deps for chemistry tooling and general dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        git \
+        git-lfs \
+        curl \
+        ca-certificates \
+        wget \
+        unzip \
+        vim \
+        tmux \
+        htop \
+        # rdkit + chemistry needs these
+        libxrender1 \
+        libxext6 \
+        libgomp1 \
+        # Useful for HF hub transfers
+        pigz \
+    && rm -rf /var/lib/apt/lists/* \
+    && git lfs install
+
+# Use uv for fast Python dependency resolution
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && ln -s /root/.cargo/bin/uv /usr/local/bin/uv
+
+WORKDIR /workspace
+
+# Speed up HF Hub transfers (needs `huggingface-hub[hf_transfer]`)
+ENV HF_HUB_ENABLE_HF_TRANSFER=1
+ENV HF_HOME=/workspace/.hf-cache
+ENV TRANSFORMERS_CACHE=/workspace/.hf-cache
+ENV TOKENIZERS_PARALLELISM=false
+
+# ROCm-specific environment
+ENV PYTORCH_HIP_ALLOC_CONF=expandable_segments:True
+ENV HSA_FORCE_FINE_GRAIN_PCIE=1
+
+# Copy only what we need to build the env first (layer caching)
+COPY pyproject.toml ./
+
+# Install the Lysos Python deps
+# Note: torch is already in the base image with ROCm support — don't reinstall
+RUN uv pip install --system --no-cache-dir \
+        "transformers>=4.45.0" \
+        "accelerate>=1.0.0" \
+        "peft>=0.13.0" \
+        "trl>=0.11.0" \
+        "datasets>=3.0.0" \
+        "huggingface-hub[hf_transfer]>=0.27.0" \
+        "tokenizers>=0.20.0" \
+        "safetensors>=0.4.5" \
+        "rdkit>=2024.3.5" \
+        "PyTDC>=1.1.0" \
+        "numpy>=1.26.0" \
+        "pandas>=2.2.0" \
+        "scikit-learn>=1.5.0" \
+        "scipy>=1.13.0" \
+        "pyarrow>=17.0.0" \
+        "tqdm>=4.66.0" \
+        "rich>=13.9.0" \
+        "click>=8.1.7" \
+        "pydantic>=2.9.0" \
+        "python-dotenv>=1.0.1" \
+        "wandb>=0.18.0" \
+        "fastapi>=0.115.0" \
+        "uvicorn[standard]>=0.32.0" \
+        "httpx>=0.27.0" \
+        "sse-starlette>=2.1.3"
+
+# Optimum-AMD for Flash Attention 2 + ONNX Runtime on ROCm
+RUN uv pip install --system --no-cache-dir "optimum[amd]>=1.23.0" || true
+
+# Now copy the rest of the project (separate layer so source changes don't bust deps cache)
+COPY . .
+
+# Install Lysos itself in editable mode
+RUN uv pip install --system --no-cache-dir -e .
+
+# Default command — drop into shell
+CMD ["bash"]
