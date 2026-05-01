@@ -1,0 +1,82 @@
+# Stage 2 — AMR specialization (SFT on antibiotic + AMP data).
+#
+# Loads Stage 1 (TxGemma-4) checkpoint and continues training on
+# antimicrobial-specific data: ChEMBL antibiotic subset, DBAASP/APD3/DRAMP
+# antimicrobial peptides, CARD resistant pathogen targets.
+#
+# Targets: Small 1x MI300X for ~15-20 hours.
+
+_inherit: base.yaml
+
+run_name: stage2-amr-sft-lysos-base
+description: AMR specialization on top of Stage 1 TxGemma-4
+
+# -----------------------------------------------------------------------------
+# Model — load from Stage 1 checkpoint
+# -----------------------------------------------------------------------------
+model:
+  base_id: rahul24raj/txgemma-4-31b      # Stage 1 output (HF Hub)
+  # If still local from Stage 1, override at CLI: --model.base_id ./checkpoints/stage1-txgemma4
+
+# -----------------------------------------------------------------------------
+# Data
+# -----------------------------------------------------------------------------
+dataset:
+  source: local
+  path: data/processed/amr-stage2
+  hub_id: rahul24raj/lysos-amr-stage2
+  split_train: train
+  split_eval: valid
+  text_field: messages
+  response_template: "<start_of_turn>model\n"
+  max_seq_length: 4096
+  packing: true
+  # Multi-task mixing weights (sum = 1.0)
+  task_mix:
+    activity_prediction: 0.30   # given molecule + pathogen → MIC
+    generation_for_target: 0.40 # given pathogen → SMILES
+    peptide_design: 0.15        # given pathogen → AMP sequence
+    safety_prediction: 0.10     # given molecule → hemolysis
+    drug_likeness: 0.05         # given molecule → QED + Lipinski
+
+# -----------------------------------------------------------------------------
+# Training — gentler LR than Stage 1, fewer epochs (avoid forgetting Stage 1)
+# -----------------------------------------------------------------------------
+training:
+  output_dir: ./checkpoints/stage2-amr-sft
+  num_train_epochs: 3
+  per_device_train_batch_size: 4
+  gradient_accumulation_steps: 4
+  learning_rate: 1.0e-5
+  warmup_ratio: 0.05
+  eval_steps: 100
+  save_steps: 200
+  logging_steps: 10
+
+# -----------------------------------------------------------------------------
+# PEFT — same target modules but new LoRA, merged with Stage 1
+# -----------------------------------------------------------------------------
+peft:
+  r: 64
+  alpha: 128
+  load_existing_adapter: rahul24raj/txgemma-4-31b   # merge Stage 1 first
+
+# -----------------------------------------------------------------------------
+# Hub
+# -----------------------------------------------------------------------------
+hub:
+  push_to_hub: true
+  hub_model_id: rahul24raj/lysos-base
+  push_strategy: end
+
+# -----------------------------------------------------------------------------
+# Wandb
+# -----------------------------------------------------------------------------
+wandb:
+  tags:
+    - amd-mi300x
+    - gemma-4
+    - lablab-2026
+    - stage2
+    - amr
+    - sft
