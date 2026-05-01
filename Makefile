@@ -122,3 +122,15 @@ clean-cache:
 .PHONY: build-index
 build-index:
 	@$(PYTHON) scripts/build_known_antibiotics_index.py
+
+# ---- visual assets (SVG → PNG) -------------------------------------------
+# Picks the first available tool: rsvg-convert > inkscape > headless chrome.
+.PHONY: assets
+assets:
+	@$(PYTHON) scripts/render_assets.py docs/assets/
+
+.PHONY: pitch-pdf
+pitch-pdf:
+	@which marp >/dev/null 2>&1 || (echo 'marp not installed: npm i -g @marp-team/marp-cli' && exit 1)
+	@marp docs/pitch-deck.md --pdf --output docs/lysos-pitch.pdf
+	@echo "wrote docs/lysos-pitch.pdf"
