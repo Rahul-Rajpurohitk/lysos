@@ -42,6 +42,8 @@ dependencies = [
     "huggingface-hub[hf_transfer]>=0.27.0",
     "tokenizers>=0.20.0",
     "safetensors>=0.4.5",
+    # Embedding model — EmbeddingGemma 300m for novelty reward + RAG + dedup
+    "sentence-transformers>=3.0.0",
 
     # Chemistry / drug discovery
     "rdkit>=2024.3.5",

@@ -46,6 +46,7 @@ REWARDS = [
     ("src.eval.rewards.drug_likeness", "qed_score"),
     ("src.eval.rewards.synth", "sa_score"),
     ("src.eval.rewards.novelty", "tanimoto_distance_to_known"),
+    ("src.eval.rewards.embedding_novelty", "embedding_novelty"),
     ("src.eval.rewards.safety", "hemolysis_inverse"),
     ("src.eval.rewards.activity", "predict_mic"),
 ]

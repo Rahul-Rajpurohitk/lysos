@@ -78,8 +78,14 @@ reward:
       weight: 0.15
       module: src.eval.rewards.safety:hemolysis_inverse
     - name: novelty
-      weight: 0.15
+      weight: 0.10           # Tanimoto on ECFP4 fingerprints (bit-level overlap)
       module: src.eval.rewards.novelty:tanimoto_distance_to_known
+      args:
+        reference_set: data/processed/known-antibiotics.smiles
+        threshold: 0.6
+    - name: embedding_novelty
+      weight: 0.05           # EmbeddingGemma cosine distance (semantic novelty)
+      module: src.eval.rewards.embedding_novelty:embedding_novelty
       args:
         reference_set: data/processed/known-antibiotics.smiles
         threshold: 0.6
