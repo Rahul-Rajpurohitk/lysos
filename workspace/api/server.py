@@ -378,13 +378,24 @@ async def score_smiles(smiles: str = Query(..., min_length=1, max_length=500),
         "hemolysis_safety": 0.15,
         "novelty": 0.15,
     }
+
+    def _safe(fn, key: str) -> float:
+        try:
+            return float(fn())
+        except (ImportError, ModuleNotFoundError):
+            log.warning("%s scorer skipped — backing module unavailable", key)
+            return 0.0
+        except Exception as exc:  # noqa: BLE001
+            log.warning("%s scorer failed: %s", key, exc)
+            return 0.0
+
     scores = {
-        "validity": smiles_valid(raws)[0],
-        "predicted_mic": predict_mic(raws, target_pathogen=target)[0],
-        "drug_likeness_qed": qed_score(raws)[0],
-        "synthesizability": sa_score(raws)[0],
-        "hemolysis_safety": hemolysis_inverse(raws)[0],
-        "novelty": tanimoto_distance_to_known(raws)[0],
+        "validity": _safe(lambda: smiles_valid(raws)[0], "validity"),
+        "predicted_mic": _safe(lambda: predict_mic(raws, target_pathogen=target)[0], "predicted_mic"),
+        "drug_likeness_qed": _safe(lambda: qed_score(raws)[0], "drug_likeness_qed"),
+        "synthesizability": _safe(lambda: sa_score(raws)[0], "synthesizability"),
+        "hemolysis_safety": _safe(lambda: hemolysis_inverse(raws)[0], "hemolysis_safety"),
+        "novelty": _safe(lambda: tanimoto_distance_to_known(raws)[0], "novelty"),
     }
     combined = sum(weights[k] * v for k, v in scores.items())
 
