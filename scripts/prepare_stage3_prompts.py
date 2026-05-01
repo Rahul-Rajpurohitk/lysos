@@ -57,18 +57,70 @@ PATHOGENS = [
 # domain framing. Each variation has a SMILES-output and a peptide-output form.
 
 ASK_VARIANTS_SMI = [
+    # Generic
     "Generate a single antibacterial small molecule against {name}, prioritizing low MIC, drug-likeness (Lipinski-compliant), and synthetic accessibility.\nOutput the molecule as a SMILES string.",
     "Design a novel small-molecule antibiotic for {name}. The compound should be drug-like (QED > 0.5), synthesizable, and structurally distinct from known antibiotics.\nReturn the molecule as a SMILES string.",
     "Propose a candidate antibacterial drug targeting {name}. Optimize for: low predicted MIC, low hepatotoxicity, and high oral bioavailability.\nOutput a SMILES string.",
-    "Design a beta-lactam-class or quinolone-class analogue with activity against {name}, while improving on resistance profiles.\nReturn as a SMILES string.",
     "Generate a structurally novel compound likely to inhibit growth of {name}. Avoid close analogues of penicillins, cephalosporins, and fluoroquinolones.\nOutput as a SMILES string.",
+    "Design an antibiotic candidate against {name} that bypasses common resistance mechanisms (efflux pumps, beta-lactamases, ribosomal mutations).\nOutput as a SMILES string.",
+    "Propose a single antibacterial molecule against {name}. Constraint: must be a small molecule under 500 Da with at most 5 hydrogen-bond donors and 10 acceptors.\nReturn a SMILES.",
+    # Antibiotic-class scaffolded
+    "Design a beta-lactam analogue active against {name}. Modify the side chains to evade beta-lactamase hydrolysis.\nReturn as a SMILES string.",
+    "Design a fluoroquinolone analogue with activity against {name}. Optimize the C-7 substituent to avoid efflux-mediated resistance.\nReturn as a SMILES string.",
+    "Design a tetracycline-class analogue against {name}. Modify ring D to evade ribosomal protection proteins.\nReturn as a SMILES string.",
+    "Design a macrolide-class analogue (14-membered ring) against {name}. Modify the cladinose sugar to retain potency despite erm-mediated methylation resistance.\nReturn as a SMILES string.",
+    "Design an oxazolidinone analogue with activity against {name}. The compound should retain ribosomal binding without cross-resistance to linezolid.\nReturn as a SMILES string.",
+    "Design an aminoglycoside-class scaffold active against {name}. Optimize substituents to avoid aminoglycoside-modifying enzymes.\nReturn as a SMILES string.",
+    "Design a glycopeptide-class analogue (vancomycin scaffold) against {name}. Bypass D-Ala-D-Lac resistance.\nReturn as a SMILES string.",
+    "Design a polymyxin-class lipopeptide against {name}. Reduce nephrotoxicity while retaining LPS binding.\nReturn as a SMILES.",
+    "Design a rifamycin-class compound against {name}. The compound should evade rpoB mutational resistance.\nReturn as a SMILES string.",
+    # ADMET-constrained
+    "Design an antibacterial against {name} with high oral bioavailability and a half-life suitable for once-daily dosing.\nReturn a SMILES string.",
+    "Design an antibacterial against {name} that crosses the blood-brain barrier (LogP 1-3, MW < 400).\nReturn a SMILES.",
+    "Design an antibacterial against {name} with no CYP3A4 inhibition liability and minimal QT-prolongation risk.\nReturn a SMILES.",
+    "Design an injectable antibacterial against {name}. Solubility >100 mg/mL in saline.\nReturn a SMILES.",
+    # Mechanism-of-action constrained
+    "Design a novel cell-wall biosynthesis inhibitor active against {name}. Target should not be PBP1, PBP2, or PBP3 specifically.\nReturn a SMILES string.",
+    "Design a topoisomerase IV inhibitor with selectivity for {name}. The compound should have minimal cross-reactivity with mammalian topoisomerases.\nReturn a SMILES.",
+    "Design a DNA-gyrase inhibitor active against {name}. Differentiate from quinolones by binding to a non-overlapping pocket.\nReturn a SMILES.",
+    "Design a bacterial RNA polymerase inhibitor against {name}. Prefer non-rifamycin scaffolds.\nReturn as a SMILES.",
+    "Design an LpxC inhibitor active against {name}. Target hydroxamic-zinc binding for selectivity.\nReturn as a SMILES.",
+    "Design a folate-pathway antagonist active against {name} (DHFR or DHPS inhibitor) with reduced trimethoprim-sulfonamide cross-resistance.\nReturn as a SMILES.",
+    # Combination-style
+    "Design a beta-lactamase inhibitor that, in combination with amoxicillin, restores activity against {name}. The inhibitor itself need not be antibacterial.\nReturn the inhibitor SMILES.",
+    "Design an efflux-pump inhibitor adjuvant for {name}. The compound should re-sensitize resistant strains to existing antibiotics.\nReturn a SMILES.",
+    "Design a permeabilizer of the gram-negative outer membrane to potentiate antibiotic uptake into {name}.\nReturn a SMILES.",
+    # Natural-product-inspired
+    "Design a natural-product-inspired antibacterial against {name}. Take inspiration from polyketide or non-ribosomal-peptide scaffolds while remaining synthetically tractable.\nReturn a SMILES.",
+    "Design a fragment-based antibacterial against {name}. Maximum heavy atoms = 22.\nReturn a SMILES.",
+    # Novelty-emphasized
+    "Generate a structurally novel antibiotic candidate against {name}. Tanimoto similarity to known antibiotics in the training set must be < 0.4.\nReturn a SMILES.",
 ]
 
 ASK_VARIANTS_PEP = [
+    # Generic
     "Design a short antimicrobial peptide (10-30 residues) against {name}, prioritizing low hemolytic activity and high antibacterial potency.\nOutput as a single-letter amino-acid sequence.",
     "Generate a novel cationic alpha-helical antimicrobial peptide targeting {name}. Length 12-25 residues, low predicted hemolysis.\nReturn the peptide sequence.",
     "Propose an antimicrobial peptide for {name}. The peptide should be amphipathic, charged, and structurally distinct from melittin/LL-37/magainin.\nOutput as a sequence.",
     "Design an anti-{short} peptide of 15-25 residues with high MIC potency and low hemolysis.\nReturn the amino-acid sequence.",
+    # Structural-class
+    "Design a beta-defensin-inspired AMP active against {name}. Cysteine-stabilized fold, 25-40 residues.\nReturn as a sequence.",
+    "Design a tachyplesin-class disulfide-stabilized AMP against {name}. 16-20 residues.\nReturn as a sequence.",
+    "Design a proline-rich AMP (Bac7-class) targeting {name} via ribosome inhibition. 20-35 residues.\nReturn as a sequence.",
+    "Design a cyclic AMP against {name} with at least one disulfide bond. 12-20 residues.\nReturn as a sequence.",
+    # Charge / hydrophobicity constrained
+    "Design an AMP against {name} with net charge +4 to +8 and hydrophobicity 30-45%. 18-25 residues.\nReturn as a sequence.",
+    "Design a tryptophan-rich AMP active against {name}. At least 3 Trp residues, 12-20 residues total.\nReturn as a sequence.",
+    "Design a histidine-rich AMP that activates only at acidic pH (intracellular targeting). 15-25 residues, MIC against {name}.\nReturn as a sequence.",
+    # Cell-penetrating
+    "Design an arginine-rich cell-penetrating AMP targeting intracellular pathogens, optimized for {name}.\nReturn as a sequence.",
+    # Lipid-tagged / lipopeptide
+    "Design a lipopeptide against {name} with a C12-C16 fatty acid tail and a cyclized peptide head (12-15 residues).\nReturn as a sequence.",
+    # Hybrid / chimeric
+    "Design a chimeric AMP against {name} fusing the pore-forming N-terminus of magainin with the membrane-targeting C-terminus of LL-37. Retain potency, reduce hemolysis.\nReturn as a sequence.",
+    # Selectivity-focused
+    "Design a salt-tolerant AMP against {name} that retains potency at physiological NaCl (150 mM). 18-30 residues.\nReturn as a sequence.",
+    "Design an AMP against {name} with selectivity index (HC50/MIC) > 50.\nReturn as a sequence.",
 ]
 
 
@@ -113,8 +165,8 @@ def _pack(p: dict, ask: str, modality: str) -> dict:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Prepare Stage 3 RL prompts dataset")
-    p.add_argument("--per-pathogen", type=int, default=400,
-                   help="How many prompts per pathogen (default: 400 → 3200 total across 8 pathogens)")
+    p.add_argument("--per-pathogen", type=int, default=1500,
+                   help="How many prompts per pathogen (default: 1500 → 12000 total across 8 pathogens)")
     p.add_argument("--smi-fraction", type=float, default=0.7,
                    help="Fraction of prompts asking for small molecules (rest peptides)")
     p.add_argument("--output-dir", type=Path, default=Path("data/processed/amr-rl-prompts"))
