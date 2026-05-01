@@ -239,6 +239,56 @@ def t_drug_reverse_cas(cas: str, name: str) -> dict:
     return _msg(user, name, task="drug_reverse_cas")
 
 
+def t_drug_smiles(name: str, smiles: str) -> dict:
+    """drug name → SMILES."""
+    user = (
+        "Instructions: Provide the canonical SMILES string for the named drug.\n"
+        f"Question: What is the SMILES of {name}?"
+    )
+    return _msg(user, f"SMILES: {smiles}", task="drug_smiles")
+
+
+def t_drug_from_smiles(smiles: str, name: str) -> dict:
+    """SMILES → drug name (only for known drugs in DrugCentral)."""
+    user = (
+        "Instructions: Identify the drug whose structure is given.\n"
+        f"Question: Which approved or investigational drug has the SMILES below?\n"
+        f"SMILES: {smiles}"
+    )
+    return _msg(user, name, task="drug_from_smiles")
+
+
+def t_natural_product_origin(name: str, genus: str, species: str) -> dict:
+    """compound name → producing organism (NPAtlas)."""
+    organism = f"{genus} {species}".strip() if species else genus
+    user = (
+        "Instructions: Identify the producing organism for the named natural product.\n"
+        "Context: Many clinically important antibiotics are natural products produced by soil bacteria and fungi.\n"
+        f"Question: Which organism produces the natural product {name}?"
+    )
+    return _msg(user, organism, task="natural_product_origin")
+
+
+def t_natural_product_origin_smiles(smiles: str, genus: str) -> dict:
+    """natural product SMILES → producing genus."""
+    user = (
+        "Instructions: Identify the producing genus for the natural product whose structure is below.\n"
+        "Context: Many antibiotics derive from specific bacterial or fungal genera (Streptomyces produces vancomycin, Penicillium produces penicillin, etc.).\n"
+        f"Question: Which genus most likely produces this compound?\n"
+        f"SMILES: {smiles}"
+    )
+    return _msg(user, genus, task="natural_product_origin_smiles")
+
+
+def t_natural_product_smiles(name: str, smiles: str) -> dict:
+    """natural product name → SMILES."""
+    user = (
+        "Instructions: Provide the canonical SMILES for the named natural product.\n"
+        f"Question: What is the SMILES of {name}?"
+    )
+    return _msg(user, f"SMILES: {smiles}", task="natural_product_smiles")
+
+
 def _msg(user: str, assistant: str, task: str) -> dict:
     """Pack one example into the canonical Lysos training format."""
     messages = [
@@ -270,13 +320,18 @@ class Sources:
     apd3_csv: Path
     dramp_csv: Path
     drugbank_csv: Path
+    drugcentral_csv: Path
+    npatlas_csv: Path
     out_dir: Path
 
 
 # Only ChEMBL is strictly required — every other source is best-effort
 # enrichment. We can train Stage 2 on ChEMBL alone if needed.
 REQUIRED_SOURCES = ["chembl"]
-OPTIONAL_SOURCES = ["dbaasp", "bindingdb", "pubchem", "apd3", "dramp", "drugbank"]
+OPTIONAL_SOURCES = [
+    "dbaasp", "bindingdb", "pubchem", "apd3", "dramp",
+    "drugbank", "drugcentral", "npatlas",
+]
 
 
 def _ensure_data(srcs: Sources, fetch: bool) -> dict[str, bool]:
@@ -294,6 +349,8 @@ def _ensure_data(srcs: Sources, fetch: bool) -> dict[str, bool]:
         "apd3": ("src.data.apd3", "fetch_apd3_amps"),
         "dramp": ("src.data.dramp", "fetch_amps"),
         "drugbank": ("src.data.drugbank", "fetch_drugbank_open"),
+        "drugcentral": ("src.data.drugcentral", "fetch_drugcentral"),
+        "npatlas": ("src.data.npatlas", "fetch_npatlas"),
     }
     paths = {
         "chembl": srcs.chembl_csv,
@@ -303,6 +360,8 @@ def _ensure_data(srcs: Sources, fetch: bool) -> dict[str, bool]:
         "apd3": srcs.apd3_csv,
         "dramp": srcs.dramp_csv,
         "drugbank": srcs.drugbank_csv,
+        "drugcentral": srcs.drugcentral_csv,
+        "npatlas": srcs.npatlas_csv,
     }
     for name, path in paths.items():
         if path.exists():
@@ -506,6 +565,76 @@ def build_drug_likeness_examples(srcs: Sources, max_rows: int | None,
     return out
 
 
+def build_drug_structure_examples(srcs: Sources, max_rows: int | None,
+                                  present: dict[str, bool]) -> list[dict]:
+    """DrugCentral → SMILES-aware drug knowledge.
+
+    DrugCentral has SMILES inline (unlike DrugBank vocab). So we add two
+    additional task types: name → SMILES, SMILES → name.
+    """
+    import pandas as pd
+    df = _load_activity_csv(srcs.drugcentral_csv, present, "drugcentral")
+    if df is None or df.empty:
+        return []
+    out: list[dict] = []
+    for _, row in df.iterrows():
+        name = str(row.get("name", "")).strip()
+        smi = str(row.get("smiles", "")).strip()
+        if not name or len(name) < 2 or name.lower() in ("nan", "none"):
+            continue
+        if not smi or len(smi) < 5 or smi.lower() in ("nan", "none"):
+            continue
+        # name → SMILES (very common pharma lookup)
+        out.append(t_drug_smiles(name, smi))
+        # SMILES → name (reverse — model learns to recognize known drugs)
+        out.append(t_drug_from_smiles(smi, name))
+        # CAS lookup if available
+        cas = str(row.get("cas", "")).strip()
+        if cas and "-" in cas:
+            out.append(t_drug_cas_lookup(name, cas))
+        # InChI Key if available
+        inchi_key = str(row.get("inchi_key", "")).strip()
+        if inchi_key and len(inchi_key) >= 25:
+            out.append(t_drug_inchi_key(name, inchi_key))
+    if max_rows:
+        out = out[:max_rows]
+    return out
+
+
+def build_natural_product_examples(srcs: Sources, max_rows: int | None,
+                                   present: dict[str, bool]) -> list[dict]:
+    """NPAtlas → natural product knowledge tasks.
+
+    Antibiotics overwhelmingly come from natural products (penicillins,
+    glycopeptides, aminoglycosides, polymyxins, ...). Teaching the model
+    the producer-organism → compound mapping gives strong AMR priors.
+    """
+    import pandas as pd
+    df = _load_activity_csv(srcs.npatlas_csv, present, "npatlas")
+    if df is None or df.empty:
+        return []
+    out: list[dict] = []
+    for _, row in df.iterrows():
+        name = str(row.get("name", "")).strip()
+        smi = str(row.get("smiles", "")).strip()
+        genus = str(row.get("source_genus", "")).strip()
+        species = str(row.get("source_species", "")).strip()
+        if not name or len(name) < 2 or name.lower() in ("nan", "none"):
+            continue
+        if not smi or len(smi) < 5 or smi.lower() in ("nan", "none"):
+            continue
+        # SMILES + name pairing
+        out.append(t_natural_product_smiles(name, smi))
+        # name → producing organism
+        if genus and genus.lower() not in ("nan", "none", ""):
+            out.append(t_natural_product_origin(name, genus, species))
+            # SMILES → producing genus (chemistry → biology direction)
+            out.append(t_natural_product_origin_smiles(smi, genus))
+    if max_rows:
+        out = out[:max_rows]
+    return out
+
+
 def build_drug_knowledge_examples(srcs: Sources, max_rows: int | None,
                                   present: dict[str, bool]) -> list[dict]:
     """DrugBank vocabulary → knowledge tasks (no SMILES needed).
@@ -572,6 +701,8 @@ def main() -> int:
         apd3_csv=args.data_root / "apd3_amps.csv",
         dramp_csv=args.data_root / "dramp_amps.csv",
         drugbank_csv=args.data_root / "drugbank_open.csv",
+        drugcentral_csv=args.data_root / "drugcentral.csv",
+        npatlas_csv=args.data_root / "npatlas.csv",
         out_dir=args.output_dir,
     )
 
@@ -587,6 +718,8 @@ def main() -> int:
     safety = build_safety_examples(srcs, args.max_rows_per_task, present)
     drug_like = build_drug_likeness_examples(srcs, args.max_rows_per_task, present)
     drug_knowledge = build_drug_knowledge_examples(srcs, args.max_rows_per_task, present)
+    drug_structure = build_drug_structure_examples(srcs, args.max_rows_per_task, present)
+    natural_products = build_natural_product_examples(srcs, args.max_rows_per_task, present)
 
     log.info("  activity_prediction:   %d", len(activity))
     log.info("  generation_for_target: %d", len(generation))
@@ -594,8 +727,13 @@ def main() -> int:
     log.info("  safety_prediction:     %d", len(safety))
     log.info("  drug_likeness:         %d", len(drug_like))
     log.info("  drug_knowledge:        %d", len(drug_knowledge))
+    log.info("  drug_structure:        %d", len(drug_structure))
+    log.info("  natural_products:      %d", len(natural_products))
 
-    all_examples = activity + generation + peptide + safety + drug_like + drug_knowledge
+    all_examples = (
+        activity + generation + peptide + safety + drug_like
+        + drug_knowledge + drug_structure + natural_products
+    )
     if not all_examples:
         log.error("No examples built. Real data may be empty — check the raw CSVs.")
         return 1
