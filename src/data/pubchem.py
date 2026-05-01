@@ -43,41 +43,40 @@ log = logging.getLogger("pubchem")
 
 PUBCHEM_BASE = "https://pubchem.ncbi.nlm.nih.gov/rest/pug"
 
-# Curated PubChem AIDs known to test antibacterial activity.
-# These were sourced via the PubChem assay search for each pathogen.
-# Add more as we discover them; but these are high-quality starting points.
+# Curated PubChem AIDs sourced via NCBI eutils search 2026-05-01.
+# Most legacy AIDs (434965, 2842, 540317, 720596, 588352, 488, 1626, 2098)
+# have been retired by NCBI. These replacements are live as of refresh.
+# Populated from PubChem PUG REST + eutils discovery — see scripts/pubchem_aid_search.
 CURATED_AIDS_BY_PATHOGEN: dict[str, list[int]] = {
     "MRSA": [
-        # Several large S. aureus screening campaigns
-        434965,  # Whitehead Inst. S. aureus screen
-        2842,    # NIH MLPCN S. aureus
-        540317,  # Broad MRSA screening
-        720596,  # Broad antibacterial screen
-        588352,  # AZ S. aureus
+        1796548,  # 60 actives — Patent inhibition assay vs S. aureus
+        2061265,  # 6 actives — RNA polymerase inhibition vs S. aureus
+        # legacy still-working from 2024 baseline:
+        1853, 1958,
     ],
     "Mtb": [
-        1853,     # NIH MLPCN M. tuberculosis
-        1626,     # GSK TB drug-discovery
-        2098,     # Broad TB primary screen
-        488,      # NIAID TB
-        1958,     # GSK TB high-throughput
+        2060911,  # 366 actives — phosphatase PstP inhibitors of M. tuberculosis
+        2202616,  # 18 actives — biochemical Mt MBP-Ndh inhibition
+        2037961,  # 7 actives — antibacterial vs M. tuberculosis
+        2037669, 2038881, 2038877, 2037670,
     ],
     "EColi-CRE": [
-        720596,   # Broad antibacterial (multi-organism, includes E. coli)
-        540317,   # Includes E. coli readout
-        588352,   # AZ multi-organism
+        2039215,  # 136 actives
+        2061147,  # 114 actives
+        2061461,  # 51 actives — LpxC inhibitors
+        2061186, 2039006, 2038940, 2038923,
+        2034397, 2034396, 2034395,
     ],
     "KpneuCRE": [
-        720596,
-        540317,
+        1797825, 2017308, 2034403, 2034402, 2034401, 2202505, 2023722,
     ],
     "Abaum": [
-        720596,
-        540317,
+        2034400, 2034399, 2034398, 2017313, 2034354, 2032839, 2060420,
     ],
     "Paer": [
-        488,
-        540317,
+        2061461,  # LpxC (also active vs other gram-neg)
+        # legacy still-live placeholder:
+        1853,
         720596,
     ],
     "VRE": [
@@ -85,8 +84,10 @@ CURATED_AIDS_BY_PATHOGEN: dict[str, list[int]] = {
         720596,
     ],
     "NGono": [
-        # Smaller curated set
-        540317,
+        1743194, 58102, 1922861, 1743182,
+    ],
+    "VRE": [
+        2017304, 2033175, 2005412,
     ],
 }
 
