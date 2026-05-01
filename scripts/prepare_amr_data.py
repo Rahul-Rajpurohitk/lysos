@@ -637,11 +637,11 @@ def build_natural_product_examples(srcs: Sources, max_rows: int | None,
 
 def build_drug_knowledge_examples(srcs: Sources, max_rows: int | None,
                                   present: dict[str, bool]) -> list[dict]:
-    """DrugBank vocabulary → knowledge tasks (no SMILES needed).
+    """DrugBank vocabulary → knowledge tasks.
 
-    Produces 5 example types per row: id-lookup, synonyms, InChI Key,
-    CAS forward + CAS reverse. With 14,630 DrugBank rows that's up to
-    ~73K examples; we cap to keep the dataset balanced.
+    Produces 5 vocab task types per row: id-lookup, synonyms, InChI Key,
+    CAS forward + CAS reverse. If the DrugBank source has SMILES (from
+    PubChem InChI-Key resolution), we additionally emit name↔SMILES tasks.
     """
     import pandas as pd
 
@@ -657,6 +657,7 @@ def build_drug_knowledge_examples(srcs: Sources, max_rows: int | None,
         synonyms = str(row.get("synonyms", "")).strip()
         inchi_key = str(row.get("inchi_key", "")).strip()
         cas = str(row.get("cas", "")).strip()
+        smi = str(row.get("smiles", "")).strip()
 
         if drugbank_id and drugbank_id.startswith("DB"):
             out.append(t_drug_id_lookup(name, drugbank_id))
@@ -667,6 +668,12 @@ def build_drug_knowledge_examples(srcs: Sources, max_rows: int | None,
         if cas and "-" in cas:
             out.append(t_drug_cas_lookup(name, cas))
             out.append(t_drug_reverse_cas(cas, name))
+        # If a SMILES was resolved (via the PubChem InChI-key resolver),
+        # emit the structure tasks too — these are higher-value than
+        # vocabulary lookups for chemistry training.
+        if smi and len(smi) > 5 and smi.lower() not in ("nan", "none"):
+            out.append(t_drug_smiles(name, smi))
+            out.append(t_drug_from_smiles(smi, name))
     if max_rows:
         out = out[:max_rows]
     return out
@@ -693,6 +700,11 @@ def main() -> int:
     args = parse_args()
     random.seed(args.seed)
 
+    # Prefer the SMILES-enriched DrugBank file if the resolver has produced it.
+    drugbank_enriched = args.data_root / "drugbank_with_smiles.csv"
+    drugbank_default = args.data_root / "drugbank_open.csv"
+    drugbank_path = drugbank_enriched if drugbank_enriched.exists() else drugbank_default
+
     srcs = Sources(
         chembl_csv=args.data_root / "chembl_antibiotics.csv",
         dbaasp_csv=args.data_root / "dbaasp_amps.csv",
@@ -700,7 +712,7 @@ def main() -> int:
         pubchem_csv=args.data_root / "pubchem_antibacterial.csv",
         apd3_csv=args.data_root / "apd3_amps.csv",
         dramp_csv=args.data_root / "dramp_amps.csv",
-        drugbank_csv=args.data_root / "drugbank_open.csv",
+        drugbank_csv=drugbank_path,
         drugcentral_csv=args.data_root / "drugcentral.csv",
         npatlas_csv=args.data_root / "npatlas.csv",
         out_dir=args.output_dir,

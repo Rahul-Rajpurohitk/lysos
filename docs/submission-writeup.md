@@ -59,7 +59,7 @@ Pre-written here; copy-paste at submission time.
 > ## Resources
 > - Code: github.com/Rahul-Rajpurohitk/lysos
 > - Stage 2 dataset: huggingface.co/datasets/rahul24raj/lysos-amr-stage2 (222,606 ex.)
-> - Stage 3 prompts: huggingface.co/datasets/rahul24raj/lysos-rl-prompts (3,200 prompts)
+> - Stage 3 prompts: huggingface.co/datasets/rahul24raj/lysos-rl-prompts (12,000 prompts)
 
 ---
 

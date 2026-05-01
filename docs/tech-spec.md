@@ -133,7 +133,7 @@ Train the generator to produce molecules that score well on multiple objectives.
 | Item | Detail |
 |---|---|
 | Algorithm | GRPO (Group Relative Policy Optimization, DeepSeek-R1 style) — no value model needed |
-| Prompts (LIVE on HF Hub) | [`rahul24raj/lysos-rl-prompts`](https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts) — 3,200 prompts (3,072 train + 128 valid) across 8 priority pathogens × 2 modalities |
+| Prompts (LIVE on HF Hub) | [`rahul24raj/lysos-rl-prompts`](https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts) — 12,000 prompts (11,520 train + 480 valid) across 8 priority pathogens × 2 modalities |
 | Reward components (configs/stage3_rl_grpo.yaml) | • predicted MIC → 0.40 (heuristic v1; Stage-2 ML predictor swap-in post-training)<br>• drug_likeness QED → 0.15<br>• synthesizability SA → 0.10<br>• hemolysis_safety → 0.15<br>• novelty (Tanimoto Morgan FP) → 0.10<br>• embedding_novelty (EmbeddingGemma cosine vs 20,489-row index) → 0.05<br>• validity (rdkit parse) → 0.05 |
 | Hardware | Small 1× MI300X — but RL holds policy + frozen reference + reward predictor + KV-cache + grads coresident (~152 GB peak) — this is THE MI300X-specific moment, busts H100 80 GB |
 | Time | 15-25 GPU-hours |

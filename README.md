@@ -109,7 +109,7 @@ This repo is currently private; will be public-source by submission. Watch this 
 | **HF Model — Lysos base (Stage 2 SFT)** | https://huggingface.co/rahul24raj/lysos-base | reserved |
 | **HF Model — Lysos RL (final)** | https://huggingface.co/rahul24raj/lysos-rl | reserved |
 | **HF Dataset — Stage 2 AMR** | https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 222,606 examples** |
-| **HF Dataset — Stage 3 RL prompts** | https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts | **LIVE — 3,200 prompts** |
+| **HF Dataset — Stage 3 RL prompts** | https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts | **LIVE — 12,000 prompts** |
 
 ---
 

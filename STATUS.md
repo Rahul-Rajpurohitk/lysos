@@ -7,7 +7,7 @@
 
 - **49+ commits** pushed to [github.com/Rahul-Rajpurohitk/lysos](https://github.com/Rahul-Rajpurohitk/lysos) (private until kickoff)
 - **Stage 2 dataset live on HF Hub** — **222,606 instruction examples** (210,272 train + 11,066 valid) · 13 task types from 6 real sources (ChEMBL + DBAASP + DRAMP + DrugBank + DrugCentral + NPAtlas)
-- **Stage 3 RL prompts live on HF Hub** — 3,200 prompts
+- **Stage 3 RL prompts live on HF Hub** — 12,000 prompts
 - **All 24 modules verify clean** — `make verify` passes (24/24)
 - **12/13 unit tests pass** (1 skip without rdkit) — `make test`
 - **Demo workspace docker-buildable** — FastAPI + Vite/React/Tailwind frontend
@@ -27,7 +27,7 @@
 | HF Model — Lysos base (Stage 2 SFT) | huggingface.co/rahul24raj/lysos-base | reserved |
 | HF Model — Lysos RL (final) | huggingface.co/rahul24raj/lysos-rl | reserved |
 | HF Dataset — Stage 2 | huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 222,606 examples** |
-| HF Dataset — RL prompts | huggingface.co/datasets/rahul24raj/lysos-rl-prompts | **LIVE — 3,200 prompts** |
+| HF Dataset — RL prompts | huggingface.co/datasets/rahul24raj/lysos-rl-prompts | **LIVE — 12,000 prompts** |
 
 ---
 
@@ -56,7 +56,7 @@
 | Path | Count | HF Hub | Notes |
 |---|---|---|---|
 | `data/processed/amr-stage2/` | **222,606** examples | rahul24raj/lysos-amr-stage2 | 210,272 train + 11,066 valid |
-| `data/processed/amr-rl-prompts/` | 3,200 prompts | rahul24raj/lysos-rl-prompts | 3,072 train + 128 valid |
+| `data/processed/amr-rl-prompts/` | 12,000 prompts | rahul24raj/lysos-rl-prompts | 11,520 train + 480 valid |
 | `data/processed/known_antibiotics_index.parquet` | **20,489** rows | (local — used by RAG + novelty) | ChEMBL + DBAASP + DRAMP |
 | `data/processed/tdc-stage1/` | (runs on VM) | rahul24raj/lysos-tdc-stage1 (reserved) | needs PyTDC |
 

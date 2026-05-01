@@ -27,7 +27,7 @@ This plan separates work into three buckets:
 |---|---|---|
 | Repo | `github.com/Rahul-Rajpurohitk/lysos` · ~70 commits | `git log --oneline` |
 | Stage 2 dataset | 222,606 examples · 9 task types · live on HF Hub | `datasets.load_dataset("rahul24raj/lysos-amr-stage2")` |
-| Stage 3 RL prompts | 3,200 prompts · 8 pathogens × 2 modalities · live | `datasets.load_dataset("rahul24raj/lysos-rl-prompts")` |
+| Stage 3 RL prompts | 12,000 prompts · 8 pathogens × 2 modalities · live | `datasets.load_dataset("rahul24raj/lysos-rl-prompts")` |
 | RAG index | 20,489 known antibiotics with EmbeddingGemma vectors | `data/processed/known_antibiotics_index.parquet` |
 | Module verifier | 24 / 24 modules import clean | `make verify` |
 | Reward unit tests | 12 pass, 1 skip (rdkit) | `make test` |

@@ -75,7 +75,7 @@ Supervised fine-tune on
 
 Reinforcement learning on
 [`rahul24raj/lysos-rl-prompts`](https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts)
-— 3,200 generation prompts spanning 8 priority pathogens. Each rollout is
+— 12,000 generation prompts spanning 8 priority pathogens. Each rollout is
 scored by the six-component composite reward and the policy is updated with
 GRPO (DeepSeek-R1 style).
 

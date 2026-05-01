@@ -12,7 +12,7 @@
 - [x] HF Hub model slugs reserved (`rahul24raj/txgemma-4-31b`, `rahul24raj/lysos-base`, `rahul24raj/lysos-rl`)
 - [x] **10 real data loaders implemented + verified live**: ChEMBL ✓, DBAASP ✓, DRAMP ✓, CARD ✓, DrugBank ✓, PDB ✓, ZINC ✓ · BindingDB ⚠ JSP-gated · PubChem ⚠ AIDs retired · APD3 ⚠ source 404
 - [x] **Stage 2 dataset live on HF Hub** — `rahul24raj/lysos-amr-stage2` · **222,606 examples** (was 21K → 31K → 96K after DrugBank wired in)
-- [x] **Stage 3 RL prompts live on HF Hub** — `rahul24raj/lysos-rl-prompts` (3,200 prompts)
+- [x] **Stage 3 RL prompts live on HF Hub** — `rahul24raj/lysos-rl-prompts` (12,000 prompts)
 - [x] **Known-antibiotics RAG index** — `data/processed/known_antibiotics_index.parquet` (20,489 rows from ChEMBL+DBAASP+DRAMP)
 - [x] Verifier (`make verify` 24/24) + 13 unit tests (12 pass, 1 skip-no-rdkit) + Makefile shipped
 - [x] **Workspace verified end-to-end** — FastAPI boots, all 6 routes register, frontend builds clean (1573 modules, 160KB JS), real screenshot captured
