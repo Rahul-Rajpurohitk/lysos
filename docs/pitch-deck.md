@@ -1,3 +1,26 @@
+---
+marp: true
+theme: default
+size: 16:9
+paginate: true
+backgroundColor: "#06121a"
+color: "#e6f7f3"
+style: |
+  section {
+    font-family: Inter, system-ui, sans-serif;
+    background: linear-gradient(180deg, #06121a 0%, #001114 100%);
+    color: #e6f7f3;
+  }
+  h1, h2, h3 { color: #00e6b9; font-family: 'JetBrains Mono', ui-monospace, monospace; letter-spacing: -0.5px; }
+  h2 { border-bottom: 1px solid #1f4458; padding-bottom: 0.4em; }
+  table { color: #a3c2bd; }
+  table th { color: #56cbb6; border-bottom: 1px solid #1f4458; }
+  td, th { padding: 6px 12px; }
+  code, pre { color: #00e6b9; background: #001114; }
+  blockquote { color: #88c552; border-left: 3px solid #00e6b9; }
+  section.title { text-align: left; }
+---
+
 # Lysos — Pitch Deck (10 slides, startup format)
 
 > **Format**: 16:9 PDF for the lablab submission. Each slide capped at 2-3
