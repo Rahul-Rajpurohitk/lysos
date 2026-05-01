@@ -84,6 +84,11 @@ out/
 .turbo/
 *.tsbuildinfo
 .cache/
+# Vite build output
+workspace/web/dist/
+# tsc -b emits these next to vite.config.ts — we don't ship them
+workspace/web/vite.config.js
+workspace/web/vite.config.d.ts
 
 # Jupyter
 .ipynb_checkpoints/

@@ -191,6 +191,54 @@ def t_drug_likeness(smi: str, qed: float, lipinski_pass: bool) -> dict:
     return _msg(user, answer, task="drug_likeness")
 
 
+def t_drug_id_lookup(name: str, drugbank_id: str) -> dict:
+    """drug name → DrugBank ID."""
+    user = (
+        "Instructions: Identify the DrugBank accession ID for the named drug.\n"
+        f"Question: What is the DrugBank ID of {name}?"
+    )
+    return _msg(user, drugbank_id, task="drug_id_lookup")
+
+
+def t_drug_synonyms(name: str, synonyms: str) -> dict:
+    """drug name → synonyms list."""
+    syns = [s.strip() for s in synonyms.split("|") if s.strip()][:6]
+    user = (
+        "Instructions: List up to six known names or synonyms for the drug below.\n"
+        f"Question: What other names is {name} known by?"
+    )
+    answer = ", ".join(syns) if syns else f"No widely-used synonyms beyond '{name}'."
+    return _msg(user, answer, task="drug_synonyms")
+
+
+def t_drug_inchi_key(name: str, inchi_key: str) -> dict:
+    """drug name → Standard InChI Key."""
+    user = (
+        "Instructions: Provide the Standard InChI Key for the named drug.\n"
+        "Context: The InChI Key is a 27-character hash that uniquely identifies a chemical structure across databases.\n"
+        f"Question: What is the Standard InChI Key of {name}?"
+    )
+    return _msg(user, inchi_key, task="drug_inchi_key")
+
+
+def t_drug_cas_lookup(name: str, cas: str) -> dict:
+    """drug name → CAS number."""
+    user = (
+        "Instructions: Provide the CAS Registry Number for the named drug.\n"
+        f"Question: What is the CAS number of {name}?"
+    )
+    return _msg(user, cas, task="drug_cas_lookup")
+
+
+def t_drug_reverse_cas(cas: str, name: str) -> dict:
+    """CAS number → drug name."""
+    user = (
+        "Instructions: Identify the drug given its CAS Registry Number.\n"
+        f"Question: Which drug has CAS number {cas}?"
+    )
+    return _msg(user, name, task="drug_reverse_cas")
+
+
 def _msg(user: str, assistant: str, task: str) -> dict:
     """Pack one example into the canonical Lysos training format."""
     messages = [
@@ -458,6 +506,43 @@ def build_drug_likeness_examples(srcs: Sources, max_rows: int | None,
     return out
 
 
+def build_drug_knowledge_examples(srcs: Sources, max_rows: int | None,
+                                  present: dict[str, bool]) -> list[dict]:
+    """DrugBank vocabulary → knowledge tasks (no SMILES needed).
+
+    Produces 5 example types per row: id-lookup, synonyms, InChI Key,
+    CAS forward + CAS reverse. With 14,630 DrugBank rows that's up to
+    ~73K examples; we cap to keep the dataset balanced.
+    """
+    import pandas as pd
+
+    df = _load_activity_csv(srcs.drugbank_csv, present, "drugbank")
+    if df is None or df.empty:
+        return []
+    out: list[dict] = []
+    for _, row in df.iterrows():
+        name = str(row.get("name", "")).strip()
+        if not name or name.lower() in ("nan", "none"):
+            continue
+        drugbank_id = str(row.get("drugbank_id", "")).strip()
+        synonyms = str(row.get("synonyms", "")).strip()
+        inchi_key = str(row.get("inchi_key", "")).strip()
+        cas = str(row.get("cas", "")).strip()
+
+        if drugbank_id and drugbank_id.startswith("DB"):
+            out.append(t_drug_id_lookup(name, drugbank_id))
+        if synonyms and len(synonyms) > 5:
+            out.append(t_drug_synonyms(name, synonyms))
+        if inchi_key and len(inchi_key) >= 25:
+            out.append(t_drug_inchi_key(name, inchi_key))
+        if cas and "-" in cas:
+            out.append(t_drug_cas_lookup(name, cas))
+            out.append(t_drug_reverse_cas(cas, name))
+    if max_rows:
+        out = out[:max_rows]
+    return out
+
+
 # -----------------------------------------------------------------------------
 # CLI
 # -----------------------------------------------------------------------------
@@ -501,14 +586,16 @@ def main() -> int:
     peptide = build_peptide_examples(srcs, args.max_rows_per_task, present)
     safety = build_safety_examples(srcs, args.max_rows_per_task, present)
     drug_like = build_drug_likeness_examples(srcs, args.max_rows_per_task, present)
+    drug_knowledge = build_drug_knowledge_examples(srcs, args.max_rows_per_task, present)
 
     log.info("  activity_prediction:   %d", len(activity))
     log.info("  generation_for_target: %d", len(generation))
     log.info("  peptide_design:        %d", len(peptide))
     log.info("  safety_prediction:     %d", len(safety))
     log.info("  drug_likeness:         %d", len(drug_like))
+    log.info("  drug_knowledge:        %d", len(drug_knowledge))
 
-    all_examples = activity + generation + peptide + safety + drug_like
+    all_examples = activity + generation + peptide + safety + drug_like + drug_knowledge
     if not all_examples:
         log.error("No examples built. Real data may be empty — check the raw CSVs.")
         return 1

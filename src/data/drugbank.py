@@ -53,6 +53,8 @@ CANONICAL_DRUG_FIELDS = {
     "synonyms": ["Synonyms", "synonyms"],
     "cas": ["CAS Number", "CAS_Number", "cas_number", "CAS"],
     "indication": ["Indication", "indication", "Description"],
+    "inchi_key": ["Standard InChI Key", "InChI Key", "inchi_key", "InChIKey"],
+    "accession": ["Accession Numbers", "accession_numbers"],
 }
 
 
@@ -151,25 +153,43 @@ def fetch_drugbank_open(
             with open(dest, "rb") as f:
                 magic = f.read(4)
             if magic.startswith(b"PK"):
-                log.warning("%s is a ZIP archive (DrugBank mislabels SDFs as .csv); "
-                            "extracting + parsing requires rdkit (not installed locally). "
-                            "Skipping for now.", dest.name)
-                # Try to extract for downstream handling on the VM
+                # DrugBank publishes both vocabulary AND structures as ZIP-wrapped
+                # files mislabelled .csv. Extract first; then parse whatever is
+                # inside (real CSV → vocabulary; SDF → structures).
                 try:
                     import zipfile
                     extract_dir = dest.parent / dest.stem
                     extract_dir.mkdir(exist_ok=True)
                     with zipfile.ZipFile(dest) as zf:
                         zf.extractall(extract_dir)
-                    log.info("  → extracted SDF to %s (parse with rdkit on VM)",
-                             extract_dir)
+                    log.info("  → extracted %s to %s/", dest.name, extract_dir.name)
                 except Exception as exc:  # noqa: BLE001
                     log.warning("  could not extract: %s", exc)
-                # Try to parse SDF SMILES with simple text scan as a fallback
-                df = _parse_sdf_smiles_lite(extract_dir if 'extract_dir' in dir() else None)
-                if df is not None and not df.empty:
-                    log.info("  parsed %d SMILES from SDF via lite scan", len(df))
-                    all_dfs.append(df)
+                    continue
+
+                # 1. Try to parse any *.csv inside the extracted archive
+                csv_inside = list(extract_dir.glob("*.csv"))
+                for inner_csv in csv_inside:
+                    try:
+                        inner_df = pd.read_csv(inner_csv, low_memory=False,
+                                               on_bad_lines="skip")
+                        log.info("  parsed inner CSV %s: %d rows × %d cols",
+                                 inner_csv.name, len(inner_df), len(inner_df.columns))
+                        norm = _normalize_columns(inner_df)
+                        if not norm.empty:
+                            all_dfs.append(norm)
+                    except Exception as exc:  # noqa: BLE001
+                        log.warning("  could not parse %s: %s", inner_csv.name, exc)
+
+                # 2. SDF files: try the lite SMILES tag scan (won't work for the
+                # current DrugBank SDF which uses pure mol blocks, but harmless)
+                df_sdf = _parse_sdf_smiles_lite(extract_dir)
+                if df_sdf is not None and not df_sdf.empty:
+                    log.info("  parsed %d SMILES from SDF via lite scan", len(df_sdf))
+                    all_dfs.append(df_sdf)
+                elif list(extract_dir.glob("*.sdf")):
+                    log.info("  found .sdf with mol-block structures; skipping "
+                             "SMILES extraction (needs rdkit on VM)")
                 continue
 
             df = None
@@ -195,10 +215,18 @@ def fetch_drugbank_open(
         return pd.DataFrame()
 
     df = pd.concat(all_dfs, ignore_index=True)
-    # Filter to entries with valid SMILES
-    df = df[df["smiles"].astype(str).str.len() > 5]
-    df = df.drop_duplicates(subset=["smiles"], keep="first")
-    log.info("DrugBank Open total: %d unique drugs with SMILES", len(df))
+    # Keep entries with EITHER a SMILES or an InChI Key (both useful for Stage 2).
+    # Vocabulary-only rows (name + InChI Key, no SMILES) still seed knowledge tasks.
+    has_smiles = df["smiles"].astype(str).str.len() > 5
+    has_inchi = df.get("inchi_key", pd.Series([""] * len(df))).astype(str).str.len() > 5
+    df = df[has_smiles | has_inchi]
+    # Dedup by name (vocabulary entries) and SMILES (structure entries) separately
+    if "name" in df.columns:
+        df = df.drop_duplicates(subset=["name"], keep="first")
+    log.info(
+        "DrugBank Open total: %d entries (%d with SMILES, %d with InChI Key)",
+        len(df), int(has_smiles.sum()), int(has_inchi.sum()),
+    )
 
     if out_path:
         out_path = Path(out_path)
