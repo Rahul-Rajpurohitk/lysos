@@ -31,13 +31,25 @@ dataset:
   response_template: "<start_of_turn>model\n"
   max_seq_length: 4096
   packing: true
-  # Multi-task mixing weights (sum = 1.0)
+  # Multi-task mixing weights (sum = 1.0). Recalibrated 2026-05-01 after
+  # DrugBank knowledge tasks added — total 9 task types in lysos-amr-stage2.
   task_mix:
-    activity_prediction: 0.30   # given molecule + pathogen → MIC
-    generation_for_target: 0.40 # given pathogen → SMILES
-    peptide_design: 0.15        # given pathogen → AMP sequence
-    safety_prediction: 0.10     # given molecule → hemolysis
-    drug_likeness: 0.05         # given molecule → QED + Lipinski
+    # Core chemistry (60%) — these directly serve the design objective
+    generation_for_target: 0.30  # given pathogen → SMILES
+    activity_prediction: 0.20    # given molecule + pathogen → MIC
+    peptide_design: 0.10         # given pathogen → AMP sequence
+
+    # Safety + properties (15%)
+    safety_prediction: 0.10      # given molecule → hemolysis
+    drug_likeness: 0.05          # given molecule → QED + Lipinski (rdkit-side)
+
+    # Pharma knowledge (25%) — DrugBank vocabulary tasks. Lower per-task weight
+    # because they're shorter/simpler than the chemistry tasks.
+    drug_id_lookup: 0.05         # name → DrugBank ID
+    drug_inchi_key: 0.05         # name → Standard InChI Key
+    drug_synonyms: 0.05          # name → synonym list
+    drug_cas_lookup: 0.05        # name → CAS
+    drug_reverse_cas: 0.05       # CAS → name
 
 # -----------------------------------------------------------------------------
 # Training — gentler LR than Stage 1, fewer epochs (avoid forgetting Stage 1)
