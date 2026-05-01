@@ -9,10 +9,12 @@ demo video.
 | Asset | Purpose | Used in |
 |---|---|---|
 | `cover-1920.svg` | Brand-mark hero · 1920×1080 | Slide 1 of pitch deck · lablab submission cover |
+| `thumbnail-square.svg` | 1024×1024 square thumbnail | HF Space + social previews |
 | `architecture.svg` | Full pipeline · MI300X memory budget | Pitch deck slide 5 · video Section 4 |
 | `data-flow.svg` | 10 sources → loaders → HF Hub | Pitch deck slide 6 |
 | `reward-curves.svg` | Per-component RL reward (projected mockup) | Pitch deck slide 6 · video Section 7 — swap for real wandb when training completes |
 | `rocm-smi-mockup.svg` | Terminal-style 152/192 GB callout | Video Section 6 · pitch deck side-rail |
+| `workspace-screenshot.png` | Live React UI screenshot (real, not a mockup) | Pitch deck slide 4 · video Section 5 (Beat 1) |
 
 ## Style system
 

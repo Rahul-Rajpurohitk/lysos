@@ -79,7 +79,9 @@ Live demo on Hugging Face Spaces (`lablab-ai-amd-developer-hackathon/lysos`):
 3. Each candidate scored on: predicted MIC, drug-likeness, synthetic accessibility, hemolytic safety, novelty vs known antibiotics.
 4. "Find similar known drugs" button: EmbeddingGemma cosine search returns top-5 closest known antibiotics with similarity bars.
 
-Insert: workspace screenshot showing 5 candidates with score panels.
+Insert: `docs/assets/workspace-screenshot.png` (real screenshot of the local build — sidebar of 8 pathogens, MRSA selected, generation parameters, generate button).
+
+![workspace](assets/workspace-screenshot.png)
 
 ---
 
