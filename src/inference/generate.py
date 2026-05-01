@@ -168,12 +168,31 @@ class LysosGenerator:
         self._model.train(False)
         log.info("Model ready in %.1fs", time.perf_counter() - t0)
 
-    def _build_prompt(self, target: str, *, modality: str = "smiles") -> str:
+    def _build_prompt(
+        self,
+        target: str,
+        *,
+        modality: str = "smiles",
+        rag_examples: list[dict] | None = None,
+    ) -> str:
         info = PATHOGEN_CATALOG.get(target)
         if info is None:
             raise ValueError(f"unknown target: {target}; known: {list(PATHOGEN_CATALOG)}")
         template = GENERATION_PROMPT_AMP if modality == "peptide" else GENERATION_PROMPT_SMI
-        return template.format(name=info["name"], context=info["context"])
+        prompt = template.format(name=info["name"], context=info["context"])
+
+        # Optional RAG: append top-k known antibiotics as in-context examples
+        if rag_examples:
+            ref_lines = ["", "Reference examples (known antibiotics for this pathogen):"]
+            for ex in rag_examples:
+                line = f"- {ex.get('name', '?')}: SMILES = {ex.get('smiles', '')}"
+                if ex.get("indication"):
+                    line += f"  ({ex['indication']})"
+                ref_lines.append(line)
+            ref_lines.append("")
+            ref_lines.append("Now design a NEW molecule, distinct from these references but inspired by their pharmacology.")
+            prompt = prompt + "\n" + "\n".join(ref_lines)
+        return prompt
 
     def design(
         self,
@@ -185,12 +204,37 @@ class LysosGenerator:
         top_k: int = 0,
         max_new_tokens: int = 256,
         score: bool = True,
+        enable_rag: bool = False,
+        rag_index: str = "data/processed/known-antibiotics.smiles",
+        rag_k: int = 3,
     ) -> list[Candidate]:
-        """Generate `n` candidate molecules/peptides for `target`."""
+        """Generate `n` candidate molecules/peptides for `target`.
+
+        Args:
+            enable_rag: if True, retrieve top-k known antibiotics matching
+                        the target and inject them as in-context examples.
+                        Powered by EmbeddingGemma 300m.
+            rag_index: path to indexed antibiotic corpus (.smi or .csv)
+            rag_k: how many references to inject (default 3)
+        """
         self._load()
         import torch
 
-        prompt = self._build_prompt(target, modality=modality)
+        rag_examples = None
+        if enable_rag:
+            try:
+                from src.inference.retrieval import get_retriever
+                retr = get_retriever(rag_index)
+                pathogen_info = PATHOGEN_CATALOG.get(target, {})
+                query = (f"antibiotic design for {pathogen_info.get('name', target)}: "
+                         f"{pathogen_info.get('context', '')}")
+                rag_examples = retr.retrieve(query, k=rag_k)
+                log.info("RAG: retrieved %d in-context examples for %s",
+                         len(rag_examples), target)
+            except Exception as exc:  # noqa: BLE001
+                log.warning("RAG retrieval failed (%s); generating without examples", exc)
+
+        prompt = self._build_prompt(target, modality=modality, rag_examples=rag_examples)
         messages = [{"role": "user", "content": prompt}]
         formatted = self._tok.apply_chat_template(
             messages, add_generation_prompt=True, tokenize=False

@@ -173,6 +173,13 @@ class DesignRequest(BaseModel):
     top_p: float = Field(0.95, ge=0.1, le=1.0)
     max_new_tokens: int = Field(256, ge=32, le=1024)
     return_top: int = Field(20, ge=1, le=200)
+    enable_rag: bool = Field(True, description="Use EmbeddingGemma to inject known antibiotics as in-context examples")
+    rag_k: int = Field(3, ge=0, le=10, description="How many reference antibiotics to inject")
+
+
+class SimilarRequest(BaseModel):
+    smiles: str = Field(..., min_length=1, max_length=500)
+    k: int = Field(5, ge=1, le=20)
 
 
 class CandidateOut(BaseModel):
@@ -241,6 +248,8 @@ async def design(req: DesignRequest) -> DesignResponse:
         top_p=req.top_p,
         max_new_tokens=req.max_new_tokens,
         score=True,
+        enable_rag=req.enable_rag,
+        rag_k=req.rag_k,
     )
     elapsed = time.perf_counter() - t0
 
@@ -324,6 +333,25 @@ async def design_stream(req: DesignRequest):
         yield {"event": "done", "data": json.dumps({"total": len(candidates)})}
 
     return EventSourceResponse(event_gen())
+
+
+@app.post("/api/similar")
+async def find_similar(req: SimilarRequest) -> list[dict]:
+    """Return top-k known antibiotics most similar to the given SMILES,
+    using EmbeddingGemma 300m cosine similarity over our indexed corpus."""
+    try:
+        from src.inference.retrieval import get_retriever
+        index_path = os.environ.get(
+            "LYSOS_RAG_INDEX",
+            "data/processed/known-antibiotics.smiles",
+        )
+        retr = get_retriever(index_path)
+        hits = await asyncio.to_thread(retr.retrieve, req.smiles, k=req.k)
+        return hits
+    except FileNotFoundError as exc:
+        raise HTTPException(503, f"retrieval index not built: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"retrieval failed: {exc}") from exc
 
 
 @app.get("/api/score")
