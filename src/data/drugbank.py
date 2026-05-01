@@ -80,6 +80,41 @@ def _download(url: str, dest: Path, timeout: float = 30.0) -> bool:
         return False
 
 
+def _parse_sdf_smiles_lite(extract_dir):
+    """Best-effort SMILES extraction from SDF without rdkit.
+
+    SDFs typically have a `> <SMILES>` or `> <CANONICAL_SMILES>` data tag
+    block. We do a simple regex scan over the file. This won't handle all
+    SDF variants but gets a basic SMILES list for free.
+    """
+    if extract_dir is None or not extract_dir.exists():
+        return None
+    import re
+    smiles_re = re.compile(r"> +<\s*(canonical_)?smiles\s*>\s*\n([^\n]+)", re.IGNORECASE)
+    rows = []
+    sdf_files = list(extract_dir.glob("*.sdf"))
+    for sdf in sdf_files:
+        try:
+            with open(sdf, encoding="latin-1", errors="ignore") as f:
+                text = f.read()
+            for m in smiles_re.finditer(text):
+                smi = m.group(2).strip()
+                if smi and len(smi) > 3:
+                    rows.append({
+                        "drugbank_id": "",
+                        "smiles": smi,
+                        "name": "",
+                        "synonyms": "",
+                        "cas": "",
+                        "indication": "",
+                    })
+        except Exception:  # noqa: BLE001
+            continue
+    if not rows:
+        return None
+    return pd.DataFrame(rows)
+
+
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Map DrugBank column names to our standard schema."""
     cols_lower = {c.lower(): c for c in df.columns}
@@ -111,6 +146,32 @@ def fetch_drugbank_open(
         fname = url.rsplit("/", 1)[-1]
         dest = cache_dir / fname
         if dest.exists() or _download(url, dest):
+            # DrugBank Open Data files are misnamed: "all-open-structures.csv"
+            # is actually a ZIP containing an SDF. We detect by magic bytes.
+            with open(dest, "rb") as f:
+                magic = f.read(4)
+            if magic.startswith(b"PK"):
+                log.warning("%s is a ZIP archive (DrugBank mislabels SDFs as .csv); "
+                            "extracting + parsing requires rdkit (not installed locally). "
+                            "Skipping for now.", dest.name)
+                # Try to extract for downstream handling on the VM
+                try:
+                    import zipfile
+                    extract_dir = dest.parent / dest.stem
+                    extract_dir.mkdir(exist_ok=True)
+                    with zipfile.ZipFile(dest) as zf:
+                        zf.extractall(extract_dir)
+                    log.info("  → extracted SDF to %s (parse with rdkit on VM)",
+                             extract_dir)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("  could not extract: %s", exc)
+                # Try to parse SDF SMILES with simple text scan as a fallback
+                df = _parse_sdf_smiles_lite(extract_dir if 'extract_dir' in dir() else None)
+                if df is not None and not df.empty:
+                    log.info("  parsed %d SMILES from SDF via lite scan", len(df))
+                    all_dfs.append(df)
+                continue
+
             df = None
             for enc in ("utf-8", "latin-1", "cp1252", "utf-16"):
                 try:
