@@ -8,21 +8,24 @@ resistance. Tasks cover:
   - safety_prediction:     given mol → predict hemolysis
   - drug_likeness:         given mol → predict QED + Lipinski
 
-Sources used (all open license):
-  - ChEMBL antibiotic subset (small molecule MIC)
-  - DBAASP, APD3, DRAMP (antimicrobial peptides)
-  - CARD (resistance gene catalog → target pathogens)
-  - BindingDB antibacterial subset
-
-This script can run CPU-only and is intended to run pre-kickoff so we
-have a clean Stage 2 dataset ready when Stage 1 finishes training.
+Sources used (all open license, REAL data — no synthetic stubs):
+  - ChEMBL antibacterial activities (src/data/chembl.py)
+  - DBAASP antimicrobial peptides   (src/data/dbaasp.py)
+  - (later) APD3, DRAMP, CARD
 
 Usage:
 
-    # Default: prepare everything, write to data/processed/amr-stage2/
+    # 1. Fetch raw data first (one-time, ~5-15 min)
+    python -m src.data.chembl --output data/raw/chembl_antibiotics.csv
+    python -m src.data.dbaasp --output data/raw/dbaasp_amps.csv
+
+    # 2. Build the Stage 2 instruction corpus
     python scripts/prepare_amr_data.py
 
-    # Subset for fast iteration
+    # OR: --fetch in one go (fetch + build)
+    python scripts/prepare_amr_data.py --fetch
+
+    # Cap rows per task for fast iteration
     python scripts/prepare_amr_data.py --max-rows-per-task 500
 
     # Push to HF Hub (private)
@@ -196,7 +199,7 @@ def _msg(user: str, assistant: str, task: str) -> dict:
     ]
     return {
         "task": task,
-        "split": "train",  # caller overrides
+        "split": "train",
         "prompt": user,
         "response": assistant,
         "messages": json.dumps(messages),
@@ -204,81 +207,48 @@ def _msg(user: str, assistant: str, task: str) -> dict:
 
 
 # -----------------------------------------------------------------------------
-# Data sourcing
+# Data sourcing — REAL loaders
 # -----------------------------------------------------------------------------
 
 
 @dataclass
 class Sources:
-    """Paths to raw downloads (or stub data when offline)."""
+    """Paths to raw downloads from real data loaders."""
 
-    chembl_antibiotic_csv: Path
-    dbaasp_amp_csv: Path
-    apd3_csv: Path
-    dramp_csv: Path
-    card_targets_csv: Path
-    bindingdb_antibacterial_csv: Path
+    chembl_csv: Path
+    dbaasp_csv: Path
     out_dir: Path
 
 
-def _ensure_sample_chembl(path: Path) -> None:
-    """Write a small synthetic ChEMBL-like sample if real data missing.
+def _ensure_data(srcs: Sources, fetch: bool) -> None:
+    """Verify raw data exists; optionally fetch it from real APIs."""
+    if not srcs.chembl_csv.exists():
+        if fetch:
+            log.info("Fetching ChEMBL antibacterial activities...")
+            from src.data.chembl import fetch_amr_activities
+            fetch_amr_activities(out_path=srcs.chembl_csv)
+        else:
+            log.error(
+                "ChEMBL data not found at %s\n"
+                "  Run: python -m src.data.chembl --output %s\n"
+                "  Or:  python scripts/prepare_amr_data.py --fetch",
+                srcs.chembl_csv, srcs.chembl_csv,
+            )
+            raise FileNotFoundError(srcs.chembl_csv)
 
-    Production note: replace with a real `chembl_downloader` call once we
-    have ChEMBL API access set up. For now this enables CPU dry-runs.
-    """
-    if path.exists():
-        return
-    log.warning("Real ChEMBL data missing at %s — writing 50-row synthetic sample for dry-run", path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # A handful of real, public-domain antibiotic SMILES with rough MICs
-    rows = [
-        # (smiles, pathogen_short, mic_log_ug_per_ml, name)
-        ("CC1(C)S[C@@H]2[C@H](NC(=O)Cc3ccccc3)C(=O)N2[C@H]1C(=O)O", "MRSA", 0.30, "penicillin G"),
-        ("OC[C@H]1O[C@H](OC2=C(O)C=C(C=C2)C(=O)NC2CCCCC2)[C@@H](O)[C@H](O)[C@@H]1O", "EColi-CRE", 1.20, "vancomycin-like analog"),
-        ("CC1=C(N)C=C(N=N1)C2=NC=C(N=C2N)C(=O)O", "MRSA", 0.60, "trimethoprim"),
-        ("CC(=O)N[C@@H]([C@@H](O)C1=CC=C(C=C1)[N+](=O)[O-])C(=O)NC2=CC=CC=C2", "Mtb", 1.00, "chloramphenicol"),
-        ("OC1=C(C(O)=O)C=CC=C1C(=O)O", "EColi-CRE", 1.50, "salicylic-derived"),
-        ("CN1C2=NC(=NC=C2C(=O)N1)C(=O)O", "Paer", 0.45, "fluoroquinolone-like"),
-        ("CC1=C2N=C(C(=O)O)N(C2=CC(F)=C1)C3CC3", "MRSA", 0.40, "ciprofloxacin"),
-        ("CC1(C)C[C@@H]2[C@@H](NC(=O)C(=NOC)C3=CSC(N)=N3)C(=O)N2C1C(=O)O", "Mtb", 0.50, "ceftriaxone-like"),
-    ]
-    # Replicate a few times with synthetic noise
-    extended = []
-    rnd = random.Random(42)
-    for _ in range(7):
-        for r in rows:
-            extended.append((r[0], r[1], r[2] + rnd.uniform(-0.2, 0.2), r[3]))
-    extended.extend(rows)
-    with open(path, "w") as f:
-        f.write("smiles,pathogen_short,mic_log_ug_per_ml,name\n")
-        for r in extended:
-            f.write(",".join([str(x) for x in r]) + "\n")
-
-
-def _ensure_sample_amps(path: Path) -> None:
-    """Tiny synthetic AMP sample (real DBAASP/APD3/DRAMP plug in later)."""
-    if path.exists():
-        return
-    log.warning("Real AMP data missing at %s — writing synthetic sample for dry-run", path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # Real public AMPs (LL-37, magainin, melittin, etc.)
-    rows = [
-        # (sequence, pathogen_short, hemolytic_int, source)
-        ("LLGDFFRKSKEKIGKEFKRIVQRIKDFLRNLVPRTES", "MRSA", 1, "LL-37"),
-        ("GIGKFLHSAKKFGKAFVGEIMNS", "EColi-CRE", 0, "magainin-2"),
-        ("GIGAVLKVLTTGLPALISWIKRKRQQ", "MRSA", 1, "melittin"),
-        ("ILPWKWPWWPWRR", "MRSA", 0, "tritrpticin-like"),
-        ("RRRRRRRRR", "EColi-CRE", 0, "polyarginine"),
-        ("KRWWKWWRR", "MRSA", 0, "indolicidin-like"),
-        ("ACDEFGHIKLMNPQRSTVWY", "MRSA", 0, "synthetic mix"),
-        ("KKLLKKLL", "Paer", 0, "amphipathic helix"),
-    ]
-    extended = list(rows) * 5
-    with open(path, "w") as f:
-        f.write("sequence,pathogen_short,hemolytic_int,source\n")
-        for r in extended:
-            f.write(",".join([str(x) for x in r]) + "\n")
+    if not srcs.dbaasp_csv.exists():
+        if fetch:
+            log.info("Fetching DBAASP antimicrobial peptides...")
+            from src.data.dbaasp import fetch_amps
+            fetch_amps(out_path=srcs.dbaasp_csv)
+        else:
+            log.error(
+                "DBAASP data not found at %s\n"
+                "  Run: python -m src.data.dbaasp --output %s\n"
+                "  Or:  python scripts/prepare_amr_data.py --fetch",
+                srcs.dbaasp_csv, srcs.dbaasp_csv,
+            )
+            raise FileNotFoundError(srcs.dbaasp_csv)
 
 
 # -----------------------------------------------------------------------------
@@ -289,7 +259,9 @@ def _ensure_sample_amps(path: Path) -> None:
 def build_activity_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
     import pandas as pd
 
-    df = pd.read_csv(srcs.chembl_antibiotic_csv)
+    df = pd.read_csv(srcs.chembl_csv)
+    # Drop rows where MIC didn't normalize
+    df = df.dropna(subset=["smiles", "pathogen_short", "mic_log_ug_per_ml"])
     if max_rows:
         df = df.head(max_rows)
     out = []
@@ -304,7 +276,11 @@ def build_activity_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
 def build_generation_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
     import pandas as pd
 
-    df = pd.read_csv(srcs.chembl_antibiotic_csv)
+    df = pd.read_csv(srcs.chembl_csv)
+    # Only generate from highly potent compounds (pchembl >= 5, ie IC50 <= 10µM)
+    if "pchembl_value" in df.columns:
+        df = df[df["pchembl_value"] >= 5.0]
+    df = df.dropna(subset=["smiles", "pathogen_short"])
     if max_rows:
         df = df.head(max_rows)
     out = []
@@ -319,7 +295,11 @@ def build_generation_examples(srcs: Sources, max_rows: int | None) -> list[dict]
 def build_peptide_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
     import pandas as pd
 
-    df = pd.read_csv(srcs.dbaasp_amp_csv)
+    df = pd.read_csv(srcs.dbaasp_csv)
+    df = df.dropna(subset=["sequence", "pathogen_short"])
+    # Only use peptides with non-hemolytic activity for generation training
+    if "hemolytic_int" in df.columns:
+        df = df[df["hemolytic_int"] == 0]
     if max_rows:
         df = df.head(max_rows)
     out = []
@@ -334,10 +314,11 @@ def build_peptide_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
 def build_safety_examples(srcs: Sources, max_rows: int | None) -> list[dict]:
     import pandas as pd
 
+    df = pd.read_csv(srcs.dbaasp_csv)
+    df = df.dropna(subset=["sequence"])
     rows = []
-    df = pd.read_csv(srcs.dbaasp_amp_csv)
     for _, row in df.iterrows():
-        rows.append(t_safety_prediction(row["sequence"], True, int(row["hemolytic_int"])))
+        rows.append(t_safety_prediction(row["sequence"], True, int(row.get("hemolytic_int", 0))))
     if max_rows:
         rows = rows[:max_rows]
     return rows
@@ -350,7 +331,9 @@ def build_drug_likeness_examples(srcs: Sources, max_rows: int | None) -> list[di
 
     RDLogger.DisableLog("rdApp.*")
 
-    df = pd.read_csv(srcs.chembl_antibiotic_csv)
+    df = pd.read_csv(srcs.chembl_csv)
+    df = df.dropna(subset=["smiles"])
+    df = df.drop_duplicates(subset=["smiles"])
     if max_rows:
         df = df.head(max_rows)
     out = []
@@ -384,8 +367,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--output-dir", type=Path, default=Path("data/processed/amr-stage2"))
     p.add_argument("--max-rows-per-task", type=int, default=None)
     p.add_argument("--push-to-hub", type=str, default=None)
-    p.add_argument("--task-mix", type=str, default=None,
-                   help="Override task mix as JSON (sums to 1.0)")
+    p.add_argument("--fetch", action="store_true",
+                   help="Fetch raw data from ChEMBL/DBAASP APIs first if missing")
     p.add_argument("--seed", type=int, default=42)
     return p.parse_args()
 
@@ -394,20 +377,16 @@ def main() -> int:
     args = parse_args()
     random.seed(args.seed)
 
-    # Resolve sources (write samples if missing)
     srcs = Sources(
-        chembl_antibiotic_csv=args.data_root / "chembl_antibiotics.csv",
-        dbaasp_amp_csv=args.data_root / "dbaasp_amps.csv",
-        apd3_csv=args.data_root / "apd3.csv",
-        dramp_csv=args.data_root / "dramp.csv",
-        card_targets_csv=args.data_root / "card_targets.csv",
-        bindingdb_antibacterial_csv=args.data_root / "bindingdb_antibacterial.csv",
+        chembl_csv=args.data_root / "chembl_antibiotics.csv",
+        dbaasp_csv=args.data_root / "dbaasp_amps.csv",
         out_dir=args.output_dir,
     )
-    _ensure_sample_chembl(srcs.chembl_antibiotic_csv)
-    _ensure_sample_amps(srcs.dbaasp_amp_csv)
 
-    log.info("Building task slices...")
+    # Verify (or fetch) real data
+    _ensure_data(srcs, fetch=args.fetch)
+
+    log.info("Building task slices from real data...")
     activity = build_activity_examples(srcs, args.max_rows_per_task)
     generation = build_generation_examples(srcs, args.max_rows_per_task)
     peptide = build_peptide_examples(srcs, args.max_rows_per_task)
@@ -422,7 +401,7 @@ def main() -> int:
 
     all_examples = activity + generation + peptide + safety + drug_like
     if not all_examples:
-        log.error("No examples built. Check data paths.")
+        log.error("No examples built. Real data may be empty — check the raw CSVs.")
         return 1
 
     log.info("Total: %d examples", len(all_examples))
@@ -438,12 +417,11 @@ def main() -> int:
 
     log.info("Train: %d, Eval: %d", len(train_set), len(eval_set))
 
-    # Save HF Dataset
     try:
         import pandas as pd
         from datasets import Dataset, DatasetDict
     except ImportError as exc:
-        log.error("Missing deps: %s. Install datasets + pandas + pyarrow.", exc)
+        log.error("Missing deps: %s. pip install datasets pandas pyarrow", exc)
         return 2
 
     ds = DatasetDict({
