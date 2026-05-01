@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" font-family="Inter, system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#04101a"/>
+      <stop offset="0.55" stop-color="#06121a"/>
+      <stop offset="1" stop-color="#001114"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.6">
+      <stop offset="0" stop-color="#00e6b9" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#00e6b9" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#0a2030" stroke-width="0.6"/>
+    </pattern>
+  </defs>
+
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#grid)"/>
+  <rect width="1024" height="1024" fill="url(#halo)"/>
+
+  <!-- molecule centerpiece -->
+  <g transform="translate(512,420)" stroke="#00e6b9" stroke-width="3" fill="none">
+    <!-- main hexagonal ring -->
+    <path d="M 0 -80 L 70 -40 L 70 40 L 0 80 L -70 40 L -70 -40 Z"/>
+    <!-- inner double-bond -->
+    <path d="M -50 -32 L 50 -32" stroke-width="2"/>
+    <path d="M -50 32 L 50 32" stroke-width="2"/>
+    <!-- substituent atoms -->
+    <line x1="0" y1="-80" x2="0" y2="-130"/>
+    <circle cx="0" cy="-130" r="8" fill="#00e6b9"/>
+    <line x1="70" y1="40" x2="118" y2="68"/>
+    <circle cx="118" cy="68" r="6" fill="#56cbb6"/>
+    <line x1="-70" y1="40" x2="-118" y2="68"/>
+    <circle cx="-118" cy="68" r="6" fill="#56cbb6"/>
+  </g>
+
+  <!-- title -->
+  <text x="512" y="660" font-family="JetBrains Mono, monospace" font-size="180" font-weight="800" fill="#e6f7f3" text-anchor="middle" letter-spacing="-2">LYSOS</text>
+  <rect x="350" y="680" width="324" height="6" fill="#00e6b9"/>
+
+  <!-- tagline -->
+  <text x="512" y="760" font-size="30" fill="#a3c2bd" text-anchor="middle" font-weight="500">Generative drug designer for AMR</text>
+  <text x="512" y="800" font-family="JetBrains Mono, monospace" font-size="20" fill="#56cbb6" text-anchor="middle" letter-spacing="1">Gemma 4 31B · AMD MI300X · Open weights</text>
+
+  <!-- footer -->
+  <text x="512" y="970" font-family="JetBrains Mono, monospace" font-size="16" fill="#56cbb6" text-anchor="middle" letter-spacing="2">github.com/Rahul-Rajpurohitk/lysos</text>
+</svg>
