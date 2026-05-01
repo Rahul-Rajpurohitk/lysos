@@ -171,9 +171,11 @@ class ChEMBLClient:
 def fetch_organism_activities(
     organism: str,
     *,
-    standard_types: tuple[str, ...] = ("MIC", "MBC", "IC50", "Ki"),
+    standard_types: tuple[str, ...] = (
+        "MIC", "MBC", "IC50", "Ki", "EC50", "Activity", "GI50", "Inhibition",
+    ),
     pchembl_min: float | None = None,
-    max_records: int | None = 5000,
+    max_records: int | None = 8000,
     client: ChEMBLClient | None = None,
 ) -> list[dict]:
     """Fetch activity records for one target organism.
