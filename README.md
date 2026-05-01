@@ -51,6 +51,8 @@
 
 Input a resistant pathogen (e.g., MRSA, M. tuberculosis, gram-negative ESKAPE pathogens). Get back novel, scored, downloadable molecule candidates ranked by predicted antibacterial activity, safety, synthesizability, and novelty.
 
+![workspace UI](docs/assets/workspace-screenshot.png)
+
 ---
 
 ## Architecture
