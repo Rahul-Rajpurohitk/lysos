@@ -89,6 +89,16 @@ lysos/
 
 This repo is currently private; will be public-source by submission. Watch this space.
 
+### Reserved deployments
+
+| Resource | URL |
+|---|---|
+| **GitHub repo** | https://github.com/Rahul-Rajpurohitk/lysos (private until kickoff) |
+| **HF Space (demo)** | https://huggingface.co/spaces/lablab-ai-amd-developer-hackathon/lysos |
+| **HF Model — TxGemma-4** | https://huggingface.co/rahul24raj/txgemma-4-31b |
+| **HF Model — Lysos base (post-SFT)** | https://huggingface.co/rahul24raj/lysos-base |
+| **HF Model — Lysos RL (final)** | https://huggingface.co/rahul24raj/lysos-rl |
+
 ---
 
 ## Authors

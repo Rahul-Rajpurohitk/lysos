@@ -6,8 +6,8 @@
 
 - [x] Tech spec locked
 - [x] GitHub repo initialized
-- [ ] HF Space slug `lysos` reserved in `lablab-ai-amd-developer-hackathon` org
-- [ ] HF Hub model slugs reserved (`rahul24raj/txgemma-4-31b`, `rahul24raj/lysos-base`, `rahul24raj/lysos-rl`)
+- [x] HF Space slug `lysos` reserved in `lablab-ai-amd-developer-hackathon` org
+- [x] HF Hub model slugs reserved (`rahul24raj/txgemma-4-31b`, `rahul24raj/lysos-base`, `rahul24raj/lysos-rl`)
 - [ ] AMD Dev Cloud credits confirmed in DigitalOcean
 - [ ] All 5 official AMD/lablab workshop videos watched
 - [ ] ROCm + Gemma 4 + Optimum-AMD compatibility smoke-tested
