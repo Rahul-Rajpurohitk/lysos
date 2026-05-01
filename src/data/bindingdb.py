@@ -33,9 +33,24 @@ import requests
 
 log = logging.getLogger("bindingdb")
 
-# BindingDB releases monthly; URL is date-versioned. We try the last 6 months.
+# BindingDB serves downloads through a JSP servlet wrapper. Files are
+# named BindingDB_{flavor}_{YYYYMM}_tsv.zip (verified live 2026-05).
+# The base path is /rwd/bind/chemsearch/marvin/SDFdownload.jsp?download_file=...
+# We try a few releases; the most recent active is 202604 (April 2026).
+_BDB_BASE = "https://www.bindingdb.org/rwd/bind/chemsearch/marvin/SDFdownload.jsp?download_file=/rwd/bind/downloads"
 BINDINGDB_URL_TEMPLATES = [
-    "https://www.bindingdb.org/bind/downloads/BindingDB_All_{year}m{month}.tsv.zip",
+    # BindingDB_BindingDB_Articles is the small curated subset (~17 MB) —
+    # fastest download with the highest data quality. Default choice.
+    _BDB_BASE + "/BindingDB_BindingDB_Articles_{rel}_tsv.zip",
+    # Full BindingDB (~525 MB) — much bigger but covers ChEMBL+PubChem+Patents+more
+    _BDB_BASE + "/BindingDB_All_{rel}_tsv.zip",
+    # ChEMBL slice (~326 MB) — overlaps with our ChEMBL loader, lower priority
+    _BDB_BASE + "/BindingDB_ChEMBL_{rel}_tsv.zip",
+]
+# Recent releases (YYYYMM). New releases roll monthly; we try several.
+BINDINGDB_RELEASES = [
+    "202604", "202603", "202602", "202601",
+    "202512", "202511", "202510",
 ]
 
 # Bacterial target keywords for filtering. BindingDB target names are
@@ -69,21 +84,21 @@ AMR_TO_BINDINGDB: dict[str, list[str]] = {
 def _try_download(cache_dir: Path) -> Path | None:
     """Try recent BindingDB releases; return the path of the downloaded zip."""
     cache_dir.mkdir(parents=True, exist_ok=True)
-    import datetime
-    today = datetime.date.today()
 
-    # Try last 6 months
-    for offset in range(0, 7):
-        d = today.replace(day=1) - datetime.timedelta(days=offset * 30)
-        for tmpl in BINDINGDB_URL_TEMPLATES:
-            url = tmpl.format(year=d.year, month=f"{d.month}")
-            zip_path = cache_dir / f"bindingdb_{d.year}_{d.month}.tsv.zip"
+    for tmpl in BINDINGDB_URL_TEMPLATES:
+        for rel in BINDINGDB_RELEASES:
+            url = tmpl.format(rel=rel)
+            # Pick a unique cache filename based on the URL flavor + release
+            flavor = "Articles" if "Articles" in tmpl else (
+                "All" if "_All_" in tmpl else "ChEMBL"
+            )
+            zip_path = cache_dir / f"bindingdb_{flavor}_{rel}.tsv.zip"
             if zip_path.exists():
                 log.info("Using cached %s", zip_path)
                 return zip_path
-            log.info("Trying %s", url)
+            log.info("Trying %s/%s ...", flavor, rel)
             try:
-                r = requests.get(url, timeout=30, stream=True, headers={
+                r = requests.get(url, timeout=60, stream=True, headers={
                     "User-Agent": "lysos/0.1 (https://github.com/Rahul-Rajpurohitk/lysos)",
                 })
                 if r.status_code != 200:
@@ -91,12 +106,14 @@ def _try_download(cache_dir: Path) -> Path | None:
                     continue
                 with open(zip_path, "wb") as f:
                     bytes_written = 0
+                    last_log = 0
                     for chunk in r.iter_content(chunk_size=1024 * 1024):
                         if chunk:
                             f.write(chunk)
                             bytes_written += len(chunk)
-                            if bytes_written % (50 * 1024 * 1024) == 0:
+                            if bytes_written - last_log > 50 * 1024 * 1024:
                                 log.info("  ... %.1f MB", bytes_written / 1024 / 1024)
+                                last_log = bytes_written
                 log.info("  ✓ %.1f MB downloaded", bytes_written / 1024 / 1024)
                 return zip_path
             except requests.RequestException as exc:
