@@ -118,3 +118,7 @@ clean-data:
 .PHONY: clean-cache
 clean-cache:
 	rm -rf data/raw/*_cache
+
+.PHONY: build-index
+build-index:
+	@$(PYTHON) scripts/build_known_antibiotics_index.py
