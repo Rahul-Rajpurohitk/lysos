@@ -111,14 +111,23 @@ def fetch_drugbank_open(
         fname = url.rsplit("/", 1)[-1]
         dest = cache_dir / fname
         if dest.exists() or _download(url, dest):
-            try:
-                df = pd.read_csv(dest, low_memory=False, on_bad_lines="skip")
-                norm = _normalize_columns(df)
-                if not norm.empty:
-                    log.info("Parsed %s: %d rows", fname, len(norm))
-                    all_dfs.append(norm)
-            except Exception as exc:  # noqa: BLE001
-                log.warning("Could not parse %s: %s", dest, exc)
+            df = None
+            for enc in ("utf-8", "latin-1", "cp1252", "utf-16"):
+                try:
+                    df = pd.read_csv(dest, low_memory=False, on_bad_lines="skip",
+                                     encoding=enc)
+                    if len(df.columns) >= 2:
+                        log.info("Parsed %s with encoding=%s: %d rows × %d cols",
+                                 fname, enc, len(df), len(df.columns))
+                        break
+                except (UnicodeDecodeError, Exception):
+                    continue
+            if df is None:
+                log.warning("Could not parse %s with any encoding", dest)
+                continue
+            norm = _normalize_columns(df)
+            if not norm.empty:
+                all_dfs.append(norm)
 
     if not all_dfs:
         log.warning("DrugBank: all open-data URLs gated or unavailable")

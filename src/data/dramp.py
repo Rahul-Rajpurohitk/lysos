@@ -32,15 +32,27 @@ import requests
 
 log = logging.getLogger("dramp")
 
-# DRAMP bulk-download URLs. They're versioned — when DRAMP updates,
-# add new entries here. We try each in order and use the first that works.
+# DRAMP bulk-download URLs. The site changed in 2025 — they now use
+# download.php?filename=... rather than direct zip files. The Excel files
+# carry the full metadata (sequence + target organism + hemolysis); FASTA
+# is sequence-only fallback.
+_DRAMP_BASE = "http://dramp.cpu-bioinfor.org/downloads/download.php?filename=download_data/DRAMP3.0_new/"
 DRAMP_URLS = [
-    # General AMPs (the big one)
-    "http://dramp.cpu-bioinfor.org/downloads/General_Amps.zip",
+    # General AMPs (the big one — ~22K records)
+    _DRAMP_BASE + "general_amps.xlsx",
     # Patent AMPs
-    "http://dramp.cpu-bioinfor.org/downloads/Patent_Amps.zip",
+    _DRAMP_BASE + "patent_amps.xlsx",
     # Clinical AMPs (smaller, curated)
-    "http://dramp.cpu-bioinfor.org/downloads/Clinical_Amps.zip",
+    _DRAMP_BASE + "clinical_amps.xlsx",
+    # Antibacterial subset (curated)
+    _DRAMP_BASE + "Antibacterial_amps.xlsx",
+    # Anti-Gram-positive subset
+    _DRAMP_BASE + "Anti-Gram-positive_amps.xlsx",
+    # Anti-Gram-negative subset
+    _DRAMP_BASE + "Anti-Gram-_amps.xlsx",
+    # FASTA fallbacks (sequence-only)
+    _DRAMP_BASE + "general_amps.fasta",
+    _DRAMP_BASE + "Antibacterial_amps.fasta",
 ]
 
 CANONICAL_AAS = set("ACDEFGHIKLMNPQRSTVWY")
@@ -179,35 +191,98 @@ def _normalize_dramp_df(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(out_rows)
 
 
+def _parse_fasta(path: Path) -> pd.DataFrame:
+    """Parse a DRAMP FASTA file (sequences without metadata)."""
+    if not path.exists():
+        return pd.DataFrame()
+    rows = []
+    current_id = None
+    current_seq: list[str] = []
+    try:
+        with open(path, encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith(">"):
+                    if current_id and current_seq:
+                        rows.append({"DRAMP_ID": current_id,
+                                     "Sequence": "".join(current_seq).upper(),
+                                     "Target_Organism": ""})
+                    current_id = line[1:].split("|")[0].strip()
+                    current_seq = []
+                elif line:
+                    current_seq.append(line)
+        if current_id and current_seq:
+            rows.append({"DRAMP_ID": current_id,
+                         "Sequence": "".join(current_seq).upper(),
+                         "Target_Organism": ""})
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not parse FASTA %s: %s", path, exc)
+    return pd.DataFrame(rows)
+
+
 def fetch_amps(out_path: Path | str | None = None,
                cache_dir: Path | str = "data/raw/dramp_cache") -> pd.DataFrame:
     """Fetch DRAMP AMPs across all available bulk downloads.
 
     Tries each DRAMP_URL in turn; aggregates everything that downloads.
+    DRAMP3.0 ships .xlsx files for metadata + .fasta for sequences.
     """
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     all_rows: list[pd.DataFrame] = []
     for url in DRAMP_URLS:
-        zip_name = url.rsplit("/", 1)[-1]
-        zip_path = cache_dir / zip_name
-        if not zip_path.exists() and not _download(url, zip_path):
+        # filename comes after `=` for download.php URLs
+        if "filename=" in url:
+            fname = url.split("=", 1)[1].rsplit("/", 1)[-1]
+        else:
+            fname = url.rsplit("/", 1)[-1]
+        local = cache_dir / fname
+
+        if not local.exists() and not _download(url, local):
             continue
 
-        try:
-            files = _extract_zip(zip_path, cache_dir / zip_name.replace(".zip", ""))
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Could not extract %s: %s", zip_path, exc)
-            continue
-
-        for f in files:
-            if f.suffix.lower() in (".tsv", ".csv", ".xlsx", ".xls"):
-                df_raw = _parse_dramp_table(f)
-                df_norm = _normalize_dramp_df(df_raw)
-                if not df_norm.empty:
-                    log.info("  parsed %s → %d AMR-relevant rows", f.name, len(df_norm))
-                    all_rows.append(df_norm)
+        suffix = local.suffix.lower()
+        if suffix == ".zip":
+            try:
+                files = _extract_zip(local, cache_dir / fname.replace(".zip", ""))
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Could not extract %s: %s", local, exc)
+                continue
+            for f in files:
+                if f.suffix.lower() in (".tsv", ".csv", ".xlsx", ".xls"):
+                    df_raw = _parse_dramp_table(f)
+                    df_norm = _normalize_dramp_df(df_raw)
+                    if not df_norm.empty:
+                        log.info("  parsed %s → %d AMR-relevant rows", f.name, len(df_norm))
+                        all_rows.append(df_norm)
+        elif suffix in (".xlsx", ".xls", ".tsv", ".csv"):
+            df_raw = _parse_dramp_table(local)
+            df_norm = _normalize_dramp_df(df_raw)
+            if not df_norm.empty:
+                log.info("  parsed %s → %d AMR-relevant rows", local.name, len(df_norm))
+                all_rows.append(df_norm)
+        elif suffix in (".fasta", ".fa"):
+            df_raw = _parse_fasta(local)
+            if not df_raw.empty:
+                log.info("  parsed %s → %d sequences (no activity labels)",
+                         local.name, len(df_raw))
+                # FASTA gives no per-pathogen labels; tag as "general"
+                df_raw["pathogen_short"] = "general"
+                df_raw["target_organism"] = "DRAMP-FASTA"
+                df_raw["hemolytic_int"] = 0
+                df_raw["source"] = "DRAMP"
+                df_raw["mic_ug_per_ml"] = None
+                df_raw["length"] = df_raw["Sequence"].str.len()
+                df_raw["name"] = ""
+                df_raw["dbaasp_id"] = df_raw["DRAMP_ID"]
+                df_raw = df_raw.rename(columns={"Sequence": "sequence"})
+                df_raw = df_raw[df_raw["sequence"].apply(
+                    lambda s: bool(s) and all(c in CANONICAL_AAS for c in s) and 5 <= len(s) <= 60)]
+                if not df_raw.empty:
+                    all_rows.append(df_raw[["sequence", "pathogen_short", "target_organism",
+                                            "hemolytic_int", "source", "mic_ug_per_ml",
+                                            "length", "name", "dbaasp_id"]])
 
     if not all_rows:
         log.warning("DRAMP: no rows parsed from any source")

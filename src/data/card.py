@@ -166,22 +166,36 @@ def fetch_resistance(
 
 
 def _extract_species(record: dict) -> list[str]:
-    """Pull species names from various places in a CARD record."""
+    """Pull species names from CARD record's nested model_sequences.
+
+    Real CARD schema (verified live 2026-05):
+      record.model_sequences.sequence[seq_id].NCBI_taxonomy.NCBI_taxonomy_name
+    """
     species: list[str] = []
+
+    ms = record.get("model_sequences") or {}
+    if not isinstance(ms, dict):
+        return species
+
+    # CARD nests: model_sequences.sequence -> {numeric_id -> {NCBI_taxonomy: {NCBI_taxonomy_name}}}
+    seq_dict = ms.get("sequence") or {}
+    if isinstance(seq_dict, dict):
+        for seq_id, seq_rec in seq_dict.items():
+            if not isinstance(seq_rec, dict):
+                continue
+            tax = seq_rec.get("NCBI_taxonomy") or {}
+            if isinstance(tax, dict):
+                name = tax.get("NCBI_taxonomy_name", "")
+                if name:
+                    species.append(str(name))
+
+    # Backwards-compat fallback (older CARD schemas)
     taxa = record.get("ARO_taxa") or record.get("organism") or []
     if isinstance(taxa, list):
         for t in taxa:
             name = (t.get("species") or t.get("name") if isinstance(t, dict) else t) or ""
             if name:
                 species.append(str(name))
-    # Sometimes nested under model_sequences
-    seqs = record.get("model_sequences", {})
-    if isinstance(seqs, dict):
-        for v in seqs.values():
-            if isinstance(v, dict):
-                org = v.get("NCBI_taxonomy", {}).get("NCBI_taxonomy_name", "")
-                if org:
-                    species.append(str(org))
     return species
 
 
