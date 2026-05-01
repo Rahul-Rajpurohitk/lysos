@@ -53,13 +53,17 @@ Input a resistant pathogen (e.g., MRSA, M. tuberculosis, gram-negative ESKAPE pa
 
 ## Architecture
 
-Three-stage training pipeline on AMD Instinct MI300X:
+Three-stage training pipeline + two-model coresident inference, all on a single AMD Instinct MI300X:
 
 | Stage | Goal | Hardware | Output |
 |---|---|---|---|
-| **1. TxGemma-4** | Build a chemistry-aware Gemma 4 base by replicating Google's TxGemma recipe on Therapeutics Data Commons (~70 tasks) | Large 8× MI300X | Open-source foundation model |
-| **2. AMR specialization** | Fine-tune TxGemma-4 on antibiotic-specific data (ChEMBL, DBAASP, APD3, DRAMP, CARD targets) | Small 1× MI300X | AMR-specialized SFT model |
-| **3. RL with verifiable rewards** | GRPO training with multi-objective rewards (activity + safety + novelty) | Small 1× MI300X | Final Lysos generator |
+| **1. TxGemma-4** | Build a chemistry-aware Gemma 4 base by replicating Google's TxGemma recipe on Therapeutics Data Commons (~50 tasks) | Large 8× MI300X | Open-source foundation model |
+| **2. AMR specialization** | Fine-tune TxGemma-4 on antibiotic-specific data (ChEMBL, DBAASP, APD3, DRAMP, CARD targets) — 31,855 instruction examples | Small 1× MI300X | AMR-specialized SFT model |
+| **3. RL with verifiable rewards** | GRPO training with multi-objective rewards (activity + safety + novelty + semantic novelty) | Small 1× MI300X | Final Lysos generator |
+
+Two Gemma-family models coresident at inference:
+- **Gemma 4 31B-it** — generator (62 GB FP16)
+- **EmbeddingGemma 300m** — retrieval, RAG, semantic novelty reward, similar-drug lookup (1 GB)
 
 Why MI300X specifically: GRPO training holds policy + reference + reward predictor coresident in memory (~150 GB), which exceeds H100 80GB. The 192 GB MI300X is the prerequisite, not optional.
 
@@ -74,7 +78,7 @@ lysos/
 │   ├── inference/     # Generation + scoring runtime
 │   ├── data/          # Dataset preparation
 │   └── eval/          # Benchmark harnesses
-├── workspace/         # Next.js web UI (the demo)
+├── workspace/         # Vite + React + FastAPI demo (HF Space-deployable)
 ├── notebooks/         # Exploration + analysis
 ├── scripts/           # Utility scripts
 ├── docker/            # Containerization
@@ -91,13 +95,15 @@ This repo is currently private; will be public-source by submission. Watch this 
 
 ### Reserved deployments
 
-| Resource | URL |
-|---|---|
-| **GitHub repo** | https://github.com/Rahul-Rajpurohitk/lysos (private until kickoff) |
-| **HF Space (demo)** | https://huggingface.co/spaces/lablab-ai-amd-developer-hackathon/lysos |
-| **HF Model — TxGemma-4** | https://huggingface.co/rahul24raj/txgemma-4-31b |
-| **HF Model — Lysos base (post-SFT)** | https://huggingface.co/rahul24raj/lysos-base |
-| **HF Model — Lysos RL (final)** | https://huggingface.co/rahul24raj/lysos-rl |
+| Resource | URL | State |
+|---|---|---|
+| **GitHub repo** | https://github.com/Rahul-Rajpurohitk/lysos | private until kickoff |
+| **HF Space (demo)** | https://huggingface.co/spaces/lablab-ai-amd-developer-hackathon/lysos | reserved |
+| **HF Model — TxGemma-4 (Stage 1)** | https://huggingface.co/rahul24raj/txgemma-4-31b | reserved |
+| **HF Model — Lysos base (Stage 2 SFT)** | https://huggingface.co/rahul24raj/lysos-base | reserved |
+| **HF Model — Lysos RL (final)** | https://huggingface.co/rahul24raj/lysos-rl | reserved |
+| **HF Dataset — Stage 2 AMR** | https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 31,855 examples** |
+| **HF Dataset — Stage 3 RL prompts** | https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts | **LIVE — 3,200 prompts** |
 
 ---
 
@@ -141,9 +147,44 @@ After fetching, see what's on disk:
 python scripts/data_inventory.py
 ```
 
+## Quickstart
+
+```bash
+# 1. Clone + install
+git clone https://github.com/Rahul-Rajpurohitk/lysos.git
+cd lysos
+pip install -e .
+
+# 2. Verify everything imports cleanly (24 modules)
+make verify
+
+# 3. Run the unit tests
+make test
+
+# 4. Pull a small slice of real data (cap 200/pathogen)
+make fetch
+
+# 5. Build the workspace frontend
+make web-install web-build
+
+# 6. Run the local FastAPI server (after pushing models to HF)
+make api-dev
+```
+
+## Documents
+
+- `docs/tech-spec.md` — locked technical specification (architecture, training stages, reward stack)
+- `docs/data-pipeline.md` — end-to-end data flow (sources → loaders → processed → HF Hub)
+- `docs/pitch-deck.md` — 10-slide submission deck (problem, solution, demo, architecture, business, ask)
+- `docs/demo-video-storyboard.md` — beat-by-beat 5-min MP4 plan with on-screen + voiceover
+- `docs/ROADMAP.md` — pre-kickoff checklist
+- `STATUS.md` — single-page snapshot of where the project stands today
+- `vault/` — research notes, ADRs, session logs (Obsidian-style)
+
 ## Acknowledgments
 
-- Built on [Gemma 4](https://huggingface.co/google/gemma-4-31B-it) (Google)
+- Generation: [Gemma 4 31B-it](https://huggingface.co/google/gemma-4-31B-it) (Google)
+- Embeddings + RAG: [EmbeddingGemma 300m](https://huggingface.co/google/embeddinggemma-300m) (Google)
 - Inspired by [TxGemma](https://huggingface.co/collections/google/txgemma-release-67dd92e931c857d15e4d1e87) (Google)
 - Compute by [AMD Developer Cloud](https://www.amd.com/en/developer/resources/cloud-access/amd-developer-cloud.html) on AMD Instinct™ MI300X
 - Submitted to: [AMD Developer Hackathon](https://lablab.ai/ai-hackathons/amd-developer) by [lablab.ai](https://lablab.ai)

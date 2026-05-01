@@ -5,13 +5,14 @@
 
 ## TL;DR
 
-- **64+ commits** pushed to [github.com/Rahul-Rajpurohitk/lysos](https://github.com/Rahul-Rajpurohitk/lysos) (private until kickoff)
-- **Stage 2 dataset live on HF Hub** — 21,007 instruction examples
+- **49+ commits** pushed to [github.com/Rahul-Rajpurohitk/lysos](https://github.com/Rahul-Rajpurohitk/lysos) (private until kickoff)
+- **Stage 2 dataset live on HF Hub** — 31,855 instruction examples (30,263 train + 1,592 valid)
 - **Stage 3 RL prompts live on HF Hub** — 3,200 prompts
-- **All 23 modules verify clean** — `make verify` passes
+- **All 24 modules verify clean** — `make verify` passes (24/24)
 - **12/13 unit tests pass** (1 skip without rdkit) — `make test`
 - **Demo workspace docker-buildable** — FastAPI + Vite/React/Tailwind frontend
-- **EmbeddingGemma 300m research + integration plan ready** for next-session implementation
+- **EmbeddingGemma 300m: all 5 integration phases shipped** — novelty reward + dedup + RAG + similar-drugs UI + 20,489-row index
+- **Pitch deck + 5-min demo video storyboard committed** — `docs/pitch-deck.md` + `docs/demo-video-storyboard.md`
 - Awaiting AMD Dev Cloud credits to land (expected Sat May 2) → first GPU smoke test
 
 ---
@@ -20,12 +21,12 @@
 
 | Resource | URL | Status |
 |---|---|---|
-| GitHub repo | github.com/Rahul-Rajpurohitk/lysos | private, 64+ commits |
+| GitHub repo | github.com/Rahul-Rajpurohitk/lysos | private, 49+ commits |
 | HF Space | huggingface.co/spaces/lablab-ai-amd-developer-hackathon/lysos | reserved, private |
 | HF Model — TxGemma-4 (Stage 1) | huggingface.co/rahul24raj/txgemma-4-31b | reserved |
 | HF Model — Lysos base (Stage 2 SFT) | huggingface.co/rahul24raj/lysos-base | reserved |
 | HF Model — Lysos RL (final) | huggingface.co/rahul24raj/lysos-rl | reserved |
-| HF Dataset — Stage 2 | huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 21,007 examples** |
+| HF Dataset — Stage 2 | huggingface.co/datasets/rahul24raj/lysos-amr-stage2 | **LIVE — 31,855 examples** |
 | HF Dataset — RL prompts | huggingface.co/datasets/rahul24raj/lysos-rl-prompts | **LIVE — 3,200 prompts** |
 
 ---
@@ -52,8 +53,9 @@
 
 | Path | Count | HF Hub | Notes |
 |---|---|---|---|
-| `data/processed/amr-stage2/` | **21,007** examples | rahul24raj/lysos-amr-stage2 | 19,957 train + 1,050 eval |
+| `data/processed/amr-stage2/` | **31,855** examples | rahul24raj/lysos-amr-stage2 | 30,263 train + 1,592 valid |
 | `data/processed/amr-rl-prompts/` | 3,200 prompts | rahul24raj/lysos-rl-prompts | 3,072 train + 128 valid |
+| `data/processed/known_antibiotics_index.parquet` | **20,489** rows | (local — used by RAG + novelty) | ChEMBL + DBAASP + DRAMP |
 | `data/processed/tdc-stage1/` | (runs on VM) | rahul24raj/lysos-tdc-stage1 (reserved) | needs PyTDC |
 
 ### Per-pathogen ChEMBL distribution (heavy run)
@@ -122,7 +124,9 @@ Shared SFT runner: `src/training/sft_runner.py`. Both stages 1 and 2 invoke it w
 | `pyproject.toml` | Hatchling project; deps for all of: training, chemistry, fastapi, hf hub |
 | `docker/Dockerfile.rocm` | Training environment for AMD MI300X (rocm/pytorch base + Lysos deps) |
 | `scripts/smoke_test_rocm.py` | 10-check pre-flight for AMD VM |
-| `scripts/verify_loaders.py` | Smoke-imports all 23 modules |
+| `scripts/verify_loaders.py` | Smoke-imports all 24 modules |
+| `scripts/build_known_antibiotics_index.py` | Builds the 20,489-row index for RAG + novelty |
+| `scripts/dedup_with_embeddings.py` | Clusters Stage 2 by semantic similarity, slices per task |
 | `scripts/data_inventory.py` | Walks data/raw + data/processed, reports sizes + per-pathogen counts |
 | `scripts/fetch_all_data.py` | Unified orchestrator for all 10 loaders |
 | `scripts/prepare_*.py` | TDC, AMR, Stage 3 prompts dataset builders |
@@ -179,17 +183,22 @@ vault/
 2. **APD3** alternative source (current URLs all 404)
 
 ### High-priority (do once unblocked)
-3. **EmbeddingGemma integration** (3.5 hr, 5 phases) — `vault/plans/2026-05-01-embeddinggemma-integration.md`
-4. **DBAASP heavy fetch** (running now) → re-build Stage 2 with richer AMP corpus
-5. **vLLM + Gemma 4 + ROCm smoke test** on first VM session
-6. **PyTDC install + Stage 1 dataset build** on VM
+3. **DBAASP heavy fetch** (running now) → re-build Stage 2 with richer AMP corpus
+4. **vLLM + Gemma 4 + ROCm smoke test** on first VM session
+5. **PyTDC install + Stage 1 dataset build** on VM
+6. **Re-run dedup script** on the 31,855-row Stage 2 with EmbeddingGemma to drop near-duplicates
 
-### Polish + submission
-7. Pitch deck skeleton (10–12 slides, startup format with TAM/SAM/competitors)
-8. Demo video storyboard (≤5 min)
-9. 16:9 cover image
-10. README polish for public-on-kickoff
-11. Build-in-Public social posts (daily)
+### Done since last STATUS update
+- ✓ EmbeddingGemma integration — all 5 phases shipped (novelty reward, RAG, dedup script, similar-drugs UI, 20,489-row index)
+- ✓ Pitch deck — `docs/pitch-deck.md` (10 slides, startup format)
+- ✓ Demo video storyboard — `docs/demo-video-storyboard.md` (5-min, 8 sections, beat-by-beat with VO)
+- ✓ Stage 2 dataset grew 21,007 → 31,855 examples
+
+### Polish + submission (remaining)
+7. 16:9 cover image (Slide 1 of pitch deck → PNG export)
+8. README polish for public-on-kickoff
+9. Build-in-Public social posts (daily, starting kickoff day)
+10. Convert pitch deck markdown → PDF (Marp)
 
 ---
 
@@ -226,5 +235,5 @@ By Day 6 we submit ~24 hours early.
 
 ---
 
-_Last updated: 2026-05-01 by the build session._
-_Next update: after EmbeddingGemma integration or after DBAASP heavy completes._
+_Last updated: 2026-05-01 (post-storyboard) by the build session._
+_Next update: after DBAASP heavy completes, or after the pitch-deck PDF + cover image land._
