@@ -1,5 +1,7 @@
 # Lysos
 
+![Lysos](docs/assets/cover-1920.png)
+
 > **An open-source generative drug designer built on Gemma 4, specialized for designing novel antibiotics against drug-resistant bacteria, trained with reinforcement learning on AMD MI300X.**
 
 [![Hackathon](https://img.shields.io/badge/AMD%20Developer%20Hackathon-2026-red)]()
@@ -66,6 +68,8 @@ Two Gemma-family models coresident at inference:
 - **EmbeddingGemma 300m** — retrieval, RAG, semantic novelty reward, similar-drug lookup (1 GB)
 
 Why MI300X specifically: GRPO training holds policy + reference + reward predictor coresident in memory (~150 GB), which exceeds H100 80GB. The 192 GB MI300X is the prerequisite, not optional.
+
+![Architecture](docs/assets/architecture.png)
 
 ---
 
@@ -146,6 +150,8 @@ After fetching, see what's on disk:
 ```bash
 python scripts/data_inventory.py
 ```
+
+![Data pipeline](docs/assets/data-flow.png)
 
 ## Quickstart
 
