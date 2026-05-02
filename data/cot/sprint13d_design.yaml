@@ -1,0 +1,48 @@
+task: design_challenge
+prompt_label: "Design need"
+instructions: |
+  Instructions: Propose a de novo drug design solving the stated unmet medical need.
+  Cover (1) target choice and rationale, (2) chemotype / scaffold strategy, (3) how
+  the design escapes the current resistance landscape, (4) PK/PD and delivery
+  considerations, (5) development risks (toxicity, manufacturing, registration).
+  Reference precedent compounds where useful.
+
+entries:
+  - name: "Design an oral β-lactam active against KPC-producing CRE without prodrug masking"
+    body: |
+      Target: PBP-3 (FtsI) for Enterobacterales — preserved across CRE, no resistance
+      mechanism beyond β-lactamase hydrolysis. Strategy: pair a carbapenem-stable
+      β-lactam scaffold with a permanently-attached intramolecular DBO-class β-lactamase
+      inhibitor warhead (sulopenem-class oral carbapenem chemistry + tethered avibactam-
+      analog). Avoid prodrug masking (sulopenem-etzadroxil failed bioavailability in
+      phase 3) by exploiting active oral transport via PEPT1 — a small acidic carboxylic
+      acid handle ensures intestinal uptake. Resistance escape: covalent BLI tether means
+      KPC + CTX-M cannot hydrolyze the β-lactam without first removing the BLI; the
+      thermodynamic penalty of two-step inactivation reduces resistance frequency. PK/PD:
+      target T>MIC ≥40%, oral bioavailability ≥30%, t½ 4–6h for q12h dosing. Caveat:
+      metallo-β-lactamases (NDM, VIM) still escape — DBO doesn't cover MBL. Combine with
+      oral aztreonam (Zn-stable) for full CRE coverage including NDM. Tox concerns:
+      carbapenem-class seizure risk at high CSF; add C2-acetamido-substituted side chain
+      for selectivity. Manufacturing: chiral β-lactam synthesis + DBO conjugation,
+      complex but precedented (relebactam manufacturing scale).
+
+  - name: "Design a persister-killing drug for chronic Pseudomonas CF lung biofilm"
+    body: |
+      Target: bacterial cytochrome bc1 (qcrA/B/C) — essential for ATP generation under
+      biofilm hypoxia, validated by Mtb telacebec. Strategy: aryl-imidazopyridine scaffold
+      (Q203/telacebec-class, but engineered for Pseudomonas qcrB). Persisters in biofilm
+      are metabolically dormant — most antibiotics fail because they require active growth.
+      Cytochrome bc1 inhibitors kill non-replicating cells by halting residual ATP synthesis
+      needed even for stationary survival. Resistance escape: novel target, no current
+      Pseudomonas resistome; combine with TonB-dependent uptake (siderophore conjugation)
+      to overcome outer-membrane permeability. PK/PD: lung tissue penetration critical —
+      nebulized formulation preferred (avoid systemic toxicity), or lipid-encapsulated for
+      macrophage uptake. Delivery: nebulized via tobramycin-style PARI nebulizer. Tox:
+      human cytochrome bc1 is mitochondrial complex III — selectivity must be verified
+      (telacebec did this for Mtb vs human). Risks: low antibacterial precedent for
+      non-Mtb cyt-bc; manufacturing OK (small-molecule heterocycle); registration via
+      CF lung niche pathway.
+
+  - name: "Design a VAP-targeted aerosol drug active against carbapenem-resistant A. baumannii"
+    body: |
+      Target: L
