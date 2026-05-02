@@ -69,9 +69,16 @@ def parse_args() -> argparse.Namespace:
                    help="hash = content-hash only (fast). "
                         "embed = embedding only. "
                         "both = hash first, then embed survivors.")
-    p.add_argument("--skip-tasks", type=str, default="",
-                   help="Comma-separated task names to skip embedding pass on "
-                        "(still run hash pass)")
+    p.add_argument("--skip-tasks", type=str,
+                   default="drug_id_lookup,drug_inchi_key,drug_synonyms,"
+                           "drug_cas_lookup,drug_reverse_cas,drug_smiles,"
+                           "drug_from_smiles,drug_structure,"
+                           "natural_product_origin,natural_product_origin_smiles",
+                   help="Comma-separated task names to skip embedding pass on. "
+                        "Templated-prompt tasks (where the prompt is identical "
+                        "modulo a single variable) collapse to ~100 clusters "
+                        "under embedding similarity, which destroys data. "
+                        "These tasks rely on hash dedup (pass 1) only.")
     p.add_argument("--push-to-hub", type=str, default=None)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--model", type=str, default="google/embeddinggemma-300m",
@@ -173,13 +180,13 @@ def embed_dedup(split, model, *, threshold: float, field: str,
         sampled = idx
         sampled_size = n
         if n > embed_cap:
-            sampled = list(rng.choice(idx, size=embed_cap, replace=False))
+            sampled = [int(x) for x in rng.choice(idx, size=embed_cap, replace=False)]
             sampled_size = embed_cap
             log.info("  task=%s: %d rows → sampling %d for embedding pass",
                      task, n, embed_cap)
             # Keep the un-sampled tail outright (random, no dup detection)
             unsampled = sorted(set(idx) - set(sampled))
-            keep.extend(unsampled)
+            keep.extend(int(x) for x in unsampled)
 
         # Embed
         texts = [str(split[i].get(field, "")) for i in sampled]
@@ -193,17 +200,17 @@ def embed_dedup(split, model, *, threshold: float, field: str,
         cluster_ids = _greedy_cluster(embs, threshold)
         clusters: dict[int, list[int]] = {}
         for k, ci in enumerate(cluster_ids):
-            clusters.setdefault(ci, []).append(sampled[k])
+            clusters.setdefault(int(ci), []).append(int(sampled[k]))
         before = len(sampled)
         for ci, members in clusters.items():
             if len(members) == 1:
-                keep.append(members[0])
+                keep.append(int(members[0]))
             else:
                 # Keep longest text in cluster — usually the most informative
-                rows = [split[m] for m in members]
+                rows = [split[int(m)] for m in members]
                 winner = max(range(len(members)),
                              key=lambda j: len(str(rows[j].get(field, ""))))
-                keep.append(members[winner])
+                keep.append(int(members[winner]))
         after = len(clusters)
         log.info("  task=%s: %d → %d clusters (-%d, %.1f%% in sampled set)",
                  task, before, after, before - after,
