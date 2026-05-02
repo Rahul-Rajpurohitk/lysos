@@ -56,7 +56,8 @@
 
 | Path | Count | HF Hub | Notes |
 |---|---|---|---|
-| `data/processed/amr-stage2/` | **222,606** examples | rahul24raj/lysos-amr-stage2 | 210,272 train + 11,066 valid |
+| `data/processed/amr-stage2/` | **222,606** examples | rahul24raj/lysos-amr-stage2 | 211,476 train + 11,130 valid (raw superset) |
+| `data/processed/amr-stage2-dedup-hash/` | **211,200** examples | rahul24raj/lysos-amr-stage2-dedup | 200,134 train + 11,066 valid (hash-deduped, default training set) |
 | `data/processed/amr-rl-prompts/` | 12,000 prompts | rahul24raj/lysos-rl-prompts | 11,520 train + 480 valid |
 | `data/processed/known_antibiotics_index.parquet` | **20,489** rows | (local — used by RAG + novelty) | ChEMBL + DBAASP + DRAMP |
 | `data/processed/tdc-stage1/` | **151,530** examples | **rahul24raj/lysos-tdc-stage1 (LIVE)** | 28 ADME/Tox/HTS tasks · 106,070 train + 15,153 valid + 30,307 test |
