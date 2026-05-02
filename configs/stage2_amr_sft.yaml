@@ -22,17 +22,22 @@ model:
 # Data
 # -----------------------------------------------------------------------------
 dataset:
-  # Default: the SCAFFOLD-AWARE SPLIT version (no train/valid leakage).
-  # The previous splits had:
-  #   amr-stage2 (raw):      917 exact-pair leak, 4,172 SMILES leak
-  #   amr-stage2-dedup-hash: 917 exact-pair leak, 4,172 SMILES leak
-  # The scaffold-aware split groups examples by molecule scaffold so no
-  # SMILES appears in both train and valid:
-  #   amr-stage2-clean (default): 0 leak, 195,616 train + 15,584 valid
-  # See scripts/resplit_stage2.py + scripts/check_leakage.py.
+  # The "pro" Stage 2 = scaffold-aware chemistry tuples + reasoning slice:
+  #   • clean-split chemistry tuples       195,616 train + 15,584 valid
+  #     (scaffold split: 0 SMILES leak, 0 pair leak)
+  #   • reasoning chains                     4,981 train +    207 valid
+  #     (Wikipedia mechanism/indication/resistance/history,
+  #      PubMed abstract Q&A, CARD resistance-gene explanations)
+  # = total 200,597 train + 15,791 valid · 23 task types
+  # Versions on HF Hub:
+  #   raw      → rahul24raj/lysos-amr-stage2          (leaky superset)
+  #   dedup    → rahul24raj/lysos-amr-stage2-dedup    (hash dedup, leaky)
+  #   clean    → rahul24raj/lysos-amr-stage2-clean    (scaffold-split, no leak)
+  #   reasoning → rahul24raj/lysos-amr-stage2-reasoning (just reasoning)
+  #   pro      → rahul24raj/lysos-amr-stage2-pro      (DEFAULT: clean + reasoning)
   source: local
-  path: data/processed/amr-stage2-split
-  hub_id: rahul24raj/lysos-amr-stage2-clean
+  path: data/processed/amr-stage2-pro
+  hub_id: rahul24raj/lysos-amr-stage2-pro
   split_train: train
   split_eval: valid
   text_field: messages
