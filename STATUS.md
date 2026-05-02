@@ -64,7 +64,9 @@
 |---|---|---|---|
 | `data/processed/amr-stage2/` | **222,606** examples | rahul24raj/lysos-amr-stage2 | 211,476 train + 11,130 valid (raw superset, leaky) |
 | `data/processed/amr-stage2-dedup-hash/` | **211,200** examples | rahul24raj/lysos-amr-stage2-dedup | hash-deduped (still leaky: same SMILES train+valid) |
-| `data/processed/amr-stage2-split/` | **211,200** examples | **rahul24raj/lysos-amr-stage2-clean (DEFAULT)** | scaffold-aware split, 195,616 train + 15,584 valid, **0 SMILES leak** |
+| `data/processed/amr-stage2-split/` | **211,200** examples | rahul24raj/lysos-amr-stage2-clean | scaffold-aware split, 195,616 train + 15,584 valid, **0 SMILES leak** |
+| `data/processed/amr-stage2-reasoning/` | **5,188** examples | rahul24raj/lysos-amr-stage2-reasoning | Wikipedia + PubMed + CARD reasoning chains (10 task types) |
+| `data/processed/amr-stage2-pro/` | **216,388** examples | **rahul24raj/lysos-amr-stage2-pro (DEFAULT)** | clean chemistry tuples + reasoning chains, 200,597 train + 15,791 valid |
 | `data/processed/known-antibiotics.parquet` | **39,748** | (local + RAG/novelty) | 6 sources merged: ChEMBL active + DrugBank + DrugCentral + NPAtlas filtered + DBAASP + DRAMP |
 | `data/processed/mic_predictor.joblib` | (model artifact) | (local) | XGBoost MIC predictor, 7,951 train rows, scaffold-CV MAE 0.62 |
 | `data/processed/amr-rl-prompts/` | 12,000 prompts | rahul24raj/lysos-rl-prompts | 11,520 train + 480 valid |
