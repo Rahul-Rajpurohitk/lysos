@@ -6,9 +6,15 @@
 ## TL;DR
 
 - **49+ commits** pushed to [github.com/Rahul-Rajpurohitk/lysos](https://github.com/Rahul-Rajpurohitk/lysos) (private until kickoff)
-- **Stage 2 dataset live on HF Hub** — **222,606 instruction examples** (210,272 train + 11,066 valid) · 13 task types from 6 real sources (ChEMBL + DBAASP + DRAMP + DrugBank + DrugCentral + NPAtlas)
+- **Stage 2 dataset live on HF Hub** — `lysos-amr-stage2-clean` (**195,616 train + 15,584 valid**, scaffold-aware split, **0 SMILES leak**, 0 exact-pair leak — was 4,172 SMILES + 917 pair leak before fix) · 13 task types from 7 real sources
 - **Stage 3 RL prompts live on HF Hub** — 12,000 prompts
 - **Stage 1 TDC dataset live on HF Hub** — 151,530 examples (28 ADME/Tox/HTS tasks, instruction-tuning format)
+- **Real ML MIC predictor** — XGBoost on Morgan fps, scaffold-CV MAE 0.62 / R² 0.56 — replaces heuristic in Stage 3 reward
+- **Embedding stack: Gemini Embedding 2** (gemini-embedding-001, 3072d Matryoshka) — replaces gated EmbeddingGemma; no degraded fallbacks
+- **Per-source data audit** — 92,433 raw rows → 65,898 unique canonical molecules, JSON reports per source
+- **Cross-source overlap audit** — 693 molecules duplicated across 2+ sources, top: DBAASP∩DRAMP=310, ChEMBL∩DrugCentral=220
+- **Train/test leakage audit** — 4,172 SMILES leaked across train/valid (now 0)
+- **TxGemma-27B benchmark harness** ready (`scripts/bench_stage1.py`)
 - **All 24 modules verify clean** — `make verify` passes (24/24)
 - **12/13 unit tests pass** (1 skip without rdkit) — `make test`
 - **Demo workspace docker-buildable** — FastAPI + Vite/React/Tailwind frontend
@@ -56,8 +62,11 @@
 
 | Path | Count | HF Hub | Notes |
 |---|---|---|---|
-| `data/processed/amr-stage2/` | **222,606** examples | rahul24raj/lysos-amr-stage2 | 211,476 train + 11,130 valid (raw superset) |
-| `data/processed/amr-stage2-dedup-hash/` | **211,200** examples | rahul24raj/lysos-amr-stage2-dedup | 200,134 train + 11,066 valid (hash-deduped, default training set) |
+| `data/processed/amr-stage2/` | **222,606** examples | rahul24raj/lysos-amr-stage2 | 211,476 train + 11,130 valid (raw superset, leaky) |
+| `data/processed/amr-stage2-dedup-hash/` | **211,200** examples | rahul24raj/lysos-amr-stage2-dedup | hash-deduped (still leaky: same SMILES train+valid) |
+| `data/processed/amr-stage2-split/` | **211,200** examples | **rahul24raj/lysos-amr-stage2-clean (DEFAULT)** | scaffold-aware split, 195,616 train + 15,584 valid, **0 SMILES leak** |
+| `data/processed/known-antibiotics.parquet` | **39,748** | (local + RAG/novelty) | 6 sources merged: ChEMBL active + DrugBank + DrugCentral + NPAtlas filtered + DBAASP + DRAMP |
+| `data/processed/mic_predictor.joblib` | (model artifact) | (local) | XGBoost MIC predictor, 7,951 train rows, scaffold-CV MAE 0.62 |
 | `data/processed/amr-rl-prompts/` | 12,000 prompts | rahul24raj/lysos-rl-prompts | 11,520 train + 480 valid |
 | `data/processed/known_antibiotics_index.parquet` | **20,489** rows | (local — used by RAG + novelty) | ChEMBL + DBAASP + DRAMP |
 | `data/processed/tdc-stage1/` | **151,530** examples | **rahul24raj/lysos-tdc-stage1 (LIVE)** | 28 ADME/Tox/HTS tasks · 106,070 train + 15,153 valid + 30,307 test |
