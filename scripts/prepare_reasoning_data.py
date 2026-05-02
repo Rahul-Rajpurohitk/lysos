@@ -281,6 +281,92 @@ def build_card_examples(path: Path) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# CHEMBL MECHANISMS → reasoning tasks
+# ---------------------------------------------------------------------------
+
+_BACTERIAL_KEYWORDS = (
+    "bacterial", "penicillin-binding", "dna gyrase", "topoisomerase iv",
+    "23s ribosomal", "30s ribosomal", "16s ribosomal", "ribosomal protein",
+    "dihydropteroate", "dihydrofolate reductase", "rna polymerase",
+    "peptide deformylase", "fatty acid synthesis", "mura", "murb", "murc",
+    "lpxc", "fabi", "fabh", "isoleucyl-trna", "leucyl-trna",
+    "elongation factor", "atp synthase", "qcrb", "decaprenylphosphoryl",
+    "dprE1", "ftsz", "aminoacyl-trna", "lipid ii", "undecaprenyl",
+    "menb", "isoprenoid",
+)
+
+
+def build_chembl_mech_examples(mech_path: Path, name_path: Path) -> list[dict]:
+    """Generate reasoning examples from ChEMBL mechanism-of-action entries.
+
+    Joins mechanism CSV with the canonical antibiotic table on chembl_id to
+    recover human-readable drug names. Filters to bacterial-target mechanisms
+    only (drops non-antibiotic ChEMBL hits).
+    """
+    if not mech_path.exists():
+        log.warning("ChEMBL mech missing: %s", mech_path)
+        return []
+    import pandas as pd
+    mech = pd.read_csv(mech_path)
+    log.info("ChEMBL mechanisms: %d rows", len(mech))
+
+    # Try to recover drug names via the canonical antibiotic table
+    name_map: dict[str, str] = {}
+    if name_path.exists():
+        name_df = pd.read_csv(name_path, usecols=["chembl_id", "name"])
+        name_df = name_df.dropna(subset=["chembl_id", "name"]).drop_duplicates("chembl_id")
+        name_map = dict(zip(name_df["chembl_id"], name_df["name"]))
+        log.info("  joined with %d drug names", len(name_map))
+
+    out: list[dict] = []
+    seen = set()
+    for _, row in mech.iterrows():
+        cid = str(row.get("molecule_chembl_id", "")).strip()
+        moa = str(row.get("mechanism_of_action", "")).strip()
+        action = str(row.get("action_type", "")).strip()
+        if not cid or not moa or moa.lower() == "nan":
+            continue
+        moa_low = moa.lower()
+        # Filter to bacterial mechanisms only
+        if not any(kw in moa_low for kw in _BACTERIAL_KEYWORDS):
+            continue
+        # Dedupe on (cid, moa)
+        key = (cid, moa_low)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        drug_name = name_map.get(cid, cid)
+        comment = str(row.get("mechanism_comment", "")).strip()
+        binding = str(row.get("binding_site_comment", "")).strip()
+
+        # Q1: What is the mechanism of action?
+        user = (
+            "Instructions: Identify the molecular target and mechanism of action of "
+            "the named antibiotic.\n"
+            f"Question: How does {drug_name} (ChEMBL {cid}) work?"
+        )
+        answer_parts = [
+            f"{drug_name} acts as a(n) {action.lower()} of its target: {moa}."
+        ]
+        if comment and comment.lower() != "nan":
+            answer_parts.append(f"Mechanism detail: {_truncate(comment, 600)}")
+        if binding and binding.lower() != "nan":
+            answer_parts.append(f"Binding site: {_truncate(binding, 400)}")
+        if not (comment or binding):
+            # Add a generic class-derived expansion
+            answer_parts.append(
+                f"This places {drug_name} in the class of bacterial-{moa.split(' ')[0].lower()}-"
+                f"targeting agents; clinical use depends on whether the target is essential "
+                f"in the relevant pathogens and whether the drug penetrates the cell envelope."
+            )
+        out.append(_msg(user, " ".join(answer_parts), task="drug_mechanism_chembl"))
+
+    log.info("  → %d ChEMBL-mechanism reasoning examples", len(out))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -302,6 +388,10 @@ def main() -> int:
     examples += build_wikipedia_examples(args.data_root / "wikipedia_amr.csv")
     examples += build_pubmed_examples(args.data_root / "pubmed_amr.csv")
     examples += build_card_examples(args.data_root / "card_resistance.json")
+    examples += build_chembl_mech_examples(
+        args.data_root / "chembl_mechanisms.csv",
+        args.data_root / "chembl_antibiotics.canonical.csv",
+    )
 
     if not examples:
         log.error("No examples produced. Run the source loaders first:")
