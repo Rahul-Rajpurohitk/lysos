@@ -1,0 +1,216 @@
+task: drug_pathogen_reasoning
+prompt_label: "Case"
+instructions: |
+  Instructions: A clinical case is given pairing a named drug with a named pathogen
+  in a specific scenario. Reason through (1) the susceptibility / MIC interpretation
+  using current EUCAST or CLSI breakpoints, (2) PK/PD target attainment for this
+  drug-pathogen pair at the proposed site of infection, (3) resistance mechanisms
+  to watch for, (4) recommended dosing or escalation, (5) alternatives if the
+  patient fails first-line. Cite landmark trials where helpful.
+
+entries:
+  - name: "Vancomycin in MRSA bacteremia with vanco MIC = 1.5 µg/mL — escalate or switch?"
+    body: |
+      (1) Susceptibility. CLSI vancomycin breakpoint for S. aureus is susceptible ≤2,
+      intermediate 4–8, VRSA ≥16 µg/mL. MIC 1.5 by broth microdilution is technically
+      susceptible but sits in the upper-S 'MIC creep' zone — IDSA 2020 MRSA guideline
+      flags MIC ≥1.5 as predicting clinical failure in bacteremia / endocarditis even
+      while remaining 'S' on the report. (2) PK/PD. Vancomycin target shifted from
+      trough 15–20 to AUC24/MIC 400–600 (assuming MIC=1 by BMD); at MIC 1.5 the AUC
+      needed is 600–900, often unachievable without nephrotoxicity (AUC >650 doubles
+      AKI risk per Lodise meta-analysis). (3) Resistance to watch. hVISA (heterogeneous
+      VISA) — undetected on routine MIC, identified by PAP-AUC; thickened cell wall
+      sequesters vanco. Also agr-II dysfunction predicts persistence. (4) Action.
+      Switch to daptomycin 8–10 mg/kg q24h (DAP-S confirmed) or ceftaroline 600 mg q8h
+      especially if persistent bacteremia >72 h. (5) Alternatives. Combination
+      daptomycin + ceftaroline (Geriak 2019 trial — mortality benefit) for persistent
+      MRSA bacteremia / IE; consider TMP-SMX or linezolid only if intravascular source
+      controlled.
+
+  - name: "Daptomycin for E. faecium VRE endocarditis — dose-rationale at 10–12 mg/kg + ampicillin"
+    body: |
+      (1) Susceptibility. CLSI daptomycin breakpoint for E. faecium is S ≤4 µg/mL,
+      but observational data (Britt 2017 VA cohort, n=911) show mortality benefit only
+      when MIC ≤2 AND dose ≥8 mg/kg. EUCAST refused to set a breakpoint citing
+      inadequate PK/PD coverage. (2) PK/PD. Daptomycin is concentration-dependent
+      bactericidal against gram-positives — Cmax/MIC and AUC/MIC drive killing. For
+      E. faecium with MIC 2–4, simulations show 10–12 mg/kg achieves AUC/MIC >666 in
+      ~80% of patients vs <40% at the FDA-labeled 6 mg/kg. Endocarditis vegetations
+      need higher exposure for biofilm penetration. (3) Resistance. LiaFSR pathway
+      mutations alter membrane phospholipid composition → reduced daptomycin binding;
+      cls (cardiolipin synthase) mutations also implicated. Ampicillin co-administration
+      restores daptomycin susceptibility by 'see-saw' membrane charge effect — even in
+      ampicillin-resistant VRE (Sakoulas 2012). (4) Dosing. 10–12 mg/kg actual body
+      weight q24h + ampicillin 2 g IV q4h. Monitor CK weekly (rhabdomyolysis at higher
+      doses). (5) Alternatives. Linezolid (bacteriostatic, suboptimal for IE),
+      dalbavancin off-label, or salvage with tedizolid + daptomycin. Surgery for
+      vegetation >10 mm or persistent bacteremia.
+
+  - name: "Cefepime monotherapy for Pseudomonas aeruginosa pneumonia with AmpC inducible — risk reasoning"
+    body: |
+      (1) Susceptibility. CLSI 2024 revised cefepime PSA breakpoint to S ≤2 / SDD 4 /
+      I 8 / R ≥16 µg/mL — the new SDD category requires escalated dosing (2 g q8h
+      extended-infusion) to achieve target attainment. (2) PK/PD. Cefepime is
+      time-dependent (%fT>MIC); target ≥60–70% for bactericidal effect in pneumonia,
+      ≥100% for critically ill. ELF (epithelial lining fluid) penetration is ~100% of
+      plasma free fraction. Standard 2 g q12h achieves only 40–50% fT>MIC at MIC 8;
+      extended 3-h infusion of 2 g q8h reaches >70%. (3) Resistance to watch.
+      Pseudomonas carries chromosomal AmpC (PDC) — INDUCIBLE and DEREPRESSIBLE.
+      Cefepime is a weak inducer and relatively stable to AmpC, but selection pressure
+      can pick AmpC-overexpressing mutants (~10⁻⁷ frequency) AND OprD porin loss for
+      meropenem cross-resistance. Risk highest with monotherapy >5 days. (4) Action.
+      Use prolonged-infusion cefepime 2 g q8h over 3 h; consider adding tobramycin
+      5–7 mg/kg q24h × 5 days for synergy + resistance suppression in severe
+      VAP. (5) Alternatives. Ceftolozane-tazobactam 3 g q8h (ASPECT-NP non-inferior to
+      meropenem, better against AmpC), ceftazidime-avibactam, or imipenem-relebactam
+      for MDR PSA.
+
+  - name: "Ceftriaxone for S. pneumoniae meningitis with penicillin MIC 4 µg/mL (PRSP) — adjust regimen"
+    body: |
+      (1) Susceptibility. CLSI meningitis-specific ceftriaxone breakpoints are S ≤0.5,
+      I 1, R ≥2 (much stricter than non-meningeal S ≤1). Penicillin MIC 4 defines
+      high-level penicillin-resistant pneumococcus (PRSP); cross-resistance to
+      cephalosporins is common because both target altered PBP2x/PBP1a/PBP2b. Must
+      obtain ceftriaxone MIC — if ≥1 µg/mL, monotherapy fails. (2) PK/PD. Ceftriaxone
+      CSF penetration is ~10% of serum; with 2 g q12h (meningitis dose) free CSF
+      concentrations reach 1–4 µg/mL — inadequate if MIC ≥1. Need %fT>MIC >50% in
+      CSF. (3) Resistance. Mosaic pbp2x/pbp1a genes from horizontal transfer with
+      viridans streptococci; serotype 19A and 35B over-represented. (4) Action.
+      Empirically combine ceftriaxone 2 g IV q12h + vancomycin 15–20 mg/kg q8h
+      (target trough 15–20 or AUC 400–600) per IDSA bacterial meningitis guidelines.
+      Add dexamethasone 0.15 mg/kg q6h × 4 d (de Gans 2002 NEJM — mortality benefit
+      in pneumococcal meningitis; give before/with first antibiotic dose).
+      (5) Alternatives. If ceftriaxone MIC ≥2 or clinical failure → add rifampin
+      600 mg q24h (synergy, biofilm penetration) or switch to meropenem 2 g q8h. For
+      true β-lactam allergy, moxifloxacin 400 mg q24h + vancomycin.
+
+  - name: "Meropenem in CTX-M-15 ESBL E. coli bacteremia in hypoalbuminemic ICU patient — dose strategy"
+    body: |
+      (1) Susceptibility. EUCAST meropenem breakpoints for Enterobacterales: S ≤2,
+      R >8 (with S ≤8 only when high-dose 2 g q8h prolonged infusion used). CTX-M-15
+      ESBL E. coli typically meropenem MIC 0.03–0.25, well within S. (2) PK/PD.
+      Meropenem free %fT>MIC target ≥40% for bactericidal, ≥100% in critically ill /
+      immunocompromised. Meropenem is ~2% protein-bound — hypoalbuminemia minimally
+      alters free fraction (unlike ceftriaxone or ertapenem which are heavily bound),
+      BUT augmented renal clearance (ARC, CrCl >130) common in young septic ICU
+      patients dramatically shortens t½, dropping fT>MIC. (3) Resistance to watch.
+      MEROPENEM (ESBL) — MERINO trial (Harris 2018 JAMA) confirmed meropenem superior
+      to pip-tazo for ceftriaxone-resistant E. coli/Klebsiella bacteremia (mortality
+      12.3% vs 3.7%). Selecting carbapenemase (KPC, NDM, OXA-48) is the worst-case;
+      monitor follow-up cultures. (4) Action. Meropenem 2 g IV q8h as 3-h extended
+      infusion; consider TDM (target free trough 4× MIC). (5) Alternatives. If
+      penicillin-allergic non-anaphylaxis → ertapenem 1 g q24h adequate for non-PSA
+      ESBL. Step-down to oral ciprofloxacin or TMP-SMX only if pathogen confirmed
+      susceptible AND source controlled (≥7-day IV first per IDSA).
+
+  - name: "Polymyxin B for CRAB ICU pneumonia with AKI — loading dose + steady-state PK"
+    body: |
+      (1) Susceptibility. CLSI polymyxin B breakpoint for Acinetobacter is
+      intermediate ≤2, R ≥4 — 'S' category was removed in 2020 acknowledging poor
+      clinical response even at low MICs. EUCAST gives only ECOFF 2. (2) PK/PD. AUC/MIC
+      target 50 (free drug) — but polymyxin B has slow distribution kinetics requiring
+      a LOADING DOSE (Sandri 2013 PK study; Nation 2017 international consensus).
+      Critically, polymyxin B is cleared mostly NON-RENALLY, unlike colistin
+      (renal-cleared prodrug) — so dose is NOT adjusted for AKI. Loading 2.0–2.5 mg/kg
+      IBW over 1 h, then 1.25–1.5 mg/kg q12h. Steady state achieved in 2–3 doses.
+      (3) Resistance. mcr-1 plasmid (rare in Acinetobacter), pmrAB / lpxACD lipid A
+      modification reducing LPS net negative charge → polymyxin binding loss. CRAB
+      resistance often heteroresistant — looks S on routine but subpopulations
+      regrow. (4) Action. Lung penetration is poor (ELF/plasma ~30%); add nebulized
+      colistin (CMS) 75 mg q8h via vibrating-mesh nebulizer for VAP synergy +
+      surface kill. Combine systemically with sulbactam-durlobactam or cefiderocol if
+      available. (5) Alternatives. Sulbactam-durlobactam 1 g/1 g q6h (ATTACK trial —
+      28-day mortality 19% vs 32% for colistin), cefiderocol 2 g q8h (3-h infusion),
+      tigecycline 200 mg load → 100 mg q12h (high-dose) for adjunct.
+
+  - name: "Ceftazidime-avibactam in KPC-3 CRE bacteremia — relapse risk + emerging avibactam-resistance via KPC-31 D179Y"
+    body: |
+      (1) Susceptibility. CLSI CAZ-AVI breakpoint for Enterobacterales: S ≤8/4,
+      R ≥16/4 µg/mL (CAZ component reported, AVI fixed at 4). KPC-3 producers are
+      typically S with MIC 0.5–4. (2) PK/PD. CAZ is time-dependent — target %fT>MIC
+      ≥50%, with avibactam %fT>1 mg/L threshold ≥50%. Standard 2.5 g q8h as 2-h
+      infusion. Both renally cleared — adjust per CrCl; ALWAYS use full or
+      AUGMENTED dose in CRRT (under-dosing drives resistance). (3) Resistance to
+      watch. KPC point mutations selected ON treatment — KPC-31 (D179Y), KPC-33,
+      KPC-44 expand the active-site Ω-loop, restoring ceftazidime hydrolysis while
+      paradoxically RESTORING carbapenem susceptibility (resistance trade-off
+      reported by Shields 2017; Giddins 2018). Reported in 10–30% of CAZ-AVI-treated
+      patients within 10–20 days. (4) Action. Combine CAZ-AVI with a second active
+      agent (meropenem if MIC drops back to S after KPC mutation, or aztreonam for
+      MBL co-carriage). Source control mandatory (catheters, abscess drainage). For
+      MBL co-producers (NDM + KPC) → CAZ-AVI + aztreonam (avi protects aztreonam
+      from class A/C, aztreonam evades MBL Zn²⁺ active site). (5) Alternatives.
+      Meropenem-vaborbactam (TANGO-II — superior to BAT for CRE), imipenem-relebactam
+      (RESTORE-IMI), cefiderocol. Avoid CAZ-AVI monotherapy >14 days without TDM.
+
+  - name: "Linezolid for VRE bacteremia in thrombocytopenic patient — duration vs platelet floor"
+    body: |
+      (1) Susceptibility. CLSI linezolid breakpoint for Enterococcus is S ≤2, R ≥8
+      µg/mL. Most E. faecium VRE have MIC 1–2 — at the susceptibility edge. EUCAST
+      uses S ≤4. (2) PK/PD. Linezolid is BACTERIOSTATIC against enterococci — AUC/MIC
+      80–120 target. Standard 600 mg PO/IV q12h achieves AUC ~200; oral
+      bioavailability ~100%. Bacteriostatic activity is the key reason IDSA prefers
+      daptomycin (cidal) for VRE bacteremia (Britt 2015 cohort showed mortality
+      benefit), with linezolid as alternative. (3) Resistance. 23S rRNA G2576T
+      point mutation, cfr methyltransferase (also cross-resistant to phenicols /
+      lincosamides / streptogramin A / pleuromutilins — PhLOPSa pattern), optrA / poxtA
+      ribosomal protection on plasmids — emerging globally in livestock-linked VRE.
+      (4) Action / toxicity. Reversible thrombocytopenia is dose- AND duration-related,
+      almost universal beyond 14 days; monitor CBC twice weekly. If platelets
+      <50 ×10⁹/L on therapy, switch to daptomycin 10 mg/kg q24h (if dapto-S). Other
+      tox: optic neuritis, peripheral neuropathy >28 d, lactic acidosis, serotonin
+      syndrome with SSRIs (MAO-A inhibition). (5) Alternatives. Daptomycin
+      (high-dose), tigecycline (only with combo, low serum levels — not preferred for
+      bacteremia), tedizolid (myelosuppression milder but limited enterococcal data),
+      quinupristin-dalfopristin (E. faecium only, not E. faecalis).
+
+  - name: "Azithromycin + ethambutol + rifabutin for MAC in HIV+ patient on cobicistat — DDI reasoning"
+    body: |
+      (1) Susceptibility. CLSI/CALSI macrolide breakpoint for MAC: clarithromycin /
+      azithromycin S ≤8 / I 16 / R ≥32 µg/mL. Routine ethambutol and rifamycin testing
+      not predictive of outcome — macrolide MIC is the only validated predictor.
+      (2) PK/PD. Azithromycin concentrates intracellularly (lung, macrophages,
+      lymphocytes) up to 100× plasma — long terminal t½ ~68 h. AUC/MIC the relevant
+      target. Ethambutol AUC/MIC ~30; rifabutin AUC matters for both efficacy and
+      resistance prevention. (3) Resistance / DDI to watch. The killer here is
+      cobicistat — a CYP3A4 inhibitor pharmaco-enhancer in INSTI-based ART (e.g.,
+      EVG/c). Rifabutin is metabolized by CYP3A4 → cobicistat dramatically increases
+      rifabutin and 25-O-desacetyl-rifabutin AUC, causing uveitis, neutropenia,
+      hepatitis. Rifampin is contraindicated with cobicistat (collapse of EVG levels →
+      ART failure + resistance). 23S rRNA mutation at A2058/A2059 confers macrolide
+      resistance — emerges fast on macrolide monotherapy, so combo therapy is
+      mandatory. (4) Action. Use rifabutin 150 mg q24h (reduced from standard 300)
+      with cobicistat AND watch CBC + LFTs + slit-lamp q4 wks. Better: switch ART to
+      a non-boosted regimen (BIC/FTC/TAF or DTG/3TC) so rifabutin can be used at
+      300 mg standard dose. Standard MAC therapy is azithromycin 500–600 mg q24h +
+      ethambutol 15 mg/kg q24h + rifabutin 300 mg q24h × ≥12 mo + 12 mo after
+      culture-negative + CD4 >100. (5) Alternatives. Clarithromycin 500 mg BID
+      (substitute for azithromycin but stronger CYP3A interaction), add
+      amikacin-liposomal-inhalation (Arikayce, CONVERT trial) for refractory MAC
+      pulmonary disease.
+
+  - name: "Bedaquiline + pretomanid + linezolid (BPaL) for XDR-TB with QTcF 470 ms — risk stratify"
+    body: |
+      (1) Susceptibility. WHO 2022 XDR-TB definition: MDR + resistance to any
+      fluoroquinolone + ≥1 Group A drug (bedaquiline / linezolid). Critical
+      concentrations (MGIT 960): bedaquiline 1.0, pretomanid 1.0, linezolid 1.0
+      µg/mL. (2) PK/PD. BPaL regimen — Nix-TB trial (Conradie 2020 NEJM) showed 90%
+      favorable outcome at 6 months in XDR/pre-XDR TB, vastly better than 2-yr
+      regimens; ZeNix (Conradie 2022) optimized linezolid dose to 600 mg × 26 wks
+      (vs 1200 mg) maintaining efficacy and cutting peripheral neuropathy /
+      cytopenia. Bedaquiline AUC drives efficacy; long terminal t½ (5.5 mo) means
+      QT effects persist. (3) Resistance / toxicity to watch. Bedaquiline targets
+      ATP synthase (atpE); resistance via atpE point mutation or upregulation of
+      Rv0678 efflux (cross-resistance with clofazimine). Pretomanid is a
+      nitroimidazole, activated by Ddn deazaflavin-dependent nitroreductase; ddn /
+      fbiA-D mutations confer resistance. The QT issue: bedaquiline + moxifloxacin
+      + clofazimine + delamanid are all hERG blockers — additive QTcF prolongation.
+      Baseline QTcF 470 ms is borderline (men >450, women >470 elevated; >500 high
+      risk for TdP). (4) Action. Correct K⁺ >4.0, Mg²⁺ >2.0, avoid concomitant
+      QT-prolonging drugs (azoles, ondansetron). ECG at baseline, week 2, week 4,
+      week 8, week 12. Stop drug if QTcF >500 or ΔQTcF >60 from baseline. Linezolid
+      thrombocytopenia / neuropathy / optic neuritis monitoring monthly. (5)
+      Alternatives. If QT intolerance → substitute pretomanid + linezolid + delamanid
+      (longer regimen), or move to 18-mo individualized regimen with cycloserine,
+      ethionamide, PAS, imipenem-clavulanate per WHO Group A/B/C. Programmatic
+      management with CXR + sputum culture conversion at month 2 critical.

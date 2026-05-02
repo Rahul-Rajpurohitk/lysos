@@ -1,0 +1,202 @@
+task: cross_pathogen_spectrum
+prompt_label: "Drug spectrum"
+instructions: |
+  Instructions: A named drug or drug-pair is given. Map its clinical spectrum
+  across pathogen classes by reasoning through
+  (1) primary mechanism + the binding-target conservation that drives the
+  spectrum width, (2) pathogens it COVERS WELL with typical MIC50 ranges,
+  (3) pathogens it MISSES and the resistome reason (efflux, target absence,
+  inactivating enzyme), (4) the position in IDSA stewardship hierarchy
+  (carbapenem-sparing, last-resort, etc), (5) where the spectrum is shrinking
+  due to emerging resistance.
+
+entries:
+  - name: "Cefiderocol — siderophore-cephalosporin Trojan-horse spectrum across all gram-negs including MBL, Stenotrophomonas, Burkholderia, Achromobacter"
+    body: |
+      Mechanism: catechol-siderophore moiety chelates Fe(III) and hijacks PiuA/CirA/Fiu
+      TonB-dependent transporters; cephalosporin warhead binds PBP-3, conserved across
+      Enterobacterales and non-fermenters. Trojan-horse uptake bypasses outer-membrane
+      porin loss (OmpK35/36) and overexpressed efflux (MexAB-OprM, AdeABC). COVERS WELL:
+      KPC-CRE MIC50 0.5 mg/L, NDM-Enterobacterales MIC50 1 mg/L, OXA-48 0.25, VIM/IMP
+      Pseudomonas MIC50 1, OXA-23/24 carbapenem-resistant Acinetobacter MIC50 2,
+      Stenotrophomonas maltophilia MIC50 0.5 (rare oxazolidinone-stable agent),
+      Burkholderia cepacia complex MIC50 1, Achromobacter xylosoxidans MIC50 1.
+      MISSES: gram-positives entirely (no PBP affinity, no Fe transport need), anaerobes,
+      atypicals. Resistance gap: PER-1/PER-2 ESBL outliers, NDM-9 with PBP-3 insertion
+      (YRIN/YRIK four-residue duplication) push MIC to 8–32 mg/L; piuA/cirA mutational
+      loss confers TonB-independent escape. IDSA: last-resort for pan-resistant
+      Acinetobacter and MBL-Enterobacterales when ATM-AVI unavailable; reserve, do not
+      use empirically. Spectrum shrinking from PBP-3 insertions emerging in Italy and
+      Greece NDM clones.
+
+  - name: "Ceftolozane-tazobactam — Pseudomonas-prioritized ESBL spectrum, weaknesses vs CRE"
+    body: |
+      Mechanism: ceftolozane is a novel oxyimino-cephalosporin with high PBP-1b/3 affinity
+      in Pseudomonas, stable to AmpC overexpression and MexAB/MexXY efflux at clinical
+      doses; tazobactam covers class-A ESBL (CTX-M, SHV, TEM). COVERS WELL:
+      MDR Pseudomonas aeruginosa MIC50 1 mg/L (best-in-class anti-pseudomonal cephalosporin,
+      including OprD-loss carbapenem-resistant strains), CTX-M-15 ESBL E. coli MIC50 0.5,
+      Klebsiella pneumoniae ESBL MIC50 0.5, Enterobacter AmpC-derepressed MIC50 1,
+      Citrobacter freundii MIC50 1, oral anaerobes Bacteroides fragilis MIC50 8 (modest,
+      tazobactam-driven). MISSES: KPC-CRE (tazobactam does not inhibit serine carbapenemases
+      at achievable levels, MIC >32), NDM/VIM/IMP MBL (no Zn-chelator activity), OXA-48,
+      Acinetobacter (poor PBP affinity), Stenotrophomonas, all gram-positives at clinical
+      dose, MRSA, Enterococcus. Resistance: mutated OXA-2/OXA-10, GES carbapenemases,
+      PBP-3 alterations (T91A) drive emerging Pseudomonas non-susceptibility. IDSA:
+      first-line for MDR Pseudomonas pneumonia and complicated UTI; carbapenem-sparing
+      for ESBL pyelonephritis. Shrinking against Pseudomonas in Spain and Italy as PBP-3
+      mutants spread post-2022.
+
+  - name: "Meropenem-vaborbactam — KPC-focused, weak vs OXA-48 / MBL"
+    body: |
+      Mechanism: vaborbactam is a cyclic boronic acid that forms reversible covalent
+      tetrahedral adduct with serine carbapenemases, restoring meropenem binding to
+      PBP-2/3 in KPC-producing strains. Meropenem alone retains intrinsic broad gram-neg
+      and anaerobe coverage. COVERS WELL: KPC-2/KPC-3 Klebsiella pneumoniae MIC50
+      0.06 mg/L, ESBL Enterobacterales MIC50 0.03, AmpC-derepressed Enterobacter MIC50
+      0.06, wild-type Pseudomonas MIC50 0.5, anaerobes Bacteroides fragilis MIC50 0.5,
+      streptococci MIC50 0.06, MSSA MIC50 0.12, Listeria MIC50 0.25, Haemophilus and
+      Moraxella MIC50 ≤0.06. MISSES: OXA-48 (vaborbactam weakly inhibits class-D, MIC
+      shifts <2-fold so MEM still 4–16), MBL NDM/VIM/IMP (boronates do not chelate Zn,
+      MIC >32), MDR Acinetobacter (porin/efflux defeat both partners), MRSA, VRE,
+      Stenotrophomonas (intrinsic L1 MBL). Resistance emerging via OmpK35/36 porin loss
+      raising vaborbactam MIC even with intact KPC inhibition (porin-loss + ESBL
+      combination). IDSA: KPC-CRE first-line, especially over ceftazidime-avibactam
+      where KPC-3 D179Y avibactam-resistance has emerged. Spectrum stable but narrow.
+
+  - name: "Imipenem-relebactam — Pseudomonas plus KPC, no MBL coverage"
+    body: |
+      Mechanism: relebactam is a diazabicyclooctane (DBO) that covalently acylates class-A
+      (KPC, ESBL) and class-C (AmpC) serine β-lactamases, restoring imipenem binding to
+      PBP-2. Imipenem itself retains broad gram-neg, gram-pos, and anaerobe activity plus
+      strong Pseudomonas affinity for PBP-2. COVERS WELL: KPC-Klebsiella MIC50 0.12 mg/L,
+      MDR Pseudomonas aeruginosa MIC50 1 (including OprD-loss + AmpC-derepressed strains
+      that defeat imipenem alone), CTX-M ESBL E. coli MIC50 0.06, Enterobacter cloacae
+      AmpC MIC50 0.12, Bacteroides fragilis MIC50 0.5, MSSA MIC50 0.06, Enterococcus
+      faecalis MIC50 1 (intrinsic imipenem activity preserved), Listeria MIC50 0.5.
+      MISSES: NDM/VIM/IMP MBL Enterobacterales (no Zn chelation, MIC >32), OXA-48 (DBO
+      weakly inhibits class-D, partial MIC drop only), MDR Acinetobacter (relebactam does
+      not penetrate well, OXA-23 unaffected), Stenotrophomonas (L1 MBL), MRSA, VRE,
+      atypicals. Resistance: KPC variants (D179Y) less common driver than for avibactam,
+      but porin loss + DHA-1 AmpC overproduction causing emerging non-susceptibility.
+      IDSA: alternative to MEM-VAB for KPC and preferred for Pseudomonas-CRE coinfection.
+
+  - name: "Aztreonam-avibactam — the MBL gap-filler under FDA review"
+    body: |
+      Mechanism: aztreonam is a monobactam intrinsically stable to MBL hydrolysis (Zn
+      cofactor cannot cleave the monocyclic core), so MBLs do not protect against
+      aztreonam binding to PBP-3. The companion serine-β-lactamase pairing (avibactam, a
+      DBO) neutralizes the co-produced ESBL/AmpC/KPC/OXA-48 enzymes that would otherwise
+      hydrolyze aztreonam itself. COVERS WELL: NDM-1 Klebsiella MIC50 0.5 mg/L (the
+      defining indication, no other oral or β-lactam combination matches), VIM-Pseudomonas
+      MIC50 4, IMP-Enterobacterales MIC50 1, NDM + OXA-48 + CTX-M co-producing E. coli
+      MIC50 0.5 (a uniquely useful triple-enzyme coverage), Stenotrophomonas maltophilia
+      MIC50 4 (L1 MBL + L2 ESBL co-production, ATM-AVI is one of few active agents),
+      Burkholderia MIC50 8. Coverage of standard ESBL/KPC Enterobacterales also strong
+      (MIC50 0.25). MISSES: gram-positives entirely (no monobactam PBP-1/2/3 affinity in
+      gram-pos), MDR Acinetobacter (poor PBP-3 affinity in non-fermenter A. baumannii,
+      MIC50 16), anaerobes, atypicals. Resistance: PBP-3 YRIN/YRIK insertions in
+      NDM-clones (same as cefiderocol), PER-1 ESBL not fully suppressed by avibactam.
+      IDSA: emerging first-line for confirmed MBL-CRE pending FDA approval.
+
+  - name: "Cefoxitin — cephamycin AmpC-stable but MRSA-fail, PRSP-fail, Pseudomonas-fail"
+    body: |
+      Mechanism: 7α-methoxy-cephamycin scaffold sterically blocks class-C AmpC β-lactamase
+      hydrolysis, binds PBP-1A/3 in Enterobacterales and PBP-2x in streptococci. The
+      methoxy substitution that confers AmpC stability also reduces affinity for
+      gram-positive and Pseudomonas PBPs. COVERS WELL: MSSA MIC50 4 mg/L (used as the
+      surrogate disk-diffusion test for mecA detection), wild-type E. coli MIC50 4,
+      Klebsiella MIC50 4, Proteus mirabilis MIC50 4, anaerobes Bacteroides fragilis
+      MIC50 16 (one of few β-lactams with gram-neg anaerobe activity, used for surgical
+      prophylaxis colorectal), Prevotella, Fusobacterium MIC50 4, Neisseria gonorrhoeae
+      MIC50 1, group B streptococcus MIC50 2. MISSES: MRSA (mecA-encoded PBP-2a has
+      negligible cefoxitin affinity, MIC >256), penicillin-resistant Streptococcus
+      pneumoniae PRSP (PBP-2x mutations, MIC >16), Enterococcus (intrinsic PBP-5 low
+      affinity), Pseudomonas (porin and efflux, MIC >128), Acinetobacter, ESBL-producing
+      Enterobacterales (CTX-M hydrolyzes despite methoxy, MIC >64), CRE, Stenotrophomonas.
+      Resistance: ACT/MIR/CMY plasmid AmpC (cmy-2) hydrolyzes cefoxitin (MIC >32). IDSA:
+      surgical prophylaxis colorectal, gynecologic; not for established BSI/HAP.
+
+  - name: "Doxycycline — atypicals, Lyme, Rickettsia, Vibrio, anthrax, MRSA-skin"
+    body: |
+      Mechanism: tetracycline-class 30S ribosomal protein-synthesis inhibitor binding the
+      A-site of 16S rRNA at the H34 helix. Lipophilic doxycycline penetrates intracellular
+      compartments where atypical pathogens replicate. COVERS WELL: Borrelia burgdorferi
+      Lyme MIC50 0.5 mg/L (gold standard for early Lyme), Rickettsia rickettsii (Rocky
+      Mountain spotted fever, life-saving), Anaplasma phagocytophilum MIC50 0.06,
+      Ehrlichia chaffeensis, Coxiella burnetii Q-fever MIC50 0.5, Chlamydia trachomatis
+      MIC50 0.06, Chlamydophila pneumoniae, Mycoplasma pneumoniae MIC50 0.5, Vibrio
+      vulnificus MIC50 0.5 (oyster wound necrotizing), Vibrio cholerae MIC50 1, Bacillus
+      anthracis MIC50 0.06 (post-exposure prophylaxis), Yersinia pestis MIC50 1,
+      Francisella tularensis, Brucella melitensis MIC50 1 (combo with rifampin/streptomycin),
+      community-MRSA SSTI MIC50 0.5 (USA300 typically tet-S). MISSES: Pseudomonas
+      (intrinsic MexXY-OprM efflux), Proteus (intrinsic resistance), most Enterobacterales
+      (tetA/tetB efflux ubiquitous), enterococci (tetM ribosomal-protection), group A
+      strep (tetM in 30%). Resistance: tetA/B/D/M/O efflux and ribosomal-protection genes
+      on conjugative plasmids; tigecycline and eravacycline overcome tet-resistance via
+      glycyl-substitution. IDSA: tickborne infections, atypical CAP, MRSA-SSTI alternative.
+
+  - name: "Trimethoprim-sulfamethoxazole — broad folate-pathway including Pneumocystis, Toxoplasma, Nocardia, Stenotrophomonas, MRSA"
+    body: |
+      Mechanism: sequential blockade of bacterial folate synthesis — sulfamethoxazole
+      inhibits dihydropteroate synthase (folP), trimethoprim inhibits dihydrofolate
+      reductase (folA, dfrA). Synergistic 1:5 fixed ratio achieves bactericidal effect
+      across many pathogens including selected eukaryotes with bacterial-like folate
+      enzymes. COVERS WELL: uropathogenic E. coli MIC50 0.5/9.5 mg/L, MSSA MIC50 0.5/9.5,
+      community-MRSA MIC50 0.5/9.5 (USA300), Stenotrophomonas maltophilia MIC50 0.25/4.75
+      (drug of choice — resistant to most β-lactams via L1/L2), Listeria monocytogenes
+      MIC50 0.06/1.2, Burkholderia cepacia MIC50 1/19 (CF lung, drug of choice with
+      meropenem), Nocardia asteroides MIC50 0.5/9.5, Pneumocystis jirovecii (drug of
+      choice for PJP, both prophylaxis and treatment, eukaryotic but folate enzymes
+      target), Toxoplasma gondii (DHFR-DHPS targets, alternative to pyrimethamine-sulfa),
+      Cyclospora cayetanensis, Isospora belli, Salmonella enterica MIC50 1/19 (typhoid
+      alternative). MISSES: Enterococcus (utilizes exogenous folate, intrinsic resistance),
+      Pseudomonas (efflux), group A streptococcus (variable, not preferred), anaerobes
+      (Bacteroides intrinsically resistant), Mycoplasma (no folate enzymes), Treponema.
+      Resistance: dfrA1-30 plasmid-borne DHFR mutations (>50% of E. coli in Asia), sul1/2/3
+      genes on integrons, mutational folA Phe98Tyr in S. aureus. IDSA: PJP first-line,
+      CA-MRSA SSTI, Stenotrophomonas, Nocardia, traveler's diarrhea (limited now).
+
+  - name: "Clindamycin — anaerobes plus gram-positive plus Toxoplasma plus Babesia"
+    body: |
+      Mechanism: lincosamide binding 23S rRNA at the peptidyl-transferase center
+      (overlaps macrolide/streptogramin-B site, the MLS-B binding pocket). Inhibits
+      protein elongation; also suppresses bacterial toxin production (TSST-1, PVL,
+      Shiga toxin) at sub-MIC levels — uniquely useful in toxin-mediated necrotizing
+      infection. COVERS WELL: anaerobes Bacteroides fragilis MIC50 1 mg/L (though resistance
+      now 30–50%), Prevotella MIC50 0.5, Fusobacterium MIC50 0.25, Clostridium perfringens
+      MIC50 0.5, Peptostreptococcus MIC50 0.25, MSSA MIC50 0.06, community-MRSA D-test
+      negative MIC50 0.06, group A streptococcus MIC50 0.06 (drug of choice for nec-fasc
+      and toxic shock as toxin suppressor), Streptococcus pneumoniae MIC50 0.06 (if
+      erm-negative), viridans strep, Toxoplasma gondii (50S targets, alternative regimen),
+      Babesia microti MIC50 0.5 with quinine, Plasmodium falciparum (slow-acting partner
+      with quinine), Pneumocystis jirovecii alternative with primaquine. MISSES: most
+      gram-negatives (intrinsic outer-membrane impermeability — Enterobacterales,
+      Pseudomonas, Acinetobacter all MIC >256), Enterococcus (intrinsic), Clostridioides
+      difficile (selects for it — major toxic-megacolon risk). Resistance: ermB/ermC
+      methylates 23S A2058 conferring constitutive or inducible MLS-B (D-test detects
+      the inducible phenotype for MRSA), lnu(A/B) lincosamide nucleotidyltransferase.
+      IDSA: necrotizing fasciitis adjunct, dental abscess, aspiration pneumonia.
+
+  - name: "Metronidazole and tinidazole — anaerobes plus Trichomonas plus Entamoeba plus Giardia"
+    body: |
+      Mechanism: 5-nitroimidazole prodrug reduced by anaerobic ferredoxin/PFOR systems
+      to a nitroso-radical that fragments DNA via base oxidation and strand breaks.
+      Selectivity is absolute for organisms with low-redox-potential anaerobic metabolism
+      — aerobes cannot reduce the nitro group. COVERS WELL: Bacteroides fragilis MIC50
+      0.5 mg/L (reliable, low resistance still), Prevotella MIC50 0.25, Fusobacterium
+      MIC50 0.25, Clostridium perfringens MIC50 1, Clostridioides difficile MIC50 0.5
+      (oral vancomycin or fidaxomicin now first-line, but metronidazole still used in
+      mild cases or IV-only situations), Peptostreptococcus MIC50 0.5, Helicobacter
+      pylori MIC50 1 (combination triple/quadruple therapy), Gardnerella vaginalis BV
+      MIC50 4, Trichomonas vaginalis (drug of choice, single 2g oral dose), Entamoeba
+      histolytica luminal+invasive (drug of choice), Giardia lamblia MIC50 1 (first-line),
+      Blastocystis hominis MIC50 8, Dientamoeba fragilis. Tinidazole offers similar
+      spectrum with longer half-life (12h vs 8h) and better single-dose compliance.
+      MISSES: all aerobic and microaerophilic bacteria (no anaerobic reductive pathway —
+      Enterobacterales, Pseudomonas, staphylococci, streptococci, enterococci all MIC
+      >128), Actinomyces (microaerophilic, intrinsic resistance), Propionibacterium,
+      mycobacteria, fungi. Resistance: nim genes (nimA-K) encode alternative nitroreductases
+      that detoxify rather than activate the prodrug — emerging in B. fragilis 1–5%
+      regionally. IDSA: intra-abdominal infection (with gram-neg agent), C. difficile
+      mild, BV, trichomoniasis, amebiasis, giardiasis.

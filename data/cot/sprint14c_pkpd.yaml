@@ -1,0 +1,206 @@
+task: pk_pd_reasoning
+prompt_label: "PK/PD scenario"
+instructions: |
+  Instructions: A clinical pharmacology scenario is given. Reason through
+  (1) the relevant PK/PD target for this drug class (T>MIC, AUC/MIC, Cmax/MIC,
+  fAUC, etc.) and the magnitude needed for cidality,
+  (2) how the patient state perturbs PK (Vd, clearance, protein binding, organ
+  function), (3) the dosing adjustment with rationale and target attainment math,
+  (4) toxicity ceilings and monitoring strategy, (5) alternatives if target
+  attainment cannot be reached.
+
+entries:
+  - name: "Vancomycin AUC/MIC 400-600 target in intermittent hemodialysis patient"
+    body: |
+      PK/PD: 2020 ASHP-IDSA-PIDS-SIDP consensus replaced trough-only with AUC24/MIC
+      400-600 mg·h/L for MRSA bacteremia (target >=400 for efficacy, <=600 to cap
+      AKI). Vancomycin is concentration-independent, time-dependent killing with
+      AUC as the driver. iHD patient state: anuria collapses non-dialytic clearance
+      to ~6 mL/min (normal CLcr 100), Vd stable ~0.7 L/kg, ~30-40% removed per
+      4-hour high-flux session (polysulfone, KoA >800). Strategy: 25 mg/kg loading
+      dose post-HD, then 10 mg/kg redosing after each session. Two-sample Bayesian
+      AUC estimation (pre- and 2h post-HD) preferred over trough — InsightRx /
+      DoseMeRx tools handle the saw-tooth profile. If MIC is 1 mg/L, target trough
+      15-20 yields AUC ~500. Toxicity ceiling: AUC >650 doubles AKI hazard
+      (Lodise 2009). Alternative if MIC >=2: switch to daptomycin 8-10 mg/kg
+      post-HD or ceftaroline — vancomycin MIC creep makes target attainment
+      impossible above 2 mg/L without nephrotoxic exposure.
+
+  - name: "Daptomycin dosing in class-III obesity (BMI greater than 40)"
+    body: |
+      PK/PD: fAUC24/MIC ~666 (total AUC/MIC ~800) for S. aureus cidality;
+      Cmax/MIC also matters since daptomycin is concentration-dependent. Vd is
+      0.1 L/kg in lean tissue but daptomycin distributes poorly into adipose,
+      so total-body-weight (TBW) dosing overshoots and risks CPK rise. Class-III
+      obesity perturbations: clearance scales with lean body weight, not TBW;
+      using TBW at 10 mg/kg in a 150 kg patient gives 1500 mg vs adjusted
+      body weight (ABW) ~1100 mg. Pai 2014 PK study and IDSA endocarditis
+      guidance favor ABW or a capped TBW dose. Adjustment: dose by ABW = IBW +
+      0.4*(TBW-IBW), give 8-10 mg/kg ABW q24h for bacteremia, 10-12 mg/kg for
+      MRSA endocarditis. Toxicity ceiling: CPK weekly, hold if >1000 with
+      symptoms or >2000 asymptomatic; eosinophilic pneumonia is dose-related.
+      Alternative if MIC >=2 or persistent bacteremia: combine with ceftaroline
+      (synergy via PBP1 enhancement of daptomycin binding) or switch to
+      dalbavancin (single 1500 mg dose, t1/2 ~14 days, no weight cap needed).
+
+  - name: "Beta-lactam continuous infusion vs q6h intermittent — when does prolonged-infusion strategy win"
+    body: |
+      PK/PD: beta-lactams are time-dependent — fT>MIC of 40-50% for cidality
+      (carbapenems lower at 40%, cephalosporins 60-70%, penicillins 50%).
+      For severe sepsis EUCAST and Roberts 2014 DALI study favor 100% fT>MIC
+      and even fT>4xMIC. Continuous or extended infusion (3-4h) widens fT>MIC
+      versus q6h bolus where troughs dip below MIC for organisms at the
+      breakpoint. Patient state where CI wins: critically ill with augmented
+      renal clearance (CLcr >130, common in trauma/burns), high-MIC
+      Pseudomonas (4-8 mg/L), or septic shock with expanded Vd diluting peaks.
+      Math: piperacillin-tazobactam 4.5 g over 4h q8h vs q6h bolus — Monte
+      Carlo PTA simulations (Lodise 2007) show CI achieves 90% PTA at MIC 16
+      vs 50% for bolus. MERCY and BLING-III RCTs showed mortality benefit in
+      sepsis subgroups with CI. Toxicity ceiling: trough monitoring 50-100
+      mg/L for piperacillin to avoid neurotoxicity (>150 associated with
+      delirium). Alternative if MIC >16: switch to ceftolozane-tazobactam or
+      cefiderocol; CI cannot rescue an organism above the susceptibility
+      breakpoint.
+
+  - name: "Linezolid in advanced renal failure — no dose adjustment but metabolite accumulation"
+    body: |
+      PK/PD: linezolid AUC24/MIC ratio 80-120 and %T>MIC 85% for
+      bacteriostasis; oxazolidinone is bacteriostatic against MRSA / VRE.
+      Parent drug clearance is non-renal (60-65% hepatic via morpholine ring
+      oxidation to aminoethoxyacetic acid PNU-142586 and hydroxyethyl-glycine
+      PNU-142300), so package insert says no renal dose adjustment for
+      CrCl <30. However in ESRD/HD the inactive carboxylic acid metabolites
+      accumulate 7-10 fold; clinical signal is thrombocytopenia (platelet
+      drop >25% in ~30% of patients on therapy >14 days, vs ~5% in normal
+      renal). Brier 2003 and Matsumoto 2014 TDM data support dose reduction
+      to 600 mg q24h or 300 mg q12h when therapy exceeds 14 days in dialysis
+      patients. Strategy: keep 600 mg q12h for first 7-10 days, monitor CBC
+      twice weekly, target trough 2-7 mg/L; reduce to q24h if trough >10 or
+      platelets fall below 100k. Lactic acidosis and peripheral neuropathy
+      are mitochondrial-toxicity ceilings beyond 28 days. Alternative:
+      tedizolid 200 mg daily (shorter t1/2, less marrow tox, but only 6-day
+      ABSSSI label) or daptomycin if no pulmonary source.
+
+  - name: "Aminoglycoside once-daily extended-interval (Hartford nomogram) vs traditional q8h"
+    body: |
+      PK/PD: aminoglycosides are concentration-dependent with post-antibiotic
+      effect (PAE 2-4h for gram-negatives) — Cmax/MIC >=8-10 drives cidality
+      (Moore 1987 Pseudomonas data). AUC/MIC also predicts efficacy at
+      ~80-100. Once-daily extended-interval (ODI) at gentamicin/tobramycin
+      7 mg/kg or amikacin 15-20 mg/kg q24h maximizes peak (~20 mg/L gent,
+      ~60 mg/L amikacin) while exploiting PAE during the trough-zero window
+      to lower nephro/oto-toxicity (saturable proximal tubule and cochlear
+      uptake). Hartford nomogram (Nicolau 1995): draw 6-14h post-infusion
+      level, plot on q24/q36/q48 zones based on CrCl-driven clearance shift.
+      Patient state: avoid ODI in pregnancy, ascites with markedly expanded
+      Vd, CrCl <20, endocarditis (synergy dosing q8h preferred per AHA),
+      and burns. Toxicity ceiling: cumulative auditory monitoring beyond
+      7 days, scr daily, target trough <1 mg/L for gent, <5 for amikacin.
+      Alternative if target attainment fails or duration >7-10 days: switch
+      to a beta-lactam with confirmed susceptibility (cefepime, meropenem)
+      or plazomicin which retains activity vs AME-producing CRE.
+
+  - name: "Polymyxin B vs colistin (CMS) — why their PK profiles diverge in critical illness"
+    body: |
+      PK/PD: both target LPS lipid A; fAUC/MIC ~12-25 for Pseudomonas /
+      Acinetobacter cidality (Sandri 2013). Critical divergence: polymyxin B
+      is administered as the active drug (sulfate), while colistin is given
+      as the inactive prodrug colistimethate sodium (CMS) which slowly
+      hydrolyzes in vivo to active colistin base. Colistin reaches steady
+      state at 2-3 days vs polymyxin B at ~12h, so colistin underdoses
+      early when sepsis mortality is highest. CMS is renally cleared (so
+      conversion-to-colistin is faster in renal failure, paradoxically
+      raising exposure), polymyxin B is non-renal (peptide hydrolysis).
+      Patient state: in CRRT colistin levels are unpredictable because
+      both prodrug and active species are removed; polymyxin B is more
+      stable. EUCAST 2020 and IDSA 2024 AMR guidance favor polymyxin B for
+      bloodstream infections (faster Cssmax, no renal-dose required).
+      Loading dose: polymyxin B 2-2.5 mg/kg IBW, then 1.25-1.5 mg/kg q12h.
+      Toxicity ceiling: AKI in 30-50% of patients, neurotoxicity (paresthesia)
+      dose-dependent. Alternative: cefiderocol or sulbactam-durlobactam
+      (Acinetobacter) avoid the polymyxin nephrotoxicity entirely.
+
+  - name: "Cefepime in CRRT — extracorporeal clearance and seizure risk"
+    body: |
+      PK/PD: cefepime is time-dependent, fT>MIC 60-70% needed for cidality
+      against Pseudomonas at MIC 8 (EUCAST breakpoint). t1/2 ~2h normal,
+      Vd 0.2-0.3 L/kg, ~80% renally cleared as unchanged drug, low protein
+      binding (~20%). CRRT (CVVHDF at effluent 25-35 mL/kg/h) provides
+      sieving coefficient ~0.7 — meaningful extracorporeal clearance of
+      ~30-40 mL/min on top of residual renal function. Underdosing risk:
+      empiric 1 g q12h (often used in renal failure) gives subtarget
+      exposures in CRRT — Heintz 2009 and Seyler 2011 PK studies support
+      2 g q8h or 2 g q12h continuous infusion when effluent >25 mL/kg/h.
+      Seizure risk: cefepime-induced neurotoxicity (CIN) — non-convulsive
+      status, myoclonus — driven by GABA-A antagonism at trough >20 mg/L
+      or AUC24 >800. Lamoth 2010 reported 15% incidence in renal-failure
+      patients overdosed on standard schedules. Strategy: TDM trough 8-15
+      mg/L target, EEG if altered mental status, hold dose if trough >35.
+      Alternative if seizures emerge or Pseudomonas MIC >=16: switch to
+      ceftolozane-tazobactam or meropenem (lower neurotox at equipotent
+      dose) — though carbapenems carry their own seizure signal at high
+      CSF.
+
+  - name: "Voriconazole CYP2C19 polymorphism — therapeutic drug monitoring strategy"
+    body: |
+      PK/PD: voriconazole AUC/MIC ratio drives Aspergillus efficacy (Pascual
+      2008 — trough 1-5.5 mg/L correlates with response and avoids
+      hepato/neuro-toxicity); >5.5 raises hallucination and ALT rise risk,
+      <1 doubles failure. Saturable nonlinear kinetics — small dose changes
+      give large AUC swings. CYP2C19 polymorphism: poor metabolizers (PM,
+      ~3-5% Caucasian, 15-20% Asian) have 4-fold higher AUC; ultra-rapid
+      metabolizers (UM, *17/*17) have 50% lower AUC — IDSA aspergillosis
+      guidance and CPIC voriconazole guideline recommend pre-emptive
+      genotyping when available. Strategy: standard load 6 mg/kg q12h x2
+      then 4 mg/kg q12h IV (or 200 mg PO q12h), draw trough day 5 (steady
+      state delayed by autoinhibition), target 2-5.5 mg/L. PM: start at
+      reduced 100 mg q12h or switch to isavuconazole; UM: alternative
+      azole or up-titrate with frequent TDM. Patient state: hepatic impair-
+      ment doubles AUC — Child-Pugh B requires 50% maintenance dose.
+      Toxicity ceiling: ALT >5x ULN, visual disturbances (transient at
+      peak), periostitis on chronic therapy. Alternative: isavuconazole
+      (no CYP2C19 dependence, linear PK, no QT) or posaconazole tablet
+      formulation.
+
+  - name: "Tigecycline AUC/MIC fail in bacteremia due to low Cmax — when to abandon"
+    body: |
+      PK/PD: tigecycline fAUC24/MIC ~0.9 for soft tissue, ~6.96 for HAP
+      (Meagher 2007 PK/PD), but standard 50 mg q12h yields fCmax only
+      ~0.13 mg/L (90% protein bound, total Cmax 0.6 mg/L). Vd is huge
+      ~7-10 L/kg — drug distributes into tissue (lung ELF, bile, colon)
+      but blood concentrations are subtherapeutic for bacteremia. FDA 2010
+      black-box noted increased mortality in HAP/VAP and bloodstream
+      infections vs comparators (meta-analysis OR 1.3); pooled all-cause
+      mortality 4.0% vs 3.0%. Patient state: when tigecycline is empirically
+      started for CRE bacteremia and blood culture grows the organism, the
+      low fCmax means PTA at MIC 1 (typical CRE breakpoint) is <30% even
+      with high-dose 100 mg q12h after 200 mg load. Strategy: abandon
+      tigecycline monotherapy for any bloodstream isolate, escalate within
+      24-48h to ceftazidime-avibactam (KPC), meropenem-vaborbactam, or
+      cefiderocol; reserve tigecycline for tissue-source mixed flora
+      (intra-abdominal abscess, cSSTI). High-dose 100 mg q12h trial is
+      acceptable for cIAI but not for bacteremia or HAP. Toxicity ceiling:
+      nausea-vomiting at high dose limits compliance, pancreatitis signal,
+      hepatic transaminitis.
+
+  - name: "Bedaquiline long terminal half-life and M2 metabolite QT contribution"
+    body: |
+      PK/PD: bedaquiline (Sirturo) is bactericidal against Mtb via ATP
+      synthase F0-F1 (atpE) inhibition; MIC 0.03-0.12 mg/L for
+      susceptible Mtb. Diarylquinoline class. Triphasic PK: alpha
+      distribution then long beta (~24h) and ultra-long terminal phase
+      (5-6 month effective t1/2) due to deep tissue / lipid sequestration.
+      Active M2 metabolite (N-monodesmethyl) formed via CYP3A4 — 4-6x less
+      antibacterially active but contributes substantially to QT
+      prolongation. BPaL/Nix-TB regimen (bedaquiline + pretomanid +
+      linezolid, 26 weeks) for highly drug-resistant TB: bedaquiline
+      400 mg daily x2 weeks then 200 mg three times weekly. Patient state:
+      CYP3A4 inducers (rifampicin) drop AUC ~50% — contraindicated;
+      strong inhibitors (lopinavir-ritonavir, ketoconazole) raise AUC and
+      QT risk. QT monitoring: baseline ECG, then weeks 2/4/8/12/24;
+      hold if QTcF >500 ms or rise >60 ms from baseline. Avoid co-admin
+      with delamanid, clofazimine, moxifloxacin (additive QT). The long
+      terminal t1/2 means QT effects persist months after discontinuation —
+      cannot rapidly washout. Toxicity ceiling: hepatotoxicity (LFT q
+      monthly), Torsades risk if K/Mg low. Alternative: delamanid
+      (BPaLM/BPaL-Mox combinations) if QT signal emerges.
