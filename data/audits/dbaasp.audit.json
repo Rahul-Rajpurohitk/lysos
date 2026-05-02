@@ -1,0 +1,8 @@
+{
+  "rows_in": 6256,
+  "rows_blank_dropped": 0,
+  "rows_bad_aa_dropped": 0,
+  "rows_out": 6256,
+  "duplicate_sequence_rows": 5474,
+  "unique_sequences": 782
+}

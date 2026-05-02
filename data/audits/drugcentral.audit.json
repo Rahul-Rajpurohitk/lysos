@@ -1,0 +1,11 @@
+{
+  "rows_in": 3930,
+  "rows_blank_dropped": 0,
+  "rows_unparseable_smiles": 0,
+  "rows_out": 3930,
+  "duplicate_canonical_rows": 0,
+  "unique_canonical_smiles": 3930,
+  "label_conflicts_first_20": [],
+  "mic_unit_anomalies": 0,
+  "mic_anomaly_examples_first_10": []
+}

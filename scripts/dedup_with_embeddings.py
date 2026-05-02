@@ -82,8 +82,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--push-to-hub", type=str, default=None)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--model", type=str, default="google/embeddinggemma-300m",
-                   help="Embedding model. EmbeddingGemma is gated; falls back to "
-                        "all-MiniLM-L6-v2 (open) if access is denied.")
+                   help="Embedding model — EmbeddingGemma is required (gated). "
+                        "We DO NOT fall back to an open embedder because "
+                        "general-language models lose SMILES structure and collapse "
+                        "templated prompts (99%% loss observed in testing).")
     return p.parse_args()
 
 
@@ -248,10 +250,17 @@ def main() -> int:
         try:
             model = SentenceTransformer(args.model)
         except Exception as exc:  # noqa: BLE001
-            log.warning("Could not load %s: %s", args.model, exc)
-            fallback = "sentence-transformers/all-MiniLM-L6-v2"
-            log.warning("Falling back to %s (open, 384d, smaller).", fallback)
-            model = SentenceTransformer(fallback)
+            log.error(
+                "Could not load %s: %s\n\n"
+                "EmbeddingGemma is gated. Click 'Request access' / 'Agree and access "
+                "repository' on https://huggingface.co/google/embeddinggemma-300m, "
+                "then retry. We do NOT fall back to a generic-language embedder — "
+                "open models like all-MiniLM-L6-v2 collapse templated-prompt tasks "
+                "(99% loss observed) and corrupt SMILES tokenization. Run --mode hash "
+                "for now, or run this script on the VM after access is granted.",
+                args.model, exc,
+            )
+            return 4
 
     out_splits: dict[str, "Dataset"] = {}
     for split_name in ds:
