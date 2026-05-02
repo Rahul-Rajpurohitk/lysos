@@ -1,0 +1,139 @@
+drug,class,who_category,use_authorization,notes
+plazomicin,aminoglycosides,HPCIA,humans_only,specific resistance mechanisms; AWaRe Reserve
+omadacycline,aminomethylcyclines,HPCIA,humans_only,new class derived from tetracyclines
+azlocillin,anti-pseudomonal penicillins,HPCIA,humans_only,carboxypenicillin/ureidopenicillin
+carbenicillin,anti-pseudomonal penicillins,HPCIA,humans_only,carboxypenicillin
+carindacillin,anti-pseudomonal penicillins,HPCIA,humans_only,carboxypenicillin
+mezlocillin,anti-pseudomonal penicillins,HPCIA,humans_only,ureidopenicillin
+piperacillin,anti-pseudomonal penicillins,HPCIA,humans_only,ureidopenicillin
+sulbenicillin,anti-pseudomonal penicillins,HPCIA,humans_only,carboxypenicillin
+ticarcillin,anti-pseudomonal penicillins,HPCIA,humans_only,carboxypenicillin
+piperacillin-tazobactam,anti-pseudomonal penicillins + BLI,HPCIA,humans_only,Zosyn standard hospital
+ticarcillin-clavulanic acid,anti-pseudomonal penicillins + BLI,HPCIA,humans_only,Timentin
+biapenem,carbapenems,HPCIA,humans_only,prev HPCIA
+doripenem,carbapenems,HPCIA,humans_only,prev HPCIA
+ertapenem,carbapenems,HPCIA,humans_only,prev HPCIA
+faropenem,carbapenems,HPCIA,humans_only,penem class
+imipenem,carbapenems,HPCIA,humans_only,prev HPCIA
+meropenem,carbapenems,HPCIA,humans_only,prev HPCIA
+panipenem,carbapenems,HPCIA,humans_only,prev HPCIA
+imipenem-cilastatin,carbapenems + BLI,HPCIA,humans_only,Tienam standard
+imipenem-relebactam,carbapenems + BLI,HPCIA,humans_only,Recarbrio for KPC
+meropenem-vaborbactam,carbapenems + BLI,HPCIA,humans_only,Vabomere for KPC
+cefoperazone-sulbactam,3-4-5G cephalosporins + BLI,HPCIA,humans_only,prev HPCIA
+ceftazidime-avibactam,3-4-5G cephalosporins + BLI,HPCIA,humans_only,Avycaz CRE
+ceftolozane-tazobactam,3-4-5G cephalosporins + BLI,HPCIA,humans_only,Zerbaxa Paer
+ceftriaxone-sulbactam,3-4-5G cephalosporins + BLI,HPCIA,humans_only,combination therapy
+ceftaroline,5G cephalosporins,HPCIA,humans_only,anti-MRSA Teflaro
+ceftobiprole,5G cephalosporins,HPCIA,humans_only,anti-MRSA Zevtera
+cefiderocol,siderophore cephalosporins,HPCIA,humans_only,Fetroja CRE/CRPA/CRAB
+eravacycline,fluorocyclines,HPCIA,humans_only,new class from tetracyclines
+dalbavancin,glycopeptides + lipoglycopeptides,HPCIA,humans_only,Dalvance once-dose
+oritavancin,glycopeptides + lipoglycopeptides,HPCIA,humans_only,Orbactiv once-dose
+ramoplanin,glycopeptides + lipoglycopeptides,HPCIA,humans_only,clinical-stage
+teicoplanin,glycopeptides + lipoglycopeptides,HPCIA,humans_only,Targocid
+telavancin,glycopeptides + lipoglycopeptides,HPCIA,humans_only,Vibativ
+vancomycin,glycopeptides + lipoglycopeptides,HPCIA,humans_only,Vancocin standard
+tigecycline,glycylcyclines,HPCIA,humans_only,prev CIA
+nitroxoline,8-hydroxy-5-nitroquinolines,HPCIA,humans_only,UTI
+fidaxomicin,18-membered ring macrolides,HPCIA,humans_only,Dificid C diff
+daptomycin,lipopeptides,HPCIA,humans_only,Cubicin VRE/MRSA
+aztreonam,monobactams,HPCIA,humans_only,Azactam gram-neg
+linezolid,oxazolidinones,HPCIA,humans_only,Zyvox MRSA/VRE
+tedizolid,oxazolidinones,HPCIA,humans_only,Sivextro
+colistin,polymyxins,HPCIA,humans_only,polymyxin E last resort
+polymyxin B,polymyxins,HPCIA,humans_only,last resort
+fosfomycin,phosphonic acid derivatives,HPCIA,humans_only,UTI + IV systemic
+clofazimine,riminofenazines,HPCIA,humans_only,leprosy + MDR-TB
+dapsone,sulfones,HPCIA,humans_only,leprosy + Pneumocystis
+isoniazid,TB drugs,HPCIA,humans_only,RIPE first-line TB
+rifampin,TB drugs,HPCIA,humans_only,RIPE first-line TB
+pyrazinamide,TB drugs,HPCIA,humans_only,RIPE first-line TB
+ethambutol,TB drugs,HPCIA,humans_only,RIPE first-line TB
+streptomycin,TB drugs,HPCIA,humans_only,first aminoglycoside
+bedaquiline,TB drugs,HPCIA,humans_only,Sirturo MDR-TB
+delamanid,TB drugs,HPCIA,humans_only,Deltyba MDR-TB
+pretomanid,TB drugs,HPCIA,humans_only,BPaL regimen
+sutezolid,TB drugs,HPCIA,humans_only,oxazolidinone Phase IIb
+gepotidacin,NBTIs,HPCIA,humans_only,Blujepa first NBTI 2025
+sulbactam-durlobactam,sulbactam-DBO,HPCIA,humans_only,Xacduro CRAB 2023
+aztreonam-avibactam,monobactam + DBO,HPCIA,humans_only,Emblaveo MBL EU 2024
+amikacin,aminoglycosides,CIA,both_humans_animals,WHO Watch
+gentamicin,aminoglycosides,CIA,both_humans_animals,WHO Access
+tobramycin,aminoglycosides,CIA,both_humans_animals,WHO Watch
+neomycin,aminoglycosides,CIA,both_humans_animals,WHO Access topical/oral
+spectinomycin,aminoglycosides,CIA,both_humans_animals,gonorrhea historical
+kanamycin,aminoglycosides,CIA,both_humans_animals,WHO Watch
+rifaximin,ansamycins,CIA,both_humans_animals,gut-localized rifamycin
+rifabutin,ansamycins,CIA,both_humans_animals,Mtb + MAC
+azithromycin,macrolides,CIA,both_humans_animals,WHO Watch
+clarithromycin,macrolides,CIA,both_humans_animals,WHO Watch
+erythromycin,macrolides,CIA,both_humans_animals,WHO Access
+roxithromycin,macrolides,CIA,both_humans_animals,WHO Watch
+spiramycin,macrolides,CIA,both_humans_animals,WHO Access
+ciprofloxacin,quinolones,CIA,both_humans_animals,WHO Watch
+levofloxacin,quinolones,CIA,both_humans_animals,WHO Watch
+moxifloxacin,quinolones,CIA,both_humans_animals,WHO Watch
+ofloxacin,quinolones,CIA,both_humans_animals,WHO Watch
+norfloxacin,quinolones,CIA,both_humans_animals,WHO Watch
+ceftriaxone,3rd gen cephalosporins,CIA,both_humans_animals,WHO Watch
+cefotaxime,3rd gen cephalosporins,CIA,both_humans_animals,WHO Watch
+ceftazidime,3rd gen cephalosporins,CIA,both_humans_animals,WHO Watch
+cefixime,3rd gen cephalosporins,CIA,both_humans_animals,WHO Watch
+cefepime,4th gen cephalosporins,CIA,both_humans_animals,WHO Watch
+cefpirome,4th gen cephalosporins,CIA,both_humans_animals,WHO Watch
+metronidazole,nitroimidazoles,CIA,both_humans_animals,WHO Access
+ornidazole,nitroimidazoles,CIA,both_humans_animals,WHO Access
+tinidazole,nitroimidazoles,CIA,both_humans_animals,WHO Access
+ampicillin,aminopenicillins,CIA,both_humans_animals,WHO Access
+amoxicillin,aminopenicillins,CIA,both_humans_animals,WHO Access
+amoxicillin-clavulanic acid,aminopenicillins + BLI,CIA,both_humans_animals,Augmentin WHO Access
+ampicillin-sulbactam,aminopenicillins + BLI,CIA,both_humans_animals,Unasyn WHO Watch
+mecillinam,amidinopenicillins,CIA,both_humans_animals,WHO Access UTI
+chloramphenicol,amphenicols,HIA,both_humans_animals,WHO Access
+florfenicol,amphenicols,HIA,both_humans_animals,veterinary
+cefazolin,1st gen cephalosporins,HIA,both_humans_animals,WHO Access surgical prophylaxis
+cefadroxil,1st gen cephalosporins,HIA,both_humans_animals,WHO Access
+cephalexin,1st gen cephalosporins,HIA,both_humans_animals,WHO Access
+cefuroxime,2nd gen cephalosporins,HIA,both_humans_animals,WHO Access
+cefoxitin,cephamycins,HIA,both_humans_animals,WHO Access
+cefotetan,cephamycins,HIA,both_humans_animals,WHO Access
+clindamycin,lincosamides,HIA,both_humans_animals,WHO Access
+lincomycin,lincosamides,HIA,both_humans_animals,WHO Access
+benzylpenicillin,penicillins,HIA,both_humans_animals,WHO Access
+phenoxymethylpenicillin,penicillins,HIA,both_humans_animals,WHO Access penicillin V
+benzathine penicillin,penicillins,HIA,both_humans_animals,WHO Access depot form
+sulfamethoxazole,sulfonamides + DHFR inhibitors,HIA,both_humans_animals,WHO Access (with TMP)
+trimethoprim,sulfonamides + DHFR inhibitors,HIA,both_humans_animals,WHO Access
+sulfadiazine,sulfonamides + DHFR inhibitors,HIA,both_humans_animals,WHO Access
+sulfadoxine,sulfonamides + DHFR inhibitors,HIA,both_humans_animals,WHO Access
+trimethoprim-sulfamethoxazole,sulfonamides + DHFR inhibitors,HIA,both_humans_animals,Bactrim WHO Access
+tetracycline,tetracyclines,HIA,both_humans_animals,WHO Access
+doxycycline,tetracyclines,HIA,both_humans_animals,WHO Access
+minocycline,tetracyclines,HIA,both_humans_animals,WHO Access
+oxytetracycline,tetracyclines,HIA,both_humans_animals,veterinary
+chlortetracycline,tetracyclines,HIA,both_humans_animals,veterinary
+methicillin,anti-staph penicillins,IA,both_humans_animals,historical
+oxacillin,anti-staph penicillins,IA,both_humans_animals,WHO Access MSSA
+cloxacillin,anti-staph penicillins,IA,both_humans_animals,WHO Access MSSA
+dicloxacillin,anti-staph penicillins,IA,both_humans_animals,WHO Access MSSA
+nafcillin,anti-staph penicillins,IA,both_humans_animals,WHO Access MSSA
+flucloxacillin,anti-staph penicillins,IA,both_humans_animals,WHO Access MSSA
+nitrofurantoin,nitrofurans,IA,both_humans_animals,WHO Access UTI
+nitrofurazone,nitrofurans,IA,both_humans_animals,topical
+furazolidone,nitrofurans,IA,both_humans_animals,GI infections
+mupirocin,pseudomonic acids,IA,both_humans_animals,topical
+fusidic acid,fusidanes,IA,humans_only,WHO Access
+clofoctol,phenol derivatives,IA,humans_only,topical
+pristinamycin,streptogramins,IA,humans_only,WHO Reserve
+quinupristin-dalfopristin,streptogramins,IA,humans_only,Synercid WHO Reserve
+bacitracin,cyclic polypeptides,IA,both_humans_animals,topical
+gramicidin,cyclic polypeptides,IA,both_humans_animals,topical
+flavomycin,phosphoglycolipids,NMI,animals_only,growth promoter
+narasin,ionophores,NMI,animals_only,coccidiostat
+salinomycin,ionophores,NMI,animals_only,coccidiostat
+monensin,ionophores,NMI,animals_only,coccidiostat
+avilamycin,orthosomycins,NMI,animals_only,growth promoter
+tiamulin,pleuromutilins,NMI,animals_only,veterinary
+valnemulin,pleuromutilins,NMI,animals_only,veterinary
+arsenic compounds,arsenicals,NMI,animals_only,historical
