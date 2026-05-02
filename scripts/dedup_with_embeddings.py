@@ -1,33 +1,39 @@
-"""Cluster training examples by EmbeddingGemma similarity, drop near-duplicates.
+"""Cluster training examples + drop near-duplicates.
 
-Many training corpora have rephrased duplicates that look like distinct
-examples to a tokenizer but represent the same underlying task. RDKit
-canonical SMILES helps with literal molecule duplicates, but doesn't catch:
+Two-pass dedup:
+  Pass 1 — content-hash. Drop literal duplicates (same prompt+response).
+           Cheap, catches a lot of noise.
+  Pass 2 — embedding similarity. Embed remaining rows with EmbeddingGemma,
+           cluster greedily by cosine threshold, keep one representative
+           per cluster (longest text by default).
 
-  - Different prompt phrasings of the same task
-  - Slightly different molecules (one carbon different) that aren't true negatives
-  - Same instruction asked of two different molecules with the same answer
+Stratifies by task so per-task balance is preserved.
 
-Embedding-based dedup catches all of these.
-
-Algorithm:
-  1. Embed every example's `messages` (or `prompt`) field with EmbeddingGemma
-  2. For each pair (within a task slice) with cosine similarity > threshold:
-       union them into one cluster
-  3. Keep one representative per cluster (the longest text, by default)
-  4. Stratify by task to preserve relative task balance
+Scale notes:
+  - Pass 1 is O(n).
+  - Pass 2 is O(n²) within each task slice (greedy centroid match).
+    For tasks larger than `--embed-cap` rows we sample down before embedding.
+    Default cap = 20,000 — keeps wall-clock under ~10 min on M-series Mac.
 
 Usage:
 
     python scripts/dedup_with_embeddings.py \\
         --input  data/processed/amr-stage2 \\
         --output data/processed/amr-stage2-dedup \\
-        --threshold 0.95
+        --threshold 0.97
+
+Push directly:
+
+    HF_TOKEN=... python scripts/dedup_with_embeddings.py \\
+        --input data/processed/amr-stage2 \\
+        --output data/processed/amr-stage2-dedup \\
+        --push-to-hub rahul24raj/lysos-amr-stage2-dedup
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import logging
 import sys
 from pathlib import Path
@@ -39,55 +45,91 @@ logging.basicConfig(
 )
 log = logging.getLogger("dedup")
 
-# Repo root for imports
 _REPO = Path(__file__).resolve().parent.parent
 if str(_REPO) not in sys.path:
     sys.path.insert(0, str(_REPO))
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="Embedding-based training dedup")
+    p = argparse.ArgumentParser(description="Two-pass training data dedup")
     p.add_argument("--input", type=Path, required=True,
                    help="HF Dataset directory (with train/valid splits)")
     p.add_argument("--output", type=Path, required=True,
                    help="Output directory for the dedup'd dataset")
-    p.add_argument("--threshold", type=float, default=0.95,
-                   help="Cosine similarity threshold for clustering (default 0.95)")
-    p.add_argument("--field", type=str, default="messages",
-                   help="Which dataset column to embed (default: messages)")
+    p.add_argument("--threshold", type=float, default=0.97,
+                   help="Embedding cosine threshold for clustering (default 0.97)")
+    p.add_argument("--field", type=str, default="prompt",
+                   help="Which field to compare for dedup (default: prompt)")
     p.add_argument("--batch-size", type=int, default=64,
-                   help="Batch size for embedding")
-    p.add_argument("--per-task", action="store_true", default=True,
-                   help="Cluster within each task slice (preserves task balance)")
+                   help="Embedding batch size")
+    p.add_argument("--embed-cap", type=int, default=20000,
+                   help="Per-task: if a task has more rows than this, sample down "
+                        "before embedding (default 20000)")
+    p.add_argument("--mode", choices=["hash", "embed", "both"], default="both",
+                   help="hash = content-hash only (fast). "
+                        "embed = embedding only. "
+                        "both = hash first, then embed survivors.")
+    p.add_argument("--skip-tasks", type=str, default="",
+                   help="Comma-separated task names to skip embedding pass on "
+                        "(still run hash pass)")
     p.add_argument("--push-to-hub", type=str, default=None)
+    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--model", type=str, default="google/embeddinggemma-300m",
+                   help="Embedding model. EmbeddingGemma is gated; falls back to "
+                        "all-MiniLM-L6-v2 (open) if access is denied.")
     return p.parse_args()
 
 
-def _load_model():
-    from sentence_transformers import SentenceTransformer
-    log.info("Loading google/embeddinggemma-300m ...")
-    return SentenceTransformer("google/embeddinggemma-300m")
+def _content_hash(prompt: str, response: str) -> str:
+    """Stable content hash for literal-duplicate detection."""
+    h = hashlib.sha256()
+    h.update(str(prompt).strip().lower().encode("utf-8", errors="ignore"))
+    h.update(b"\x00")
+    h.update(str(response).strip().lower().encode("utf-8", errors="ignore"))
+    return h.hexdigest()[:16]
 
 
-def _cluster_by_threshold(embeddings, threshold: float) -> list[int]:
-    """Greedy clustering: assign each row to the first existing cluster it matches.
+def hash_dedup_per_task(split, log_prefix: str = "") -> tuple[list[int], dict]:
+    """Pass 1 — drop literal duplicates by (prompt, response) hash.
 
-    Returns a list of cluster IDs (one per row).
+    Returns (kept_indices, stats).
     """
-    import numpy as np
+    seen: dict[str, int] = {}  # hash -> first idx
+    kept: list[int] = []
+    n = len(split)
+    has_resp = "response" in split.column_names
+    by_task_kept: dict[str, int] = {}
+    by_task_drop: dict[str, int] = {}
+    for i, row in enumerate(split):
+        prompt = row.get("prompt", "") or ""
+        response = row.get("response", "") if has_resp else ""
+        h = _content_hash(prompt, response)
+        task = row.get("task", "_")
+        if h in seen:
+            by_task_drop[task] = by_task_drop.get(task, 0) + 1
+            continue
+        seen[h] = i
+        kept.append(i)
+        by_task_kept[task] = by_task_kept.get(task, 0) + 1
+    log.info("%shash pass: %d → %d (-%d, %.1f%%)",
+             log_prefix, n, len(kept), n - len(kept),
+             100 * (n - len(kept)) / max(1, n))
+    return kept, {"kept_per_task": by_task_kept, "dropped_per_task": by_task_drop}
 
+
+def _greedy_cluster(embeddings, threshold: float) -> list[int]:
+    """Greedy centroid-match clustering. Returns cluster_id per row."""
+    import numpy as np
     n = len(embeddings)
     cluster_ids = [-1] * n
-    centroids: list[tuple[int, "np.ndarray"]] = []  # (cluster_id, centroid_emb)
-
+    centroids: list[tuple[int, "np.ndarray"]] = []
     for i, emb in enumerate(embeddings):
         if not centroids:
             cluster_ids[i] = 0
             centroids.append((0, emb))
             continue
-        # Cosine similarity to all existing centroids
-        cents = np.array([c[1] for c in centroids])
-        sims = cents @ emb  # both unit-normed
+        cents = np.asarray([c[1] for c in centroids])
+        sims = cents @ emb
         best = int(sims.argmax())
         if sims[best] >= threshold:
             cluster_ids[i] = centroids[best][0]
@@ -98,9 +140,76 @@ def _cluster_by_threshold(embeddings, threshold: float) -> list[int]:
     return cluster_ids
 
 
-def _pick_representative(rows: list[dict], field: str) -> dict:
-    """Within a cluster, pick the row with the longest text — usually most informative."""
-    return max(rows, key=lambda r: len(str(r.get(field, ""))))
+def embed_dedup(split, model, *, threshold: float, field: str,
+                batch_size: int, embed_cap: int, skip_tasks: set[str],
+                seed: int) -> list[int]:
+    """Pass 2 — embedding-based per-task clustering.
+
+    Returns kept indices in the original split.
+    """
+    import numpy as np
+    rng = np.random.default_rng(seed)
+
+    has_task = "task" in split.column_names
+    keep: list[int] = []
+    if has_task:
+        unique_tasks = list(dict.fromkeys(split["task"]))
+    else:
+        unique_tasks = ["_"]
+
+    for task in unique_tasks:
+        if has_task:
+            idx = [i for i, t in enumerate(split["task"]) if t == task]
+        else:
+            idx = list(range(len(split)))
+        n = len(idx)
+
+        if task in skip_tasks:
+            log.info("  task=%s: %d rows (skipped embedding pass)", task, n)
+            keep.extend(idx)
+            continue
+
+        # Sample down if huge
+        sampled = idx
+        sampled_size = n
+        if n > embed_cap:
+            sampled = list(rng.choice(idx, size=embed_cap, replace=False))
+            sampled_size = embed_cap
+            log.info("  task=%s: %d rows → sampling %d for embedding pass",
+                     task, n, embed_cap)
+            # Keep the un-sampled tail outright (random, no dup detection)
+            unsampled = sorted(set(idx) - set(sampled))
+            keep.extend(unsampled)
+
+        # Embed
+        texts = [str(split[i].get(field, "")) for i in sampled]
+        log.info("  task=%s: embedding %d rows...", task, len(texts))
+        embs = model.encode(
+            texts, normalize_embeddings=True,
+            batch_size=batch_size, show_progress_bar=False,
+        )
+        embs = np.asarray(embs, dtype=np.float32)
+
+        cluster_ids = _greedy_cluster(embs, threshold)
+        clusters: dict[int, list[int]] = {}
+        for k, ci in enumerate(cluster_ids):
+            clusters.setdefault(ci, []).append(sampled[k])
+        before = len(sampled)
+        for ci, members in clusters.items():
+            if len(members) == 1:
+                keep.append(members[0])
+            else:
+                # Keep longest text in cluster — usually the most informative
+                rows = [split[m] for m in members]
+                winner = max(range(len(members)),
+                             key=lambda j: len(str(rows[j].get(field, ""))))
+                keep.append(members[winner])
+        after = len(clusters)
+        log.info("  task=%s: %d → %d clusters (-%d, %.1f%% in sampled set)",
+                 task, before, after, before - after,
+                 100 * (before - after) / max(1, before))
+
+    return sorted(set(keep))
 
 
 def main() -> int:
@@ -108,7 +217,6 @@ def main() -> int:
 
     try:
         from datasets import Dataset, DatasetDict, load_from_disk
-        import numpy as np
     except ImportError as exc:
         log.error("Missing deps: %s. pip install datasets numpy", exc)
         return 2
@@ -122,65 +230,49 @@ def main() -> int:
     if not hasattr(ds, "keys"):
         ds = DatasetDict({"train": ds})
 
-    model = _load_model()
+    skip_tasks = {t.strip() for t in args.skip_tasks.split(",") if t.strip()}
+    if skip_tasks:
+        log.info("Skipping embedding pass for tasks: %s", sorted(skip_tasks))
 
-    out_splits: dict[str, Dataset] = {}
+    model = None
+    if args.mode in ("embed", "both"):
+        from sentence_transformers import SentenceTransformer
+        log.info("Loading %s ...", args.model)
+        try:
+            model = SentenceTransformer(args.model)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Could not load %s: %s", args.model, exc)
+            fallback = "sentence-transformers/all-MiniLM-L6-v2"
+            log.warning("Falling back to %s (open, 384d, smaller).", fallback)
+            model = SentenceTransformer(fallback)
+
+    out_splits: dict[str, "Dataset"] = {}
     for split_name in ds:
         split = ds[split_name]
-        log.info("Split %s: %d rows", split_name, len(split))
+        log.info("=" * 60)
+        log.info("Split: %s — %d rows", split_name, len(split))
 
-        # Embed
-        texts = [str(r) for r in split[args.field]]
-        log.info("  embedding %d rows...", len(texts))
-        embs = model.encode(
-            texts, normalize_embeddings=True,
-            batch_size=args.batch_size, show_progress_bar=True,
-        )
-        embs = np.asarray(embs)
+        # Pass 1: content hash
+        if args.mode in ("hash", "both"):
+            kept_idx, _ = hash_dedup_per_task(split, log_prefix="  ")
+            split = split.select(kept_idx)
+            log.info("  after hash pass: %d rows", len(split))
 
-        # Cluster — per-task slicing if requested
-        keep_idx: list[int] = []
-        if args.per_task and "task" in split.column_names:
-            tasks = split["task"]
-            unique_tasks = list(dict.fromkeys(tasks))
-            for task in unique_tasks:
-                idx = [i for i, t in enumerate(tasks) if t == task]
-                sub_embs = embs[idx]
-                cluster_ids = _cluster_by_threshold(sub_embs, args.threshold)
-                # Keep one per cluster — pick longest text
-                clusters: dict[int, list[int]] = {}
-                for k, ci in enumerate(cluster_ids):
-                    clusters.setdefault(ci, []).append(idx[k])
-                for ci, members in clusters.items():
-                    if len(members) == 1:
-                        keep_idx.append(members[0])
-                    else:
-                        rows = [split[m] for m in members]
-                        winner_local = max(range(len(members)),
-                                           key=lambda j: len(str(rows[j].get(args.field, ""))))
-                        keep_idx.append(members[winner_local])
-                log.info("    task=%s: %d rows → %d clusters",
-                         task, len(idx), len(clusters))
-        else:
-            cluster_ids = _cluster_by_threshold(embs, args.threshold)
-            clusters: dict[int, list[int]] = {}
-            for i, ci in enumerate(cluster_ids):
-                clusters.setdefault(ci, []).append(i)
-            for ci, members in clusters.items():
-                if len(members) == 1:
-                    keep_idx.append(members[0])
-                else:
-                    rows = [split[m] for m in members]
-                    winner = max(range(len(members)),
-                                 key=lambda j: len(str(rows[j].get(args.field, ""))))
-                    keep_idx.append(members[winner])
+        # Pass 2: embedding
+        if args.mode in ("embed", "both"):
+            kept_idx = embed_dedup(
+                split, model,
+                threshold=args.threshold,
+                field=args.field,
+                batch_size=args.batch_size,
+                embed_cap=args.embed_cap,
+                skip_tasks=skip_tasks,
+                seed=args.seed,
+            )
+            split = split.select(kept_idx)
+            log.info("  after embed pass: %d rows", len(split))
 
-        keep_idx = sorted(set(keep_idx))
-        deduped = split.select(keep_idx)
-        log.info("  → %d rows kept (dropped %d, %.1f%%)",
-                 len(deduped), len(split) - len(deduped),
-                 100 * (len(split) - len(deduped)) / max(1, len(split)))
-        out_splits[split_name] = deduped
+        out_splits[split_name] = split
 
     out_ds = DatasetDict(out_splits)
     args.output.mkdir(parents=True, exist_ok=True)
@@ -193,9 +285,11 @@ def main() -> int:
         if not token:
             log.error("--push-to-hub requires HF_TOKEN env var")
             return 3
-        out_ds.push_to_hub(args.push_to_hub, private=True, token=token)
-        log.info("✓ pushed to %s", args.push_to_hub)
+        log.info("Pushing to %s ...", args.push_to_hub)
+        out_ds.push_to_hub(args.push_to_hub, token=token, private=False)
+        log.info("✓ pushed")
 
+    log.info("Done.")
     return 0
 
 
