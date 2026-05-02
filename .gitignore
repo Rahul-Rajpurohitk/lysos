@@ -59,6 +59,11 @@ data/oracle/
 *.csv.gz
 *.jsonl
 
+# Exception: hand-authored synthetic teacher data IS source — track it.
+!data/synthetic/
+!data/synthetic/*.jsonl
+!data/synthetic/cursor.txt
+
 # Logs
 *.log
 logs/
