@@ -1,4 +1,4 @@
-"""Retrieval over known antibiotics using EmbeddingGemma 300m.
+"""Retrieval over known antibiotics using Gemini Embedding 2.
 
 Used by:
   - Demo workspace ("find similar known drugs" feature)
@@ -6,8 +6,10 @@ Used by:
     antibiotics as in-context examples)
 
 Indexes a corpus of (smiles, name, indication) tuples and returns
-nearest-neighbor matches by cosine similarity in EmbeddingGemma's
-768-dim space.
+nearest-neighbor matches by cosine similarity in gemini-embedding-001's
+3072-dim Matryoshka space.
+
+Required env: GEMINI_API_KEY (or GOOGLE_API_KEY).
 
 Usage:
 
@@ -25,6 +27,8 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+import numpy as np
 
 log = logging.getLogger(__name__)
 
@@ -47,35 +51,25 @@ class IndexedDoc:
 
 
 class AntibioticRetriever:
-    """EmbeddingGemma-powered nearest-neighbor index over known antibiotics."""
+    """Gemini-Embedding-2 powered nearest-neighbor index over known antibiotics."""
 
     def __init__(
         self,
         index_source: str | Path,
         *,
-        model_id: str = "google/embeddinggemma-300m",
-        device: str | None = None,
+        output_dim: int | None = None,  # None = 3072 default
     ):
         self.index_source = Path(index_source)
-        self.model_id = model_id
-        self.device = device
-        self._model = None
+        self.output_dim = output_dim
+        self._embedder = None
         self._docs: list[IndexedDoc] = []
         self._embeddings = None
 
     def _load(self):
-        if self._model is not None:
+        if self._embedder is not None:
             return
-        try:
-            from sentence_transformers import SentenceTransformer
-        except ImportError as exc:
-            raise RuntimeError(
-                f"sentence-transformers not installed: {exc}. "
-                "pip install sentence-transformers"
-            ) from exc
-
-        log.info("Loading EmbeddingGemma 300m...")
-        self._model = SentenceTransformer(self.model_id, device=self.device)
+        from src.embeddings import GeminiEmbedder
+        self._embedder = GeminiEmbedder(output_dim=self.output_dim)
         self._build_index()
 
     def _build_index(self):
@@ -88,11 +82,9 @@ class AntibioticRetriever:
             raise ValueError(f"No documents loaded from {self.index_source}")
 
         texts = [d.as_document_text() for d in self._docs]
-        # EmbeddingGemma uses "title: <field> | text: <content>" for documents
-        prompts = [f"title: SMILES | text: {t}" for t in texts]
-        log.info("  embedding %d documents...", len(prompts))
-        self._embeddings = self._model.encode(
-            prompts, normalize_embeddings=True, batch_size=128, show_progress_bar=False
+        log.info("  embedding %d documents with gemini-embedding-001...", len(texts))
+        self._embeddings = self._embedder.embed_batch(
+            texts, task_type="RETRIEVAL_DOCUMENT", normalize=True,
         )
         log.info("  index ready: %d docs, dim=%d",
                  len(self._docs), self._embeddings.shape[-1])
@@ -140,21 +132,19 @@ class AntibioticRetriever:
         """Return top-k nearest documents to the query string.
 
         Args:
-            query: Free text or SMILES. EmbeddingGemma handles both.
+            query: Free text or SMILES.
             k: how many to return
-            as_query: if True (default), use query prompt prefix; if False,
-                      treat as a document for similarity to other documents.
+            as_query: if True (default), use query task type for asymmetric
+                      retrieval; if False, use SEMANTIC_SIMILARITY (symmetric).
         """
         self._load()
-        if as_query:
-            prompt = f"task: search result | query: {query}"
-        else:
-            prompt = f"title: SMILES | text: {query}"
-        q_emb = self._model.encode(
-            [prompt], normalize_embeddings=True, show_progress_bar=False,
-        )[0]
-
-        sims = self._embeddings @ q_emb  # (N,)
+        task_type = "RETRIEVAL_QUERY" if as_query else "SEMANTIC_SIMILARITY"
+        q_emb = self._embedder.embed(query, task_type=task_type)
+        # normalize (embed() returns un-normalized)
+        norm = float(np.linalg.norm(q_emb))
+        if norm > 0:
+            q_emb = q_emb / norm
+        sims = self._embeddings @ q_emb
         top_idx = sims.argsort()[::-1][:k]
         out = []
         for i in top_idx:

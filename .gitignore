@@ -52,6 +52,9 @@ weights/
 data/raw/
 data/processed/
 data/cache/
+data/*.tab
+data/*.csv
+data/oracle/
 *.parquet
 *.csv.gz
 *.jsonl

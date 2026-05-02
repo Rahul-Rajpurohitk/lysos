@@ -81,11 +81,15 @@ def parse_args() -> argparse.Namespace:
                         "These tasks rely on hash dedup (pass 1) only.")
     p.add_argument("--push-to-hub", type=str, default=None)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--model", type=str, default="google/embeddinggemma-300m",
-                   help="Embedding model — EmbeddingGemma is required (gated). "
-                        "We DO NOT fall back to an open embedder because "
-                        "general-language models lose SMILES structure and collapse "
-                        "templated prompts (99%% loss observed in testing).")
+    p.add_argument("--model", type=str, default="gemini-embedding-001",
+                   help="Embedder. Default gemini-embedding-001 (3072d, "
+                        "$0.025/1M tokens, requires GEMINI_API_KEY). "
+                        "We DO NOT use degraded open fallbacks like "
+                        "all-MiniLM — those collapse templated prompts (99%% "
+                        "loss observed) and corrupt SMILES tokenization.")
+    p.add_argument("--output-dim", type=int, default=768,
+                   help="Matryoshka output dim for Gemini Embedding (768/1536/3072). "
+                        "768 keeps cluster quality high while halving cost.")
     return p.parse_args()
 
 
@@ -245,22 +249,23 @@ def main() -> int:
 
     model = None
     if args.mode in ("embed", "both"):
-        from sentence_transformers import SentenceTransformer
-        log.info("Loading %s ...", args.model)
-        try:
+        if args.model == "gemini-embedding-001":
+            log.info("Using gemini-embedding-001 via Google AI Studio API ...")
+            try:
+                from src.embeddings import GeminiEmbedder
+                model = GeminiEmbedder(output_dim=args.output_dim, qps=15.0)
+            except Exception as exc:  # noqa: BLE001
+                log.error(
+                    "Could not init Gemini Embedder: %s\n"
+                    "Set GEMINI_API_KEY (https://aistudio.google.com/apikey) "
+                    "or pass --model <local-st-model> --mode hash.",
+                    exc,
+                )
+                return 4
+        else:
+            from sentence_transformers import SentenceTransformer
+            log.info("Loading %s ...", args.model)
             model = SentenceTransformer(args.model)
-        except Exception as exc:  # noqa: BLE001
-            log.error(
-                "Could not load %s: %s\n\n"
-                "EmbeddingGemma is gated. Click 'Request access' / 'Agree and access "
-                "repository' on https://huggingface.co/google/embeddinggemma-300m, "
-                "then retry. We do NOT fall back to a generic-language embedder — "
-                "open models like all-MiniLM-L6-v2 collapse templated-prompt tasks "
-                "(99% loss observed) and corrupt SMILES tokenization. Run --mode hash "
-                "for now, or run this script on the VM after access is granted.",
-                args.model, exc,
-            )
-            return 4
 
     out_splits: dict[str, "Dataset"] = {}
     for split_name in ds:
