@@ -61,10 +61,16 @@ rl:
 reward:
   components:
     - name: validity
-      weight: 0.10
+      weight: 0.05            # rdkit can parse → 1.0, else 0.0
       module: src.eval.rewards.validity:smiles_valid
+    - name: structural_alerts
+      weight: 0.05            # graded chemistry-development liability:
+                              # PAINS + Brenk + NIH + Lipinski + Veber rules.
+                              # Penalizes Michael acceptors, reactive groups,
+                              # MW > 500 / logP > 5 / non-drug-like profiles.
+      module: src.eval.rewards.structural_alerts:structural_alerts_score
     - name: predicted_mic
-      weight: 0.35
+      weight: 0.30
       module: src.eval.rewards.activity:predict_mic
       args:
         target_pathogen: MRSA
@@ -84,7 +90,7 @@ reward:
         reference_set: data/processed/known-antibiotics.smiles
         threshold: 0.6
     - name: embedding_novelty
-      weight: 0.05           # EmbeddingGemma cosine distance (semantic novelty)
+      weight: 0.10           # Gemini Embedding 2 cosine distance (semantic novelty)
       module: src.eval.rewards.embedding_novelty:embedding_novelty
       args:
         reference_set: data/processed/known-antibiotics.smiles
