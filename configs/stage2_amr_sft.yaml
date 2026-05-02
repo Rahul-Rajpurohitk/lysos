@@ -22,14 +22,17 @@ model:
 # Data
 # -----------------------------------------------------------------------------
 dataset:
-  # Default to the hash-deduped version for cleaner training (5.1% literal-dup
-  # drop). Override with --dataset.path data/processed/amr-stage2 for the raw
-  # superset, or with --dataset.hub_id rahul24raj/lysos-amr-stage2 to load the
-  # raw HF Hub version. Embedding-based dedup is recommended on the VM where
-  # EmbeddingGemma is available — see scripts/dedup_with_embeddings.py.
+  # Default: the SCAFFOLD-AWARE SPLIT version (no train/valid leakage).
+  # The previous splits had:
+  #   amr-stage2 (raw):      917 exact-pair leak, 4,172 SMILES leak
+  #   amr-stage2-dedup-hash: 917 exact-pair leak, 4,172 SMILES leak
+  # The scaffold-aware split groups examples by molecule scaffold so no
+  # SMILES appears in both train and valid:
+  #   amr-stage2-clean (default): 0 leak, 195,616 train + 15,584 valid
+  # See scripts/resplit_stage2.py + scripts/check_leakage.py.
   source: local
-  path: data/processed/amr-stage2-dedup-hash
-  hub_id: rahul24raj/lysos-amr-stage2-dedup
+  path: data/processed/amr-stage2-split
+  hub_id: rahul24raj/lysos-amr-stage2-clean
   split_train: train
   split_eval: valid
   text_field: messages

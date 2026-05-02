@@ -1,0 +1,228 @@
+{
+  "cross_source_overlap": {
+    "per_source_unique": {
+      "chembl": 14971,
+      "drugbank": 0,
+      "drugcentral": 3930,
+      "npatlas": 36421,
+      "pubchem": 1162,
+      "zinc": 100,
+      "dbaasp": 782,
+      "dramp": 8532
+    },
+    "union_unique": 65180,
+    "pair_overlaps_top": [
+      {
+        "a": "dbaasp",
+        "b": "dramp",
+        "intersection": 310,
+        "a_size": 782,
+        "b_size": 8532,
+        "frac_a": 0.396,
+        "frac_b": 0.036
+      },
+      {
+        "a": "chembl",
+        "b": "drugcentral",
+        "intersection": 220,
+        "a_size": 14971,
+        "b_size": 3930,
+        "frac_a": 0.015,
+        "frac_b": 0.056
+      },
+      {
+        "a": "chembl",
+        "b": "npatlas",
+        "intersection": 81,
+        "a_size": 14971,
+        "b_size": 36421,
+        "frac_a": 0.005,
+        "frac_b": 0.002
+      },
+      {
+        "a": "chembl",
+        "b": "pubchem",
+        "intersection": 56,
+        "a_size": 14971,
+        "b_size": 1162,
+        "frac_a": 0.004,
+        "frac_b": 0.048
+      },
+      {
+        "a": "drugcentral",
+        "b": "npatlas",
+        "intersection": 43,
+        "a_size": 3930,
+        "b_size": 36421,
+        "frac_a": 0.011,
+        "frac_b": 0.001
+      },
+      {
+        "a": "drugcentral",
+        "b": "zinc",
+        "intersection": 17,
+        "a_size": 3930,
+        "b_size": 100,
+        "frac_a": 0.004,
+        "frac_b": 0.17
+      },
+      {
+        "a": "drugcentral",
+        "b": "pubchem",
+        "intersection": 13,
+        "a_size": 3930,
+        "b_size": 1162,
+        "frac_a": 0.003,
+        "frac_b": 0.011
+      },
+      {
+        "a": "chembl",
+        "b": "zinc",
+        "intersection": 2,
+        "a_size": 14971,
+        "b_size": 100,
+        "frac_a": 0.0,
+        "frac_b": 0.02
+      },
+      {
+        "a": "npatlas",
+        "b": "pubchem",
+        "intersection": 1,
+        "a_size": 36421,
+        "b_size": 1162,
+        "frac_a": 0.0,
+        "frac_b": 0.001
+      },
+      {
+        "a": "pubchem",
+        "b": "zinc",
+        "intersection": 1,
+        "a_size": 1162,
+        "b_size": 100,
+        "frac_a": 0.001,
+        "frac_b": 0.01
+      }
+    ],
+    "duplicated_across_2plus": 693
+  },
+  "stage2_split_leak": {
+    "train_rows": 211476,
+    "valid_rows": 11130,
+    "exact_pair_leak": 917,
+    "exact_pair_leak_frac": 0.0824,
+    "smiles_leak_unique": 4172,
+    "train_unique_smiles": 48976,
+    "valid_unique_smiles": 4617
+  },
+  "rl_known_drug_namedrops": {
+    "names_checked": 30566,
+    "rl_prompt_hits": 6290,
+    "hits_first_15": [
+      {
+        "split": "train",
+        "i": 1,
+        "drug_name": "penicillin",
+        "pathogen": "MRSA",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: methicillin-resistant staphylococcus aureus is a major hosp"
+      },
+      {
+        "split": "train",
+        "i": 3,
+        "drug_name": "amp",
+        "pathogen": "Abaum",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: multidrug-resistant a. baumannii causes icu pneumonia, ofte"
+      },
+      {
+        "split": "train",
+        "i": 6,
+        "drug_name": "vancomycin",
+        "pathogen": "VRE",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: vancomycin-resistant enterococcus faecium causes bloodstrea"
+      },
+      {
+        "split": "train",
+        "i": 7,
+        "drug_name": "amp",
+        "pathogen": "EColi-CRE",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: esbl-producing or carbapenem-resistant e. coli causes sever"
+      },
+      {
+        "split": "train",
+        "i": 8,
+        "drug_name": "amp",
+        "pathogen": "KpneuCRE",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: carbapenem-resistant k. pneumoniae is among the who's highe"
+      },
+      {
+        "split": "train",
+        "i": 11,
+        "drug_name": "methicillin",
+        "pathogen": "MRSA",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: methicillin-resistant staphylococcus aureus is a major hosp"
+      },
+      {
+        "split": "train",
+        "i": 17,
+        "drug_name": "amp",
+        "pathogen": "Mtb",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: m. tuberculosis kills 1.5 million people per year. mdr and "
+      },
+      {
+        "split": "train",
+        "i": 21,
+        "drug_name": "amp",
+        "pathogen": "KpneuCRE",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: carbapenem-resistant k. pneumoniae is among the who's highe"
+      },
+      {
+        "split": "train",
+        "i": 22,
+        "drug_name": "methicillin",
+        "pathogen": "MRSA",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: methicillin-resistant staphylococcus aureus is a major hosp"
+      },
+      {
+        "split": "train",
+        "i": 23,
+        "drug_name": "polymyxin",
+        "pathogen": "EColi-CRE",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: esbl-producing or carbapenem-resistant e. coli causes sever"
+      },
+      {
+        "split": "train",
+        "i": 27,
+        "drug_name": "amp",
+        "pathogen": "Paer",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: p. aeruginosa is intrinsically resistant to many antibiotic"
+      },
+      {
+        "split": "train",
+        "i": 29,
+        "drug_name": "trimethoprim",
+        "pathogen": "KpneuCRE",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: carbapenem-resistant k. pneumoniae is among the who's highe"
+      },
+      {
+        "split": "train",
+        "i": 30,
+        "drug_name": "amp",
+        "pathogen": "VRE",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: vancomycin-resistant enterococcus faecium causes bloodstrea"
+      },
+      {
+        "split": "train",
+        "i": 31,
+        "drug_name": "penicillin",
+        "pathogen": "Mtb",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: m. tuberculosis kills 1.5 million people per year. mdr and "
+      },
+      {
+        "split": "train",
+        "i": 32,
+        "drug_name": "trimethoprim",
+        "pathogen": "MRSA",
+        "prompt_excerpt": "instructions: design an antibacterial agent for the following pathogen.\ncontext: methicillin-resistant staphylococcus aureus is a major hosp"
+      }
+    ]
+  }
+}
