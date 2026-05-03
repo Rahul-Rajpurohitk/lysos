@@ -15,7 +15,7 @@ language:
   - en
 pipeline_tag: text-generation
 datasets:
-  - rahul24raj/lysos-amr-stage2
+  - rahul24raj/lysos-amr-stage2-pro-v2
   - rahul24raj/lysos-rl-prompts
 metrics:
   - validity
@@ -60,13 +60,23 @@ ADMET, binding, and toxicity tasks). Outputs a chemistry-aware Gemma 4 base.
 ### Stage 2 — AMR specialization SFT
 
 Supervised fine-tune on
-[`rahul24raj/lysos-amr-stage2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2)
-— 222,606 instruction-tuning examples drawn from real public sources:
+[`rahul24raj/lysos-amr-stage2-pro-v2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2-pro-v2)
+— **364,432 train + 29,300 valid + 55 held-out test** instruction-tuning
+examples across **27 task types** drawn from real public sources, with an
+elite chain-of-thought reasoning slice (333 named-drug CoT entries
+across 14 reasoning task types, oversampled to 5% of training compute).
+Sources include:
 
-- ChEMBL (REST API) — 16,462 bacterial activity records
+- ChEMBL (REST API) — 21,283 bacterial activity records (8 pathogens)
 - DBAASP — 6,256 antimicrobial peptides with per-strain MIC + hemolysis
 - DRAMP — 8,532 peptide records
 - DrugBank Open — 14,630 drug names + synonyms + InChI Keys + CAS
+- DrugCentral — 3,930 SMILES + INN + CAS
+- NPAtlas — 36,434 natural products + producer organism
+- Named-drug elite CoT — 333 high-quality reasoning chains spanning
+  drug-pathogen reasoning, mechanism deep-dives, structure-activity,
+  resistance mechanism, candidate ranking, reward-profile analysis,
+  structural-strategy analysis, and 7 other reasoning task types
 - CARD — 3,543 resistance-target proteins
 - PDB (RCSB) — 3,136 AMR-pathogen target structures
 - ZINC — FDA-approved + investigational drug-like SMILES

@@ -1,18 +1,19 @@
 # Lysos — submission writeups (3 lengths)
 
 The lablab portal asks for a project description and HF Space wants a card.
-Pre-written here; copy-paste at submission time.
+Pre-written here; copy-paste at submission time. Updated 2026-05-03 for the
+Stage 2 pro v2 dataset (364K train + elite reasoning slice).
 
 ---
 
 ## A. 280 characters (one tweet)
 
 > Lysos: open-source generative drug designer for antimicrobial resistance.
-> Gemma 4 31B + RL with verifiable rewards on a single AMD MI300X.
-> 96K SFT examples, 8 priority pathogens, two Gemma models coresident.
+> Gemma 4 31B + GRPO on a single AMD MI300X.
+> 364K SFT examples + 14-task elite reasoning slice + ML MIC predictor reward.
 > github.com/Rahul-Rajpurohitk/lysos
 
-(279 chars — fits on X)
+(258 chars — fits on X)
 
 ---
 
@@ -20,18 +21,18 @@ Pre-written here; copy-paste at submission time.
 
 > **Lysos** is an open-source generative drug designer for antimicrobial resistance.
 >
-> Antimicrobial resistance kills 1.27M people every year today, projected to reach 10M/year by 2050. Pharma has largely abandoned antibiotic R&D. Lysos uses generative AI to design novel antibacterial molecules in seconds against drug-resistant pathogens, with publicly verifiable activity scores.
+> AMR kills 1.27M people every year, projected to reach 10M/year by 2050. Pharma has largely abandoned antibiotic R&D. Lysos uses generative AI to design novel antibacterial molecules in seconds against drug-resistant pathogens, with publicly verifiable activity scores.
 >
-> **Built on Gemma 4 31B-it**, fine-tuned in three stages on a single AMD Instinct MI300X:
-> 1. **Stage 1 — TxGemma-4 chemistry foundation** (Therapeutics Data Commons, ~50 tasks)
-> 2. **Stage 2 — AMR specialization SFT** on 222,606 instruction examples drawn from 7 real public sources (ChEMBL, DBAASP, DRAMP, DrugBank, CARD, PDB, ZINC)
-> 3. **Stage 3 — GRPO reinforcement learning** with 7 verifiable reward components: validity, drug-likeness (QED+Lipinski), synthesizability, hemolysis safety, predicted MIC, Tanimoto novelty, and EmbeddingGemma-300m semantic novelty
+> **Built on Gemma 4 31B-it**, trained in three stages on a single AMD Instinct MI300X:
+> 1. **Stage 1 — TxGemma-4 chemistry foundation** (Therapeutics Data Commons, 28 ADMET/binding/tox tasks)
+> 2. **Stage 2 — AMR specialization SFT** on the new `lysos-amr-stage2-pro-v2` dataset: 364,432 train + 29,300 valid + 55 held-out test, 27 task types from 9 real public sources (ChEMBL, DBAASP, DRAMP, DrugBank, DrugCentral, NPAtlas, CARD, PDB, ZINC) plus a 333-entry **elite named-drug chain-of-thought slice** (14 reasoning task types, 25x oversampled to 5% of training compute)
+> 3. **Stage 3 — GRPO reinforcement learning** with 8 verifiable reward components: validity, structural alerts, predicted MIC (XGBoost ML predictor on Morgan fingerprints, scaffold-CV MAE 0.62, R² 0.56 — not a heuristic), QED drug-likeness, SA synthesizability, hemolysis safety, Tanimoto Morgan-FP novelty, EmbeddingGemma-300m semantic novelty
 >
-> **Why MI300X**: the GRPO step holds policy + reference + reward predictor coresident — peak ≈152 GB. An H100 80 GB has to shard. The MI300X 192 GB fits the entire training stack on a single card.
+> **Why MI300X**: GRPO holds policy + reference + reward predictor coresident — peak ≈152 GB. An H100 80 GB has to shard. The MI300X 192 GB fits the entire training stack on a single card.
 >
-> **Two Gemma-family models on one GPU**: Gemma 4 31B for generation (62 GB FP16) + EmbeddingGemma 300m for retrieval, novelty, and a "find similar drugs" UI feature (1 GB).
+> **Two Gemma-family models on one GPU**: Gemma 4 31B for generation (62 GB FP16) + EmbeddingGemma 300m for RAG, novelty, and a "find similar drugs" UI feature (1 GB).
 >
-> **Open**: Apache-2.0 weights, public dataset on HF Hub, MIT-licensed code on GitHub, reproducible Docker image. Runs end-to-end on AMD Developer Cloud at <$240 per training run.
+> Apache-2.0 weights, public dataset on HF Hub, MIT-licensed code, reproducible Docker. <$240 per training run on AMD Developer Cloud.
 
 (~1,490 chars)
 
@@ -44,22 +45,23 @@ Pre-written here; copy-paste at submission time.
 > Built on Gemma 4 31B + EmbeddingGemma 300m, RL-tuned on AMD Instinct MI300X.
 >
 > ## What it does
-> Pick a target pathogen (MRSA, M. tuberculosis, ESBL+ E. coli, K. pneumoniae CRE, A. baumannii, P. aeruginosa, VRE, N. gonorrhoeae). Lysos generates 50 candidate antibacterial molecules in under 30 seconds, each scored on six dimensions: predicted MIC, drug-likeness, synthesizability, hemolytic safety, structural novelty (Tanimoto), and semantic novelty (EmbeddingGemma cosine distance to a 20,489-row known-antibiotics index).
+> Pick a target pathogen (MRSA, M. tuberculosis, ESBL+ E. coli, K. pneumoniae CRE, A. baumannii, P. aeruginosa, VRE, N. gonorrhoeae). Lysos generates 50 candidate antibacterial molecules in under 30 seconds, each scored on 8 dimensions: predicted MIC (XGBoost ML predictor — not a heuristic, scaffold-CV MAE 0.62), structural-alerts liability (PAINS+Brenk+NIH+Lipinski+Veber), drug-likeness (QED), synthesizability (SA score), hemolytic safety, structural novelty (Tanimoto Morgan FP), and semantic novelty (EmbeddingGemma cosine vs 20,489-row known-antibiotics index).
 >
 > Click "find similar known drugs" on any candidate to see the top-5 closest known antibiotics by cosine similarity. Useful for novelty checks and mechanism-of-action guesses.
 >
 > ## How it was trained
 > Three-stage pipeline on a single AMD Instinct MI300X:
-> 1. **Stage 1**: chemistry foundation on Therapeutics Data Commons.
-> 2. **Stage 2**: 222,606 AMR instruction-tuning examples from 7 real public sources.
-> 3. **Stage 3**: GRPO reinforcement learning with 7 verifiable reward components, all logged separately to wandb to detect reward-hacking.
+> 1. **Stage 1**: chemistry foundation on Therapeutics Data Commons (28 tasks).
+> 2. **Stage 2**: AMR specialization on `lysos-amr-stage2-pro-v2` — 364K examples across 27 task types from 9 real sources, including a 333-entry elite chain-of-thought reasoning slice (14 reasoning task types, 25x oversampled).
+> 3. **Stage 3**: GRPO RL with 8 verifiable reward components, all logged separately to wandb to detect reward-hacking.
 >
 > The MI300X 192 GB is the prerequisite — RL training peak is ~152 GB. An H100 80 GB has to shard.
 >
 > ## Resources
 > - Code: github.com/Rahul-Rajpurohitk/lysos
-> - Stage 2 dataset: huggingface.co/datasets/rahul24raj/lysos-amr-stage2 (222,606 ex.)
+> - Stage 2 v2 dataset: huggingface.co/datasets/rahul24raj/lysos-amr-stage2-pro-v2 (364,432 train + 29,300 valid + 55 held-out test)
 > - Stage 3 prompts: huggingface.co/datasets/rahul24raj/lysos-rl-prompts (12,000 prompts)
+> - Held-out reasoning eval: `examples/score_held_out_named_drug.py` (5-axis scoring)
 
 ---
 
@@ -68,3 +70,4 @@ Pre-written here; copy-paste at submission time.
 - [ ] Copy A → X (kickoff post)
 - [ ] Copy B → lablab portal "project description" field
 - [ ] Copy C → `huggingface.co/spaces/lablab-ai-amd-developer-hackathon/lysos` README (auto-pushed by `make space-deploy`)
+- [ ] PDF version of pitch deck: `docs/pitch-deck.pdf` (already rendered via `marp docs/pitch-deck.md --pdf`)

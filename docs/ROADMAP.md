@@ -11,7 +11,7 @@
 - [x] HF Space slug `lysos` reserved in `lablab-ai-amd-developer-hackathon` org
 - [x] HF Hub model slugs reserved (`rahul24raj/txgemma-4-31b`, `rahul24raj/lysos-base`, `rahul24raj/lysos-rl`)
 - [x] **10 real data loaders implemented + verified live**: ChEMBL ✓, DBAASP ✓, DRAMP ✓, CARD ✓, DrugBank ✓, PDB ✓, ZINC ✓ · BindingDB ⚠ JSP-gated · PubChem ⚠ AIDs retired · APD3 ⚠ source 404
-- [x] **Stage 2 dataset live on HF Hub** — `rahul24raj/lysos-amr-stage2` · **222,606 examples** (was 21K → 31K → 96K after DrugBank wired in)
+- [x] **Stage 2 dataset v2 live on HF Hub** — `rahul24raj/lysos-amr-stage2-pro-v2` · **364,432 train + 29,300 valid + 55 held-out test** · 27 task types including the new elite named-drug CoT slice (333 entries across 14 reasoning task types, oversampled 25x to 5% of training compute)
 - [x] **Stage 3 RL prompts live on HF Hub** — `rahul24raj/lysos-rl-prompts` (12,000 prompts)
 - [x] **Known-antibiotics RAG index** — `data/processed/known_antibiotics_index.parquet` (20,489 rows from ChEMBL+DBAASP+DRAMP)
 - [x] Verifier (`make verify` 24/24) + 13 unit tests (12 pass, 1 skip-no-rdkit) + Makefile shipped
@@ -22,13 +22,16 @@
 - [x] **Visual assets (5 SVG + 6 PNG)** — cover, thumbnail, architecture, data-flow, reward-curves, ROCm-SMI, workspace screenshot
 - [x] **Build-in-Public posts drafted** — `docs/build-in-public.md` (day -3 → submission)
 - [x] **Judging-criteria map** — `docs/judging-criteria-map.md` (artifact-by-axis index)
-- [x] **HF model + dataset cards** — `model_cards/lysos-rl.md` + `model_cards/lysos-amr-stage2.md`
+- [x] **HF model + dataset cards** — `model_cards/lysos-rl.md`, `model_cards/lysos-amr-stage2.md` (v1), `model_cards/lysos-amr-stage2-pro-v2.md` (v2 NEW, on HF)
 - [x] **VM bootstrap script** — `scripts/vm_bootstrap.sh` (one-shot AMD VM setup)
 - [x] **HF Space deploy script** — `scripts/deploy_to_hf_space.py` + `make space-deploy`
 - [x] **Asset renderer** — `scripts/render_assets.py` (rsvg → inkscape → headless-chrome chain)
 - [x] **CITATION.cff** — academic-citation file for the GitHub repo
 - [x] **examples/** — quickstart.py, score_smiles.py, find_similar_drugs.py + README
 - [x] AMR dataset URLs + licensing confirmed (no DUA dependencies)
+- [x] **Stage 2 v2 elite reasoning slice** — 388 named-drug CoT entries (333 train + 55 held-out test) merged into pro v2; 14 reasoning task types weighted to 5% of training compute (25x oversample); zero leakage verified
+- [x] **Stage 2 v2 smoke-test** — `scripts/smoke_test_stage2_v2.py` 8/8 PASSED (caught + fixed pre-existing config typos for drug_smiles + natural_product_origin task names)
+- [x] **Named-drug QC pass** — `scripts/qc_named_drug.py` cleaned 2 corrupt entries; verified schema + zero internal duplicates + zero held-out test leakage
 
 ### GPU-blocked / waiting on credits (Sat May 2 expected)
 

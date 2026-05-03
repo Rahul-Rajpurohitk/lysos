@@ -68,7 +68,7 @@ shows the MI300X 192 GB memory budget bar).
 │                     ▼                             │
 │  ┌──────────────────────────────────────────────┐ │
 │  │  Scoring (coresident, no separate process)   │ │
-│  │  • predicted MIC (heuristic v1; ML predictor │ │
+│  │  • predicted MIC (ML XGBoost on Morgan FPs,  │ │
 │  │    Stage 1 output substituted post-train)    │ │
 │  │  • QED + Lipinski drug-likeness  (rdkit)     │ │
 │  │  • SA score synthesizability     (rdkit)     │ │
@@ -134,7 +134,7 @@ Train the generator to produce molecules that score well on multiple objectives.
 |---|---|
 | Algorithm | GRPO (Group Relative Policy Optimization, DeepSeek-R1 style) — no value model needed |
 | Prompts (LIVE on HF Hub) | [`rahul24raj/lysos-rl-prompts`](https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts) — 12,000 prompts (11,520 train + 480 valid) across 8 priority pathogens × 2 modalities |
-| Reward components (configs/stage3_rl_grpo.yaml) | • predicted MIC → 0.40 (heuristic v1; Stage-2 ML predictor swap-in post-training)<br>• drug_likeness QED → 0.15<br>• synthesizability SA → 0.10<br>• hemolysis_safety → 0.15<br>• novelty (Tanimoto Morgan FP) → 0.10<br>• embedding_novelty (EmbeddingGemma cosine vs 20,489-row index) → 0.05<br>• validity (rdkit parse) → 0.05 |
+| Reward components (configs/stage3_rl_grpo.yaml) | • predicted MIC → 0.30 (ML XGBoost predictor, scaffold-CV MAE 0.62, R² 0.56, on disk at `data/processed/mic_predictor.joblib`; auto-dispatched by `src.eval.rewards.activity:predict_mic`)<br>• structural_alerts → 0.05 (PAINS + Brenk + NIH + Lipinski + Veber)<br>• drug_likeness QED → 0.15<br>• synthesizability SA → 0.10<br>• hemolysis_safety → 0.15<br>• novelty (Tanimoto Morgan FP) → 0.10<br>• embedding_novelty (EmbeddingGemma cosine vs 20,489-row index) → 0.10<br>• validity (rdkit parse) → 0.05 |
 | Hardware | Small 1× MI300X — but RL holds policy + frozen reference + reward predictor + KV-cache + grads coresident (~152 GB peak) — this is THE MI300X-specific moment, busts H100 80 GB |
 | Time | 15-25 GPU-hours |
 | Cost | $30-50 |

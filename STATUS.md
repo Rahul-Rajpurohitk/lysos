@@ -1,26 +1,26 @@
-# Lysos — End-to-end status (2026-05-01)
+# Lysos — End-to-end status (2026-05-03)
 
 > Comprehensive snapshot of what's built, what's pushed, and what's pending.
 > Updated as the project evolves. The single page to scan to know where we are.
 
 ## TL;DR
 
-- **49+ commits** pushed to [github.com/Rahul-Rajpurohitk/lysos](https://github.com/Rahul-Rajpurohitk/lysos) (private until kickoff)
-- **Stage 2 dataset live on HF Hub** — `lysos-amr-stage2-clean` (**195,616 train + 15,584 valid**, scaffold-aware split, **0 SMILES leak**, 0 exact-pair leak — was 4,172 SMILES + 917 pair leak before fix) · 13 task types from 7 real sources
+- **80+ commits** pushed to [github.com/Rahul-Rajpurohitk/lysos](https://github.com/Rahul-Rajpurohitk/lysos) (private until kickoff)
+- **Stage 2 dataset v2 live on HF Hub** — `rahul24raj/lysos-amr-stage2-pro-v2` (**364,432 train + 29,300 valid + 55 held-out test**, scaffold-aware split, **0 SMILES leak**) · **27 task types** including the new elite named-drug CoT slice (333 entries across 14 reasoning task types, oversampled 25x to 5% of training compute)
 - **Stage 3 RL prompts live on HF Hub** — 12,000 prompts
 - **Stage 1 TDC dataset live on HF Hub** — 151,530 examples (28 ADME/Tox/HTS tasks, instruction-tuning format)
-- **Real ML MIC predictor** — XGBoost on Morgan fps, scaffold-CV MAE 0.62 / R² 0.56 — replaces heuristic in Stage 3 reward
-- **Embedding stack: Gemini Embedding 2** (gemini-embedding-001, 3072d Matryoshka) — replaces gated EmbeddingGemma; no degraded fallbacks
+- **Real ML MIC predictor** — XGBoost on Morgan fps, scaffold-CV MAE 0.62 / R² 0.56 — wired into Stage 3 reward stack
+- **Base model**: Gemma 4 31B-it (locked) · **Embeddings**: EmbeddingGemma 300m + Gemini Embedding 2 (3072d Matryoshka) for the multi-model coresident inference
 - **Per-source data audit** — 92,433 raw rows → 65,898 unique canonical molecules, JSON reports per source
 - **Cross-source overlap audit** — 693 molecules duplicated across 2+ sources, top: DBAASP∩DRAMP=310, ChEMBL∩DrugCentral=220
-- **Train/test leakage audit** — 4,172 SMILES leaked across train/valid (now 0)
-- **TxGemma-27B benchmark harness** ready (`scripts/bench_stage1.py`)
+- **Train/test leakage audit** — 0 SMILES leak, 0 prompt leak (388 named-drug CoT entries QC'd, 2 corrupt removed)
 - **All 24 modules verify clean** — `make verify` passes (24/24)
 - **12/13 unit tests pass** (1 skip without rdkit) — `make test`
+- **Stage 2 v2 smoke-test**: 8/8 PASSED via `scripts/smoke_test_stage2_v2.py` (caught + fixed 2 pre-existing config typos)
 - **Demo workspace docker-buildable** — FastAPI + Vite/React/Tailwind frontend
 - **EmbeddingGemma 300m: all 5 integration phases shipped** — novelty reward + dedup + RAG + similar-drugs UI + 20,489-row index
 - **Pitch deck + 5-min demo video storyboard committed** — `docs/pitch-deck.md` + `docs/demo-video-storyboard.md`
-- Awaiting AMD Dev Cloud credits to land (expected Sat May 2) → first GPU smoke test
+- Awaiting AMD Dev Cloud credits → first GPU smoke test (Mon May 4 kickoff)
 
 ---
 
@@ -66,7 +66,8 @@
 | `data/processed/amr-stage2-dedup-hash/` | **211,200** examples | rahul24raj/lysos-amr-stage2-dedup | hash-deduped (still leaky: same SMILES train+valid) |
 | `data/processed/amr-stage2-split/` | **211,200** examples | rahul24raj/lysos-amr-stage2-clean | scaffold-aware split, 195,616 train + 15,584 valid, **0 SMILES leak** |
 | `data/processed/amr-stage2-reasoning/` | **5,188** examples | rahul24raj/lysos-amr-stage2-reasoning | Wikipedia + PubMed + CARD reasoning chains (10 task types) |
-| `data/processed/amr-stage2-pro/` | **216,388** examples | **rahul24raj/lysos-amr-stage2-pro (DEFAULT)** | clean chemistry tuples + reasoning chains, 200,597 train + 15,791 valid |
+| `data/processed/amr-stage2-pro/` | **216,388** examples | rahul24raj/lysos-amr-stage2-pro | clean chemistry tuples + reasoning chains, 200,597 train + 15,791 valid (v1 — superseded) |
+| `data/processed/amr-stage2-pro-v2/` | **393,732** examples | **rahul24raj/lysos-amr-stage2-pro-v2 (DEFAULT 2026-05-03)** | pro v1 + 333 elite named-drug CoT (333 train + 55 held-out test), 27 task types, scaffold-split clean |
 | `data/processed/known-antibiotics.parquet` | **39,748** | (local + RAG/novelty) | 6 sources merged: ChEMBL active + DrugBank + DrugCentral + NPAtlas filtered + DBAASP + DRAMP |
 | `data/processed/mic_predictor.joblib` | (model artifact) | (local) | XGBoost MIC predictor, 7,951 train rows, scaffold-CV MAE 0.62 |
 | `data/processed/amr-rl-prompts/` | 12,000 prompts | rahul24raj/lysos-rl-prompts | 11,520 train + 480 valid |

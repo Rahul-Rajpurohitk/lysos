@@ -71,6 +71,11 @@ reward:
       module: src.eval.rewards.structural_alerts:structural_alerts_score
     - name: predicted_mic
       weight: 0.30
+      # Dispatches automatically: ML XGBoost predictor (2048-bit Morgan FP +
+      # 8-pathogen one-hot, scaffold-CV MAE 0.62, R² 0.56) when the joblib
+      # bundle is present at data/processed/mic_predictor.joblib (default);
+      # falls back to a lipophilicity heuristic ONLY if bundle missing.
+      # Bundle on disk at session start (verified 2026-05-03).
       module: src.eval.rewards.activity:predict_mic
       args:
         target_pathogen: MRSA
