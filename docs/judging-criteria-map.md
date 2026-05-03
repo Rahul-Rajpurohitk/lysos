@@ -43,7 +43,7 @@ The MI300X 192 GB story is the central technology pitch:
 | Three-stage training pipeline | `src/training/stage{1,2,3}_*.py` + corresponding `configs/*.yaml` |
 | Six-component verifiable reward | `src/eval/rewards/` + `tests/test_rewards.py` |
 | ROCm + vLLM + TRL working together | `docker/Dockerfile.rocm` + `scripts/smoke_test_rocm.py` |
-| Two Gemma-family models coresident | `workspace/api/server.py` lazy-loads both |
+| Open generator + closed embedder | Gemma 4 31B-it on MI300X + Gemini Embedding 2 via API; lazy-loads in `workspace/api/server.py` |
 | EmbeddingGemma novelty + RAG + similar-drugs | `src/eval/rewards/embedding_novelty.py` + `src/inference/retrieval.py` + workspace UI |
 
 Reproducibility:
@@ -73,7 +73,7 @@ Why pharma left the market: high R&D cost, low antibiotic margins, slow regulato
 | Frontier model (Gemma 4 31B, April 2026) | Most projects are still on older models — ours uses the latest |
 | Verifiable rewards (not human prefs) | 6-component reward, every term computable & open-source |
 | Single-GPU training pitch | Most public RL drug-design uses multi-node — we run everything on one MI300X |
-| Two Gemma-family models coresident | Generator + Embedder on same card — only possible with 192 GB |
+| 62 GB generator on a single MI300X | Gemma 4 31B-it FP16 fits comfortably; embedder is API-based so no extra GPU memory pressure |
 | Real public data only (no proprietary) | 10 sources, all freely available, all open license |
 
 Pitch slide 8 has the side-by-side competitor table (Insilico, Recursion, Atomwise, ChemLLM, Galactica).

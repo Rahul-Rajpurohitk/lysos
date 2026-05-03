@@ -58,7 +58,7 @@ shows the MI300X 192 GB memory budget bar).
 │  └──────────────────┬───────────────────────────┘ │
 │                     ▼                             │
 │  ┌──────────────────────────────────────────────┐ │
-│  │  Two Gemma-family models, coresident         │ │
+│  │  Open generator + closed embedder            │ │
 │  │  ─────────────────────────────────────       │ │
 │  │  • Gemma 4 31B-it     — generator (62 GB)    │ │
 │  │  • Gemini Embedding 2 — RAG + novelty (API)  │ │

@@ -42,7 +42,7 @@
 
   <!-- title -->
   <text x="60" y="62" font-family="JetBrains Mono, ui-monospace, monospace" font-size="34" font-weight="700" fill="#e6f7f3">LYSOS — architecture</text>
-  <text x="60" y="92" font-size="18" fill="#7da5a0">Generative drug designer for AMR · Gemma 4 31B + EmbeddingGemma · single AMD MI300X (192 GB)</text>
+  <text x="60" y="92" font-size="18" fill="#7da5a0">Generative drug designer for AMR · Gemma 4 31B + Gemini Embedding 2 · single AMD MI300X (192 GB)</text>
 
   <!-- watermark / brand mark -->
   <g transform="translate(1490,55)">
@@ -124,7 +124,7 @@
     <g>
       <rect x="460" y="80" width="320" height="180" rx="10" fill="url(#embShade)" stroke="#3a86c0" stroke-width="1.6"/>
       <text x="480" y="108" font-family="JetBrains Mono, monospace" font-size="12" letter-spacing="2" fill="#5fa6da">EMBEDDER</text>
-      <text x="480" y="140" font-size="22" font-weight="700" fill="#e6f7f3">EmbeddingGemma 300m</text>
+      <text x="480" y="140" font-size="22" font-weight="700" fill="#e6f7f3">Gemini Embedding 2</text>
       <text x="480" y="166" font-size="14" fill="#a3c2bd">Gemma 3 architecture</text>
       <text x="480" y="186" font-size="14" fill="#a3c2bd">Matryoshka 768→128</text>
       <text x="480" y="208" font-size="14" fill="#a3c2bd">FP16 · ~1 GB · 2K context</text>

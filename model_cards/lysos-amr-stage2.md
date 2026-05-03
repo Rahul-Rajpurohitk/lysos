@@ -16,10 +16,20 @@ tags:
   - amr
 ---
 
-# lysos-amr-stage2
+# lysos-amr-stage2 (v1 — historical)
+
+> **⚠ SUPERSEDED**: this v1 dataset is preserved for reproducibility of older
+> checkpoints. **The current canonical dataset is
+> [`rahul24raj/lysos-amr-stage2-pro-v2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2-pro-v2)**
+> (364,432 train + 29,300 valid + 55 held-out test, 27 task types including
+> the elite named-drug chain-of-thought reasoning slice). All Lysos training
+> configs and tooling target the v2 dataset; this v1 entry is kept on Hub
+> for history.
 
 A 222,606-example instruction-tuning dataset for fine-tuning generative drug
-design models on antimicrobial resistance.
+design models on antimicrobial resistance. **This is the v1 raw superset**
+(pre-scaffold-split, pre-reasoning-slice). Consumers should prefer
+`lysos-amr-stage2-pro-v2` unless reproducing pre-2026-05-03 work.
 
 ## Sources
 

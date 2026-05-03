@@ -30,7 +30,7 @@ Stage 2 pro v2 dataset (364K train + elite reasoning slice).
 >
 > **Why MI300X**: GRPO holds policy + reference + reward predictor coresident — peak ≈152 GB. An H100 80 GB has to shard. The MI300X 192 GB fits the entire training stack on a single card.
 >
-> **Two Gemma-family models on one GPU**: Gemma 4 31B for generation (62 GB FP16) + Gemini Embedding 2 (gemini-embedding-001, 3072d Matryoshka) for RAG, novelty, and the "find similar drugs" UI feature.
+> **Best open generator + best closed embedder**: Gemma 4 31B-it runs on the MI300X (62 GB FP16) for molecule generation, paired with Gemini Embedding 2 (gemini-embedding-001, 3072d Matryoshka, MTEB top-1) via Google API for retrieval, semantic novelty, and the "find similar drugs" UI feature.
 >
 > Apache-2.0 weights, public dataset on HF Hub, MIT-licensed code, reproducible Docker. <$240 per training run on AMD Developer Cloud.
 
