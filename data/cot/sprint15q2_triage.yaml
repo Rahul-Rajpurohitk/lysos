@@ -1,0 +1,292 @@
+task: candidate_ranking
+prompt_label: "Triage scenario"
+instructions: |
+  Instructions: A pathogen and clinical setting is named, with multiple
+  approved or late-stage investigational antibacterials in the candidate set.
+  Rank the candidates by net clinical effectiveness considering activity
+  vs the pathogen, safety, practicality (route, frequency, monitoring),
+  resistance evolution risk, and stewardship cost. Justify the ranking
+  position by position with reference to specific drug features and
+  cite the trial / guideline that supports the conclusion.
+
+entries:
+  - name: "Stenotrophomonas maltophilia pneumonia in CF — rank TMP-SMX vs levofloxacin vs minocycline"
+    body: |
+      Setting: cystic fibrosis patient with worsening FEV1, sputum culture
+      growing Stenotrophomonas maltophilia plus chronic Pseudomonas
+      colonization. Ranking. (1) TMP-SMX (15 mg/kg/day TMP component IV
+      q6 to 8h) — first-line per multiple guidelines. Reasons: (a)
+      bactericidal sequential folate-pathway blockade; (b) Stenotrophomonas
+      MIC50 0.06 to 0.5 ug/mL TMP component; (c) decades of clinical
+      experience including in CF cohorts. Trade-offs: hyperkalemia from
+      TMP ENaC block (especially in CF with labile electrolytes), bone
+      marrow suppression, sulfa hypersensitivity SJS/TEN risk in HLA-B*15:02
+      and B*58:01, hepatic enzyme rise; rising dfrA17/sul1 plasmid-mediated
+      resistance (10 to 30 percent in some CF cohorts). (2) Levofloxacin
+      750 mg IV/PO q24h — second choice or alternative for sulfa-allergic.
+      Reasons: ParC and GyrA inhibition active vs Stenotrophomonas; oral
+      PO option simplifies outpatient. Trade-offs: ~30 percent FQ-R in CF
+      cohorts (gyrA mutations selected by chronic FQ exposure for
+      Pseudomonas); FDA black-box for tendinopathy, aortic dissection, QTc;
+      C. difficile risk. (3) Minocycline 100 mg IV/PO q12h — third choice
+      for severe disease as combination partner. Reasons: 30S A-site binding
+      with C7 dimethylamino lipophilicity for tissue penetration; oral
+      option; combination with TMP-SMX gives orthogonal mechanisms. Trade-offs:
+      vestibular tox, hyperpigmentation, lupus-like syndrome with chronic
+      use, 10 to 20 percent tet-gene resistance. Net: TMP-SMX > levofloxacin
+      > minocycline as monotherapy; TMP-SMX + levofloxacin combination
+      sometimes used for severe pneumonia.
+
+  - name: "HIV-associated cryptococcal meningitis — rank AmphoB+5FC induction vs fluconazole-only vs combination throughout"
+    body: |
+      Setting: HIV-positive patient (CD4 35) with subacute headache, CSF
+      pleocytosis, opening pressure 28 cm H2O, CSF cryptococcal antigen
+      titer 1:1024. Diagnosed cryptococcal meningoencephalitis. Ranking.
+      (1) Liposomal AmphoB + 5FC induction x 2 weeks then fluconazole
+      consolidation x 8 weeks then fluconazole maintenance — first-line
+      per IDSA 2010 cryptococcosis guideline + WHO 2022 + van der Horst
+      1997 NEJM. Reasons: (a) ergosterol-pore mechanism (AmphoB) plus
+      DNA/RNA-chain-termination (5FC) gives synergistic fungicidal kill
+      that single-agent does not match; (b) faster CSF sterilization
+      (median 9 vs 19 days for AmphoB monotherapy); (c) high-dose
+      consolidation prevents relapse during immune reconstitution.
+      Trade-offs: AmphoB nephrotox even with liposomal (5 to 10 percent),
+      hypokalemia, hypomagnesemia; 5FC marrow suppression; high cost
+      (over $20,000 induction); ICP management with daily LPs to drain
+      CSF until OP normalizes (essential for survival). (2) Fluconazole
+      monotherapy 1200 mg daily x 2 weeks then 800 mg x 8 weeks — second
+      choice ONLY in resource-limited settings without AmphoB access.
+      Reasons: cheaper, oral, less nephrotox. Trade-off: significantly
+      higher mortality (around 50 to 60 percent in HIV/AIDS sub-Saharan
+      data) — markedly worse than combination induction, and no longer
+      preferred where AmphoB+5FC accessible. (3) AmphoB monotherapy
+      throughout 6 weeks — third choice; reserved for 5FC unavailable.
+      Reasons: ergosterol-pore mechanism alone is fungicidal but slower
+      CSF sterilization; cumulative nephrotox. Net: AmphoB+5FC induction
+      > AmphoB-only > fluconazole-only for HIV-cryptococcal-meningitis.
+
+  - name: "Burkholderia cenocepacia pneumonia in CF — rank TMP-SMX vs meropenem vs ceftazidime"
+    body: |
+      Setting: CF patient with worsening exacerbation, sputum growing B.
+      cenocepacia (most virulent BCC species, also a relative-contraindication
+      to lung transplantation). Ranking. (1) Meropenem 2 g IV q8h
+      extended-infusion — first-line per BCC pulmonary exacerbation
+      guidelines. Reasons: (a) some BCC strains have reduced expression
+      of chromosomal carbapenemase, allowing meropenem to penetrate; (b)
+      extended-infusion maximizes T greater than MIC; (c) commonly
+      combined with TMP-SMX for combination chemotherapy. Trade-offs:
+      C. difficile risk; cost; carbapenem-class selection pressure for
+      KPC and AmpC. (2) TMP-SMX 5 mg/kg TMP component IV q12h — second
+      choice or combined first-line. Reasons: sequential folate blockade;
+      bactericidal; may add to meropenem activity in vitro. Trade-offs:
+      hyperkalemia, bone marrow suppression, sulfa hypersensitivity;
+      rising sul1/sul2 resistance. (3) Ceftazidime 2 g IV q8h — third
+      choice; variable BCC susceptibility (test specifically). Reasons:
+      anti-Pseudomonal cephalosporin sometimes active vs BCC; oral
+      step-down possible to ceftazidime-avibactam if needed. Trade-offs:
+      AmpC induction in BCC strains; class B L1 MBL hydrolyzes 3G
+      cephalosporins in some BCC; not reliably active without specific
+      susceptibility data. Combination therapy (meropenem + TMP-SMX) is
+      common for severe BCC pneumonia. Net: meropenem > TMP-SMX >
+      ceftazidime for BCC pulmonary exacerbation, with strong consideration
+      for upfront combination.
+
+  - name: "MDR Acinetobacter baumannii bloodstream infection — rank cefiderocol vs sulbactam-durlobactam vs polymyxin combo"
+    body: |
+      Setting: ICU patient with central-line-associated bloodstream
+      infection from carbapenem-resistant A. baumannii (OXA-23 producer,
+      AdeABC overexpression). Ranking. (1) Sulbactam-durlobactam 1 g
+      + 1 g IV q6h — first-line per IDSA AMR 2024 update and ATTACK
+      trial (Bouza 2023, Lancet ID). Reasons: (a) durlobactam DBO
+      covalently inhibits class A, C, AND class D (OXA-23/24/58)
+      beta-lactamases (uniquely broad among DBOs); (b) sulbactam has
+      intrinsic CRAB-active PBP1/PBP3 affinity; (c) ATTACK showed
+      superior 28-day mortality vs polymyxin (19 vs 32 percent) in
+      CRAB. Trade-off: narrow gram-negative spectrum (no Pseudomonas,
+      Enterobacterales beyond A. baumannii), expensive. (2) Cefiderocol
+      2 g IV q8h infused over 3h — second choice when sulbactam-
+      durlobactam unavailable. Reasons: catechol-Fe siderophore Trojan-horse
+      uptake bypasses OprD-loss-equivalent and AdeABC efflux. Trade-off:
+      CREDIBLE-CR trial flagged numerically higher mortality in CRAB
+      pneumonia (FDA black-box for CRAB use); cirA mutations cause MIC
+      rise during prolonged therapy. (3) Polymyxin-B + tigecycline
+      (high-dose 100 mg IV q12h) + meropenem combination — third-line
+      salvage. Reasons: triple-mechanism multi-target attack
+      (LPS-disruption + 30S + PBP); historical experience pre-2023.
+      Trade-offs: nephrotoxicity 25 to 30 percent (polymyxin) +
+      tigecycline Cmax ceiling causing bacteremia AUC/MIC failure (FDA
+      black-box for tigecycline). Net: sulbactam-durlobactam > cefiderocol
+      > polymyxin combo for CRAB bacteremia — 2024 paradigm shift from
+      polymyxin-first.
+
+  - name: "Invasive aspergillosis in stem-cell transplant — rank voriconazole vs isavuconazole vs liposomal AmphoB"
+    body: |
+      Setting: allogeneic SCT patient day 30 with new pulmonary nodules,
+      BAL galactomannan greater than 1.0, CT halo sign, biopsy showing
+      septate hyphae. Diagnosed invasive aspergillosis. Ranking. (1)
+      Voriconazole 6 mg/kg IV q12h x 24h load then 4 mg/kg q12h, with TDM
+      target trough 1 to 5.5 ug/mL — historic first-line per Herbrecht
+      2002 NEJM; still first-line in many guidelines. Reasons: (a)
+      MIC50 0.5 to 2 ug/mL against Aspergillus; (b) excellent oral PO
+      bioavailability; (c) decades of clinical experience. Trade-offs:
+      CYP2C19 polymorphism causing 4-fold AUC variability — TDM required;
+      visual disturbance (photopsia) 30 percent; hepatic enzyme rise; QTc
+      prolongation; SBECD vehicle limits IV in renal failure;
+      breakthrough on TR34/L98H A. fumigatus rising. (2) Isavuconazole
+      200 mg PO/IV q8h x 6 doses load then daily — equivalent or
+      preferred first-line per Maertens 2016 SECURE trial (non-inferiority
+      to voriconazole with cleaner safety). Reasons: (a) better
+      tolerability (paradoxical QTc shortening, no visual disturbance,
+      no SBECD vehicle in IV form); (b) no TDM required (predictable PK);
+      (c) Mucorales coverage as bonus. Trade-off: somewhat higher cost
+      than vori; less long-term experience. (3) Liposomal AmphoB 3 to 5
+      mg/kg IV q24h — second-line or salvage. Reasons: ergosterol-pore
+      mechanism orthogonal to azole; active against TR34/L98H A.
+      fumigatus where azoles fail. Trade-offs: nephrotox 5 to 10 percent
+      even with liposomal at high dose; daily infusion logistics;
+      hypokalemia, hypomagnesemia. Net: isavuconazole > voriconazole >
+      liposomal AmphoB for first-line invasive aspergillosis in 2024
+      transplant practice.
+
+  - name: "Severe Pneumocystis pneumonia (PCP) — rank TMP-SMX+steroid vs IV pentamidine vs primaquine+clindamycin"
+    body: |
+      Setting: HIV-positive patient (CD4 30) with 7-day exertional dyspnea,
+      hypoxemia (PaO2 55 mmHg), bilateral ground-glass on CT, BAL Giemsa
+      positive for P. jirovecii. Ranking. (1) TMP-SMX 15 to 20 mg/kg/day
+      TMP component IV/PO divided q6 to 8h x 21 days PLUS adjunctive
+      prednisone 40 mg PO BID x 5 days then taper x 21 days — first-line
+      per Bozzette 1990 NEJM (steroids reduce mortality in moderate-severe
+      PCP defined as PaO2 less than 70 or A-a gradient greater than 35).
+      Reasons: (a) bactericidal sequential folate blockade; (b) decades
+      of clinical experience; (c) oral conversion from IV when stable;
+      (d) cheap; (e) Bozzette and CSCAP cohort showed mortality reduction
+      with adjunctive steroids in moderate-severe PCP. Trade-offs: 30 to
+      50 percent sulfa allergy/intolerance rate in HIV (higher than general
+      population); hyperkalemia, marrow suppression, hepatic enzymes.
+      (2) IV pentamidine 4 mg/kg IV daily x 21 days — second-line for
+      sulfa-intolerant or treatment-failure PCP. Reasons: alternative
+      with reasonable activity. Trade-offs: severe — pancreatitis,
+      hypoglycemia/hyperglycemia, AKI 25 percent, QTc prolongation, IV
+      thrombophlebitis; clinically inferior tolerability vs TMP-SMX.
+      (3) Primaquine 30 mg PO daily PLUS clindamycin 600 to 900 mg IV q6h
+      x 21 days — third-line option for sulfa-intolerant moderate disease.
+      Reasons: alternative regimen with moderate efficacy; oral primaquine.
+      Trade-offs: G6PD screen mandatory before primaquine (hemolytic
+      anemia in deficient patients); methemoglobinemia; clindamycin C.
+      difficile risk. Net: TMP-SMX+steroid > pentamidine > primaquine-
+      clindamycin for severe PCP.
+
+  - name: "Lyme neuroborreliosis — rank ceftriaxone vs IV penicillin G vs oral doxycycline"
+    body: |
+      Setting: 50-year-old with 2 months of progressive headache, focal
+      facial nerve palsy, lumbar puncture showing lymphocytic pleocytosis,
+      Lyme CSF antibody index positive. Diagnosed Lyme neuroborreliosis
+      (B. burgdorferi). Ranking. (1) Ceftriaxone 2 g IV q24h x 14 to 21
+      days — first-line per IDSA Lyme 2020 update. Reasons: (a) excellent
+      CSF penetration at 2 g IV daily; (b) bactericidal against B.
+      burgdorferi (MIC 0.5 to 1); (c) once-daily dosing convenient for
+      OPAT outpatient transition. Trade-offs: pseudolithiasis (calcium
+      ceftriaxone sludge) at high dose, hypersensitivity, C. difficile
+      risk; cost relative to oral. (2) Penicillin G 18 to 24 million units
+      IV daily x 14 to 21 days — second choice; equivalent to ceftriaxone
+      in older guidelines, less convenient (q4h or continuous infusion
+      required). Reasons: same target (PBPs), same CSF penetration at
+      high doses; cheaper than ceftriaxone. Trade-off: q4h dosing
+      logistics, hypersensitivity. (3) Oral doxycycline 100 mg BID x 21
+      to 28 days — third choice; specifically indicated per Lyme 2020
+      update for European-strain neuroborreliosis (B. afzelii, B. garinii)
+      and reasonable for late Lyme arthritis. Reasons: (a) oral option
+      with good intracellular penetration; (b) 14 to 21 days oral
+      non-inferior to IV ceftriaxone in some European RCTs (Ljostad
+      2008); (c) convenient outpatient. Trade-offs: lower CSF penetration
+      than ceftriaxone (around 25 percent of plasma), photosensitivity,
+      esophagitis, GI; not preferred for severe meningitis presentation.
+      Net: ceftriaxone > penicillin G > doxycycline for severe US Lyme
+      neuroborreliosis; doxycycline more reasonable for European
+      uncomplicated cases.
+
+  - name: "Pseudomonas chronic CF colonization — rank inhaled tobramycin vs inhaled aztreonam vs ceftolozane-tazobactam"
+    body: |
+      Setting: 25-year-old CF patient with chronic P. aeruginosa
+      colonization, declining FEV1 from 65 to 55 percent over 6 months,
+      sputum mucoid Pseudomonas. Ranking. (1) Inhaled tobramycin
+      (TOBI Podhaler 112 mg BID via inhaler, 28-day on/off cycles) —
+      first-line for chronic Pseudomonas suppressive therapy in CF per
+      Ramsey 1999 NEJM. Reasons: (a) high local lung concentration with
+      minimal systemic exposure (cyst-Pseudomonas-killing without
+      nephrotox of IV tobramycin); (b) decades of clinical experience;
+      (c) on/off cycle reduces resistance emergence vs continuous
+      monotherapy. Trade-offs: cough/bronchospasm during inhalation,
+      voice alteration; tobramycin-R Pseudomonas emerges with chronic
+      use (typically takes years). (2) Inhaled aztreonam (Cayston 75 mg
+      TID) — alternative or rotation partner. Reasons: monobactam
+      mechanism (orthogonal to tobramycin's 30S target) — useful for
+      tobramycin-R or resistance suppression via mechanism rotation; FDA
+      approved 2010. Trade-offs: TID dosing (worse adherence than tobi
+      BID); cost; bronchospasm. (3) Ceftolozane-tazobactam 1 g + 0.5 g
+      IV q8h (or 3 g + 1.5 g IV q8h for severe) — third choice for
+      EXACERBATION not chronic suppression. Reasons: engineered cephalosporin
+      retains activity against MexAB-OprM-overexpressing Pseudomonas; for
+      acute exacerbation rather than chronic colonization. Trade-offs: IV-
+      only (no inhaled), AKI risk, expensive, not for chronic use. Net for
+      CHRONIC suppression: inhaled tobramycin > inhaled aztreonam > ceftolozane-
+      tazo (which is acute therapy not chronic suppression). Rotation
+      strategies (alternating tobi/aztreonam months) studied with mixed
+      results.
+
+  - name: "Esophageal candidiasis in HIV — rank fluconazole vs micafungin vs posaconazole"
+    body: |
+      Setting: HIV-positive patient (CD4 80) with odynophagia, retrosternal
+      pain, white plaques on endoscopy biopsied as Candida albicans
+      esophagitis. Ranking. (1) Fluconazole 200 to 400 mg PO/IV daily
+      x 14 to 21 days — first-line per IDSA candidiasis 2016. Reasons:
+      (a) excellent oral bioavailability (90 percent); (b) cheap; (c)
+      C. albicans typically fluconazole-S (MIC 0.25 ug/mL); (d)
+      well-tolerated. Trade-offs: hepatic enzyme rise, QTc prolongation,
+      drug-drug interactions via CYP3A4 (especially with HIV protease
+      inhibitors); azole-resistant Candida glabrata or krusei would
+      drive to switch. (2) Micafungin 100 mg IV daily x 14 to 21 days —
+      second choice for fluconazole-R or in clinical setting where
+      enteral absorption is unreliable. Reasons: echinocandin glucan-
+      synthase inhibitor; fungicidal; once-daily dosing; no significant
+      drug-drug interactions. Trade-offs: IV only (less convenient than
+      fluconazole); cost. (3) Posaconazole DR-tab 300 mg PO daily x 14
+      to 21 days — third choice for fluconazole-resistant or as
+      alternative azole. Reasons: extended hydrophobic side chain
+      reaches deeper CYP51 pocket, retains activity against fluconazole-
+      R isolates. Trade-offs: more expensive than fluconazole, more
+      side effects (mineralocorticoid-like effect, more hepatic), TDM
+      target trough greater than 0.7 for prophylaxis. Net: fluconazole >
+      micafungin > posaconazole for C. albicans esophagitis (reverse
+      order if fluconazole resistance documented).
+
+  - name: "MRSA bacteremia secondary to skin abscess — rank vancomycin vs daptomycin vs ceftaroline"
+    body: |
+      Setting: 45-year-old IV drug user with right-arm cellulitis, fever,
+      blood cultures positive for MRSA (MIC vancomycin 1, dapto 0.25),
+      no endocarditis on TEE, source-controlled by I&D. Ranking. (1)
+      Vancomycin AUC-targeted 400 to 600 mg.h/L (typically 25 to 30 mg/kg
+      load then 15 to 20 mg/kg q8 to 12h) — historical first-line for
+      MRSA bacteremia per AHA/IDSA endocarditis 2015. Reasons: (a)
+      bactericidal at adequate AUC; (b) decades of experience; (c) cheap;
+      (d) excellent skin/soft-tissue penetration. Trade-offs: AKI risk
+      16 percent at AUC greater than 600 (additive with piperacillin-tazo);
+      ELF penetration only 50 percent (less critical for bacteremia
+      than pneumonia); MIC creep vs vanco-MIC-2 strains. (2) Daptomycin
+      8 to 12 mg/kg IV q24h — equivalent first-line per Fowler 2006 NEJM
+      (non-inferior to vanco for MRSA bacteremia and right-sided
+      endocarditis). Reasons: (a) bactericidal Ca2+-dependent membrane
+      depolarization; (b) once-daily simple dosing; (c) active against
+      vanco-MIC-creep strains; (d) high-dose 8 to 12 mg/kg overcomes
+      AUC/MIC barrier. Trade-offs: rhabdomyolysis 1 to 7 percent at
+      high dose (CK monitoring), eosinophilic pneumonia, pulmonary
+      contraindication (surfactant inactivation — irrelevant here as
+      no pneumonia source). (3) Ceftaroline 600 mg IV q8h or
+      daptomycin + ceftaroline combination — third-line as monotherapy
+      OR as add-on for vancomycin/dapto failure. Reasons: PBP2a
+      allosteric binder; "see-saw" with daptomycin (alters membrane
+      charge restoring dapto sensitivity per Geriak 2019). Trade-offs:
+      monotherapy data for MRSA bacteremia limited; cost. Net for
+      uncomplicated MRSA bacteremia with source control: vancomycin or
+      daptomycin equivalent first-line; ceftaroline as add-on for
+      complicated or persistent.

@@ -52,19 +52,22 @@ dataset:
   # Multi-task mixing weights (sum = 1.0). Recalibrated 2026-05-03 after
   # named-drug-elite-CoT injection — total 27 task types in train.
   task_mix:
-    # Core chemistry (44%) — directly serve the design objective.
+    # Core chemistry (46%) — directly serve the design objective.
     # Reduced 2pp from generation/activity to make room for elite reasoning slice.
     generation_for_target: 0.18  # given pathogen → SMILES
     activity_prediction: 0.16    # given molecule + pathogen → MIC
     peptide_design: 0.08         # given pathogen → AMP sequence
-    drug_structure: 0.04         # name ↔ SMILES (DrugCentral)
+    drug_smiles: 0.02            # name → SMILES (DrugCentral)
+    drug_from_smiles: 0.02       # SMILES → name (DrugCentral)
 
     # Safety + properties (12%)
     safety_prediction: 0.08      # given molecule → hemolysis
     drug_likeness: 0.04          # given molecule → QED + Lipinski (rdkit-side)
 
     # Drug + natural product knowledge (37%) — vocabulary tasks
-    natural_products: 0.10       # NPAtlas — name ↔ SMILES ↔ producer organism
+    natural_product_origin: 0.04         # NPAtlas — name → producer organism
+    natural_product_smiles: 0.03         # NPAtlas — name → SMILES
+    natural_product_origin_smiles: 0.03  # NPAtlas — name → both
     drug_id_lookup: 0.05         # name → DrugBank ID  (was 0.06; 1pp redirected)
     drug_inchi_key: 0.05         # name → Standard InChI Key
     drug_synonyms: 0.05          # name → synonym list

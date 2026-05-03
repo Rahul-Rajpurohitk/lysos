@@ -1,0 +1,326 @@
+task: reward_profile_analysis
+prompt_label: "Drug profile"
+instructions: |
+  Instructions: An existing antimicrobial is named. Analyze its profile across
+  the 7 multi-objective reward components used in antibacterial generative
+  scoring: (1) predicted MIC / activity (against the named pathogen target),
+  (2) drug-likeness QED (Lipinski-like + electronic properties),
+  (3) synthetic accessibility SA score (smaller is easier),
+  (4) hemolysis / safety, (5) Tanimoto novelty (Morgan fingerprint vs known
+  antibiotics), (6) semantic / embedding novelty (concept-level distance from
+  approved drugs), (7) chemical validity. Discuss what trade-offs the molecule
+  illustrates and what features future generators should retain or improve.
+
+entries:
+  - name: "Polymyxin B scoring profile against MDR gram-negatives"
+    body: |
+      (1) Predicted MIC / activity: polymyxin-B MIC50 against ESBL E. coli,
+      KPC-CRE, NDM-CRE, OXA-CRAB 0.25 to 1 ug/mL via LPS lipid-A
+      electrostatic binding plus fatty-acyl-mediated outer-membrane
+      disruption; bactericidal against most gram-negatives including
+      otherwise pan-resistant strains. Score: very high "salvage"
+      activity. (2) QED: very low. 1203-Da cyclic decapeptide with five
+      2,4-diaminobutyric-acid (Dab) residues plus n-fatty-acyl tail
+      (predominantly 6-methyloctanoyl); severely fails Lipinski (MW,
+      HBD, polarity). QED around 0.05. (3) SA: very low. Produced by
+      Bacillus polymyxa fermentation; the cyclic peptide + fatty-acyl
+      makes total synthesis impractical; SA around 0.10. (4) Hemolysis
+      / safety: dose-limiting nephrotoxicity (25 to 30 percent at
+      effective doses) plus neurotoxicity (paresthesias, ataxia at
+      high dose). The mechanism IS membrane disruption — selectivity
+      between bacterial LPS and mammalian membranes is incomplete.
+      (5) Tanimoto novelty: zero (in reference cyclic-peptide library).
+      (6) Semantic novelty: low (polymyxin class is established since
+      1947). (7) Validity: 100 percent. Trade-off illustrated:
+      polymyxins are the textbook "last-line salvage drug with
+      catastrophic safety profile" — elite gram-negative activity at
+      the cost of 25 percent acute kidney injury rate. A generator
+      that values novelty AND safety should NOT propose polymyxin-class
+      cyclic peptides; the field has been actively moving away from
+      polymyxins toward newer drugs (cefiderocol, ceftaz-avi,
+      mero-vab, sulbactam-durlobactam) that achieve similar coverage
+      with cleaner safety. The polymyxin scoring profile is the
+      "anti-pattern" the generator should learn to avoid for
+      gram-negative chemistry.
+
+  - name: "Eravacycline scoring profile against MDR gram-negatives + gram-positives"
+    body: |
+      (1) Predicted MIC / activity: eravacycline MIC50 against MRSA 0.25,
+      VRE 0.06, ESBL E. coli 0.5, ESBL K. pneumoniae 0.5, A. baumannii
+      0.5 to 1 ug/mL via 30S A-site binding with C7 fluoro tightening
+      ribosomal contacts plus C9 pyrrolidinoacetamido (rigid 5-ring)
+      defeating TetA efflux and Tet(M) protection. Score: high breadth,
+      moderate-high potency. (2) QED: moderate. 558-Da fluorocycline
+      with the tetracycline core plus modifications; passes most
+      Lipinski. QED around 0.40. (3) SA: moderate. Tetracycline
+      synthesis well-established but C7 fluorination requires careful
+      regiocontrol; SA around 0.55. (4) Hemolysis / safety: low
+      intrinsic; main side effects are nausea (35 percent — higher than
+      tigecycline), hepatic enzyme rise. Importantly, eravacycline has
+      higher Cmax (1.2 ug/mL at 1 mg/kg q12h IV) than tigecycline,
+      partially overcoming the AUC/MIC failure in bacteremia (FDA does
+      NOT carry the same mortality black-box for eravacycline). (5)
+      Tanimoto novelty: low (tetracycline core). (6) Semantic novelty:
+      low (fluorocycline subclass). (7) Validity: 100 percent.
+      Trade-off illustrated: eravacycline is an incremental SAR
+      improvement over tigecycline — same scaffold, better PK, better
+      coverage of tetX-positive strains (the C7 fluoro deflects FAD-
+      monooxygenase orientation slowing hydroxylation). For a generative
+      model, eravacycline shows that small-changes-to-existing-class
+      can yield meaningful clinical improvement — but the upper-bound
+      Cmax limit of the tetracycline class likely constrains how much
+      further this scaffold can be pushed before complete redesign is
+      needed.
+
+  - name: "Lefamulin scoring profile against community-acquired bacterial pneumonia"
+    body: |
+      (1) Predicted MIC / activity: lefamulin MIC50 against S. pneumoniae
+      0.12, MSSA/MRSA 0.12, M. pneumoniae 0.06, Legionella 0.5, H.
+      influenzae 1 ug/mL via 50S peptidyl-transferase-center binding at
+      A- and P-site (G2061, A2451, U2506, U2585 of 23S rRNA) — a
+      sub-pocket distinct from macrolide and oxazolidinone binding sites.
+      Score: high for respiratory pathogens, narrower (no gram-negatives,
+      no enterococci) than ideal. (2) QED: moderate. 568-Da pleuromutilin
+      with tricyclic mutilin core plus C14 hydroxycyclohexylsulfanyl-
+      acetate side chain; passes most Lipinski. QED around 0.45.
+      (3) SA: moderate to low. Mutilin core synthesis requires multiple
+      stereocenter controls; semi-synthetic from pleuromutilin natural
+      product. SA around 0.55. (4) Hemolysis / safety: low. GI side
+      effects (12 percent diarrhea/nausea), QTc prolongation 5 to 10 ms,
+      hepatic enzyme rise 4 percent. (5) Tanimoto novelty: high.
+      Pleuromutilin scaffold is unrelated to other approved
+      antibacterials — Morgan FP similarity to azithromycin, clindamycin
+      around 0.2. (6) Semantic novelty: very high. Pleuromutilin class
+      had been used in veterinary medicine (tiamulin) but lefamulin is
+      the first human-approved member; the binding pocket is distinct
+      from all other 50S-binding antibiotics, providing a relatively
+      cross-resistance-free option. (7) Validity: 100 percent. Trade-off
+      illustrated: lefamulin demonstrates that "old class, new
+      indication" can produce clinically transformative drugs —
+      pleuromutilins were veterinary for decades, and human approval
+      brought a novel-target anti-pneumonia option. For a generative
+      model, lefamulin suggests that exploring "natural-product-class
+      X with modifications for human PK/safety" is a productive arc;
+      the novelty score is high, but the spectrum is narrower than
+      ideal — restricted to CABP indication.
+
+  - name: "Telavancin scoring profile against MRSA and vanA VRE"
+    body: |
+      (1) Predicted MIC / activity: telavancin MIC50 against MSSA/MRSA
+      0.06 to 0.5 ug/mL, hVISA 0.5 to 1 (about 4-fold better than
+      vancomycin), vanA VRE greater than 32 (only partial activity via
+      membrane disruption). Score: high vs MRSA, modest vs vanA VRE.
+      Mechanism dual: D-Ala-D-Ala binding (transglycosylation block)
+      plus membrane depolarization via decylaminoethyl tail anchoring.
+      (2) QED: very low. 1755-Da lipoglycopeptide with the vancomycin
+      heptapeptide core plus phosphonomethylaminomethyl + decylaminoethyl
+      additions; severely fails Lipinski. QED around 0.05. (3) SA:
+      very low. Semi-synthetic from vancomycin (which is fermentation-
+      derived); the lipid-side-chain installation is a chemistry
+      bottleneck; SA around 0.10. (4) Hemolysis / safety: nephrotox
+      12 to 16 percent serum creatinine rise; QTc prolongation around
+      8 ms; teratogenicity (FDA category C, REMS pregnancy testing
+      protocol). (5) Tanimoto novelty: low (in reference glycopeptide
+      library). (6) Semantic novelty: moderate (lipoglycopeptide
+      engineering for dual-mechanism is established but conceptually
+      meaningful). (7) Validity: 100 percent. Trade-off illustrated:
+      telavancin shows the "lipoglycopeptide engineering" strategy —
+      take vancomycin and add a fatty-acyl anchor for membrane
+      disruption — gives modest benefit (2 to 4-fold MIC improvement
+      vs hVISA) at the cost of teratogenicity and nephrotoxicity. The
+      QED/SA scores remain catastrophic because of the underlying
+      glycopeptide architecture. Compare to oritavancin and dalbavancin
+      (related lipoglycopeptides) — the class-defining trade-off is the
+      same. A generative model exploring anti-MRSA chemistry may
+      reasonably stay AWAY from glycopeptide modifications and explore
+      other anti-MRSA strategies (anti-PBP2a allosteric like ceftaroline,
+      or daptomycin-class lipopeptide).
+
+  - name: "Sulbactam-durlobactam scoring profile against CRAB"
+    body: |
+      (1) Predicted MIC / activity: sulbactam alone MIC against CRAB
+      greater than 32 (OXA-23 hydrolyzes); with durlobactam restoration,
+      sulbactam MIC drops to 1 to 2 ug/mL — sufficient for clinical
+      activity. Spectrum is narrow: CRAB only, no Pseudomonas, no
+      Enterobacterales beyond Acinetobacter. Score: high for CRAB only.
+      (2) QED: moderate-low. Sulbactam (penicillanic-acid-sulfone, 233
+      Da, QED around 0.55) plus durlobactam (DBO, 277 Da, QED around
+      0.50). The COMBINATION is administered at 1:1 ratio, so each
+      contributes; the QED of each is acceptable, the combination
+      pharmacology is straightforward. (3) SA: moderate. Sulbactam
+      well-established synthesis; durlobactam is multi-step but
+      precedented (related to avibactam chemistry); SA around 0.45 to
+      0.55. (4) Hemolysis / safety: low. Hepatic enzyme rise 6 percent,
+      hypersensitivity, mild GI; no nephrotox concern (unlike polymyxin),
+      a key advantage. (5) Tanimoto novelty: moderate. Sulbactam is
+      established but durlobactam carries a 2-OH bridgehead and extended
+      sulfonyloxy tether that distinguishes it from avibactam and
+      relebactam at the SAR level. (6) Semantic novelty: high.
+      Sulbactam-durlobactam is the first DBO-class beta-lactamase
+      inhibitor with class D (OXA-23/24/58) coverage — a novel
+      combination strategy targeted at CRAB. (7) Validity: 100 percent
+      (for both molecules). Trade-off illustrated: sulbactam-durlobactam
+      shows that "narrow-spectrum but cleanly safe" can be a winning
+      strategy when the alternative (polymyxin-based therapy) carries
+      catastrophic toxicity. A generative model targeting CRAB should
+      prioritize (a) class-D-active DBO inhibitor, (b) sulbactam-
+      compatible PBP affinity, (c) clean nephrotoxicity profile.
+
+  - name: "Aztreonam-avibactam scoring profile against MBL Enterobacterales"
+    body: |
+      (1) Predicted MIC / activity: aztreonam alone MIC against NDM-1 +
+      CTX-M-15 K. pneumoniae greater than 32 (CTX-M-15 hydrolyzes
+      aztreonam); with avibactam protection, aztreonam MIC drops to 0.5
+      to 4 ug/mL — clinically active. Aztreonam is intrinsically
+      MBL-stable (monobactam ring cannot be hydrolyzed by Zn1-Zn2
+      class B chemistry); avibactam shields it from class A serine
+      ESBL/AmpC hydrolysis. Score: very high for the otherwise-untreatable
+      MBL+ESBL co-resistant scenario. (2) QED: moderate. Aztreonam (435
+      Da, QED around 0.55) plus avibactam (265 Da, QED around 0.55).
+      Both pass Lipinski. (3) SA: moderate. Aztreonam monobactam
+      synthesis well-precedented; avibactam DBO chemistry is multi-step
+      but established at scale; SA around 0.50. (4) Hemolysis / safety:
+      low. No cross-reactivity with penicillin allergens (monobactam
+      ring lacks penicillin's bicyclic structure) — a unique safety
+      advantage in penicillin-allergic patients. (5) Tanimoto novelty:
+      low (aztreonam is an established drug; avibactam is a
+      well-validated DBO inhibitor). (6) Semantic novelty: high. The
+      combination strategy of "MBL-stable beta-lactam + serine-BLI"
+      is a novel mechanistic pairing for the MBL+ESBL clinical
+      scenario; the FDA approval (2024 expected) makes this the first
+      such combination drug. (7) Validity: 100 percent. Trade-off
+      illustrated: aztreonam-avibactam shows that COMBINATION chemistry
+      design — pairing complementary stabilities — produces clinically
+      transformative options without redesigning the core warhead.
+      The drug-likeness scores stay reasonable because the components
+      individually are drug-like; the combination simply combines them
+      pharmacologically. For a generative model, this argues for
+      "find complementary partners for existing drugs" as a strategy
+      arc, not just designing single molecules.
+
+  - name: "Isavuconazole scoring profile against invasive aspergillosis and mucormycosis"
+    body: |
+      (1) Predicted MIC / activity: isavuconazole MIC50 against A.
+      fumigatus 1 to 2 ug/mL (similar to voriconazole), Mucorales
+      (Rhizopus, Mucor) 0.5 to 2 (voriconazole greater than 16 — no
+      Mucorales activity); active against TR34/L98H A. fumigatus where
+      voriconazole MIC rises. Score: high breadth (the rare antifungal
+      with both Aspergillus and Mucorales activity). (2) QED: moderate.
+      717 Da (formulated as the prodrug isavuconazonium sulfate, 945 Da,
+      cleaved by plasma BChE to release isavuconazole); the active drug
+      passes most Lipinski. QED around 0.30. (3) SA: moderate. Multi-step
+      synthesis with chiral chemistry; isavuconazonium prodrug requires
+      additional sulfate-coupling step; SA around 0.55. (4) Hemolysis /
+      safety: low. SHORTENED QTc paradoxically (by about 4 ms — opposite
+      of most azoles), hepatic enzyme rise 5 percent, GI 7 percent, NO
+      visual disturbance (contrast voriconazole 30 percent photopsia
+      from C-19 retinal). The water-soluble prodrug also eliminates the
+      cyclodextrin vehicle (SBECD) of voriconazole IV — renal-safe.
+      (5) Tanimoto novelty: moderate (extended benzothiazole-cyanopropan-
+      2-yl side chain distinguishes it from voriconazole's structure;
+      Morgan FP similarity to vori around 0.35). (6) Semantic novelty:
+      moderate (extended-pocket-reach is a known azole strategy but
+      isavuconazole is the first with Mucorales activity at clinically
+      tolerable dose). (7) Validity: 100 percent. Trade-off illustrated:
+      isavuconazole shows that EXTENDED-AZOLE-ARM strategy combined
+      with prodrug solubility engineering can produce a drug that
+      simultaneously expands spectrum (Mucorales coverage) AND reduces
+      toxicity (no QTc prolongation, no SBECD vehicle, no visual
+      disturbance) — a rare two-axis improvement. For a generative
+      model, this is an example where modest structural change at the
+      side chain (different benzothiazole vs pyrimidinyl-fluorophenyl)
+      yields a clinically distinctive profile.
+
+  - name: "Posaconazole scoring profile against invasive aspergillosis prophylaxis"
+    body: |
+      (1) Predicted MIC / activity: posaconazole MIC50 against A.
+      fumigatus 0.5 to 1 ug/mL, Mucorales 0.5 to 2 (active vs Rhizopus,
+      partly active vs Cunninghamella), Candida (most species) 0.5 ug/mL.
+      Active against TR34/L98H A. fumigatus where voriconazole fails.
+      Score: high breadth, especially for prophylaxis use. (2) QED:
+      low-moderate. 700 Da, complex chiral structure with multiple
+      stereocenters; passes Lipinski with caveats. QED around 0.20.
+      (3) SA: low. The DR-tab formulation requires careful crystal
+      engineering for reliable bioavailability (oral suspension was
+      replaced because of erratic absorption); posaconazole synthesis
+      is a 20+ step multi-chiral campaign; SA around 0.20. (4) Hemolysis
+      / safety: hepatic enzyme rise 5 to 12 percent, QTc prolongation
+      5 to 10 ms, mineralocorticoid-like effect from
+      11-beta-hydroxysteroid dehydrogenase inhibition (hypokalemia,
+      hypertension, edema — most prominent at trough greater than 4).
+      (5) Tanimoto novelty: low (in reference azole library). (6)
+      Semantic novelty: moderate (extended-side-chain strategy). (7)
+      Validity: 100 percent. Trade-off illustrated: posaconazole has
+      worse SA score than isavuconazole (more complex synthesis), more
+      side effects (mineralocorticoid effect), but is a longer-
+      established drug with strong primary prophylaxis data in AML and
+      stem-cell-transplant. The DR-tab + IV reformulation history
+      illustrates how PHARMACEUTICAL FORMULATION matters as much as
+      molecular design — generators that ignore formulation
+      tractability will produce molecules that are theoretically
+      potent but practically unusable.
+
+  - name: "Pretomanid scoring profile against highly drug-resistant tuberculosis"
+    body: |
+      (1) Predicted MIC / activity: pretomanid MIC50 against M.
+      tuberculosis (drug-susceptible AND XDR) 0.03 to 0.25 ug/mL via
+      Ddn-activated NO release that inactivates cytochrome bd oxidase
+      and disrupts mycolic acid synthesis under hypoxic granuloma
+      conditions; uniquely active against non-replicating bacilli.
+      Inactive against M. abscessus, M. avium (no Ddn substrate
+      specificity). Score: very high for Mtb. (2) QED: moderate. 359
+      Da, bicyclic 4-nitroimidazole; passes Lipinski. QED around 0.55.
+      (3) SA: moderate. Multi-step synthesis with the bicyclic
+      nitroimidazole framework; SA around 0.50. (4) Hemolysis / safety:
+      hepatic enzyme rise 12 percent, peripheral neuropathy 7 percent
+      (additive with linezolid in BPaL — most common dose-limiting
+      AE), reproductive testicular toxicity in animals (FDA category C).
+      (5) Tanimoto novelty: very high. Bicyclic 4-nitroimidazole prodrug
+      is a unique scaffold among approved antibacterials; Morgan FP
+      similarity to other antibiotics around 0.15. (6) Semantic novelty:
+      very high. Ddn-activated nitroimidazole + cytochrome bd oxidase
+      target + mycolic-acid-synthesis disruption — three orthogonal
+      effects, all from one molecule. (7) Validity: 100 percent.
+      Trade-off illustrated: pretomanid demonstrates that targeting
+      a pathogen-specific activation pathway (Ddn nitroreductase only
+      in Mtb-complex) gives exquisite selectivity AND novelty. For a
+      generative model, this argues that exploring "prodrug activated
+      by pathogen-specific enzyme" is a productive strategy for
+      mycobacteria — and analogously for protozoa (atovaquone is
+      activated by parasite cytochrome b interaction). The
+      neurotoxicity from linezolid co-therapy in BPaL is a regimen-
+      level constraint, not a molecule-level constraint.
+
+  - name: "Gepotidacin scoring profile against drug-resistant gonorrhea and uncomplicated UTI"
+    body: |
+      (1) Predicted MIC / activity: gepotidacin MIC50 against
+      uropathogenic E. coli 4 ug/mL (including ESBL and FQ-R), N.
+      gonorrhoeae 0.06 ug/mL (including ceftriaxone-R clinical isolates),
+      S. aureus 1 ug/mL via novel bacterial topoisomerase inhibitor (NBTI)
+      mechanism — binds gyrA dimer interface near the GyrA DNA-bridge
+      helix, distinct from the FQ pocket near GyrA Ser83. Score:
+      moderate-high (cystitis activity sufficient for FDA-approved
+      indication; gonorrhea activity excellent). (2) QED: moderate.
+      478 Da triazaacenaphthylene; passes Lipinski. QED around 0.45.
+      (3) SA: moderate. Multi-step synthesis but precedented chemistry;
+      SA around 0.55. (4) Hemolysis / safety: low. GI side effects
+      (14 percent diarrhea/nausea), modest QTc (~6 ms), no FDA
+      black-box concerns; no FQ-class tendinopathy or aortic dissection
+      risk. (5) Tanimoto novelty: high. Triazaacenaphthylene is a
+      unique scaffold; Morgan FP similarity to ciprofloxacin around
+      0.25. (6) Semantic novelty: very high. NBTI binds a NEW POCKET
+      of gyrase, distinct from the FQ pocket — pre-existing gyrA S83L
+      and parC S80I FQ-resistance mutations do NOT raise gepotidacin
+      MIC. The "different pocket on the same target" is a paradigm.
+      (7) Validity: 100 percent. Trade-off illustrated: gepotidacin
+      shows that targeting a NOVEL POCKET on a WELL-VALIDATED TARGET
+      (gyrase/topo IV) sidesteps pre-existing target mutations — a
+      strategic arc that avoids the resistance liability of new-pocket
+      drugs while requiring no new safety/tolerability validation
+      since the target class is well-understood. For a generative
+      model, this is the single highest-priority insight: "find new
+      pockets on validated targets" is a more tractable than "find
+      brand-new targets" while delivering equivalent novelty value.
+      Resistance to gepotidacin is via gyrA D85 mutations — distinct
+      from FQ resistance, so the next-generation chemistry can target
+      yet another gyrA pocket.

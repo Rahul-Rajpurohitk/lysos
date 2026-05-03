@@ -1,0 +1,345 @@
+task: structural_strategy_reasoning
+prompt_label: "Strategy"
+instructions: |
+  Instructions: A pathogen and resistance landscape is presented. Analyze the
+  structural arc that successful drugs against this pathogen have followed.
+  Identify (1) the named target preserved across the pathogen, (2) the named
+  drugs that have worked clinically and the specific structural feature each
+  carries that defeats the resistance, (3) what structural arcs the chemistry
+  has converged on, (4) what features future antibacterial chemistry against
+  this pathogen should retain — referencing existing approved or late-stage
+  investigational compounds, (5) the resistance evolution pathway to monitor.
+
+entries:
+  - name: "Structural arc against azole-resistant Aspergillus fumigatus (TR34/L98H + TR46/Y121F/T289A)"
+    body: |
+      Target: CYP51A (lanosterol-14-alpha-demethylase, ERG11 homolog), the
+      heme-iron enzyme catalyzing the demethylation step of ergosterol
+      biosynthesis. Resistance: TR34/L98H tandem-repeat promoter mutation
+      overexpresses CYP51A and remodels the active site, raising voriconazole
+      MIC from 0.5 to 4 to 8 ug/mL (clinically resistant); TR46/Y121F/T289A
+      similar but voriconazole-specific. Successful drug chemistries: (1)
+      isavuconazole — chiral backbone with a benzothiazole-cyanopropan-2-yl
+      side chain replacing voriconazole's pyrimidinyl-fluorophenyl arm; the
+      bulky benzothiazole reaches an extended hydrophobic pocket near the
+      heme iron that is more accessible in TR34-remodeled CYP51A than
+      voriconazole's smaller pocket; isavuconazole MIC50 against TR34/L98H
+      A. fumigatus 1 to 2 ug/mL versus voriconazole 4 to 8; (2) posaconazole
+      DR-tab — extended C-side-chain reaches deeper than voriconazole into
+      the substrate channel, retaining MIC against TR34/L98H around 0.5 to 1;
+      (3) liposomal amphotericin B — orthogonal pore-forming mechanism via
+      ergosterol membrane insertion, no cross-resistance to azole CYP51A
+      mutations. Convergent structural arc: extend the azole arm into a
+      deeper or alternate hydrophobic pocket of CYP51A, OR switch to
+      orthogonal mechanism (ergosterol pore). Future anti-azole-R
+      Aspergillus chemistry should retain (a) triazole heme-iron binding
+      via N4 lone pair, (b) extended hydrophobic side chain reaching
+      pockets unaffected by TR34/L98H remodeling, (c) ideally also
+      activity against TR46/Y121F/T289A which is voriconazole-specific.
+      Resistance evolution: emerging cyp51A G54E, M220I point mutations
+      add to the TR34-driven resistance landscape; environmental
+      agricultural azole pressure (azole fungicides on tulips, wheat,
+      grapes) is the selection driver — regulatory action is part of the
+      One Health response. Olorofim (F2G investigational) targeting
+      dihydroorotate dehydrogenase (DHODH) is the next-generation
+      orthogonal-mechanism antifungal in late development.
+
+  - name: "Structural arc against Cryptococcus neoformans meningoencephalitis"
+    body: |
+      Target: ergosterol-rich membrane (AmphoB pore), CYP51A (azole),
+      cytosine deaminase pathway (5FC). Cryptococcus is encapsulated
+      yeast with polysaccharide capsule (glucuronoxylomannan, GXM) as
+      virulence factor; CNS-tropism via endothelial transcytosis. Resistance
+      landscape: traditionally AmphoB/5FC-susceptible; fluconazole resistance
+      emerging with prolonged exposure (ERG11 mutations in some African
+      cohorts). Successful drug chemistries: (1) liposomal amphotericin B
+      — heptaene macrolide forms transmembrane pores via ergosterol binding
+      (8-molecule barrel architecture); CNS penetration adequate at 3 to 4
+      mg/kg; the lipid formulation reduces nephrotoxicity vs deoxycholate;
+      (2) flucytosine (5FC) — taken up by fungal cytosine permease (FCY2),
+      converted by cytosine deaminase (FCY1) to 5-fluorouracil that is
+      incorporated into RNA and inhibits thymidylate synthase; mammalian
+      cells lack cytosine deaminase, giving selectivity; AmphoB pore
+      enhances 5FC uptake — synergy basis; (3) fluconazole — bis-triazole
+      with N4 heme-iron binding to CYP51A; CSF penetration around 80
+      percent of plasma; consolidation/maintenance phase. Convergent
+      structural arc: (a) induction with two orthogonal mechanisms
+      (membrane pore + DNA/RNA chain-termination), (b) consolidation
+      with high-dose oral azole, (c) maintenance until immune
+      reconstitution. Future anti-cryptococcal chemistry should retain
+      (a) CNS penetration ≥30 percent of plasma (often the bottleneck),
+      (b) fungicidal mechanism for induction phase, (c) compatibility
+      with multi-month maintenance dosing. Resistance evolution: ERG11
+      Y132F in fluconazole-exposed strains (rare but rising); FCY1 and
+      FUR1 loss-of-function for 5FC resistance (selected by 5FC monotherapy
+      — combination with AmphoB suppresses); no AmphoB resistance
+      reported clinically in C. neoformans.
+
+  - name: "Structural arc against Candida auris multi-drug-resistant yeast"
+    body: |
+      Target: 1,3-beta-D-glucan synthase (FKS1, FKS2), CYP51 (ERG11), and
+      ergosterol membrane. Resistance landscape: 90 percent fluconazole-R
+      (intrinsic-like with ERG11 Y132F and K143R), 30 to 50 percent
+      echinocandin-R (FKS1 hot-spot S639P/F mutations), 30 percent AmphoB-R
+      (mechanism not fully characterized, possibly altered ergosterol
+      biosynthesis with non-AmphoB-binding sterols). Five geographic
+      clades (I-V) with differing profiles. Successful drug chemistries:
+      (1) echinocandins (caspofungin, micafungin, anidulafungin) — cyclic
+      hexapeptide lipopeptides binding glucan synthase; first-line for
+      C. auris bloodstream/invasive; (2) liposomal amphotericin B salvage
+      for echinocandin-R; (3) combination echinocandin + AmphoB sometimes
+      used in breakthrough; (4) investigational ibrexafungerp — oral
+      glucan-synthase inhibitor with different binding pocket than
+      echinocandins (no FKS1 cross-resistance to typical echinocandin-R
+      mutations); (5) fosmanogepix — novel inhibitor of GWT1
+      (glycosylphosphatidylinositol-anchor biosynthesis) — orthogonal
+      mechanism in late-stage development. Convergent structural arc:
+      (a) target fungal-specific cell wall (glucan synthase) with
+      lipopeptide chemistry — large molecules are intrinsic to the class
+      because the glucan synthase substrate is large; (b) reserve
+      orthogonal mechanism (membrane pore via AmphoB) for echinocandin
+      breakthrough; (c) explore truly novel targets (GWT1, DHODH) for
+      pan-resistant strains. Future anti-C. auris chemistry should
+      retain (a) glucan-synthase or other fungal-specific target, (b)
+      compatibility with single-agent therapy where possible (combination
+      complexity is operationally hard in resource-limited centers), (c)
+      ideally oral bioavailability for outpatient transition. Resistance
+      evolution: FKS1 hot-spot mutations under prolonged echinocandin
+      exposure; ERG3 alterations driving cross-resistance to azole AND
+      AmphoB; clade-specific resistance profiles complicate empirical
+      therapy.
+
+  - name: "Structural arc against pulmonary mucormycosis (Rhizopus, Mucor, Lichtheimia)"
+    body: |
+      Target: ergosterol membrane (AmphoB pore), CYP51 (azole), iron acquisition
+      pathway (deferasirox adjuvant). Mucorales are angioinvasive — they
+      grow into blood vessels, cause infarction and necrosis, and require
+      surgical debridement in addition to antifungal therapy. Resistance
+      landscape: voriconazole has NO activity against Mucorales (CYP51 of
+      Mucorales has different active-site geometry than Aspergillus —
+      voriconazole's smaller pocket-fitting structure does not reach Mucorales
+      heme); the historical antifungal armamentarium failed for years.
+      Successful drug chemistries: (1) liposomal amphotericin B 5 to 10
+      mg/kg q24h (high-dose) — gold standard for induction, ergosterol pore
+      mechanism active across Mucorales; (2) isavuconazole 200 mg q8h x 6
+      doses load then daily — extended benzothiazole-cyanopropan-2-yl
+      side chain reaches the deeper hydrophobic pocket near heme iron of
+      Mucorales CYP51 (the structural arc that defeated voriconazole's
+      Mucorales-blind spot); MIC50 against Rhizopus 0.5 to 2 ug/mL;
+      (3) posaconazole (active but lower potency than isavuconazole; oral
+      maintenance option); (4) deferasirox iron-chelator adjuvant
+      (DEFEAT-MUCOR trial mixed results, but iron-deprivation rationale
+      based on Rhizopus iron requirement remains valid). Convergent
+      structural arc: extend the azole arm to reach the deeper Mucorales
+      CYP51 pocket; pair with surgical debridement (the antifungal alone
+      cannot reach necrotic tissue); high-dose lipid-formulation AmphoB
+      for induction. Future anti-mucormycosis chemistry should retain
+      (a) Mucorales-CYP51-active triazole or alternative ergosterol-pathway
+      target, (b) ability to dose at high concentrations without prohibitive
+      toxicity (lipid formulations), (c) ideally fungicidal in macrophages
+      (Rhizopus survives in macrophages — intracellular activity matters).
+      Resistance evolution: rare azole-R cyp51 mutations emerging with
+      isavuconazole long-term use; AmphoB-R remains rare. Olorofim DHODH
+      inhibitor active vs Mucorales in vitro — promising next-line.
+
+  - name: "Structural arc against Stenotrophomonas maltophilia"
+    body: |
+      Target: dihydropteroate synthase + dihydrofolate reductase (TMP-SMX),
+      gyrase/topoisomerase IV (FQ), 30S ribosome (tetracycline). Stenotrophomonas
+      is intrinsically resistant to nearly all beta-lactams (chromosomal class
+      B L1 metallo-beta-lactamase + class A L2 cephalosporinase),
+      aminoglycosides (chromosomal aac(6prime)-Iz), and carbapenems (L1 MBL).
+      The "naturally pan-resistant gram-negative" — chemistry options are
+      narrow. Successful drug chemistries: (1) trimethoprim-sulfamethoxazole
+      — sequential folate-pathway blockade (sulfa inhibits DHPS, TMP inhibits
+      DHFR); bactericidal at 15 mg/kg/day TMP component IV q6 to 8h; MIC50
+      0.06 to 0.5 ug/mL TMP component; (2) levofloxacin 750 mg IV/PO q24h
+      — ParC and GyrA inhibition; resistance ~30 percent in some CF
+      cohorts; (3) minocycline 100 mg IV/PO q12h — 30S A-site binding plus
+      C7 dimethylamino lipophilicity for intracellular and tissue penetration;
+      (4) cefiderocol — siderophore Trojan-horse uptake bypasses L1 MBL
+      hydrolysis at clinically achievable Cmax. Convergent structural arc:
+      (a) target pathways orthogonal to beta-lactam (folate, DNA, ribosome)
+      because L1 MBL defeats the entire beta-lactam class, (b) prefer
+      bactericidal mechanisms (sulfa-TMP synergy bactericidal) for severe
+      infection, (c) for cefiderocol-class chemistry, the siderophore-
+      receptor uptake routes around L1 hydrolysis. Future anti-Stenotrophomonas
+      chemistry should retain (a) non-beta-lactam target OR siderophore-
+      mediated uptake, (b) tolerance of the chromosomal MDR-pump portfolio
+      (SmeABC, SmeDEF), (c) compatibility with combination therapy
+      (TMP-SMX + levofloxacin or TMP-SMX + minocycline for severe).
+      Resistance evolution: dfrA17 plasmid-borne DHFR variants and
+      sul1/sul2 (sulfonamide-R DHPS) emerging in CF cohorts (10 to 30
+      percent prevalence in some centers).
+
+  - name: "Structural arc against group A streptococcal necrotizing fasciitis"
+    body: |
+      Target: PBP1, PBP2 (penicillin-class), 50S ribosome (clindamycin).
+      Group A Streptococcus (S. pyogenes) is essentially universally
+      penicillin-susceptible — penicillin MIC remains 0.01 ug/mL across
+      clinical isolates after 80+ years of use, an unusual antibiotic-class
+      track record. The complication is the high-toxin-output Pyrogenic
+      Exotoxin A and SpeB phenotype that drives streptococcal toxic shock
+      syndrome (STSS) — bacterial cell-killing without toxin suppression
+      yields catastrophic outcomes. Successful drug chemistries: (1)
+      penicillin G 4 million units IV q4h (or continuous infusion) — direct
+      bactericidal kill via PBP acylation; cheap, well-tolerated; (2)
+      clindamycin 600 to 900 mg IV q8h add-on for TOXIN SUPPRESSION —
+      independent of bacterial growth, clindamycin halts ribosomal
+      synthesis of M-protein, streptolysin O/S, SpeA/B/C exotoxins;
+      Eagle effect: clindamycin retains activity in stationary-phase
+      streptococcal cultures where penicillin loses bactericidal activity;
+      (3) IVIG 1 g/kg x 1 then 0.5 g/kg x 2 days for refractory STSS
+      (neutralizing antibodies against superantigen toxins); (4) emergency
+      surgical debridement is THE definitive therapy — every hour delay
+      raises mortality 4 percent. Convergent structural arc: (a) standard
+      cell-wall-killer (penicillin) is necessary, (b) ribosomal toxin-
+      suppression adjunct is necessary independent of cidality, (c)
+      surgery primary not adjunct. Future anti-Strep-NF chemistry should
+      retain (a) penicillin-class core (no need to redesign — resistance
+      doesn't exist), (b) ribosomal antitoxin add-on (clindamycin or
+      linezolid as alternative for D-test-positive isolates), (c) IVIG
+      as biological adjunct. Resistance evolution: erm methylation of
+      A2058 (MLSb) defeats clindamycin in 5 to 25 percent of S. pyogenes
+      regionally — D-test mandatory; linezolid is the alternative
+      antitoxin agent for clindamycin-resistant strains.
+
+  - name: "Structural arc against Neisseria gonorrhoeae XDR — novel topoisomerase target"
+    body: |
+      Target: PBPs (ceftriaxone — 3G ceph), gyrase/topoisomerase IV (FQ —
+      now FQ-R epidemic), elongation factor and 50S ribosome (azithromycin
+      — also rising R). Resistance landscape: ceftriaxone-R N. gonorrhoeae
+      now reported globally (penA mosaic genes from N. perflava and N.
+      cinerea horizontally acquired); fluoroquinolone resistance widespread
+      (gyrA S91F + parC S87R); azithromycin resistance via 23S rRNA
+      A2058G, A2059G mutations. The traditional drug arsenal is
+      collapsing. Successful drug chemistries (current and emerging): (1)
+      ceftriaxone 500 mg IM x 1 (CDC 2021 single-dose dual therapy
+      replaced by monotherapy after WHO removed dual-therapy
+      recommendation 2022) — high-dose monotherapy for uncomplicated;
+      MIC remains less than 0.25 in most isolates but rising; (2)
+      azithromycin 1 g PO co-treatment formerly recommended, now
+      questioned with rising resistance; (3) gepotidacin — novel
+      triazaacenaphthylene NBTI binding GyrA dimer interface (DISTINCT
+      from FQ pocket near GyrA Ser83), retains activity against
+      ceftriaxone-R AND FQ-R isolates; MIC50 0.06 ug/mL; phase 3
+      EAGLE trial showed non-inferiority to ceftriaxone for
+      uncomplicated gonorrhea in women; (4) zoliflodacin —
+      spiropyrimidinetrione novel topoisomerase II inhibitor (different
+      pocket from FQ) — phase 3 single-dose oral. Convergent structural
+      arc: (a) move beyond traditional ceftriaxone + macrolide
+      combinations as resistance erodes them, (b) target NEW pockets
+      of gyrase and topoisomerase IV (NBTI, spiropyrimidinetrione)
+      that pre-existing gyrA/parC mutations do not affect, (c) prioritize
+      single-dose oral chemistry for outpatient compliance and global
+      distribution. Future anti-gonococcal chemistry should retain
+      (a) novel-pocket gyrase or new-target chemistry not affected by
+      pre-existing FQ resistance, (b) single-dose oral or single-injection
+      pharmacology for compliance, (c) tolerability profile suitable for
+      outpatient use. Resistance evolution: GyrA D85 mutations to
+      gepotidacin emerge under selection; molecular surveillance
+      essential.
+
+  - name: "Structural arc against Treponema pallidum (syphilis)"
+    body: |
+      Target: PBPs of T. pallidum, exquisitely sensitive to penicillin
+      (MIC 0.001 to 0.01 ug/mL — among the most penicillin-susceptible
+      pathogens known). Resistance landscape: NO clinical penicillin
+      resistance reported in 80+ years of use, an unprecedented track
+      record across antibiotic classes; macrolide resistance via 23S
+      rRNA A2058G IS documented (so azithromycin no longer recommended).
+      The clinical challenge is not resistance but achieving adequate
+      target tissue concentration (CSF for neurosyphilis, vegetation in
+      ocular). Successful drug chemistries: (1) benzathine penicillin G
+      2.4 million units IM x 1 for primary/secondary; 3 weekly doses for
+      late latent — depot formulation gives sustained low penicillin
+      levels for weeks; (2) aqueous crystalline penicillin G 18 to 24
+      million units IV daily x 10 to 14 days for neurosyphilis (CSF
+      penetration only about 10 percent of plasma but adequate at
+      high IV doses); (3) ceftriaxone 2 g IV daily x 14 days as
+      penicillin-allergy-non-anaphylaxis alternative — adequate CSF
+      penetration plus T. pallidum sensitivity; (4) doxycycline 100 mg
+      PO BID x 28 days for late latent in penicillin-allergic patients
+      (NOT for neurosyphilis — inadequate CSF penetration). Convergent
+      structural arc: simple beta-lactam targeting universally
+      preserved PBPs is sufficient; the challenge is pharmacology
+      (depot formulations for outpatient compliance, high-dose IV for
+      CNS penetration), not resistance. Future anti-syphilis chemistry
+      arguably needs no innovation in mechanism — penicillin is the
+      paradigm of "if it ain't broke, don't fix it." However, depot
+      formulations with longer release profiles (TURF-T or microsphere
+      penicillin) could reduce the multi-week dosing burden in late
+      latent disease. Resistance evolution: continued surveillance via
+      sequencing of 23S rRNA in macrolide-treated cohorts;
+      penicillin-resistance has not been credibly reported and is not
+      a near-term concern.
+
+  - name: "Structural arc against Helicobacter pylori (quadruple bismuth therapy)"
+    body: |
+      Target: ribosome (clarithromycin via 50S A-site at A2058, doxycycline
+      via 30S, levofloxacin via gyrase), urease pathway (no direct
+      antibiotic), bismuth metabolism (bismuth subsalicylate). H. pylori
+      colonizes gastric mucosa under acidic conditions; combination
+      therapy is mandatory (single-agent fails due to single-step
+      resistance). Resistance landscape: clarithromycin resistance
+      via 23S rRNA A2143G/A2142G now 15 to 30 percent in many regions
+      (drove clarithromycin-triple therapy out of first-line
+      recommendation); fluoroquinolone resistance via gyrA mutations
+      rising; metronidazole resistance via rdxA mutations widespread.
+      Successful drug chemistries: (1) bismuth quadruple (PPI +
+      bismuth subsalicylate + tetracycline + metronidazole x 14 days)
+      — works around clarithromycin resistance; bismuth disrupts
+      H. pylori membrane and biofilm directly; (2) clarithromycin
+      triple (PPI + amoxicillin + clarithromycin) — only first-line
+      where local clarithromycin-R less than 15 percent (rare globally
+      now); (3) levofloxacin triple (PPI + amoxicillin + levofloxacin)
+      — second-line option with moderate FQ-R prevalence; (4)
+      vonoprazan-based regimens (potassium-competitive acid blocker,
+      higher gastric pH, better antibiotic activity). Convergent
+      structural arc: (a) acid suppression (PPI or vonoprazan) raises
+      gastric pH to allow antibiotic activity (most antibiotics work
+      poorly at gastric pH 2), (b) two or three different antibiotics
+      target ribosome / DNA / metronidazole-redox-cycle, (c) bismuth
+      adds biofilm-disruption and direct membrane-toxic effect.
+      Future anti-H. pylori chemistry should retain (a) compatibility
+      with acid-suppression co-therapy, (b) coverage of clarithromycin-R
+      isolates without need for pre-treatment susceptibility testing,
+      (c) tolerable for 14-day oral course (compliance is the practical
+      constraint). Resistance evolution: 23S rRNA mutations rising;
+      consider susceptibility-guided therapy in failure cases (H. pylori
+      culture is technically difficult but increasingly used in resistance-
+      heavy regions).
+
+  - name: "Structural arc against Mycobacterium avium complex (MAC) pulmonary disease"
+    body: |
+      Target: 50S ribosome (macrolide via A2058 of 23S rRNA), arabinosyl
+      transferase EmbB (ethambutol), rpoB (rifabutin/rifampin). MAC
+      includes M. avium, M. intracellulare, M. chimaera; mostly affects
+      structurally abnormal lungs (bronchiectasis, COPD) or
+      immunocompromised. Resistance landscape: macrolide resistance via
+      23S rRNA A2058G/A2059G is the dominant treatment-failure mechanism
+      and is the prognostic marker — macrolide-R MAC has 5-year mortality
+      40 to 50 percent vs 15 percent for macrolide-S. Successful drug
+      chemistries: (1) clarithromycin 500 mg PO BID OR azithromycin 250
+      to 500 mg daily — the cornerstone; macrolide MIC of less than 32
+      defines susceptibility, but the clinical failure threshold is
+      lower (clarithromycin MIC less than 4 ideal); (2) ethambutol 15 to
+      25 mg/kg PO daily — partner drug suppressing macrolide-R selection;
+      (3) rifabutin 150 to 300 mg PO daily — preferred over rifampin in
+      macrolide-containing regimens because rifabutin is a much weaker
+      CYP3A4 inducer (around 30 percent of rifampin's strength), avoiding
+      drug-drug interaction issues with clarithromycin (rifampin halves
+      clarithromycin AUC); also better activity against MAC than rifampin;
+      (4) amikacin liposomal inhaled (Arikayce) FDA 2018 for
+      treatment-refractory MAC lung disease — high local lung
+      concentration, low systemic exposure, novel formulation. Convergent
+      structural arc: (a) macrolide as the drug, (b) ethambutol-
+      rifabutin partner pair to suppress macrolide resistance emergence,
+      (c) inhaled aminoglycoside for refractory disease where systemic
+      drugs fail to clear. Future anti-MAC chemistry should retain (a)
+      macrolide or alternative 23S binder, (b) suitable partner drug
+      pair to suppress single-step ribosomal mutation, (c) consideration
+      of inhaled or pulmonary-targeted formulations to reach MAC niche
+      in cavitary lung disease. Resistance evolution: 23S rRNA mutations
+      under monotherapy; molecular monitoring at baseline and treatment
+      failure.
