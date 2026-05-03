@@ -1,0 +1,305 @@
+task: cross_pathogen_spectrum
+prompt_label: "Drug spectrum"
+instructions: |
+  Instructions: A specific antimicrobial is named. Reason through (1) what
+  pathogens it covers and the named molecular feature that drives that coverage,
+  (2) what major pathogens it does NOT cover and the named structural reason,
+  (3) the typical clinical positioning and the rationale (why prefer over
+  alternatives), (4) the resistance profile and where it might fail,
+  (5) the stewardship logic — when to choose this and when to switch.
+
+entries:
+  - name: "Doxycycline — broad gram-positive, atypical, vector-borne coverage"
+    body: |
+      Coverage: gram-positive (S. aureus including community MRSA, S. pneumoniae,
+      group A and B streptococci), atypicals (Mycoplasma pneumoniae, Chlamydia
+      pneumoniae and trachomatis, Legionella pneumophila), vector-borne pathogens
+      (Borrelia burgdorferi/Lyme, Rickettsia rickettsii/Rocky Mountain Spotted Fever,
+      Anaplasma phagocytophilum, Ehrlichia chaffeensis, Coxiella burnetii/Q fever,
+      Rickettsia prowazekii/typhus), some gram-negatives (Vibrio cholerae,
+      Yersinia pestis, Francisella tularensis/tularemia, Brucella, Bartonella),
+      and protozoa (Plasmodium prophylaxis, Balantidium). Mechanistic feature:
+      doxycycline binds 30S ribosomal A-site at h34 of 16S rRNA; the
+      C7 dimethylamino group, C5 hydroxyl, and 6-alpha-deoxy modification give
+      lipophilicity that drives intracellular concentration (essential for
+      Rickettsia, Anaplasma, Chlamydia which are obligate intracellular). NOT
+      covered: enterococci (intrinsic ribosomal protection in gram-positive
+      cocci? more accurately, marginal MIC); Pseudomonas (intrinsic outer-
+      membrane impermeability and MexAB-OprM efflux); B. fragilis and most
+      anaerobes (variable, with some tet-gene-positive strains resistant);
+      MRSA in hospital-acquired strains often carrying tetK/tetM. Clinical
+      positioning: tick-borne disease (Lyme, RMSF, anaplasmosis) is doxycycline-
+      first because of intracellular activity unique to tetracyclines; community-
+      acquired pneumonia (CAP) outpatient atypical coverage when macrolide
+      resistance exceeds 25 percent (which is typical in 2024 US S. pneumoniae);
+      malaria prophylaxis. Resistance: tet(M) ribosomal protection and tet(K)
+      efflux raise MIC 4 to 16-fold. Stewardship: prefer over levofloxacin in
+      atypical CAP for tendinopathy/QTc/C diff sparing; prefer over azithromycin
+      for atypical pneumonia in regions with high pneumococcal macrolide
+      resistance; ALWAYS use over oral cephalosporin or amoxicillin-clavulanate
+      for suspected tick-borne disease.
+
+  - name: "Clindamycin — anaerobes, gram-positive, antitoxin"
+    body: |
+      Coverage: streptococci (S. pyogenes, S. agalactiae, S. pneumoniae if
+      D-test negative), MSSA and community MRSA (D-test negative; D-test
+      positive isolates have inducible MLSb resistance), most anaerobes
+      (Bacteroides fragilis when not tet-positive, Prevotella, Fusobacterium,
+      Peptostreptococcus, Clostridium perfringens), atypicals partially (none
+      reliably), protozoa Toxoplasma gondii and Plasmodium and Babesia
+      (synergy with primaquine for PCP, with quinine for babesiosis,
+      with pyrimethamine for toxo). Mechanistic feature: binds 50S ribosome
+      at A2058 and U2611 of 23S rRNA, blocking peptide bond formation; same
+      binding site as macrolides explains MLSb cross-resistance. The "anti-toxin"
+      property unique to clindamycin: independent of bacterial growth,
+      clindamycin halts ribosomal synthesis of streptococcal toxins (M-protein,
+      streptolysin) and staphylococcal exotoxins (TSST-1, alpha-hemolysin),
+      providing critical adjunct in necrotizing fasciitis and toxic shock
+      syndrome — beta-lactams do NOT inhibit toxin production at sub-MIC.
+      NOT covered: Enterococcus (intrinsic, low ribosomal affinity), all
+      gram-negative aerobes (intrinsic, OM impermeability), Mycoplasma (50S
+      mutation), MAC, Legionella. Clinical positioning: necrotizing fasciitis
+      add-on with penicillin or vancomycin (Eagle effect — clindamycin
+      remains active in stationary phase when beta-lactams fail); CA-MRSA
+      SSTI (when D-test negative); Toxoplasma encephalitis in HIV; intra-abdominal
+      anaerobic coverage when metronidazole alternatives needed. Resistance:
+      Erm methylation of A2058 (constitutive or inducible MLSb); D-test
+      mandatory before use in S. aureus. Stewardship: AVOID monotherapy if
+      D-test inducible (selects constitutive MLSb mutants); HIGH C. difficile
+      risk (relative risk 15 to 20-fold) — keep courses short and monitor;
+      not first-line for CDI-prone elderly.
+
+  - name: "Linezolid — universal gram-positive plus M. tuberculosis"
+    body: |
+      Coverage: ALL clinically significant gram-positive bacteria — MRSA, VRE
+      (faecium and faecalis), all streptococci, Listeria, Corynebacterium
+      jeikeium, Nocardia (variable), M. tuberculosis (XDR-TB regimen component
+      in BPaL/BPaLM), M. avium and M. abscessus (limited). Mechanistic feature:
+      binds 50S A-site at A2451 of 23S rRNA, blocking 70S initiation complex
+      formation — a mechanism distinct from macrolides, lincosamides,
+      streptogramin (no cross-resistance via MLSb). The (S)-acetamidomethyl
+      group at C5 of the oxazolidinone is the universal binding handle (do
+      not modify); the morpholine D-ring of linezolid (or the
+      pyridinyl-pyrimidinyl of tedizolid) defines class members. NOT covered:
+      gram-negative aerobes (intrinsic — efflux via AcrAB-TolC keeps internal
+      concentrations sub-MIC), most anaerobes (variable; B. fragilis MIC
+      4 to 16). Clinical positioning: VRE bacteremia (alternative to dapto
+      and the ONLY drug with consistent oral bioavailability for chronic
+      VRE infection); MRSA pneumonia (ZEPHyR trial, Wunderink 2012, showed
+      clinical-cure benefit over vancomycin for HAP/VAP MRSA — superior
+      epithelial-lining-fluid penetration); MDR-TB and XDR-TB long-course
+      therapy (BPaL); hospital outpatient parenteral antimicrobial therapy
+      (OPAT) where oral switch is desirable. Resistance: cfr methyltransferase
+      (transmissible plasmid) methylates A2503, raising MIC to 8 to 16,
+      conferring cross-resistance to chloramphenicol AND lefamulin (PhLOPSa
+      phenotype: phenicol, linc, oxa, pleuro, strepto-A); 23S rRNA G2576T
+      mutations are chromosomal and require multiple alleles for high-level
+      resistance. Stewardship: short-course preferred (less than 14 days)
+      because of mitochondrial protein synthesis inhibition driving
+      thrombocytopenia (~30 percent at 14 days), peripheral and optic
+      neuropathy (greater than 28 days), lactic acidosis. Hold SSRIs (MAO-A
+      inhibition by linezolid → serotonin syndrome). Tedizolid 200 mg daily
+      is a once-daily, lower-tox alternative with same spectrum.
+
+  - name: "Tigecycline — broad MRSA/VRE/ESBL/anaerobe spectrum, NO Pseudomonas"
+    body: |
+      Coverage: MRSA, VRE faecium and faecalis, S. pneumoniae (penicillin-R
+      and macrolide-R), enterococci, ESBL Enterobacterales (E. coli, K. pneumoniae,
+      Enterobacter), KPC-CRE (resistance limited by AdeABC overexpression in
+      Acinetobacter), most anaerobes (B. fragilis, Prevotella, Fusobacterium),
+      atypicals (Legionella, M. pneumoniae, C. pneumoniae), Mycobacterium
+      abscessus and M. fortuitum, Stenotrophomonas (alternative). Mechanistic
+      feature: 30S A-site binding via tetracycline core; the bulky C9 t-butyl-
+      glycylamido side chain prevents TetA-class efflux pump recognition AND
+      Tet(M) ribosomal protection access — escape from the dominant tet-resistance
+      mechanisms. The C7 dimethylamino retained from minocycline gives
+      lipophilicity and intracellular concentration. NOT covered: P. aeruginosa
+      (intrinsic — MexXY-OprM efflux pumps export tigecycline; outer membrane
+      permeability also limits), Proteus, Providencia, Morganella (intrinsic
+      tet-A-like efflux). Clinical positioning: complicated intra-abdominal
+      infection (cIAI) with anaerobic and ESBL coverage in single agent;
+      complicated SSTI with MRSA/VRE concerns; salvage in CRAB or
+      Stenotrophomonas. Resistance: tetX FAD-monooxygenase (hydroxylates
+      C11a) emerging in Enterobacterales raises MIC to 4 to 8; AdeABC
+      overexpression in Acinetobacter raises MIC. Pharmacology constraint:
+      Cmax ceiling around 0.6 ug/mL drives AUC/MIC failure in BACTEREMIA,
+      leading to FDA mortality black-box (Tigecycline FDA 2010); positioning
+      restricted to non-bacteremic indications. Stewardship: AVOID for
+      bacteremia, ventilator-associated pneumonia (HAP/VAP — no anti-Pseudomonas
+      coverage), or where Cmax/MIC matters. Use as definitive therapy ONLY
+      with susceptibility-confirmed isolate and tissue/intra-abdominal
+      indication where local tissue concentrations compensate.
+
+  - name: "Ceftaroline — anti-MRSA cephalosporin without enterococcal or Pseudomonas activity"
+    body: |
+      Coverage: MRSA (the unique selling point — MIC50 1 ug/mL via PBP2a
+      allosteric binding), MSSA, all streptococci including penicillin-resistant
+      S. pneumoniae, Listeria (limited), Hemophilus, Moraxella, ESBL-naive
+      Enterobacterales (E. coli, K. pneumoniae, Proteus), AmpC-derepressed
+      Enterobacter (modestly), some anaerobes (S. anginosus group). Mechanistic
+      feature: C3 thiazolyl-pyridinium with phosphono-prodrug (ceftaroline fosamil)
+      reaches PBP2a's allosteric site at residue Glu447 region, triggering
+      conformational opening of the active-site groove that excludes other
+      cephalosporins; the C7 aminothiazole-oxime is preserved for gram-negative
+      activity. Adds anti-MRSA activity to a 3G-class cephalosporin scaffold —
+      first-in-class. NOT covered: Pseudomonas (intrinsic — no penetration past
+      OprD porin, MexAB-OprM efflux), Acinetobacter, Stenotrophomonas, ESBL
+      producers (CTX-M-15 hydrolyzes ceftaroline at standard concentrations),
+      enterococci (intrinsic low affinity at PBP5 of E. faecium), most anaerobes
+      including B. fragilis. Clinical positioning: community-acquired pneumonia
+      (CABP) when MRSA suspected; complicated SSTI with MRSA/MSSA/streptococci;
+      add-on for MRSA bacteremia (combination with vancomycin or daptomycin —
+      "see-saw effect" where ceftaroline alters membrane charge and restores
+      dapto sensitivity). Resistance: PBP2a mutations near allosteric site
+      (Glu447Lys, Tyr446Asn) raise MIC; ESBL hydrolysis defeats it. Stewardship:
+      NOT empirical for HAP/VAP without anti-Pseudomonas partner; not appropriate
+      for ESBL-suspected bacteremia (use carbapenem); useful as MRSA-targeted
+      cephalosporin in specific bacteremia and pneumonia scenarios.
+
+  - name: "Cefiderocol — universal gram-negative including MBL, no gram-positive coverage"
+    body: |
+      Coverage: ALL major gram-negative bacilli including KPC-CRE, NDM/VIM/IMP
+      MBL-producing Enterobacterales and Pseudomonas, OXA-48 Enterobacterales,
+      OXA-23/24/58 carbapenem-resistant Acinetobacter (CRAB), ceftolozane-
+      tazobactam-resistant and meropenem-vaborbactam-resistant Pseudomonas,
+      Stenotrophomonas (alternative), Burkholderia. Mechanistic feature:
+      catechol moiety on C3 chelates Fe3+ and the Fe-cefiderocol complex is
+      actively imported via TonB-dependent siderophore receptors (PiuA, PirA in
+      P. aeruginosa, FiuA in E. coli, PirA-like in CRAB) — Trojan-horse uptake
+      that bypasses outer-membrane porin loss (oprD downregulation) and efflux
+      pump overexpression (MexAB-OprM, MexXY) which defeat conventional
+      cephalosporins. The cephalosporin warhead retains stability against
+      class A (KPC), class B (NDM, VIM, IMP), class C (AmpC), and class D
+      (OXA-48, OXA-23) beta-lactamases through structural features of the
+      catechol-Fe complex orientation. NOT covered: gram-positive bacteria
+      (no PBP affinity in gram-positives — siderophore-receptor-mediated uptake
+      is gram-negative-specific), anaerobes. Clinical positioning: VAP/HAP and
+      bacteremia from confirmed MBL-producing gram-negatives where no other
+      beta-lactam works; CRAB pneumonia (CREDIBLE-CR trial showed cefiderocol
+      activity but black-box-flagged for higher mortality vs comparators —
+      attribution debated); salvage when ceftaz-avi, mero-vab, IMI-rel all
+      fail. Resistance: cirA siderophore-receptor mutations reduce uptake (MIC
+      to 8 to 32); PBP3 mutations raise MIC modestly. Stewardship: reserved
+      for genuine MBL-producing or pan-resistant gram-negative, NOT empirical
+      first-line for any indication; molecular MBL screening (NG-Test CARBA-5,
+      blaNDM/blaVIM PCR) before commitment.
+
+  - name: "Aztreonam — gram-negative-only monobactam, MBL-stable"
+    body: |
+      Coverage: aerobic gram-negatives — Enterobacterales (E. coli, Klebsiella,
+      Proteus, Salmonella), P. aeruginosa, Hemophilus, Neisseria; some
+      partial activity against Acinetobacter. Mechanistic feature: monobactam
+      structure (single beta-lactam ring without the fused thiazolidine of
+      penicillins or dihydrothiazine of cephalosporins); binds PBP3 of
+      gram-negatives selectively. The monobactam scaffold is intrinsically
+      stable against class B metallo-beta-lactamases (NDM, VIM, IMP) because
+      the Zn coordination chemistry of MBLs requires bicyclic beta-lactam
+      ring orientation that is absent from monobactams — aztreonam is the
+      ONLY beta-lactam with reliable MBL stability. NOT covered: gram-positive
+      bacteria (intrinsic — no PBP affinity in gram-positives), anaerobes,
+      Bacteroides, intracellular pathogens. Vulnerable to class A ESBL (CTX-M,
+      TEM, SHV) and class C AmpC; therefore requires partner BLI (avibactam,
+      sulbactam-durlobactam) when these enzymes co-exist with MBL.
+      Aztreonam-avibactam is the combination drug — avibactam protects aztreonam
+      from CTX-M and AmpC while aztreonam itself remains MBL-stable, giving
+      activity against the difficult NDM-positive ESBL co-producers. Clinical
+      positioning: penicillin-allergic patients needing gram-negative coverage
+      (no cross-reactivity with penicillin allergens because monobactam ring
+      lacks penicillin's bicyclic structure); MBL-producing CRE bacteremia
+      via aztreonam-avibactam combination. Resistance: ESBL hydrolysis (defeated
+      by avibactam combination), PBP3 mutations, oprD-loss in Pseudomonas.
+      Stewardship: aztreonam monotherapy useful in pen-allergic patient with
+      susceptible Enterobacterales or Pseudomonas; aztreonam-avibactam reserved
+      for documented MBL-producing isolate; AVOID in S. aureus or
+      enterococcal indications.
+
+  - name: "Meropenem-vaborbactam — KPC focus, NOT MBL"
+    body: |
+      Coverage: KPC-producing carbapenem-resistant Enterobacterales (CRE),
+      class A serine carbapenemases (KPC-2, KPC-3, KPC-31), all the
+      meropenem-susceptible bacteria (Enterobacterales, P. aeruginosa,
+      Acinetobacter MIC-dependent, MSSA, S. pneumoniae, anaerobes including
+      B. fragilis, Listeria). Mechanistic feature: meropenem provides the
+      antibiotic backbone with carbapenem potency and DHP-1 stability via
+      1-beta-methyl. Vaborbactam is a cyclic boronic-acid-class beta-lactamase
+      inhibitor with reversible covalent binding to class A serine
+      beta-lactamases via Ser-O-B(OH)2 tetrahedral intermediate (the boron
+      mimics tetrahedral transition state of beta-lactam hydrolysis). Vaborbactam
+      restores meropenem MIC against KPC-producing K. pneumoniae from greater
+      than 64 to 0.06 to 1 (Lomovskaya 2017 AAC). NOT covered: MBL producers
+      (NDM, VIM, IMP — vaborbactam is class A serine specific, no MBL coverage;
+      meropenem alone is hydrolyzed by MBL); OXA-48 (poor inhibition by
+      vaborbactam); Stenotrophomonas (intrinsic L1 MBL); B. fragilis with
+      cfiA gene. Clinical positioning: KPC-CRE bacteremia, complicated UTI,
+      pyelonephritis, complicated intra-abdominal infection — TANGO-II trial
+      (Wunderink 2018) showed superior cure vs best-available therapy in
+      KPC-CRE infections. Resistance: KPC mutations (KPC-31 D179Y) confer
+      resistance to ceftaz-avi but PRESERVE meropenem-vaborbactam activity —
+      the two drugs are complementary in the KPC-CRE armamentarium. Porin
+      loss (OmpK35/OmpK36) in K. pneumoniae raises MIC; carrying both KPC
+      and OmpK loss may shift MIC to greater than 8. Stewardship: confirmation
+      of KPC carbapenemase before use; avoid for empirical coverage; prefer
+      mero-vab over ceftaz-avi when KPC-31-type escape mutation is present;
+      switch to cefiderocol or aztreonam-avibactam if MBL is documented.
+
+  - name: "Rifaximin — gut-restricted, hepatic encephalopathy / IBS-D / traveler"
+    body: |
+      Coverage: gram-positive and gram-negative gut bacteria, especially
+      Enterobacterales (E. coli including ETEC strains causing traveler's
+      diarrhea), Bacteroides, Clostridium (NOT C. difficile reliably; some
+      activity against vegetative C. difficile but NOT spores); reduces gut
+      ammonia-producing bacteria contributing to hepatic encephalopathy.
+      Mechanistic feature: rifaximin is a non-systemically-absorbed rifamycin
+      derivative with a pyrido-imidazo modification that confers gut-restricted
+      pharmacology — oral bioavailability is less than 0.4 percent, so almost
+      all administered drug remains in the gastrointestinal lumen. Mechanism:
+      binds bacterial DNA-dependent RNA polymerase beta subunit (rpoB), inhibiting
+      transcription, same as systemic rifampin. Because rifaximin does not
+      enter systemic circulation, it spares gut microbiome only in the lumen,
+      and bacterial rpoB exposure does NOT drive systemic resistance to
+      rifampin (a critical practical advantage). NOT covered: bacteremia
+      (rifaximin does not reach bloodstream), CNS infection, urinary infection;
+      no useful spectrum outside the gut lumen. Clinical positioning: travelers'
+      diarrhea (E. coli ETEC, Shigella, Campylobacter) — 200 mg PO TID x 3
+      days; hepatic encephalopathy prevention/treatment in cirrhosis (550 mg
+      PO BID; reduces overt HE recurrence by 58 percent per Bass 2010 NEJM);
+      irritable bowel syndrome with diarrhea (IBS-D) — 550 mg PO TID x 14 days
+      (Pimentel 2011 NEJM showed symptomatic benefit). Resistance: rpoB
+      mutations emerge with prolonged use; no clinically significant
+      cross-resistance to systemic rifampin observed in clinical M. tuberculosis
+      isolates because of the pharmacological compartment separation.
+      Stewardship: avoid for systemic infection (cannot reach target); avoid
+      for C. difficile prophylaxis (no proven benefit; metronidazole or
+      vancomycin oral are the agents); short-course traveler's diarrhea is
+      well-tolerated; long-course cirrhosis use requires LFT monitoring.
+
+  - name: "Aztreonam-avibactam — MBL-positive Enterobacterales when ESBL co-exists"
+    body: |
+      Coverage: gram-negative bacteria producing METALLO-beta-lactamases
+      (NDM-1/-2/-7, VIM-1/-2/-4, IMP-1/-4) co-existing with class A ESBLs
+      (CTX-M-15, TEM, SHV) and class C AmpC; the 1-2-punch combination that
+      addresses the multi-class enzyme repertoire of contemporary CRE.
+      Mechanistic feature: aztreonam (monobactam) is intrinsically stable to
+      MBL hydrolysis (class B Zn-mediated chemistry cannot orient the
+      monobactam ring for hydrolysis) but is hydrolyzed by class A ESBL and
+      class C AmpC. Avibactam (DBO inhibitor with bridgehead 2-OH) covalently
+      acylates Ser70 of class A and class C beta-lactamases with carbamoyl
+      acyl-enzyme that recyclizes (slow off-rate, sustained inhibition over
+      hours). The combination protects aztreonam from ESBL/AmpC hydrolysis
+      while aztreonam itself defeats MBL via inherent stability. Result:
+      activity against NDM-positive K. pneumoniae and E. coli that also carry
+      CTX-M-15 (the dominant clinical phenotype globally — NDM rarely occurs
+      alone; it sits on plasmids carrying CTX-M and other resistance genes).
+      NOT covered: gram-positive (no PBP-3 affinity in gram-positive
+      monobactam-target), enterococci, MRSA, S. pneumoniae, anaerobes
+      including B. fragilis. Pseudomonas with VIM only (where aztreonam-avibactam
+      retains activity); Stenotrophomonas (intrinsic L1 MBL — but L2 ESBL is
+      avibactam-inhibited, so partial activity exists for some isolates).
+      Clinical positioning: pivotal phase 3 REVISIT and ASSEMBLE trials showed
+      activity against MBL-CRE; FDA approved 2024 (or imminent depending on
+      timeline) for cIAI, cUTI, HAP/VAP from MBL-producing Enterobacterales;
+      reserved as last-line. Resistance: NDM-7 with PBP3 inserts is emerging
+      as escape mutation; cefiderocol is alternative. Stewardship: confirm
+      NDM/VIM/IMP molecular detection (NG-Test CARBA-5, blaNDM/blaVIM PCR)
+      before use; avoid empirical first-line; partner with infection control
+      to limit MBL-CRE spread.

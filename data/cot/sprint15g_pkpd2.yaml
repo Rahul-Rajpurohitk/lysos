@@ -1,0 +1,283 @@
+task: pk_pd_reasoning
+prompt_label: "PK/PD scenario"
+instructions: |
+  Instructions: A specific dosing or PK/PD question is presented. Reason through
+  (1) the relevant PK/PD index for the drug class (T greater than MIC, AUC/MIC,
+  Cmax/MIC) and the numeric target for the desired endpoint (stasis, 1-log
+  kill, clinical cure), (2) how the patient-specific factor (renal function,
+  obesity, augmented clearance, dialysis) shifts exposure, (3) the recommended
+  dose adjustment with citation, (4) the toxicity ceiling and how to monitor,
+  (5) the feedback loop — what TDM target and timing.
+
+entries:
+  - name: "Aminoglycoside extended-interval (once-daily) Cmax/MIC target in normal renal function"
+    body: |
+      Aminoglycosides are concentration-dependent killers with prominent post-antibiotic
+      effect (PAE) of 2 to 4 hours; the relevant PK/PD index is Cmax/MIC, with
+      target Cmax/MIC of 8 to 10 for 1-log kill against gram-negative bacilli
+      (Moore 1987, J Infect Dis). Extended-interval dosing (Hartford or Hartfordian
+      regimens, 5 to 7 mg/kg gentamicin once daily, or 15 to 20 mg/kg amikacin
+      once daily) takes advantage of: (1) Cmax saturation of bacterial 30S
+      A-site binding; (2) the long PAE that allows interdose drug-free intervals
+      without losing inhibition; (3) reduced cumulative renal cortical
+      accumulation, lowering nephrotoxicity from the ~25 percent rate of q8h
+      dosing to 5 to 8 percent. For target Cmax of 16 to 24 ug/mL gentamicin
+      (assuming MIC of 2), give 7 mg/kg actual body weight IV over 30 minutes;
+      check trough at 18 to 22 hours (target less than 1 ug/mL) to confirm
+      drug clearance before the next dose. Hartford nomogram (Nicolau 1995)
+      uses the random level at 6 to 14 hours post-dose to set the next interval
+      (q24, q36, or q48). Patient-specific shift: obesity uses adjusted body
+      weight (IBW + 0.4*[ABW - IBW]) because aminoglycosides distribute
+      primarily in lean tissue; pregnancy increases Vd by 30 percent and
+      requires loading dose adjustment; augmented clearance (CrCl greater than
+      130, common in young trauma/burn patients) shortens half-life and may
+      require q12h dosing. Toxicity ceiling: trough greater than 1 (gent) or
+      greater than 5 (amik) drives nephrotoxicity; cumulative dose greater than
+      14 days drives ototoxicity (irreversible cochlear damage in 1 to 2
+      percent). TDM: random or trough level day 2, daily creatinine, audiometry
+      at baseline and post-treatment for courses over 7 days.
+
+  - name: "Beta-lactam continuous infusion vs intermittent — fT greater than MIC target in critical illness"
+    body: |
+      Beta-lactams (penicillins, cephalosporins, carbapenems, monobactams) are
+      time-dependent killers; the PK/PD index is fT greater than MIC (free
+      drug time above MIC), with class-specific targets: penicillins 50 percent,
+      cephalosporins 60 to 70 percent, carbapenems 40 percent of dosing
+      interval. For 1-log kill or critical illness, target greater than 100
+      percent (Cmin greater than MIC). Continuous infusion (steady-state
+      concentration constantly above MIC) achieves 100 percent fT greater than
+      MIC by definition, vs intermittent q6 to q8h that hits 100 percent only
+      with frequent dosing or low MIC. Patient-specific shift: critical illness
+      causes augmented renal clearance (hyper-dynamic circulation, fluid
+      resuscitation increases CrCl to greater than 130 in around 30 percent of
+      ICU patients per Udy 2014), which shortens beta-lactam half-life and
+      lowers steady-state concentrations. Hypoalbuminemia (common in critical
+      illness, albumin less than 25 g/L in 40 percent of ICU patients) raises
+      free fraction of highly protein-bound beta-lactams (ceftriaxone, ertapenem,
+      teicoplanin), paradoxically increasing free Cmax but also faster renal
+      clearance — the net AUC effect is variable. Recommended dose: piperacillin-
+      tazobactam 4.5 g IV q8h or 12 to 18 g/day continuous infusion;
+      meropenem 1 g q8h or 4 to 6 g/day continuous; cefepime 2 g q8h or 6 g/day
+      continuous. Evidence: BLISS RCT (Roberts 2016 CCM) showed continuous
+      infusion improved clinical cure (56 vs 34 percent) in severe sepsis;
+      DALI study confirmed PK target attainment doubled with continuous infusion
+      in ICU. Toxicity: continuous infusion does not raise toxicity thresholds
+      (carbapenem CNS, cefepime neurotoxicity at high free concentrations); TDM
+      where available targets free Cmin 4-fold above MIC.
+
+  - name: "Vancomycin AUC dosing in morbid obesity (BMI greater than 40)"
+    body: |
+      Vancomycin AUC0-24/MIC target is 400 to 600 mg.h/L per 2020 ASHP-IDSA-
+      PIDS-SIDP consensus update (no longer trough-based). For MRSA bacteremia
+      with MIC of 1 (broth microdilution), target AUC is 400 (lower bound) to
+      500 (mid-range); for pneumonia or hVISA suspected, target 600 (upper
+      bound). Vancomycin distributes primarily in lean body water (Vd ~0.7
+      L/kg), not adipose; in obesity (BMI greater than 40, weight greater than
+      120 kg), use ACTUAL body weight for loading dose 25 to 30 mg/kg (cap at
+      3 g) but adjusted body weight (ABW = IBW + 0.4*[ABW - IBW]) for
+      maintenance to avoid AUC overshoot. Patient-specific shift: obese patients
+      have higher CrCl in absolute mL/min terms (kidneys hypertrophy) but
+      reduced CrCl per kg, leading to overestimation of clearance with
+      Cockcroft-Gault using actual weight; use lean body weight or
+      Salazar-Corcoran equation for obesity. Drug-drug consideration: concurrent
+      piperacillin-tazobactam doubles AKI rate (Hammond 2017 meta), worse in
+      obese patients with already elevated baseline creatinine. Recommended
+      approach: 25 to 30 mg/kg actual body weight loading dose (max 3 g over
+      90 to 120 minutes, slowed for red-man syndrome risk), followed by 15
+      to 20 mg/kg q8 to 12h based on Bayesian AUC posterior estimate
+      (single peak at 1 to 2 hours post-infusion + trough before next dose,
+      around 12 hours post-load). Avoid trough-only monitoring — the
+      trough-AUC relationship breaks down in obesity. TDM: Bayesian AUC
+      estimate day 2, daily creatinine, repeat day 5; nephrotoxicity rises
+      sharply when AUC exceeds 700 (Lodise 2019); switch to alternative
+      (linezolid, daptomycin, ceftaroline) if AKI develops.
+
+  - name: "Linezolid AUC/MIC and Cmin for mitochondrial toxicity prevention"
+    body: |
+      Linezolid efficacy is AUC/MIC-driven: AUC0-24/MIC greater than 80 to 100
+      gives stasis, AUC/MIC greater than 200 for clinical cure (Rayner 2003,
+      AAC). MIC50 against MRSA, VRE, and M. tuberculosis is 1 to 2 ug/mL;
+      standard dose 600 mg PO/IV q12h achieves AUC of 200 to 300, hitting
+      target. For toxicity, the relevant index is Cmin (trough) — mitochondrial
+      protein synthesis inhibition (the cause of thrombocytopenia, lactic
+      acidosis, peripheral and optic neuropathy) is concentration-dependent
+      and cumulative-time-dependent; trough greater than 7 ug/mL or duration
+      greater than 14 days drives toxicity exponentially. Renal failure does
+      NOT clinically alter linezolid clearance (drug is hepatically eliminated
+      via non-CYP oxidation to PNU-142586 and PNU-142300 metabolites that
+      ARE renally cleared but inactive), but the metabolites accumulate in
+      ESRD/HD without dose adjustment generally needed. Specific toxicity
+      drivers: BPaL TB regimens use 1200 mg daily for 6 months, leading to
+      ~80 percent peripheral neuropathy at high dose; ZeNix trial (Conradie 2022)
+      showed dose reduction to 600 mg daily preserves cure with reduced
+      toxicity. TDM: Cmin target less than 7 (preferably less than 5) for
+      courses over 10 days; weekly CBC for thrombocytopenia (more than 30
+      percent drop from baseline triggers reduction or switch); ophthalmology
+      and neurology exams at baseline and monthly during prolonged use.
+      Drug-drug: SSRI co-therapy raises serotonin-syndrome risk via MAO-A
+      inhibition by linezolid (4-fold serotonin level rise); tedizolid has
+      6-fold less MAO-A inhibition and is preferred where SSRI cannot be
+      held. CYP2C19 ultra-rapid metabolizer status alters voriconazole, NOT
+      linezolid (linezolid does not use CYP).
+
+  - name: "Daptomycin high-dose 10 to 12 mg/kg for MRSA bacteremia AUC/MIC bactericidal target"
+    body: |
+      Daptomycin is concentration-dependent with PAE; PK/PD index is AUC/MIC
+      (Cmax/MIC also correlates), with target AUC0-24/MIC about 666 for 1-log
+      kill against S. aureus (Safdar 2004). Standard 6 mg/kg q24h IV achieves
+      AUC ~600 mg.h/L; with MIC of 1, AUC/MIC = 600, marginally below the
+      bactericidal target. For MRSA bacteremia, IDSA 2011 and updated
+      guidelines support 8 to 12 mg/kg q24h IV, especially when source-controlled
+      bacteremia OR vancomycin failure OR MIC creep. At 10 mg/kg, AUC reaches
+      900 to 1100, comfortably exceeding 666 against MIC 1. Patient-specific
+      shifts: renal dosing — standard q24h becomes q48h when CrCl less than 30;
+      hemodialysis — give post-HD on dialysis days; obesity — use ACTUAL body
+      weight (daptomycin has Vd of 0.1 L/kg, mainly extracellular fluid;
+      lean-body-weight underdoses obese patients per Pai 2014). Augmented renal
+      clearance (CrCl greater than 130) may require q12h dosing in young
+      ICU patients. Toxicity ceiling: the dose-limiting tox is rhabdomyolysis
+      (CK rise greater than 5x ULN in 1 to 7 percent at 10 to 12 mg/kg vs less
+      than 1 percent at 6 mg/kg), with risk amplified by concurrent statins
+      (hold statin during dapto course if possible), renal impairment, or
+      strenuous exercise. TDM: not routinely available for daptomycin; weekly
+      CK level, daily creatinine, hold dose if CK greater than 1000 with
+      muscle symptoms or greater than 2000 asymptomatic. Eosinophilic
+      pneumonia is a delayed (around week 2 to 4) immunologic toxicity —
+      not concentration-related but mandates recognition. Pulmonary
+      contraindication: surfactant inactivates daptomycin in the alveolar
+      space, making it ineffective for pneumonia regardless of dose.
+
+  - name: "Voriconazole CYP2C19-genotype-driven dosing and TDM"
+    body: |
+      Voriconazole is metabolized primarily by CYP2C19 (and secondarily by
+      CYP3A4 and CYP2C9); CYP2C19 has substantial genetic polymorphism that
+      drives 4-fold inter-individual exposure variability at the same mg/kg
+      dose. Phenotypes: ultra-rapid metabolizer (UM, *17/*17) — AUC about
+      0.5x population mean, sub-therapeutic on standard dose; extensive
+      metabolizer (EM, *1/*1) — population mean exposure; intermediate
+      metabolizer (IM, *1/*2 or *1/*3) — AUC about 1.5x; poor metabolizer (PM,
+      *2/*2 or *2/*3) — AUC 2 to 4x. For invasive aspergillosis, the AUC/MIC
+      target is about 50 (Pascual 2008 CID), and trough levels are the
+      practical surrogate: target trough 1 to 5.5 ug/mL. Below 1 — risk of
+      breakthrough infection (UM phenotype patients). Above 5.5 — risk of
+      hepatotoxicity (4 to 10 percent AST/ALT rise at higher trough), visual
+      disturbance (photopsia, dose-related retinal A2E rod-cell dysfunction
+      driven by C-19 retinal effect), encephalopathy in elderly. CPIC
+      pharmacogenomics guideline (Moriyama 2017) recommends pre-emptive
+      genotyping and dose adjustment: UM/EM standard 6 mg/kg load q12h x 24h
+      then 4 mg/kg q12h IV (or 200 mg PO BID); IM/PM start at 50 to 75
+      percent of standard. Even with genotyping, trough TDM is essential at
+      day 5 to 7 (steady state) and weekly thereafter; switch to
+      isavuconazole (linear PK, no TDM required) if voriconazole levels
+      cannot be reliably attained. Drug-drug: voriconazole inhibits CYP3A4,
+      raising tacrolimus, sirolimus, cyclosporine levels in transplant
+      patients (reduce dose to 1/3 and TDM the partner drug).
+
+  - name: "Posaconazole DR-tablet vs oral suspension absorption and Cmin target in mucormycosis"
+    body: |
+      Posaconazole is the first-line triazole for invasive mucormycosis
+      (Rhizopus, Mucor) where voriconazole has NO activity. The PK/PD target
+      is Cmin (trough) greater than 1.25 ug/mL for mucormycosis treatment
+      (Cornely 2014 ECMM/ESCMID guideline) and greater than 0.7 for prophylaxis
+      in AML/SCT. Oral suspension formulation has erratic absorption (highly
+      food-dependent — without high-fat meal, bioavailability drops to 10
+      percent; with cola pH 2.5 and high-fat meal, around 50 percent), making
+      it unreliable for mucormycosis where consistent target attainment is
+      life-or-death. Delayed-release tablet (DR-tab) and IV solution were
+      developed to overcome this: DR-tab gives reliable bioavailability
+      ~50 percent independent of food, and IV (cyclodextrin-vehicle) gives
+      direct AUC delivery. Dosing: DR-tab 300 mg PO q12h x 1 day load, then
+      300 mg PO daily; IV 300 mg IV q12h x 1 day load, then 300 mg daily.
+      Patient-specific shifts: severe mucositis or vomiting in stem-cell
+      transplant patients requires IV (oral absorption fails); renal
+      failure of CrCl less than 50 — avoid IV (cyclodextrin vehicle
+      accumulates and causes renal tubular damage), use DR-tab; hepatic
+      impairment — TDM-guided dose reduction. TDM: posaconazole trough
+      day 5 to 7 then weekly, target greater than 1.25 ug/mL for treatment;
+      adjust dose by 25 to 50 percent if outside range. Toxicity: hepatic
+      enzyme rise (5 to 12 percent), QTc prolongation, mineralocorticoid-like
+      effect (11-beta-hydroxysteroid dehydrogenase inhibition causes
+      hypokalemia, hypertension, edema — most prominent at trough greater
+      than 4); monitor K, BP, ECG. Switch to isavuconazole if posaconazole
+      cannot be attained or tox limits use.
+
+  - name: "Cefiderocol fT greater than MIC 75 percent with extended 3-h infusion in CRAB"
+    body: |
+      Cefiderocol is a siderophore-cephalosporin with PK/PD index fT greater
+      than MIC; the target for stasis is 75 percent of dosing interval (higher
+      than typical cephalosporins because of competitive iron uptake and
+      siderophore-receptor saturation effects per Yamano 2019). Standard dose
+      is 2 g IV q8h infused over 3 hours (extended infusion to maximize T
+      greater than MIC) for normal CrCl 60 to 119; 1.5 g q8h for CrCl 30 to
+      60; 1 g q8h for CrCl 15 to 30; 0.75 g q12h for CrCl less than 15;
+      and 2 g q6h for augmented clearance (CrCl greater than 120 — common in
+      ICU/burn patients). Pathogen MIC50 against CRAB (carbapenem-resistant
+      A. baumannii) is 1 to 4 ug/mL, against NDM/VIM Pseudomonas 1 to 2,
+      against KPC-CRE 0.5 to 1; serum free concentrations at standard dose
+      reach 30 to 50 ug/mL Cmax with 3-hour infusion, giving 75 percent fT
+      greater than MIC for all clinically targeted gram-negatives. Resistance
+      emergence: cirA (siderophore-receptor) mutations reduce uptake and shift
+      MIC to 8 to 32 — molecular surveillance recommended for CRAB outbreaks.
+      Patient shift: liver failure does not require dose change (renal
+      clearance dominant); ICU augmented clearance may cause underdosing
+      with q8h — switch to q6h or 4 g/day continuous infusion in select
+      cases. Toxicity ceiling: well-tolerated; main adverse effects are
+      diarrhea (8 percent), hepatic enzyme rise (3 percent), QTc prolongation
+      (modest, 5 to 8 ms), CRAB CREDIBLE-CR trial showed numerically higher
+      mortality vs best-available therapy in CRAB pneumonia (FDA black-box
+      consideration), although attribution is debated. TDM not standard;
+      MIC of clinical isolate is the operative metric.
+
+  - name: "Tigecycline AUC/MIC failure in bacteremia — Cmax 0.6 ug/mL ceiling"
+    body: |
+      Tigecycline PK/PD index is AUC0-24/MIC, target around 17 for stasis
+      against gram-negatives and around 7 for gram-positives (Rubino 2010).
+      Standard dose is 100 mg IV load then 50 mg q12h, achieving steady-state
+      Cmax of 0.6 ug/mL and AUC0-24 of 5 to 6 mg.h/L. Against MRSA with MIC
+      of 0.25, AUC/MIC is 24 — adequate. Against ESBL E. coli with MIC of
+      0.5, AUC/MIC is 12 — marginal. Against Acinetobacter or Stenotrophomonas
+      with MIC of 1 to 2, AUC/MIC is 3 to 6 — sub-therapeutic. The Cmax
+      ceiling around 0.6 ug/mL is the fundamental PK problem: tigecycline
+      distributes extensively into tissues (Vd 7 to 10 L/kg, lung-tissue
+      to plasma ratio about 8) but plasma free concentration plateaus at sub-MIC
+      for most gram-negatives. In bacteremia, where clearance of bloodstream
+      organisms requires sustained free drug above MIC, tigecycline fails
+      consistently — FDA 2010 black-box warning issued because pooled
+      meta-analysis of 13 RCTs showed 0.6 percent absolute mortality
+      increase in tigecycline arms, driven by bacteremia trials. Recommended
+      dose escalation: high-dose tigecycline 100 mg q12h (double-dose) raises
+      AUC to 10 to 12 mg.h/L and improves AUC/MIC for Acinetobacter; supported
+      by Falagas 2014 retrospective and used clinically in CRAB despite no
+      registration. Patient shift: hepatic failure (Child-Pugh C) reduces
+      glucuronidation clearance, lower dose 25 mg q12h after initial load.
+      Renal failure no adjustment needed (biliary excretion dominant). TDM
+      not clinical practice; better answer is to use tigecycline only for
+      cSSSI and complicated intra-abdominal where local tissue concentrations
+      compensate, NOT for bacteremia. Eravacycline addresses the Cmax limit
+      partially (twice tigecycline's Cmax at 1.0 mg/kg q12h IV).
+
+  - name: "Caspofungin in moderate hepatic impairment Child-Pugh B — dose reduction"
+    body: |
+      Caspofungin clearance is hepatic (degradation by N-acetylation and
+      hydrolysis to peptide products, then biliary excretion); the PK/PD
+      index is AUC/MIC, target around 250 for stasis against Candida (Andes
+      2010, AAC). Standard dose is 70 mg IV load x 1 then 50 mg IV q24h.
+      In Child-Pugh A (mild hepatic impairment) — no adjustment. In Child-Pugh
+      B (moderate) — give 70 mg load then 35 mg q24h (50 percent reduction)
+      because clearance drops about 30 percent and AUC rises proportionally;
+      the rationale is to maintain target AUC without overshoot toward
+      hepatotoxicity. Child-Pugh C (severe) — limited data; consider
+      micafungin or anidulafungin (less hepatic-dependent). Patient shifts:
+      cyclosporine increases caspofungin AUC by 35 percent (transient hepatic
+      enzyme rise reported); rifampin/dexamethasone induce caspofungin
+      clearance (raise dose to 70 mg q24h). Pediatric: weight-based 50
+      mg/m^2 daily after 70 mg/m^2 load (max 70 mg). For CNS candidiasis,
+      caspofungin has poor CSF penetration (3 to 6 percent of plasma) and
+      should not be used; switch to fluconazole (if susceptible) or amphotericin-B.
+      Resistance: FKS hot-spot mutations raise MIC 4 to 16-fold; FKS sequencing
+      recommended for treatment failure. Toxicity: hepatic enzyme rise 5 to 10
+      percent (transient and dose-related), histamine-like infusion reaction
+      (slow infusion to over 1 hour), thrombophlebitis at IV site. TDM not
+      routine; clinical response and serial blood cultures are the operative
+      surrogates. FKS mutation surveillance is the molecular feedback loop
+      replacing TDM in the echinocandin class.
