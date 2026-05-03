@@ -1,0 +1,290 @@
+task: stewardship_decision
+prompt_label: "Stewardship case"
+instructions: |
+  Instructions: An empirical-therapy or de-escalation decision is presented.
+  Reason through (1) what the local epidemiology and prior cultures imply about
+  resistance probability, (2) which drug to choose or de-escalate to and why,
+  (3) the duration appropriate for this syndrome with citation to landmark
+  duration trials, (4) collateral damage to consider (C. difficile, ESBL induction,
+  AKI), (5) what the next decision point is and what data triggers it.
+
+entries:
+  - name: "5-day vs 10-day uncomplicated cellulitis — Hepburn 2004 short-course"
+    body: |
+      45-year-old with non-purulent cellulitis of the lower leg, no abscess,
+      no systemic toxicity, no diabetes, no bite wound, no immune compromise.
+      Most cases are caused by group A Streptococcus or beta-hemolytic
+      streptococci (S. agalactiae, S. dysgalactiae); MSSA accounts for a
+      minority of non-purulent cellulitis. Empirical first-line: cephalexin
+      500 mg PO QID OR penicillin VK 500 mg PO QID; if MRSA risk (prior
+      MRSA, IV drug use, recurrent SSTI), add doxycycline 100 mg BID or
+      TMP-SMX. Duration: Hepburn 2004 (Arch Intern Med, NEJM) randomized
+      trial showed 5-day course non-inferior to 10-day for clinical cure
+      (98 vs 98 percent). IDSA 2014 SSTI guideline endorses 5 days for
+      uncomplicated cellulitis. Stewardship move: 5-day course (cephalexin
+      500 mg QID x 5 days), reassess at 48 to 72 hours; extend only if
+      slow response. Avoid: routine 10-day or 14-day courses (no benefit,
+      excess C. difficile risk and collateral); empirical IV vancomycin
+      (oral options work for non-purulent cellulitis); coverage for
+      Pseudomonas (not the typical cellulitis pathogen). Next decision:
+      48-hour assessment — improving redness/edema, pain, fever; if
+      worsening, image to rule out abscess (drainage required) or
+      necrotizing fasciitis (surgical emergency, broad coverage with
+      vancomycin + piperacillin-tazobactam + clindamycin for toxin
+      suppression).
+
+  - name: "Discontinue empirical vancomycin at 48h with MRSA nasal PCR negative for HAP"
+    body: |
+      ICU patient with hospital-acquired pneumonia (HAP) day 4 of admission;
+      empirical regimen started with vancomycin (15 mg/kg q12h) plus
+      piperacillin-tazobactam (4.5 g q6h, extended infusion) for broad
+      MRSA + Pseudomonas coverage. MRSA nasal PCR returns negative at 24
+      hours; sputum culture growing only Klebsiella pneumoniae sensitive to
+      pip-tazo. Stewardship move: discontinue vancomycin at 48 hours.
+      Rationale: MRSA nasal PCR has a high negative predictive value (around
+      99 percent) for excluding MRSA pneumonia (Parente 2018, CID; Carr 2018,
+      Open Forum Infect Dis); when combined with negative sputum culture
+      growth at 48 hours, the probability of MRSA pneumonia drops below 1
+      percent, making continued vancomycin futile and harmful. Collateral
+      damage avoided: vancomycin AKI rate ~16 percent at AUC greater than
+      600, especially when paired with piperacillin-tazobactam (Hammond 2017
+      meta showed doubling of AKI rate with the combination); preserves
+      vancomycin for a future targeted MRSA scenario; reduces vancomycin-
+      resistant Enterococcus selection pressure. Continue piperacillin-
+      tazobactam to complete planned course (7 days for HAP per IDSA 2016
+      short-course HAP guidelines, supported by Chastre 2003 PneumA). Next
+      decision: day 4 to 5 reassessment of clinical improvement (reduced
+      respiratory secretions, normalizing WBC and procalcitonin trend);
+      cultures unchanged on re-test; complete the 7-day course at appropriate
+      dose attainment.
+
+  - name: "Avoid empirical antibiotics in viral pharyngitis with Centor 0 to 1"
+    body: |
+      28-year-old presents with sore throat, mild fever 37.8C, cough,
+      rhinorrhea, no exudate, no tender anterior cervical adenopathy. Centor
+      score 0 (no fever greater than 38, no exudate, no anterior LAD, has
+      cough); modified Centor (McIsaac) similarly low. Probability of group
+      A Streptococcus (GAS) pharyngitis in this clinical picture is less
+      than 5 percent — most cases are viral (rhinovirus, adenovirus, EBV,
+      enterovirus). Stewardship move: do NOT prescribe antibiotics; supportive
+      care (acetaminophen, fluids, salt-water gargle, lozenges); reserve
+      rapid-strep test and culture for higher Centor scores (3 to 4).
+      Rationale: empirical antibiotics in viral pharyngitis offer no
+      symptom benefit (Spurling 2017 Cochrane); drive C. difficile risk
+      (8.5x in 90 days post-exposure to even short courses);
+      drive S. pyogenes resistance (macrolide resistance has risen to 15
+      to 25 percent in some US regions due to outpatient overuse); add
+      anaphylaxis and SJS risk; cost. IDSA 2012 GAS pharyngitis guideline:
+      penicillin VK 500 mg PO BID or QID x 10 days, OR amoxicillin 1 g daily
+      x 10 days, OR cephalexin (penicillin allergy without anaphylaxis) ONLY
+      if rapid-strep positive or culture-confirmed GAS. Avoid azithromycin
+      first-line (resistance rising). Next decision: if symptoms persist
+      beyond 5 days, worsen, or develop scarlet-fever-like rash or peritonsillar
+      abscess, reassess and test; if mononucleosis features (lymphadenopathy,
+      splenomegaly), monospot or EBV serology — and AVOID amoxicillin in
+      EBV (causes morbilliform rash in 90 percent).
+
+  - name: "IV-to-PO switch fluoroquinolone or beta-lactam at clinical stability"
+    body: |
+      62-year-old hospitalized with pyelonephritis, started on IV
+      ceftriaxone 1 g q24h. Day 2 — afebrile, hemodynamically stable,
+      tolerating diet, blood cultures negative, urine culture growing
+      ceftriaxone-S E. coli, creatinine improving. Stewardship move:
+      switch IV ceftriaxone to oral cefpodoxime 200 mg q12h or
+      ciprofloxacin 500 mg q12h or amoxicillin-clavulanate 875/125 mg
+      q12h (susceptibility-guided) at clinical stability. Rationale: oral
+      switch criteria (the COMS criteria of Cunha 2008): (C) Clinical
+      improvement, (O) Oral route works (no ileus, no NPO, no severe
+      vomiting), (M) Markers improving (fever, WBC trending down,
+      hemodynamic stability), (S) Susceptibility-guided drug. IDSA 2010
+      complicated UTI/pyelonephritis guideline supports IV-to-PO switch
+      typically within 48 to 72 hours of fever resolution. Total duration
+      7 days for uncomplicated pyelonephritis (cipro or fluoroquinolone) or
+      10 to 14 days for beta-lactam (Sandberg 2012 Lancet trial showed
+      7-day cipro non-inferior to 14-day for women with pyelonephritis).
+      Stewardship benefit: shorter LOS, lower cost, lower line-related
+      bacteremia risk, lower nosocomial pathogen acquisition. Avoid:
+      empirical IV continuation just because patient remains hospitalized
+      for other reasons; nephrotoxic IV antibiotics when oral options work.
+      Next decision: 24-hour post-PO-switch reassessment — if symptoms
+      worsen on oral, exclude obstruction (renal ultrasound for
+      hydronephrosis, cyst); if cultures show resistance, switch
+      empirical class.
+
+  - name: "Avoid antibiotics for asymptomatic candiduria"
+    body: |
+      78-year-old in long-term care with indwelling urinary catheter; routine
+      urinalysis pre-procedure shows pyuria; urine culture grows greater
+      than 10^5 CFU/mL Candida albicans. Patient afebrile, no flank pain,
+      no urinary symptoms attributable to UTI, no immunosuppression, no
+      planned urological procedure with mucosal trauma. Stewardship move:
+      do NOT treat. Remove the catheter if no longer indicated (most
+      catheter-associated candiduria resolves with catheter removal).
+      Repeat urine culture after catheter removal is NOT routinely
+      indicated. IDSA 2016 candidiasis guideline: asymptomatic candiduria
+      should NOT be treated in non-pregnant adults regardless of
+      pyuria, regardless of catheter status, EXCEPT in three scenarios:
+      (1) neutropenic patients (treat as candidemia source); (2) very
+      low birth weight neonates; (3) patients undergoing urological
+      manipulation with mucosal trauma (peri-procedural fluconazole
+      400 mg PO daily x 1 day before to several days after). Rationale
+      for non-treatment: candiduria represents colonization in most
+      cases, not infection; treatment with fluconazole drives selection
+      for fluconazole-resistant Candida glabrata and C. krusei;
+      antifungals add hepatic enzyme rise, QTc prolongation, drug-drug
+      interactions; no evidence treatment improves outcomes (Sobel 2000
+      retrospective, no benefit). Avoid: amphotericin bladder irrigation
+      (no benefit for invasive disease, has not shown long-term clearance);
+      reflexive systemic antifungal based on lab finding alone. Next
+      decision: treat ONLY if true candidemia (positive blood culture)
+      OR symptomatic candidiasis (cystitis with delirium attributed to
+      UTI in elderly with sterile blood-pus workup); fluconazole 200
+      to 400 mg daily x 14 days for documented true infection.
+
+  - name: "Procalcitonin-guided antibiotic stop in suspected bacterial pneumonia"
+    body: |
+      ICU patient with possible HAP — fever, rising WBC, infiltrate on
+      chest X-ray; empirical pip-tazo started. Initial procalcitonin (PCT)
+      0.4 ng/mL (low-positive); blood cultures and respiratory cultures
+      pending. Day 3 PCT drops to 0.15 ng/mL with clinical improvement;
+      cultures negative. Stewardship move: stop empirical antibiotics at
+      day 3 because of low and falling PCT plus negative cultures and
+      improving clinical course. Rationale: PCT-guided algorithms (de Jong
+      2016 Lancet ID, SAPS trial) showed that stopping antibiotics when
+      PCT drops greater than 80 percent from peak OR falls below 0.5 ng/mL
+      reduces antibiotic days by 1.2 days without affecting mortality (in
+      fact, lower 1-year mortality observed in the de-escalation arm).
+      For severe sepsis/septic shock in ICU, PROGRESS and PRORATA trials
+      similarly support PCT-guided cessation. Caveat: PCT has lower
+      sensitivity in localized infections (intra-abdominal, hardware-
+      associated, biliary), so do not rely on PCT alone in those scenarios.
+      Stewardship benefit: shorter antibiotic days reduce C. difficile risk
+      (every additional day raises CDI risk by 8 to 12 percent), reduce
+      antimicrobial resistance pressure, reduce drug-related toxicity
+      (AKI, encephalopathy). Avoid: continuing antibiotics "just because"
+      patient is in ICU with uncertain diagnosis; chasing radiographic
+      infiltrates that do not represent active infection (atelectasis,
+      ARDS, pulmonary hemorrhage). Next decision: if clinical worsening
+      occurs after stopping, repeat cultures, repeat imaging, restart
+      empirical broad-spectrum based on hospital antibiogram for HAP risk
+      factors; otherwise complete supportive care without antibiotics.
+
+  - name: "OPAT eligibility for outpatient parenteral antimicrobial therapy"
+    body: |
+      55-year-old completing inpatient stay for vertebral osteomyelitis
+      caused by MSSA — cefazolin IV q8h, planned 6-week total course.
+      Patient is hemodynamically stable, afebrile, ambulatory, has reliable
+      IV access (PICC line placed), home support, and proximity to ED for
+      urgent issues. Stewardship move: enroll in OPAT (outpatient parenteral
+      antimicrobial therapy) program for the remaining 4 weeks. Eligibility
+      criteria (IDSA 2018 OPAT guideline): (1) clinical stability — afebrile,
+      no hemodynamic instability, no need for daily ICU-level monitoring;
+      (2) reliable venous access — PICC, midline, or tunneled central line;
+      (3) drug compatibility — cefazolin q8h via 24-hour elastomeric pump,
+      OR ceftriaxone q24h short infusion (preferred for once-daily
+      simplicity), OR daptomycin q24h for MRSA, OR ertapenem q24h for ESBL;
+      (4) social support and patient capability for self-administration
+      or home health visits; (5) baseline labs (CBC, BMP, LFTs, drug levels
+      for vancomycin/aminoglycoside) plus weekly monitoring; (6) clear
+      communication channel — OPAT pharmacist, infectious disease specialist,
+      24-hour ER access. For this MSSA osteomyelitis case, switch from
+      cefazolin to ceftriaxone 2 g IV daily (ceftriaxone has slightly
+      lower MSSA cidal activity than cefazolin per Bai 2015 meta but is
+      easier for once-daily home infusion; cefazolin alternative is 2 g
+      IV q8h with elastomeric pump). Avoid: OPAT for unstable patients,
+      those without IV access plan, those with prior history of line-related
+      bacteremia, or those unable to perform line care. Next decision:
+      weekly clinical/lab monitoring (CBC, BMP, ESR/CRP trend), monthly
+      MRI for osteomyelitis at 3 months for treatment-response assessment,
+      transition to oral linezolid or oral fluoroquinolone for the final
+      2 weeks if MSSA susceptible.
+
+  - name: "5-day amoxicillin for community-acquired pneumonia outpatient — Spellberg 2018 short-course"
+    body: |
+      52-year-old healthy outpatient with cough, low-grade fever, focal
+      crackles right lower lobe, normal RR, normal SaO2, no comorbidities,
+      CURB-65 score 0. Diagnosed CAP, no admission needed. Pathogens by
+      probability: S. pneumoniae, atypicals (M. pneumoniae, C. pneumoniae,
+      Legionella), Hemophilus influenzae, Moraxella catarrhalis. Standard
+      ATS-IDSA 2019 outpatient regimen for healthy adult: amoxicillin 1 g
+      PO TID x 5 days OR doxycycline 100 mg PO BID x 5 days OR macrolide
+      (only if local pneumococcal macrolide resistance below 25 percent —
+      typically not in 2024 USA). Stewardship move: 5-day amoxicillin (or
+      doxycycline if penicillin-allergic). Rationale: ATS-IDSA 2019
+      shortened CAP duration to 5 days for clinically stable patients with
+      no signs of slow response (afebrile within 48 to 72 hours, no
+      respiratory deterioration). Spellberg 2018 review and earlier CAP-IT
+      pediatric trial supported short-course non-inferiority. The previous
+      "complete the bottle" 7- to 10-day courses were not evidence-based.
+      Stewardship benefit: less antibiotic exposure, less C. difficile risk,
+      less S. pneumoniae macrolide selection, lower cost. Avoid: empirical
+      respiratory fluoroquinolone (levofloxacin, moxifloxacin) in healthy
+      outpatients — reserves these for inpatient or higher-risk; FQ-related
+      tendinopathy and aortic dissection black-box; FQ-related selection
+      pressure for resistance. Avoid: dual-coverage atypical + beta-lactam
+      in healthy outpatient (single-agent works for most). Next decision:
+      48 to 72 hour reassessment — clinical improvement (defervescence,
+      resolved hypoxia, eating); if not improving, switch class (e.g.
+      doxycycline added) and consider chest imaging for complications
+      (parapneumonic effusion, empyema).
+
+  - name: "Probiotics or specific Lactobacillus rhamnosus for prevention of antibiotic-associated diarrhea"
+    body: |
+      ICU patient on prolonged broad-spectrum antibiotics (piperacillin-tazobactam
+      then meropenem then ceftaz-avi over 6 weeks of complicated abdominal
+      infection); attending team asks about probiotics for diarrhea prevention.
+      Evidence: Lactobacillus rhamnosus GG and Saccharomyces boulardii have
+      reduced antibiotic-associated diarrhea (AAD) and C. difficile-associated
+      diarrhea (CDAD) in some meta-analyses (Goldenberg 2013 Cochrane showed
+      RR 0.40 for CDAD with probiotics; PLACIDE 2013 Lancet showed no
+      benefit in elderly hospitalized patients). Stewardship position:
+      controversial. AVOID empirical probiotic in high-risk ICU patients
+      with central lines, immune compromise, or short bowel syndrome —
+      Lactobacillus and Saccharomyces have caused fungemia and bacteremia
+      from central-line contamination (case reports of S. boulardii
+      fungemia 0.5 to 2 percent at high-risk centers). The 2017 ACG
+      guideline does NOT recommend routine probiotic use for AAD or CDAD
+      prevention. CONSIDER probiotics only in selected outpatients on
+      short courses without significant comorbidity. Better stewardship
+      moves: (1) shorten antibiotic course where feasible; (2) narrow
+      spectrum; (3) early IV-to-PO switch; (4) avoid double-anaerobic
+      coverage when single-agent works (don't add metronidazole when
+      pip-tazo or carbapenem is already given); (5) C. difficile prevention
+      via hand hygiene with soap and water (alcohol-based rub does not
+      kill C. difficile spores), contact precautions for known CDI patients,
+      and antimicrobial stewardship to reduce overall antibiotic exposure.
+      Avoid: Lactobacillus or Saccharomyces in CVC-bearing critically ill
+      patient. Next decision: monitor for CDI symptoms (greater than 3
+      unformed stools/24h, abdominal pain, fever); test toxin and NAAT
+      if CDI suspected; treat with fidaxomicin per IDSA 2021.
+
+  - name: "Antibiotic time-out at 72 hours — empirical-to-targeted assessment"
+    body: |
+      Surgical ICU patient day 4 post-laparotomy for perforated diverticulitis;
+      empirical regimen: piperacillin-tazobactam, vancomycin, fluconazole
+      (broad-spectrum + MRSA + Candida coverage given fecal peritonitis).
+      Day 3 — patient stable, afebrile, cultures growing E. coli ESBL-negative
+      sensitive to ceftriaxone, blood cultures negative, sterile peritoneal
+      fluid post-day-2, MRSA nasal PCR negative, no Candida growth.
+      Stewardship move: 72-hour antibiotic time-out (a CDC-endorsed and
+      IDSA-supported stewardship intervention, Fishman 2014). De-escalate
+      to: ceftriaxone 2 g IV daily plus metronidazole 500 mg IV q8h (or
+      simply ceftriaxone for non-anaerobic source if peritoneum sterile);
+      stop vancomycin (MRSA negative); stop fluconazole (no Candida growth).
+      Rationale: empirical broad-spectrum coverage at admission for fecal
+      peritonitis is appropriate; continued broad coverage at day 3 to 4
+      with culture-guided narrow option available is wasteful and
+      collateral-harming. SHARP, MRSA SBAR, and antibiotic-stewardship-
+      program audits show the 72-hour reassessment is one of the highest-
+      yield interventions for reducing inappropriate antibiotic days
+      (relative reduction 20 to 30 percent). Specific examples from RCT:
+      stopping vancomycin in MRSA-PCR-negative HAP saves 30 percent of
+      vanco days; stopping echinocandin if no fungal source identified
+      saves significant cost and fluconazole-R selection. Avoid: continuing
+      "just because patient is sick"; continuing because resident is
+      uncomfortable narrowing; multi-agent regimens beyond 72 hours
+      without source-specific rationale. Next decision: complete 4 to 7
+      day total course of narrowed regimen (4 days for source-controlled
+      intra-abdominal infection per STOP-IT trial, Sawyer 2015 NEJM —
+      4 days non-inferior to 8 days when source control achieved);
+      reassess at end of treatment for clinical cure.

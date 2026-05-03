@@ -1,0 +1,346 @@
+task: pathogen_specific_dive
+prompt_label: "Pathogen"
+instructions: |
+  Instructions: A specific pathogen is named. Reason through (1) the dominant
+  resistance mechanisms or intrinsic features that define the antimicrobial
+  challenge, (2) the first-line and second-line therapy with named drugs and
+  PK/PD targets, (3) the clinical syndromes where it is encountered, (4) the
+  diagnostic strategy (molecular, phenotypic), (5) the infection-control or
+  stewardship implication.
+
+entries:
+  - name: "Carbapenem-resistant Acinetobacter baumannii (CRAB)"
+    body: |
+      Resistance landscape: chromosomal blaOXA-51-like in all A. baumannii
+      provides intrinsic carbapenem hydrolysis; resistance becomes clinically
+      significant when blaOXA-51 is overexpressed (insertion sequence ISAba1
+      upstream) or when acquired blaOXA-23, blaOXA-24/40, blaOXA-58, blaOXA-72
+      (also class D carbapenemases) are present; some strains carry NDM-1
+      additionally; AdeABC efflux pump overexpression contributes; and PBP2
+      mutations alter target affinity. The result: carbapenem MIC greater
+      than 8 ug/mL, often greater than 32, with resistance to ALL
+      beta-lactams except sometimes sulbactam (which has intrinsic affinity
+      for PBP1 and PBP3 of Acinetobacter). First-line: high-dose ampicillin-
+      sulbactam 9 g IV q8h (sulbactam component is the active arm; high doses
+      drive sulbactam levels above MIC for many CRAB strains) PLUS minocycline
+      100 mg IV q12h or polymyxin-B 1.5 mg/kg q12h, with combination therapy
+      preferred over monotherapy in observational cohorts. NEW first-line
+      option: sulbactam-durlobactam 1 g + 1 g IV q6h — durlobactam DBO
+      inhibitor protects sulbactam from OXA-23 hydrolysis, restoring MIC50
+      to 1 to 2 ug/mL (Bouza 2023). Cefiderocol active in vitro but
+      CREDIBLE-CR trial showed numerically higher mortality vs best-available
+      therapy (FDA black-box concern). Tigecycline at high dose (100 mg IV
+      q12h) for non-bacteremic indications. Clinical syndromes: ventilator-
+      associated pneumonia (VAP, dominant ICU infection), bloodstream from
+      central lines, surgical-site after trauma or cardiothoracic surgery,
+      meningitis post-neurosurgery, wound colonization. Diagnostics: rapid
+      MALDI-TOF speciation; carbapenemase phenotypic (Carba NP, eCIM)
+      and molecular (blaOXA-23, blaOXA-24, blaNDM PCR); MIC for all
+      sulbactam-, polymyxin-, minocycline-, cefiderocol-based options.
+      Stewardship/IC: contact precautions, environmental disinfection
+      (Acinetobacter survives weeks on surfaces; bleach or hydrogen peroxide
+      vapor preferred for terminal cleaning), cohorting, and outbreak
+      investigation when greater than 3 cases/month per ward.
+
+  - name: "Stenotrophomonas maltophilia"
+    body: |
+      Intrinsic resistance: chromosomal class B L1 metallo-beta-lactamase
+      (Zn-dependent, hydrolyzes carbapenems including meropenem and
+      imipenem) PLUS chromosomal class A L2 cephalosporinase (hydrolyzes
+      penicillins and most cephalosporins including ceftazidime); chromosomal
+      aac(6prime)-Iz (aminoglycoside acetyltransferase, knocks out gentamicin/
+      tobramycin/amikacin); SmeABC and SmeDEF efflux pumps. The combined
+      defenses make Stenotrophomonas intrinsically resistant to nearly all
+      beta-lactams and aminoglycosides — a "naturally pan-resistant"
+      organism. First-line: TMP-SMX (trimethoprim-sulfamethoxazole) 15
+      mg/kg/day TMP component IV divided q6 to 8h; TMP MIC50 0.06 to 0.5
+      ug/mL — bactericidal sequential folate-pathway blockade. Second-line:
+      levofloxacin 750 mg IV/PO q24h (resistance ~30 percent in some
+      regions, especially CF cohorts); minocycline 200 mg IV/PO load then
+      100 mg q12h; tigecycline (variable activity, CMS Cmax ceiling
+      problem); cefiderocol (active via Trojan-horse uptake bypassing L1
+      MBL hydrolysis); chloramphenicol (rarely used, gray-baby and aplastic
+      anemia risk). Clinical syndromes: nosocomial pneumonia (especially
+      ventilator-associated and CF-associated), bloodstream from central
+      lines, wound and skin/soft-tissue, urinary tract (rarely community,
+      mostly hospital-acquired catheter-associated). High mortality in
+      bacteremia (~30 percent). Diagnostics: MALDI-TOF; routine antimicrobial
+      susceptibility for TMP-SMX, levo, minocycline, ceftazidime (still
+      L2-hydrolyzed but check); Etest for moxifloxacin; molecular BLNAR-
+      like detection not standard. Stewardship/IC: contact precautions
+      because environmental survival; common in water sources (sink drains,
+      ventilator humidifiers — outbreak source investigation matters);
+      prefer source control (line removal) when bacteremia from CVC.
+      Combination therapy (TMP-SMX + levofloxacin or TMP-SMX + minocycline)
+      considered for severe pneumonia or persistent bacteremia.
+
+  - name: "Burkholderia cepacia complex"
+    body: |
+      Resistance landscape: complex of 20+ species including B. cepacia,
+      B. cenocepacia, B. multivorans, B. dolosa, B. vietnamiensis, B. anthina.
+      Intrinsic resistance: chromosomal class A AmpC-like (PenA) cephalosporinase,
+      class B carbapenemase (variable presence — KPC-like activity in some
+      strains), AmrAB-OprA and AmrAB-OprM efflux pumps, polymyxin resistance
+      via lipid-A modification (4-amino-4-deoxy-arabinose, similar to mcr
+      mechanism), and target-mediated changes including PBP3 modifications.
+      The combined defenses give intrinsic resistance to ALL aminoglycosides,
+      polymyxin/colistin, and most beta-lactams. First-line: TMP-SMX
+      (sequential folate blockade — same as for Stenotrophomonas), 5 mg/kg
+      TMP component q12h; second-line: meropenem 2 g IV q8h with extended
+      infusion (penetrates despite chromosomal carbapenemase in some strains),
+      ceftazidime 2 g IV q8h (variable susceptibility — test specifically),
+      chloramphenicol (limited use), minocycline. Combination therapy is
+      common in severe disease (TMP-SMX + meropenem, or TMP-SMX +
+      ceftazidime) for cystic fibrosis pulmonary exacerbation. Clinical
+      syndromes: chronic CF lung infection (B. cenocepacia is the most
+      virulent species and CONTRAINDICATES lung transplantation in many
+      programs because of high post-transplant mortality from B. cenocepacia
+      sepsis); pneumonia in chronic granulomatous disease (CGD) patients
+      (a defining infection); bloodstream from CVC contamination
+      (water-source outbreaks); rare community pneumonia. Diagnostics:
+      species-level identification by MALDI-TOF or recA gene sequencing
+      (clinically important because B. cenocepacia carries lung-transplant
+      contraindication while B. multivorans does not); susceptibility
+      testing per CLSI Burkholderia-specific. Stewardship/IC: strict
+      contact precautions in CF clinics, water-system surveillance for
+      Burkholderia in hospital water sources, segregation of CF patients
+      with B. cenocepacia from those without to prevent cross-transmission.
+
+  - name: "Mycobacterium abscessus complex"
+    body: |
+      Resistance landscape: rapidly-growing nontuberculous mycobacterium
+      with three subspecies (M. abscessus subsp. abscessus, M. massiliense,
+      M. bolletii). Intrinsic resistance: chromosomal blaMab class A
+      beta-lactamase hydrolyzes most beta-lactams; erm(41) gene confers
+      inducible macrolide resistance — but only in subsp. abscessus and
+      subsp. bolletii (subsp. massiliense has truncated erm(41) and remains
+      macrolide-susceptible, important for therapy choice and prognosis);
+      chromosomal mph efflux limits clinical drug levels; cell-wall mycolic
+      acid layer reduces drug penetration. The combined defenses make
+      M. abscessus complex among the most drug-resistant pathogens treated.
+      First-line (intensive phase, 4 to 6 weeks IV): amikacin 15 mg/kg IV
+      q24h PLUS imipenem 1 g IV q6h or cefoxitin 12 g/day IV PLUS azithromycin
+      500 mg PO daily (only if subsp. massiliense or erm(41) inactive subsp.
+      abscessus). Continuation phase (12 to 24 months oral): azithromycin +
+      clofazimine + linezolid + bedaquiline + tigecycline combinations
+      individualized. Clinical syndromes: chronic pulmonary infection
+      (especially in cystic fibrosis, structural lung disease,
+      bronchiectasis), skin/soft-tissue from contaminated water/aesthetic
+      procedures (tattoo, facial rejuvenation, breast implant, plastic
+      surgery), disseminated in immunocompromised. Diagnostics: AFB smear
+      and culture (rapidly growing, around 7 days vs M. tuberculosis 2 to
+      6 weeks); MALDI-TOF speciation; molecular subspecies identification
+      by hsp65 sequencing or rpoB sequencing; erm(41) genotype crucial
+      for prognosis (massiliense vs abscessus); susceptibility for amikacin,
+      imipenem, cefoxitin, doxycycline, linezolid, clarithromycin (with
+      14-day incubation to detect inducible resistance). Stewardship/IC:
+      no person-to-person transmission for most cases (water/environmental
+      source); CF-specific transmissible clones with hyper-virulence
+      (M. abscessus DCC1, DCC2) monitored at CF centers; infection control
+      around water sources at risk-prone facilities (humidifiers, cosmetic
+      injection setups).
+
+  - name: "Multidrug-resistant Mycobacterium tuberculosis (MDR-TB)"
+    body: |
+      Resistance landscape: defined as resistance to at least both rifampin
+      AND isoniazid (the two most active first-line drugs); extensively
+      drug-resistant (XDR) adds resistance to a fluoroquinolone AND a
+      second-line injectable (amikacin, kanamycin, capreomycin) or
+      bedaquiline/linezolid. Mutations: rpoB (rifampin), katG Ser315Thr
+      and inhA promoter (isoniazid), gyrA S91P/D94G (fluoroquinolones),
+      rrs A1401G (amikacin), atpE D28V (bedaquiline), 23S rRNA G2576T
+      (linezolid). Global epidemiology: ~410,000 incident MDR-TB cases
+      annually (WHO 2023), with India, China, Russia accounting for over
+      50 percent. First-line MDR-TB regimen: WHO 2022 short-course (6 months)
+      BPaLM — bedaquiline 400 mg daily x 14 days then 200 mg three times
+      weekly + pretomanid 200 mg daily + linezolid 600 mg daily (dose
+      reduction from earlier 1200 mg per ZeNix 2022) + moxifloxacin 400 mg
+      daily; for XDR or fluoroquinolone-intolerant, BPaL alone (drop the
+      moxi). Older 18 to 24 month regimens (kanamycin or capreomycin +
+      ethionamide + cycloserine + PAS) are now reserved for failure of
+      newer regimens. Clinical syndromes: pulmonary TB (MDR strain),
+      extrapulmonary TB (CNS, bone, lymph node, GI), disseminated in
+      HIV. Diagnostics: GeneXpert MTB/RIF detects rifampin resistance
+      (proxy for MDR-TB) within 2 hours; GeneXpert MTB/XDR adds katG,
+      inhA, fluoroquinolone, second-line injectable detection; whole-genome
+      sequencing increasingly used for full resistance prediction; line
+      probe assay (GenoType MTBDRplus and MTBDRsl). Stewardship/IC:
+      airborne precautions (negative-pressure room, N95 respirator) until
+      sputum AFB-negative; DOT (directly observed therapy) for adherence;
+      contact tracing for index case; surveillance for treatment failure
+      via monthly sputum smear and culture during treatment.
+
+  - name: "Azole-resistant Aspergillus fumigatus"
+    body: |
+      Resistance landscape: Aspergillus fumigatus is the most common cause
+      of invasive aspergillosis in immunocompromised hosts (hematologic
+      malignancy, stem cell transplant, solid organ transplant, COVID-
+      associated). Azole resistance arises by two main pathways: (1)
+      patient-driven — emerges during long-term azole therapy in single
+      patients, with cyp51A point mutations (G54E/V/W, G138C, M220I);
+      (2) environment-driven — through agricultural azole use selecting
+      strains with cyp51A tandem-repeat promoter mutations (TR34/L98H and
+      TR46/Y121F/T289A), found globally and patients can present at first
+      diagnosis with already-resistant strains. The TR34/L98H mutation
+      raises voriconazole MIC from 0.5 to 4 to 8 (resistant); TR46/Y121F/T289A
+      raises voriconazole specifically while sparing posaconazole partially.
+      First-line for confirmed azole-resistant invasive aspergillosis:
+      liposomal amphotericin-B 3 to 5 mg/kg IV q24h OR isavuconazole 200 mg
+      PO/IV q8h x 6 doses load then daily (active against TR34/L98H but
+      cross-resistance with TR46 — check MIC). Combination therapy
+      (voriconazole + echinocandin like caspofungin) considered in severe
+      cases despite mixed evidence (Marr 2015). Clinical syndromes: invasive
+      pulmonary aspergillosis (cavitary nodules, halo sign, air-crescent
+      sign on CT), tracheobronchial in lung-transplant, CNS (rare,
+      catastrophic), aspergilloma in pre-existing cavities. Diagnostics:
+      serum galactomannan (lateral-flow or ELISA, sensitivity 60 to 80
+      percent in hematologic malignancy, false positives with piperacillin-
+      tazobactam pre-2014); BAL galactomannan greater than 1.0 highly
+      specific; serum/BAL Aspergillus PCR; cyp51A genotype on positive
+      isolate; serum 1,3-beta-D-glucan (non-specific, also positive for
+      Candida and Pneumocystis). TDM for voriconazole and posaconazole
+      essential during therapy (target trough 1 to 5.5 voriconazole, greater
+      than 1.25 posaconazole). Stewardship/IC: HEPA-filtered rooms for
+      high-risk neutropenic patients; primary prophylaxis with posaconazole
+      DR-tab during AML induction or post-transplant; surveillance
+      galactomannan twice-weekly during high-risk neutropenia.
+
+  - name: "Candida auris"
+    body: |
+      Resistance landscape: emerging multidrug-resistant yeast first reported
+      2009 (Japan), now endemic in over 50 countries. Five geographic clades
+      (I South Asia, II East Asia, III Africa, IV South America, V Iran)
+      with differing resistance profiles. Around 90 percent of clinical
+      isolates are fluconazole-resistant (intrinsic-like, ERG11 mutations
+      Y132F and K143R analogous to C. albicans azole-R), 30 to 50 percent
+      echinocandin-resistant (FKS1 hot-spot S639P/F mutations emerging in
+      cohorts with prior echinocandin pressure), 30 percent amphotericin-
+      resistant (mechanism not fully understood, possibly ergosterol
+      membrane modification). First-line: echinocandin (caspofungin 70 mg
+      load then 50 mg q24h, or micafungin 100 mg q24h, or anidulafungin 200
+      mg load then 100 mg q24h) until susceptibility known. If echinocandin-
+      resistant, lipid-formulation amphotericin B 3 to 5 mg/kg q24h;
+      susceptibility testing essential for every isolate because clade-
+      based prediction is unreliable. Combination therapy (echinocandin +
+      amphotericin) sometimes used for breakthrough or persistent fungemia.
+      Clinical syndromes: bloodstream (catheter-associated, post-surgical),
+      wound colonization, urinary, ear infection (notably the original
+      "auris" naming from Japanese ear discharge isolates); high mortality
+      around 30 to 50 percent in candidemia. Diagnostics: MALDI-TOF
+      identification (note: requires updated database — older databases
+      misidentify as C. haemulonii); molecular ITS or D1/D2 sequencing
+      confirms species; FKS1 sequencing for echinocandin resistance;
+      ERG11 sequencing for azole resistance. Stewardship/IC: STRICT
+      contact precautions and environmental controls — C. auris persists
+      on surfaces for weeks, resists routine quaternary-ammonium
+      disinfectants (EPA List P or List K disinfectants required:
+      chlorine bleach, hydrogen peroxide); cohorting; surveillance
+      cultures for new admissions in high-prevalence regions; outbreak
+      response with public-health partnership; CDC and WHO notification
+      required for new clusters.
+
+  - name: "Cryptococcus neoformans var. grubii (HIV/AIDS-associated cryptococcal meningitis)"
+    body: |
+      Resistance landscape: traditionally susceptible to amphotericin and
+      flucytosine; fluconazole resistance emerging in some African cohorts
+      with prolonged exposure (azole pressure, ERG11 mutations). Encapsulated
+      yeast — the polysaccharide capsule (glucuronoxylomannan, GXM) is the
+      virulence factor and a diagnostic target. Pathophysiology: inhalation
+      from environmental source (pigeon guano, soil); pulmonary primary
+      infection often subclinical; hematogenous dissemination to CNS in
+      immunocompromised (CD4 less than 100 in HIV/AIDS — the classic host
+      condition). First-line for cryptococcal meningoencephalitis: induction
+      with liposomal amphotericin B 3 to 4 mg/kg IV q24h PLUS flucytosine
+      25 mg/kg PO q6h x 2 weeks (van der Horst 1997 NEJM established
+      synergy); consolidation with fluconazole 800 mg PO daily x 8 weeks;
+      maintenance with fluconazole 200 mg daily x 6 to 12 months minimum
+      (or until CD4 greater than 200 sustained). Clinical syndromes:
+      meningoencephalitis (most common), pulmonary cryptococcosis, skin
+      lesions (umbilicated papules), osteoarticular, prostatitis. Subacute
+      meningitis with headache, low-grade fever, meningismus, and elevated
+      ICP (often greater than 25 cm H2O — one of the diagnostic and
+      management challenges). Diagnostics: serum cryptococcal antigen (CrAg)
+      lateral-flow assay (sensitivity greater than 99 percent and specificity
+      around 97 percent in HIV); CSF CrAg and India ink; LP with opening
+      pressure measurement (high pressure requires repeat LPs or shunt);
+      culture; quantitative CrAg titers track therapy response. Stewardship/IC:
+      no person-to-person transmission; pre-emptive screening with serum
+      CrAg in HIV-positive patients with CD4 less than 200 (or less than 100)
+      at ART initiation reduces incident meningitis (REMSTART, ACTG A5277);
+      ICP management with daily LPs to drain CSF until OP normalizes;
+      avoid steroids (no benefit, may worsen) — different from TB
+      meningitis where steroids help.
+
+  - name: "Pneumocystis jirovecii"
+    body: |
+      Resistance landscape: opportunistic fungus (formerly classified as
+      protozoan); cannot be cultured. Resistance emerges via mutations in
+      DHPS (dihydropteroate synthase, target of sulfa drugs) — codon 55
+      and 57 mutations (Thr55Ala, Pro57Ser) raise sulfa MIC; clinically
+      relevant in regions with high prophylaxis use, with reported prevalence
+      5 to 30 percent of clinical isolates; clinical impact debated (some
+      studies show worse outcomes, others not). Atovaquone resistance
+      via cytochrome b mutations also reported. First-line treatment:
+      TMP-SMX 15 to 20 mg/kg/day TMP component IV/PO divided q6 to 8h
+      for severe disease, or 2 DS tabs PO TID for mild-moderate, x 21
+      days. Add adjunctive corticosteroids (prednisone 40 mg BID x 5 days,
+      then taper over 21 days) for moderate-severe PCP — defined as
+      PaO2 less than 70 mmHg or A-a gradient greater than 35 — Bozzette
+      1990 NEJM and CSCAP cohort showed mortality reduction. Alternative
+      regimens for sulfa-allergy or treatment failure: pentamidine 4 mg/kg
+      IV daily (toxic — pancreatitis, hypoglycemia/hyperglycemia, AKI,
+      QTc); clindamycin 600 to 900 mg IV q6h PLUS primaquine 30 mg PO
+      daily (alternative for moderate disease); atovaquone 750 mg PO BID
+      with food (mild disease only); dapsone PLUS trimethoprim. Clinical
+      syndromes: subacute pneumonia in HIV/AIDS (CD4 less than 200) —
+      nonproductive cough, exertional dyspnea, hypoxemia, ground-glass on
+      CT; in non-HIV immunocompromised (steroid-dependent connective tissue
+      disease, transplant, hematologic malignancy on chemotherapy) the
+      presentation is often more abrupt and severe. Diagnostics: induced
+      sputum or BAL with Giemsa or methenamine silver staining; PCP PCR
+      (highly sensitive, distinguishes infection from colonization with
+      quantitative PCR copies); BAL beta-D-glucan greater than 80 pg/mL;
+      LDH elevated. Stewardship/IC: primary prophylaxis with TMP-SMX 1
+      DS daily (or 1 DS three times weekly) for HIV-positive with CD4 less
+      than 200, post-allogeneic-transplant for at least 6 months,
+      steroid-dependent rheumatologic patients on prednisone greater than
+      20 mg daily for over 4 weeks; alternatives for sulfa-allergy:
+      dapsone (after G6PD screen), atovaquone, aerosolized pentamidine.
+
+  - name: "Toxoplasma gondii (cerebral toxoplasmosis in HIV/AIDS)"
+    body: |
+      Resistance landscape: protozoan parasite (apicomplexan); resistance
+      uncommon in clinical practice but emerging via DHFR mutations
+      (analogous to TMP-resistance) and DHPS mutations under sulfa
+      pressure. Standard regimens have remained effective since 1980s.
+      First-line for cerebral toxoplasmosis: pyrimethamine 200 mg PO load
+      then 50 to 75 mg PO daily PLUS sulfadiazine 1 to 1.5 g PO QID PLUS
+      leucovorin (folinic acid) 10 to 20 mg PO daily (to prevent
+      pyrimethamine-induced bone marrow suppression by replacing reduced
+      folate that bypasses pyrimethamine-blocked DHFR); duration 6 weeks
+      acute, then chronic suppression at half-dose until immune
+      reconstitution. Alternative for sulfa allergy: pyrimethamine PLUS
+      clindamycin 600 mg PO q6h PLUS leucovorin (the IDSA-preferred
+      alternative); pyrimethamine PLUS atovaquone PLUS leucovorin
+      (alternative-alternative); TMP-SMX (15 mg/kg/day TMP component) is
+      a single-drug alternative with similar efficacy in some studies
+      (Schmidt 2006). Clinical syndromes: cerebral toxoplasmosis in
+      HIV/AIDS (CD4 less than 100, classic ring-enhancing lesions on MRI,
+      usually multiple, basal ganglia and corticomedullary junction
+      preference); chorioretinitis (acute or congenital); congenital
+      toxoplasmosis (chorioretinitis, hydrocephalus, intracranial
+      calcifications in newborn); reactivated disease in transplant
+      recipients (heart transplant especially — donor-derived if seropositive
+      donor to seronegative recipient). Diagnostics: serum Toxoplasma IgG
+      (positive in chronic latent infection, present in 20 to 50 percent
+      of US adults); serum IgM (acute or recent); MRI brain (multiple
+      ring-enhancing lesions, basal ganglia preference); CSF PCR for
+      Toxoplasma DNA (in high-risk HIV patient, distinguishes from
+      lymphoma — though brain biopsy may be needed if empirical therapy
+      fails by 2 weeks). Empirical therapy in HIV with seropositive
+      Toxoplasma IgG and ring-enhancing lesions reasonable; lack of
+      response by 2 weeks → biopsy for primary CNS lymphoma vs Toxo.
+      Stewardship/IC: primary prophylaxis with TMP-SMX 1 DS daily
+      (also covers PCP) in HIV patients with CD4 less than 100 AND
+      Toxoplasma IgG positive; discontinue when CD4 greater than 200
+      sustained for 6 months on ART.
