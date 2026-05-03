@@ -156,7 +156,16 @@ class LysosGenerator:
         dt = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}[self.dtype]
         kwargs = dict(torch_dtype=dt, device_map=self.device_map, use_cache=True)
         if self.attn_impl == "flash_attention_2":
-            kwargs["attn_implementation"] = "flash_attention_2"
+            # flash_attention_2 only on CUDA/ROCm GPUs with the package installed.
+            # Auto-fallback to "eager" on CPU/MPS so local dev works.
+            try:
+                import flash_attn  # noqa: F401
+                if torch.cuda.is_available():
+                    kwargs["attn_implementation"] = "flash_attention_2"
+                else:
+                    log.info("CPU/MPS detected — using eager attention (flash_attn requires CUDA/ROCm)")
+            except ImportError:
+                log.info("flash_attn not installed — using default eager attention")
 
         self._model = AutoModelForCausalLM.from_pretrained(self.model_id, **kwargs)
 
