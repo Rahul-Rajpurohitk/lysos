@@ -1,0 +1,257 @@
+task: structure_activity_comparison
+prompt_label: "SAR comparison"
+instructions: |
+  Instructions: Two structurally related antibiotics are given. Explain
+  (1) the specific structural difference at a named position or functional group,
+  (2) why that change shifts target binding, target evasion, or PK,
+  (3) how it affects MIC ranges across key pathogens,
+  (4) how it affects resistance susceptibility (e.g. enzyme hydrolysis, efflux),
+  (5) the medicinal-chemistry or clinical lesson learned.
+
+entries:
+  - name: "Cefepime vs ceftazidime — C3 N-methylpyrrolidinium quaternary and AmpC stability"
+    body: |
+      Both share the 7-aminothiazole-oxime side chain at C7 that drives ESBL-naive
+      Enterobacterales activity. The SAR move at C3 is the discriminator: ceftazidime
+      carries a 3-aminothiadiazole-thiomethyl with a pyridinium handle, whereas
+      cefepime replaces it with a 1-methylpyrrolidinium quaternary connected via a
+      methylene linker. The permanently positively charged quaternary in cefepime
+      drives two effects: (1) faster outer-membrane penetration through OmpF/OmpC
+      porins of Enterobacterales (the negatively charged porin lumen pulls cations
+      in faster — the "zwitterion advantage"), giving 2 to 4-fold lower MIC against
+      Pseudomonas (cefepime MIC50 1 to 4 ug/mL vs ceftazidime 1 to 8) and against
+      AmpC-derepressed Enterobacter (cefepime 0.5 vs ceftazidime greater than 32);
+      (2) steric block of AmpC class C beta-lactamase, where the bulky pyrrolidinium
+      cannot fit the AmpC active-site groove, while ceftazidime's smaller pyridine-
+      thiomethyl is hydrolyzed at high enzyme expression. MIC vs gram-positives:
+      cefepime is modestly more active vs MSSA (1 vs 4) due to the same OM penetration
+      benefit but neither is anti-MRSA. Resistance: both fall to CTX-M-15 ESBL and
+      KPC carbapenemase identically — the C3 difference does not protect from class
+      A serine carbapenemases. Lesson: a permanently charged quaternary nitrogen
+      converts a 3G cephalosporin into a "fourth-generation" agent, with Pseudomonas
+      and AmpC coverage as the deliverable. The same logic appears in cefpirome
+      (cyclopentapyridinium) and cefozopran.
+
+  - name: "Vancomycin vs teicoplanin — heptapeptide core plus N-acyl side chain"
+    body: |
+      Both bind the D-Ala-D-Ala terminus of lipid-II via the same heptapeptide
+      glycopeptide core (vancomycin C-terminal Asp/Glu, residues 1-7 forming the
+      pocket via H-bonds from amide NH groups to the D-Ala-D-Ala carbonyl). The
+      structural difference is in the sugar substituents: vancomycin has a
+      vancosamine and glucose pair on residue 4; teicoplanin replaces these with
+      five separate N-acetyl-glucosamine and mannose units AND adds an N-acyl
+      side chain (predominantly C10/C11 fatty acyl) on residue 6 — the lipid
+      anchor that distinguishes glycolipopeptides. The N-acyl tail anchors
+      teicoplanin into the bacterial membrane, raising the local concentration
+      at the transglycosylation site and giving slower off-rate from D-Ala-D-Ala
+      (longer plasma half-life of 70 to 100 hours, supporting once-daily dosing
+      after loading). MIC against MSSA/MRSA is similar (0.5 to 1) but against
+      hVISA the membrane-anchoring teicoplanin retains slightly better activity
+      (1 to 2 vs vancomycin 2 to 4). Resistance: vanA fully confers cross-resistance
+      to both (D-Ala-D-Lac substitution), but vanB confers vancomycin-R while
+      partially preserving teicoplanin sensitivity (the lipid anchor compensates).
+      Toxicity: teicoplanin has lower nephrotoxicity (around 4 percent vs vancomycin
+      8 to 16 percent at appropriate AUC) and lower red-man syndrome (no histamine
+      release from the slower IV infusion). Lesson: addition of a fatty-acyl side
+      chain to a glycopeptide gives membrane anchoring, longer half-life, partial
+      vanB rescue, and lower nephrotox — the foundation of the lipoglycopeptide
+      class (telavancin, dalbavancin, oritavancin) extends this logic.
+
+  - name: "Erythromycin vs azithromycin — 9a-aza ring expansion to 15-membered"
+    body: |
+      Erythromycin is a 14-membered macrolactone with C9 ketone and C6 hydroxyl;
+      azithromycin inserts a methylated nitrogen between C9 and C10, expanding
+      the lactone to 15 members and removing the C9 ketone (replaced by methyl-
+      amino). The 9a-aza ring expansion does two things: (1) removes the hemiketal
+      cyclization at C9-C6-C8 that occurs at gastric pH and inactivates erythromycin
+      (via 6,9- and 8,9-anhydroerythromycin spirocycles), giving azithromycin
+      gastric stability and allowing oral dosing without enteric coating; (2) shifts
+      ribosomal binding affinity at the 23S rRNA exit tunnel — both bind A2058
+      (E. coli numbering) but azithromycin's basic methylamine in the lactone
+      ring picks up an additional H-bond and Van der Waals contact, slightly
+      improving affinity. Tissue distribution differs dramatically: azithromycin
+      concentrates intracellularly (volume of distribution about 30 L/kg, tissue
+      to plasma ratio greater than 50 in lung and prostate) and has half-life of
+      68 hours vs erythromycin's 1.5 hours, supporting 5-day or single-dose
+      regimens. MIC50 against S. pyogenes 0.06 (both), H. influenzae 1 (azithro)
+      vs 4 (erythro) due to OM penetration via the basic nitrogen, M. catarrhalis
+      0.06 (both), Chlamydia 0.25 (azithro) vs 0.25 (erythro) — azithromycin
+      preferred for tissue concentration. Resistance: erm methylation of A2058
+      (MLSB phenotype) confers cross-resistance to both equally; mef efflux pumps
+      give M phenotype that affects 14-membered (erythro) more than 15-membered
+      (azithro). Lesson: the 9a-aza ring expansion is one of the highest-leverage
+      single changes in macrolide chemistry — it converted a labile twice-daily
+      drug into a once-daily, gastric-stable, long-half-life agent.
+
+  - name: "Erythromycin vs clarithromycin — 6-O-methylation and acid stability"
+    body: |
+      Clarithromycin retains erythromycin's 14-membered lactone core but methylates
+      the C6 hydroxyl to a methoxy (6-OMe). The C6 hydroxyl is the proton donor
+      that initiates the gastric-acid-catalyzed hemiketal cyclization with the
+      C8 hydrogen and C9 ketone, forming the inactive 6,9-spirocycle. Methylating
+      C6 blocks this rearrangement: clarithromycin survives gastric pH with
+      around 90 percent of dose intact (vs erythromycin's around 30 percent
+      survival), giving 50 percent oral bioavailability vs erythromycin's 25
+      percent. Ribosomal binding affinity is also modestly improved (A2058 H-bond
+      network is altered): MIC vs S. pneumoniae 0.03 (clarithro) vs 0.06 (erythro);
+      vs Helicobacter pylori MIC drops to 0.06 (clarithro) vs 0.5 (erythro), the
+      basis for clarithromycin's use in triple/quadruple H. pylori eradication.
+      Clarithromycin has a hepatically generated 14-OH active metabolite that
+      adds to the parent's MIC vs H. influenzae and atypicals. Resistance: erm
+      methylation of A2058 confers cross-resistance to both equally. Tox profile
+      improves: less GI upset (the C6-OMe also removes the prokinetic motilin-
+      receptor binding that drives erythromycin's nausea and the cardiac QT
+      effect of erythromycin in elderly women is reduced about 2-fold). Lesson:
+      a single methylation that prevents an intramolecular degradation pathway
+      can rewrite the PK profile, with anti-H. pylori activity falling out as
+      a clinical bonus.
+
+  - name: "Penicillin G vs nafcillin — beta-lactam plus 2-ethoxy-1-naphthamido steric block"
+    body: |
+      Both share the 6-aminopenicillanic acid bicyclic beta-lactam-thiazolidine
+      core. Penicillin G has a benzyl side chain at C6 (the simplest possible
+      amide); nafcillin replaces it with a 2-ethoxy-1-naphthamido group — a
+      large bulky bicyclic aromatic with an ortho-ethoxy substituent. The ortho-
+      ethoxy creates steric block that prevents staphylococcal PC1-class
+      beta-lactamase (penicillinase) from accessing the beta-lactam carbonyl
+      (the same mechanism as methicillin's ortho-dimethoxy). Penicillinase-
+      producing S. aureus accounts for greater than 90 percent of community
+      MSSA strains; nafcillin (and oxacillin, dicloxacillin, methicillin)
+      retains MIC of 0.25 to 1 ug/mL against MSSA, while penicillin G MIC
+      against penicillinase-positive MSSA is greater than 64. Against
+      penicillinase-NEGATIVE MSSA (rare, mostly historical) penicillin G MIC
+      is around 0.03 — penicillin G is the better drug when bacteria do not
+      hydrolyze it. The ortho-substitution also reduces affinity for streptococcal
+      and pneumococcal PBPs — nafcillin MIC vs S. pneumoniae 1 vs penicillin G
+      0.015. MRSA via mecA encoding low-affinity PBP2a defeats both equally.
+      PK: nafcillin is highly hepatically cleared (less renal adjustment needed),
+      whereas penicillin G is renally cleared (probenecid prolongs half-life
+      via competition for OAT secretion). Lesson: ortho-substituted bulky
+      acyl side chains created the entire "anti-staphylococcal penicillin"
+      class by trading streptococcal potency for beta-lactamase stability;
+      this approach was the first conscious SAR move to defeat a beta-lactamase.
+
+  - name: "Imipenem vs ertapenem — 1-beta-methyl plus meta-aminobenzoic acid"
+    body: |
+      Both are carbapenems sharing the bicyclic carbapenem ring with C2 amidine
+      and C6 hydroxyethyl. Imipenem has 1-H, no 1-substituent (DHP-1 vulnerable,
+      requires cilastatin); ertapenem adds 1-beta-methyl (DHP-1 stable, like
+      meropenem) and replaces the C2 amidine pyrrolidine of imipenem with a
+      meta-substituted pyrrolidine carboxamide attached to a meta-amino-
+      benzoic acid. The meta-aminobenzoate increases protein binding to about
+      95 percent (imipenem 20 percent), prolonging half-life from 1 to 4 hours
+      and supporting once-daily IV dosing. Anti-Pseudomonas potency is paradoxically
+      LOST: ertapenem MIC vs Pseudomonas is greater than 32 (imipenem 2 to 4)
+      because the bulky meta-aminobenzoate cannot fit through the OprD porin
+      that imports carbapenems into Pseudomonas (and OprD-bypass is not available
+      to ertapenem — only to cefiderocol). Anti-Acinetobacter is similarly lost.
+      Activity preserved against MSSA, S. pneumoniae, Enterobacterales, and
+      anaerobes (B. fragilis). Resistance: KPC, NDM, OXA-48 carbapenemases
+      hydrolyze both equally. Clinical positioning: ertapenem is OUTPATIENT-
+      PARENTERAL-friendly (q24h IV, home infusion) for non-Pseudomonas
+      indications like complicated intraabdominal, complicated UTI, and CAP;
+      imipenem and meropenem cover Pseudomonas and remain hospital-IV q6-8h
+      drugs. Lesson: protein binding is a PK lever but at the cost of OM
+      penetration in gram-negatives; the C2 modification that created
+      ertapenem's once-daily dosing was a deliberate trade-off that gave up
+      Pseudomonas to gain ambulatory dosing.
+
+  - name: "Fluconazole vs voriconazole — triazole heterocycle and CYP51 binding"
+    body: |
+      Both are triazole antifungals binding the heme iron of fungal lanosterol-
+      14-alpha-demethylase (CYP51A in molds, ERG11 in yeasts). Fluconazole has
+      two 1H-1,2,4-triazole rings linked by a propan-2-ol with a 2,4-difluorophenyl
+      group; voriconazole keeps one triazole and one fluoropyrimidine ring with
+      a chiral methyl on the central carbon. The fluoropyrimidine of voriconazole
+      reaches deeper into a hydrophobic pocket adjacent to the heme, picking up
+      hydrogen bonds with Phe228 and Tyr132 of CYP51A. Result: voriconazole has
+      anti-Aspergillus activity (MIC50 0.5 to 2 ug/mL) where fluconazole is
+      essentially inactive (MIC greater than 64); voriconazole also covers
+      Scedosporium, Fusarium, and dimorphic molds (Histoplasma, Coccidioides).
+      Yeast activity: both cover Candida albicans (fluconazole MIC 0.25, vori
+      0.06), but voriconazole adds C. krusei (intrinsically fluconazole-R)
+      and improves C. glabrata coverage. Pharmacology: voriconazole has nonlinear
+      CYP2C19-driven metabolism (genetic polymorphism — poor metabolizers have
+      AUC 4-fold higher than extensive metabolizers; ultra-rapid metabolizers
+      undertarget), requiring TDM (target trough 1 to 5.5 ug/mL); fluconazole has
+      first-order linear renal-cleared PK without TDM. Resistance: fluconazole
+      to ERG11 mutations (Y132F in C. albicans) and CDR1/CDR2 efflux upregulation;
+      voriconazole to CYP51A TR34/L98H tandem-repeat promoter mutation in
+      Aspergillus (environmental azole-driven). Lesson: changing one of the two
+      triazole rings in fluconazole to a fluoropyrimidine bought mold activity at
+      the cost of TDM-required dosing — the "tighter pocket" SAR strategy.
+
+  - name: "Trimethoprim vs iclaprim — deeper hydrophobic pocket of bacterial DHFR"
+    body: |
+      Both bind bacterial dihydrofolate reductase (DHFR) at the folate-binding
+      pocket, blocking conversion of dihydrofolate to tetrahydrofolate (the
+      single-carbon donor for thymidine synthesis). Trimethoprim has a 2,4-
+      diaminopyrimidine ring linked via methylene to a 3,4,5-trimethoxyphenyl
+      group. Iclaprim retains the 2,4-diaminopyrimidine but extends the linker
+      and replaces the trimethoxyphenyl with a propenyl-cyclopropyl-methyl-
+      phenoxy substitution that reaches deeper into a hydrophobic groove of
+      DHFR specifically present in S. aureus and S. pneumoniae (deeper than
+      in human DHFR, by structural superposition). Result: iclaprim retains
+      activity against trimethoprim-resistant S. aureus carrying acquired
+      F98Y mutation in DHFR (a known TMP-resistance mutation that raises TMP
+      Ki by 1000-fold while iclaprim Ki rises only 8-fold); MIC50 of iclaprim
+      against MRSA is 0.06 ug/mL (TMP greater than 32 in TMP-R strains),
+      against VRE 0.5. Selectivity for bacterial vs human DHFR: iclaprim has
+      ~10,000-fold selectivity, similar to TMP. Spectrum: iclaprim narrower
+      than TMP (no Stenotrophomonas, no Shigella) — the deeper hydrophobic
+      reach is gram-positive-selective. Resistance: dfrA17 plasmid-borne
+      DHFR variant defeats both; sul1/sul2 (sulfonamide-DHPS R) does not affect
+      iclaprim (it does not require sulfa partner). Pharmacology: iclaprim is
+      weakly basic and parenteral-only; phase 3 ABSSSI noninferior to vancomycin
+      (Holland 2020). Lesson: extending the substrate-mimicking arm of a
+      DHFR inhibitor into a deeper pocket can rescue activity against acquired
+      target mutation — the "second binding pocket" rescue strategy.
+
+  - name: "Linezolid vs tedizolid — D-ring 4-(2-pyridinyl)pyrimidinyl and reduced MAO-A inhibition"
+    body: |
+      Linezolid is a first-generation oxazolidinone with a morpholine N4-substituent
+      (the D-ring); tedizolid replaces that with a 4-(2-pyridinyl)pyrimidin-5-yl
+      methyl-tetrazole substituent and adds a fluorine at C-3 of the central
+      phenyl. The pyridinyl-pyrimidinyl extension reaches into a sub-pocket of
+      the 50S A-site that is unoccupied by linezolid, picking up additional
+      contacts with U2585 and G2061 of 23S rRNA. MIC50 against MRSA drops from
+      1 ug/mL (linezolid) to 0.25 (tedizolid); against VRE faecium 1 vs 0.5;
+      against linezolid-resistant cfr-positive S. aureus (cfr methylates A2503,
+      raising linezolid MIC to 8 to 16) tedizolid MIC remains 1 to 2 (about 4-fold
+      lower) due to the additional contacts that partially compensate for the
+      methylation. Pharmacology: tedizolid is a phosphate prodrug (tedizolid
+      phosphate cleaved by alkaline phosphatase to active tedizolid) with 200 mg
+      IV/PO once daily and 91 percent oral bioavailability — half the daily dose
+      and once-daily dosing vs linezolid 600 mg q12h. Toxicity: tedizolid has
+      6-fold less monoamine oxidase A (MAO-A) inhibition in vitro than linezolid,
+      reducing serotonin-syndrome risk with concurrent SSRI; thrombocytopenia
+      rate is around 5 percent at 6 days vs linezolid's around 30 percent at
+      14 days. Resistance: cfr methylation gives partial cross-resistance;
+      G2576T mutations defeat both. Lesson: extending the D-ring of an
+      oxazolidinone into a sub-pocket buys MIC potency, partial cfr rescue,
+      AND a better therapeutic index — a textbook three-for-one SAR move.
+
+  - name: "Ciprofloxacin vs moxifloxacin — C8-methoxy and gram-positive PARC affinity"
+    body: |
+      Both are fluoroquinolones sharing the C3-carboxylic acid, C7-piperazine
+      (substituted), C6-fluoro, and the chiral N1 substituent that defines the
+      class. Ciprofloxacin has C8-H and a basic piperazine at C7; moxifloxacin
+      has C8-methoxy (8-OMe) and a constrained 8-aminomethylpyrrolidine-fused
+      bicyclic piperazine at C7. The C8-methoxy creates steric block on the
+      A-site of ParC topoisomerase IV (the gram-positive primary target — MIC vs
+      S. pneumoniae drops from 1 ug/mL ciprofloxacin to 0.06 moxifloxacin) AND
+      reduces susceptibility to gyrA-encoded efflux pumps in S. aureus.
+      Anti-anaerobic activity emerges with the C8-methoxy: moxifloxacin MIC vs
+      B. fragilis 0.5 to 2 (cipro greater than 16). The constrained C7
+      pyrrolidine reduces phototoxicity and cardiotox compared to first-generation
+      C7-piperazine FQs (clinafloxacin, sparfloxacin had QTc and phototox issues
+      driven by simpler piperazines). Resistance: gyrA S83L and parC S80I are
+      common to both, but moxifloxacin's C8-methoxy preserves more activity
+      against single-mutant strains (need both gyrA AND parC mutations to defeat
+      mox); cipro is defeated by single gyrA mutation. PK: moxifloxacin is
+      hepatically cleared (sulfate and glucuronide), no renal adjustment needed,
+      whereas cipro is partly renal. Lesson: C8 substitution is a 4G-fluoroquinolone
+      defining feature, converting a urinary-drug ciprofloxacin into a respiratory-
+      anaerobic moxifloxacin; the same C8-OMe motif appears in gemifloxacin
+      and gatifloxacin (the latter withdrawn for dysglycemia, a class-related
+      C8 risk).

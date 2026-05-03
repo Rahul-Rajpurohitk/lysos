@@ -1,0 +1,264 @@
+task: counterfactual_design
+prompt_label: "Counterfactual"
+instructions: |
+  Instructions: A specific structural feature of an existing antimicrobial is
+  hypothetically removed or substituted. Reason through (1) the role that
+  feature plays in target binding or PK, (2) the predicted MIC shift across
+  representative pathogens, (3) whether resistance mechanisms change, (4) the
+  PK or toxicity consequence, (5) the medicinal-chemistry lesson — what the
+  feature is "buying" the molecule.
+
+entries:
+  - name: "Remove the C5 (S)-acetamidomethyl group from linezolid"
+    body: |
+      The C5 (S)-acetamidomethyl pharmacophore on the oxazolidinone ring of linezolid
+      is the principal recognition element for the 50S A-site at A2451 of 23S rRNA;
+      the carbonyl of the acetamide hydrogen-bonds with the N1 of A2451 and the
+      methylene-amide rotamer fits into a hydrophobic groove formed by U2504,
+      U2506, and C2452. Removing this group (replacing CH2-NH-COCH3 with H or
+      methyl) eliminates the H-bond network and the hydrophobic anchor; predicted
+      MIC against S. aureus would shift from 1 to 2 ug/mL to greater than 64
+      (effectively inactive), and the same loss occurs against MRSA, VRE faecium,
+      Streptococcus pneumoniae, and M. tuberculosis. Resistance mechanisms remain
+      conceptually the same (cfr methylation of A2503, 23S rRNA G2576T mutations)
+      but become irrelevant because base-line activity is lost. PK shifts: the
+      acetamidomethyl also confers metabolic stability — its removal would expose
+      the morpholine ring to greater hepatic CYP-mediated oxidation, shortening
+      half-life. Toxicity: linezolid's mitochondrial protein-synthesis inhibition
+      (the cause of thrombocytopenia and lactic acidosis) is mediated by binding
+      the human mitochondrial 28S rRNA homologous A-site; removing the C5
+      acetamidomethyl would eliminate both bacterial AND mitochondrial binding,
+      paradoxically removing the toxicity at the cost of the drug. Lesson: the C5
+      acetamidomethyl is the "license to operate" of the entire oxazolidinone
+      class — every analog (tedizolid, contezolid, sutezolid) preserves it; the
+      class-defining SAR rule is "do not touch C5."
+
+  - name: "Remove the n-decanoyl lipid tail from daptomycin"
+    body: |
+      Daptomycin's mechanism is Ca2+-dependent insertion into membrane patches
+      enriched in phosphatidylglycerol (PG) followed by membrane depolarization;
+      the lipid driver is the n-decanoyl (C10) fatty acyl tail attached to the
+      tryptophan residue of the cyclic decapeptide. Removing the n-decanoyl
+      (yielding the parent A21978C aglycone or replacing with C2 acetyl) eliminates
+      the membrane-anchoring step: without the lipid tail, the cyclic peptide
+      cannot insert into the bilayer, the Ca2+-dependent kinked alpha-helical
+      conformation cannot form at the membrane interface, and depolarization does
+      not occur. Predicted MIC vs S. aureus, MRSA, VRE shifts from 0.25 to 1
+      ug/mL to greater than 32. Resistance landscape is altered: mprF lysinylation
+      of PG (which neutralizes membrane charge and repels the Ca-daptomycin
+      complex) becomes irrelevant because the parent peptide cannot insert
+      regardless of charge — the mprF resistance arc is mediated by lipid
+      anchoring, not the peptide/Ca complex. PK: the lipid tail also drives
+      protein binding (around 92 percent for daptomycin), and removal would
+      drastically increase free fraction, distribution volume, and renal
+      clearance. Toxicity: rhabdomyolysis, daptomycin's signature CK rise, is
+      hypothesized to be membrane-insertion-mediated in skeletal-muscle membranes
+      with relatively high PG; removing the tail would likely abolish toxicity
+      but also abolish the drug. Lesson: in lipopeptides the fatty acyl is the
+      antibiotic; the peptide is the targeting module. Similar logic in
+      polymyxins (without the fatty acyl tail, the cyclic decapeptide cannot
+      breach the LPS leaflet).
+
+  - name: "Remove the 1-beta-methyl group from meropenem"
+    body: |
+      The 1-beta-methyl on the carbapenem ring of meropenem sterically blocks
+      renal dehydropeptidase-1 (DHP-1) from accessing the C1 position; this
+      is the SAR feature that distinguishes meropenem (DHP-stable, no cilastatin
+      needed) from imipenem (no 1-substituent, requires 1:1 cilastatin co-administration
+      to retain urinary recovery). Removing the 1-beta-methyl reverts meropenem
+      to thienamycin-style DHP vulnerability: predicted urinary recovery would
+      drop from around 70 percent to less than 20 percent without cilastatin,
+      requiring partner-drug co-administration to be clinically usable. Antibacterial
+      MICs would NOT change (1-beta-methyl is a PK feature, not a target-binding
+      feature for PBP1a/2/3 of E. coli, K. pneumoniae, P. aeruginosa). Resistance
+      to KPC, NDM, OXA-48 carbapenemases would remain identical because hydrolysis
+      acts on the C2-C3 beta-lactam carbonyl, distant from C1. Toxicity would also
+      shift: the 1-beta-methyl reduces GABA-A receptor binding affinity at high
+      CSF concentrations (imipenem-cilastatin has 1 to 3 percent seizure rate at
+      meningitis doses; meropenem under 0.5 percent). Removing the methyl would
+      raise seizure risk to imipenem level, restricting CNS dosing. Lesson: the
+      1-beta-methyl is one of the highest-leverage single SAR moves in the
+      carbapenem class — it removed the partner drug requirement AND lowered
+      neurotoxicity simultaneously. Ertapenem and doripenem also carry the
+      1-beta-methyl for the same reason.
+
+  - name: "Remove the para-hydroxyl from amoxicillin"
+    body: |
+      The para-hydroxyl on the phenyl ring of amoxicillin's alpha-amino-phenylacetamide
+      side chain reduces protonation of the alpha-amino group at gastric pH,
+      improving oral absorption to about 95 percent. Remove the para-OH and
+      amoxicillin reverts to ampicillin: oral bioavailability drops to about
+      40 percent because the alpha-amino group is more readily protonated at
+      stomach pH and the more charged molecule is poorly absorbed. Plasma AUC
+      drops by approximately half on the same oral dose; serum/tissue
+      concentrations no longer reliably exceed MIC for typical oral indications
+      (otitis media, sinusitis). Resistance landscape unchanged: TEM-1, SHV-1,
+      and AmpC continue to hydrolyze both molecules with identical affinities;
+      clavulanate restores both equally. MIC values against susceptible
+      Enterobacterales, streptococci, Listeria, and enterococci are essentially
+      identical because target PBP binding is dominated by the 6-aminopenicillanic
+      acid core, not the para-OH. PK consequence: dose escalation would partly
+      compensate for the oral absorption loss but would also raise stool
+      concentrations and C. difficile risk. Lesson: a single para-hydroxyl
+      rewrote an antibiotic's clinical role from IV-only (ampicillin) to oral
+      first-line (amoxicillin); the same lesson applies to ester prodrugs
+      (pivampicillin, bacampicillin) and para-substitutions in other beta-lactam
+      classes. Para-OH is a textbook PK lever, not a target-binding lever.
+
+  - name: "Remove the C9 t-butylglycylamido from tigecycline"
+    body: |
+      Tigecycline's C9 t-butylglycylamido side chain is the SAR feature that
+      defeats both TetA-class efflux pumps (the side chain is too bulky for
+      the substrate channel of the membrane-spanning TetA transporter) and
+      Tet(M) ribosomal-protection proteins (it sterically clashes with the
+      Tet(M)-A-site interaction). Removing the C9 group reverts tigecycline
+      to the minocycline scaffold (C7 dimethylamino retained, C9 hydrogen
+      restored): predicted MIC against tet(M)-positive S. aureus rises from
+      0.25 ug/mL to about 16; tetA-positive E. coli MIC rises from 0.5 to 32.
+      MRSA without tet genes shows similar MIC for tige and minocycline (~0.5),
+      so the C9 group's value is specifically resistance-mediated, not
+      target-affinity-mediated. The 30S A-site binding mode of the parent
+      tetracycline core remains intact regardless. PK consequence: the C9
+      group also reduces oral absorption (tigecycline is IV-only, around
+      10 percent oral); removing it would PARADOXICALLY restore oral
+      bioavailability close to minocycline (~95 percent), and might allow
+      oral tigecycline-like activity in tet-naive strains. Toxicity: the
+      C9 is also implicated in tigecycline's Cmax limitation that drives the
+      AUC/MIC failure in bacteremia (low Cmax of 0.6 ug/mL, FDA mortality
+      black-box). Removing C9 would lift Cmax. Lesson: the C9 side chain in
+      glycylcyclines is a resistance-evading add-on that costs PK; the
+      next-generation eravacycline tries to thread the needle by using a
+      smaller pyrrolidinoacetamido at C9 plus a C7 fluoro, restoring
+      higher Cmax while keeping resistance escape.
+
+  - name: "Remove the catechol siderophore moiety from cefiderocol"
+    body: |
+      Cefiderocol's catechol moiety on the C3 chain (specifically a
+      chlorocatechol attached via a pyrrolidinium linker) chelates ferric
+      iron (Fe3+) and the resulting Fe-cefiderocol complex is actively
+      imported through bacterial TonB-dependent siderophore receptors
+      (PiuA, PirA in P. aeruginosa, FiuA in E. coli). This Trojan-horse
+      uptake bypasses outer-membrane porin loss (oprD downregulation) and
+      efflux-pump overexpression (MexAB-OprM, MexXY) that defeat conventional
+      cephalosporins. Remove the catechol and cefiderocol reverts to a
+      conventional cephalosporin pharmacophore with the C7 aminothiazole-oxime
+      backbone and C3 pyrrolidinium-quaternary feature; uptake reverts to
+      passive diffusion through OmpF/OmpC porins. Predicted MIC vs OprD-loss
+      P. aeruginosa rises from 1 ug/mL to greater than 32 (effectively
+      inactive), and vs CRAB and Stenotrophomonas the MIC also rises out
+      of the achievable range. NDM and VIM metallo-beta-lactamase coverage
+      is also COMPROMISED because part of cefiderocol's class-B-MBL stability
+      derives from the steric and electronic effects of the catechol-Fe complex
+      orientation in the active site of these enzymes — without the chelated
+      Fe, the molecule sits in the MBL active site like a typical
+      cephalosporin and is hydrolyzed. Resistance: cirA (siderophore-receptor)
+      mutations no longer matter because uptake mechanism is changed. PK:
+      catechol is also redox-active and contributes to background tox concerns
+      (catechol-O-methyltransferase substrate); removal would reduce some
+      idiosyncratic concerns. Lesson: the siderophore-Trojan-horse mechanism is
+      cefiderocol's defining feature; without it, the antibiotic is just an
+      ordinary cephalosporin defeated by both porin loss and MBL hydrolysis.
+
+  - name: "Remove the C7 piperazine from ciprofloxacin"
+    body: |
+      The C7 piperazine of ciprofloxacin reaches into a pocket near the
+      GyrA Asp426/GyrB Glu466 quinolone-resistance-determining region (QRDR);
+      its hydrogen-bond donor capability (NH of the secondary amine) and its
+      basic protonation at physiological pH (positive charge under pH 7.4)
+      drive both target affinity and outer-membrane penetration through the
+      OmpF porin. Remove the C7 piperazine (replace with H or methyl) and
+      ciprofloxacin reverts to a nalidixic-acid-like first-generation quinolone
+      with weak gyrase binding: predicted MIC vs E. coli rises from 0.015 ug/mL
+      to about 8, vs P. aeruginosa from 0.25 to greater than 32, vs S. aureus
+      from 0.5 to 16. Resistance landscape changes: gyrA S83L and parC S80I
+      mutations would still raise MIC further but the drug would already be
+      clinically inactive. Spectrum reverts from broad-spectrum to gram-negative
+      urinary-only. PK consequence: piperazine improves protein binding (~30
+      percent) and the secondary amine is also the metabolic handle for
+      glucuronidation; removing it would alter clearance pathway. The C7
+      piperazine is also the linker to which fluoroquinolone modifications
+      (the second amine in levofloxacin's methyl-piperazine, ciprofloxacin's
+      vs gemifloxacin's methoxime C8) attach; without it the compound class
+      cannot be modified for spectrum extension. Lesson: the C7 piperazine
+      is a multi-purpose feature — target affinity, OM penetration, basicity,
+      and a synthetic handle. The fluoroquinolone class is essentially defined
+      by its presence.
+
+  - name: "Replace the 2-OH of avibactam with 2-H"
+    body: |
+      Avibactam is a diazabicyclooctane (DBO) class beta-lactamase inhibitor
+      with the bicyclic carbamoyl warhead; the 2-hydroxyl (formally 2-O-sulfate
+      in the parent compound, although the active species is 2-OH after sulfate
+      cleavage) on the bridgehead nitrogen orients the carbamoyl carbonyl into
+      the active-site oxyanion hole of class A serine beta-lactamases (KPC,
+      ESBL TEM/SHV/CTX-M) and stabilizes the acyl-enzyme intermediate via H-bond
+      to Asn132. Replacing the 2-OH with 2-H (saturated bridgehead nitrogen)
+      removes the H-bond donor and disrupts the carbamoyl orientation: predicted
+      Ki for KPC-2 rises from 1 nM to greater than 1 uM (essentially loss of
+      inhibition), and the same effect for AmpC class C and OXA-48 class D
+      enzymes. The CRITICAL kinetic feature of DBOs — slow off-rate (carbamoyl
+      can recyclize after acylation, unlike clavulanate which is a suicide
+      inhibitor) — depends on the 2-OH stabilizing the carbamoyl recycling
+      transition state. Without it, even partial inhibition is short-lived.
+      Combination partner ceftazidime would lose its CRE coverage; ceftazidime-
+      avibactam (without the OH) would revert to ceftazidime-monotherapy
+      activity. Resistance: KPC-31 escape mutation (D179Y) loses the H-bond
+      that 2-OH provides; replacing the OH with H makes the wild-type enzyme
+      look like KPC-31 even before mutation occurs. PK: 2-OH is also metabolically
+      stable; replacement with H would not significantly alter clearance.
+      Lesson: small polar groups on DBO inhibitors are not decoration but
+      mechanistic essentials — relebactam's 2-piperidinyl extension is an
+      analog with a different polar group, designed for related geometric
+      reasons.
+
+  - name: "Remove the chloro substituents from oritavancin's biphenyl arm"
+    body: |
+      Oritavancin is a glycopeptide built on the chloroeremomycin scaffold with
+      a 4-(4-chlorobiphenyl)methyl group on the disaccharide vancosamine sugar.
+      The chlorobiphenyl arm has two roles: (1) anchors oritavancin into
+      the lipopolysaccharide outer leaflet (in gram-positive cell walls, it
+      penetrates beyond the peptidoglycan lipid II to interact with the
+      D-Ala-D-Ala terminus AND the membrane phospholipids), creating a dual
+      binding mode that produces the ultra-long terminal half-life (around 245
+      hours, supporting single-dose 1200 mg therapy); (2) confers activity
+      against vanA VRE by direct membrane disruption that is independent of
+      the D-Ala-D-Ala (now D-Ala-D-Lac) target. Remove the chloro substituents
+      (replace with hydrogens, yielding an unsubstituted biphenyl-methyl) and
+      the lipophilicity drops, the membrane anchoring is lost, and the dual
+      binding mode collapses to single-binding (D-Ala-D-Ala only). Predicted
+      MIC vs vanA VRE rises from 0.06 ug/mL to greater than 64 (vancomycin-
+      sensitivity-equivalent loss), and vs MRSA the long half-life feature
+      collapses to short half-life (~6 hours, like vancomycin). Single-dose
+      dosing for cSSSI would no longer be possible; standard q12h dosing
+      would be required. Resistance landscape simplifies (back to D-Ala-D-Lac
+      sensitivity). Lesson: the chlorobiphenyl arm is the lipoglycopeptide
+      "second engine" — it converts a vancomycin-class drug into a long-half-life,
+      VRE-active, dual-mechanism agent. Telavancin (decylaminoethyl tail) and
+      dalbavancin (3,3-dimethylaminopropyl on the hexapeptide D-Ala) achieve
+      similar second-engine effects with different lipophilic appendages.
+
+  - name: "Remove the C7 dimethylamino group from minocycline"
+    body: |
+      Minocycline's C7 dimethylamino group is unique among first-generation
+      tetracyclines (tetracycline has C7-H, doxycycline has C7-H) and confers:
+      (1) increased lipophilicity, raising tissue penetration including CNS
+      (CSF concentration around 25 percent of plasma, useful for atypical
+      meningitis and Acinetobacter), (2) higher affinity for the 30S A-site
+      via hydrophobic interaction with U1196 of 16S rRNA, lowering MIC against
+      MRSA and atypicals, (3) modest antiprotozoal activity (Plasmodium,
+      Entamoeba) via off-target binding that doxycycline lacks, (4) the substrate
+      handle that designers used to reach the C9 t-butylglycyl of tigecycline
+      (the "minocycline-like" precursor was the chemistry starting point for
+      glycylcyclines). Remove the C7 dimethylamino (replace with H, becoming
+      the 6-methyl-tetracycline analog) and predicted MIC vs MRSA rises from
+      1 ug/mL to about 8; CSF penetration falls; Acinetobacter coverage
+      (often quoted MIC50 of 1 to 2 for minocycline) is lost. Resistance: tet(M)
+      and tetA still affect both molecules but minocycline's slightly tighter
+      ribosomal binding gives a modest MIC advantage (around 4-fold) that
+      disappears without the C7 group. PK: lipophilicity drives oral
+      bioavailability (around 95 percent) and tissue distribution; removing
+      it would reduce both. Lesson: a modest single substituent at C7 (just
+      a dimethylamino group) is the difference between a first-generation
+      tetracycline and the foundation of an entire SAR campaign that produced
+      tigecycline, eravacycline, and omadacycline. The "platform value" of
+      the C7 dimethylamino is far larger than its direct activity contribution.
