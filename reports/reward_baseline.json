@@ -1,0 +1,202 @@
+{
+  "pathogen": "MRSA",
+  "components": [
+    "validity",
+    "structural_alerts",
+    "predicted_mic",
+    "drug_likeness_qed",
+    "synthesizability",
+    "hemolysis_safety",
+    "novelty",
+    "embedding_novelty"
+  ],
+  "weights": {
+    "validity": 0.05,
+    "structural_alerts": 0.05,
+    "predicted_mic": 0.3,
+    "drug_likeness_qed": 0.15,
+    "synthesizability": 0.1,
+    "hemolysis_safety": 0.15,
+    "novelty": 0.1,
+    "embedding_novelty": 0.1
+  },
+  "panel_results": [
+    {
+      "name": "vancomycin",
+      "smiles": "CC1C(C(CC(O1)OC2C(C(C(OC2OC3=C4C=C5C=C3OC6=C(C=C(C=C6)C(C(=O)NC7C(=O)NC8C9=CC(=C(C=C9)O)C1=C(C=C(C=C1C(NC(=O)C(C(C1=CC(=C(O5)C=C1Cl)Cl)O)NC8=O)C(=O)O)O)O)CC(=O)N)O)C(C)NC)O)O)O)NC",
+      "scores": {
+        "validity": 0.0,
+        "structural_alerts": 0.0,
+        "predicted_mic": 0.0,
+        "drug_likeness_qed": 0.0,
+        "synthesizability": 0.0,
+        "hemolysis_safety": 0.0,
+        "novelty": 0.0,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.1
+    },
+    {
+      "name": "daptomycin",
+      "smiles": "CCCCCCCCCC(=O)NC(CC(=O)N)C(=O)NC(CC(=O)O)C(=O)NC1C(=O)NC(C(=O)NC(C(=O)NC(C(=O)NC(C(=O)NC(C(=O)NC(C(=O)NC(C(=O)O1)CC(=O)O)CC2=CN=CC=C2)CCC(=O)O)CO)CC(=O)O)C)CC(C)C",
+      "scores": {
+        "validity": 1.0,
+        "structural_alerts": 0.2000000000000001,
+        "predicted_mic": 0.9998039875598933,
+        "drug_likeness_qed": 0.026488006093650217,
+        "synthesizability": 0.3706545436039105,
+        "hemolysis_safety": 0.6,
+        "novelty": 0.31252704999066067,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.6222325565414726
+    },
+    {
+      "name": "linezolid",
+      "smiles": "CC(=O)NCC1CN(C(=O)O1)C2=CC(=C(C=C2)N3CCOCC3)F",
+      "scores": {
+        "validity": 1.0,
+        "structural_alerts": 0.9,
+        "predicted_mic": 1.0,
+        "drug_likeness_qed": 0.8915973887511961,
+        "synthesizability": 0.8045368635721607,
+        "hemolysis_safety": 1.0,
+        "novelty": 0.0,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.8591932946698955
+    },
+    {
+      "name": "ciprofloxacin",
+      "smiles": "C1CC1N2C=C(C(=O)C3=CC(=C(C=C32)N4CCNCC4)F)C(=O)O",
+      "scores": {
+        "validity": 1.0,
+        "structural_alerts": 1.0,
+        "predicted_mic": 1.0,
+        "drug_likeness_qed": 0.8932298763507216,
+        "synthesizability": 0.837199926996389,
+        "hemolysis_safety": 1.0,
+        "novelty": 0.0,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.8677044741522472
+    },
+    {
+      "name": "doxycycline",
+      "smiles": "CC1C2CC3C(C(=O)C(=C(C3(C(=O)C2=C(C4=C1C=CC=C4O)O)O)O)C(=O)N)N(C)C",
+      "scores": {
+        "validity": 1.0,
+        "structural_alerts": 0.8,
+        "predicted_mic": 0.9553576131530155,
+        "drug_likeness_qed": 0.42612766442095723,
+        "synthesizability": 0.6417456750462357,
+        "hemolysis_safety": 1.0,
+        "novelty": 0.009375000000000005,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.7556385011136718
+    },
+    {
+      "name": "amoxicillin",
+      "smiles": "CC1(C(N2C(S1)C(C2=O)NC(=O)C(C3=CC=C(C=C3)O)N)C(=O)O)C",
+      "scores": {
+        "validity": 1.0,
+        "structural_alerts": 0.9,
+        "predicted_mic": 0.9786119705793873,
+        "drug_likeness_qed": 0.5530315284690744,
+        "synthesizability": 0.7043523087206157,
+        "hemolysis_safety": 1.0,
+        "novelty": 0.0,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.7919735513162389
+    },
+    {
+      "name": "meropenem",
+      "smiles": "CC1C2CC3=C(C(=O)N3C2C(=O)O)SC1NC(=O)CCC4CN(C4=O)CC",
+      "scores": {
+        "validity": 1.0,
+        "structural_alerts": 0.9,
+        "predicted_mic": 0.7969925719381168,
+        "drug_likeness_qed": 0.6401225374878294,
+        "synthesizability": 0.4983164065504988,
+        "hemolysis_safety": 1.0,
+        "novelty": 0.7439024390243902,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.8043380367620984
+    },
+    {
+      "name": "azithromycin",
+      "smiles": "CCC1C(C(C(N(CC(CC(C(C(C(C(C(=O)O1)C)OC2CC(C(C(O2)C)O)(C)OC)C)OC3C(C(CC(O3)C)N(C)C)O)(C)O)C)C)C)C)O)C",
+      "scores": {
+        "validity": 0.0,
+        "structural_alerts": 0.0,
+        "predicted_mic": 0.0,
+        "drug_likeness_qed": 0.0,
+        "synthesizability": 0.0,
+        "hemolysis_safety": 0.0,
+        "novelty": 0.0,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.1
+    },
+    {
+      "name": "rifampin",
+      "smiles": "CC1C=CC=C(C(=O)NC2=C(C3=C(C(=C(C(=C3O)C(=O)C(=C(C1OC)C)O)C)O)C(=N\\N4CCN(CC4)C)/C2=O)O)C",
+      "scores": {
+        "validity": 1.0,
+        "structural_alerts": 0.19999999999999993,
+        "predicted_mic": 0.8133035211373638,
+        "drug_likeness_qed": 0.3272732616579902,
+        "synthesizability": 0.46355622994182966,
+        "hemolysis_safety": 1.0,
+        "novelty": 0.6310679611650485,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.7125444647005955
+    },
+    {
+      "name": "metronidazole",
+      "smiles": "CC1=NC=C(N1CCO)[N+](=O)[O-]",
+      "scores": {
+        "validity": 1.0,
+        "structural_alerts": 0.8,
+        "predicted_mic": 0.282622289973379,
+        "drug_likeness_qed": 0.5158680082581498,
+        "synthesizability": 0.816800510270924,
+        "hemolysis_safety": 1.0,
+        "novelty": 0.0,
+        "embedding_novelty": 1.0
+      },
+      "composite": 0.5838469392578286
+    }
+  ],
+  "invalid_results": [
+    {
+      "name": "not_a_molecule",
+      "smiles": "this is not SMILES",
+      "validity": 0.0
+    },
+    {
+      "name": "empty",
+      "smiles": "",
+      "validity": 0.0
+    },
+    {
+      "name": "garbage",
+      "smiles": "###%%% invalid ###",
+      "validity": 0.0
+    },
+    {
+      "name": "partial_paren",
+      "smiles": "C1CC(",
+      "validity": 0.0
+    },
+    {
+      "name": "unknown_atom",
+      "smiles": "CXY",
+      "validity": 0.0
+    }
+  ]
+}

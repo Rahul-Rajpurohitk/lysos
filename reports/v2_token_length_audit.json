@@ -1,0 +1,404 @@
+{
+  "tokenizer": "gpt2",
+  "max_seq": 4096,
+  "warn_at": 0.85,
+  "warn_threshold": 3481,
+  "n_total": 37218,
+  "n_over_max": 0,
+  "n_over_warn": 0,
+  "per_task_summary": {
+    "natural_product_origin": {
+      "n": 1500,
+      "p50": 56,
+      "p90": 65,
+      "p99": 90,
+      "max": 151
+    },
+    "drug_from_smiles": {
+      "n": 1500,
+      "p50": 84,
+      "p90": 133,
+      "p99": 238,
+      "max": 663
+    },
+    "natural_product_smiles": {
+      "n": 1500,
+      "p50": 98,
+      "p90": 163,
+      "p99": 267,
+      "max": 765
+    },
+    "drug_synonyms": {
+      "n": 1500,
+      "p50": 59,
+      "p90": 143,
+      "p99": 245,
+      "max": 443
+    },
+    "drug_inchi_key": {
+      "n": 1500,
+      "p50": 74,
+      "p90": 104,
+      "p99": 142,
+      "max": 183
+    },
+    "drug_likeness": {
+      "n": 1500,
+      "p50": 141,
+      "p90": 184,
+      "p99": 370,
+      "max": 608
+    },
+    "natural_product_origin_smiles": {
+      "n": 1500,
+      "p50": 133,
+      "p90": 201,
+      "p99": 296,
+      "max": 395
+    },
+    "drug_smiles": {
+      "n": 1500,
+      "p50": 81,
+      "p90": 130,
+      "p99": 240,
+      "max": 522
+    },
+    "safety_prediction": {
+      "n": 1500,
+      "p50": 85,
+      "p90": 98,
+      "p99": 108,
+      "max": 111
+    },
+    "generation_for_target": {
+      "n": 1500,
+      "p50": 142,
+      "p90": 173,
+      "p99": 329,
+      "max": 441
+    },
+    "drug_id_lookup": {
+      "n": 1500,
+      "p50": 35,
+      "p90": 68,
+      "p99": 110,
+      "max": 147
+    },
+    "drug_cas_lookup": {
+      "n": 1500,
+      "p50": 34,
+      "p90": 37,
+      "p99": 48,
+      "max": 75
+    },
+    "drug_reverse_cas": {
+      "n": 1500,
+      "p50": 33,
+      "p90": 36,
+      "p99": 46,
+      "max": 95
+    },
+    "peptide_design": {
+      "n": 1500,
+      "p50": 113,
+      "p90": 123,
+      "p99": 131,
+      "max": 140
+    },
+    "activity_prediction": {
+      "n": 1500,
+      "p50": 129,
+      "p90": 237,
+      "p99": 461,
+      "max": 741
+    },
+    "drug_combination_synergy": {
+      "n": 44,
+      "p50": 1228,
+      "p90": 1688,
+      "p99": 2043,
+      "max": 2043
+    },
+    "resistance_mechanism_explanation": {
+      "n": 48,
+      "p50": 860,
+      "p90": 2087,
+      "p99": 2109,
+      "max": 2109
+    },
+    "design_challenge": {
+      "n": 11,
+      "p50": 1844,
+      "p90": 1914,
+      "p99": 1914,
+      "max": 1914
+    },
+    "abstract_summarize": {
+      "n": 1500,
+      "p50": 272,
+      "p90": 328,
+      "p99": 379,
+      "max": 461
+    },
+    "resistance_gene_explain": {
+      "n": 1500,
+      "p50": 60,
+      "p90": 84,
+      "p99": 131,
+      "max": 183
+    },
+    "abstract_qa": {
+      "n": 1500,
+      "p50": 353,
+      "p90": 502,
+      "p99": 638,
+      "max": 736
+    },
+    "drug_overview": {
+      "n": 108,
+      "p50": 352,
+      "p90": 383,
+      "p99": 433,
+      "max": 451
+    },
+    "drug_mechanism_chembl": {
+      "n": 25,
+      "p50": 67,
+      "p90": 73,
+      "p99": 160,
+      "max": 160
+    },
+    "drug_history": {
+      "n": 68,
+      "p50": 170,
+      "p90": 208,
+      "p99": 246,
+      "max": 246
+    },
+    "drug_indication": {
+      "n": 78,
+      "p50": 183,
+      "p90": 214,
+      "p99": 247,
+      "max": 247
+    },
+    "drug_resistance": {
+      "n": 32,
+      "p50": 273,
+      "p90": 310,
+      "p99": 338,
+      "max": 338
+    },
+    "drug_mechanism": {
+      "n": 86,
+      "p50": 282,
+      "p90": 314,
+      "p99": 352,
+      "max": 352
+    },
+    "amr_concept": {
+      "n": 13,
+      "p50": 324,
+      "p90": 401,
+      "p99": 431,
+      "max": 431
+    },
+    "pathogen_brief": {
+      "n": 11,
+      "p50": 352,
+      "p90": 398,
+      "p99": 415,
+      "max": 415
+    },
+    "drug_pathogen_reasoning": {
+      "n": 280,
+      "p50": 708,
+      "p90": 1300,
+      "p99": 1907,
+      "max": 2215
+    },
+    "drug_mechanism_deep_dive": {
+      "n": 79,
+      "p50": 2164,
+      "p90": 2672,
+      "p99": 2778,
+      "max": 2778
+    },
+    "amr_mechanism_overview": {
+      "n": 1,
+      "p50": 1009,
+      "p90": 1009,
+      "p99": 1009,
+      "max": 1009
+    },
+    "structure_activity_comparison": {
+      "n": 36,
+      "p50": 929,
+      "p90": 1561,
+      "p99": 1943,
+      "max": 1943
+    },
+    "counterfactual_design": {
+      "n": 51,
+      "p50": 671,
+      "p90": 1385,
+      "p99": 1561,
+      "max": 1561
+    },
+    "cross_pathogen_spectrum": {
+      "n": 36,
+      "p50": 1091,
+      "p90": 1307,
+      "p99": 2024,
+      "max": 2024
+    },
+    "pathogen_specific_dive": {
+      "n": 32,
+      "p50": 571,
+      "p90": 1766,
+      "p99": 1767,
+      "max": 1767
+    },
+    "pk_pd_reasoning": {
+      "n": 32,
+      "p50": 571,
+      "p90": 636,
+      "p99": 651,
+      "max": 651
+    },
+    "stewardship_decision": {
+      "n": 30,
+      "p50": 554,
+      "p90": 650,
+      "p99": 722,
+      "max": 722
+    },
+    "coadd_inhibition_screen": {
+      "n": 1500,
+      "p50": 153,
+      "p90": 170,
+      "p99": 189,
+      "max": 225
+    },
+    "coadd_mic_prediction": {
+      "n": 1500,
+      "p50": 188,
+      "p90": 211,
+      "p99": 267,
+      "max": 340
+    },
+    "coadd_selectivity_profile": {
+      "n": 1500,
+      "p50": 250,
+      "p90": 285,
+      "p99": 396,
+      "max": 598
+    },
+    "eucast_susceptibility_classification": {
+      "n": 630,
+      "p50": 158,
+      "p90": 185,
+      "p99": 242,
+      "max": 270
+    },
+    "eucast_breakpoint_lookup": {
+      "n": 213,
+      "p50": 155,
+      "p90": 189,
+      "p99": 249,
+      "max": 263
+    },
+    "eucast_pathogen_drug_match": {
+      "n": 8,
+      "p50": 398,
+      "p90": 439,
+      "p99": 439,
+      "max": 439
+    },
+    "who_class_members": {
+      "n": 32,
+      "p50": 76,
+      "p90": 97,
+      "p99": 125,
+      "max": 125
+    },
+    "who_class_lookup": {
+      "n": 138,
+      "p50": 76,
+      "p90": 90,
+      "p99": 99,
+      "max": 101
+    },
+    "who_category_assignment": {
+      "n": 138,
+      "p50": 121,
+      "p90": 131,
+      "p99": 137,
+      "max": 137
+    },
+    "who_use_restriction": {
+      "n": 138,
+      "p50": 91,
+      "p90": 95,
+      "p99": 101,
+      "max": 107
+    },
+    "tdc_admet_prediction": {
+      "n": 1500,
+      "p50": 119,
+      "p90": 146,
+      "p99": 210,
+      "max": 292
+    },
+    "tdc_toxicity_prediction": {
+      "n": 1500,
+      "p50": 107,
+      "p90": 135,
+      "p99": 188,
+      "max": 333
+    },
+    "clinical_amp_indication": {
+      "n": 96,
+      "p50": 73,
+      "p90": 93,
+      "p99": 106,
+      "max": 106
+    },
+    "clinical_amp_recognition": {
+      "n": 77,
+      "p50": 90,
+      "p90": 182,
+      "p99": 563,
+      "max": 563
+    },
+    "clinical_amp_development_stage": {
+      "n": 96,
+      "p50": 78,
+      "p90": 111,
+      "p99": 200,
+      "max": 200
+    },
+    "candidate_ranking": {
+      "n": 17,
+      "p50": 623,
+      "p90": 673,
+      "p99": 674,
+      "max": 674
+    },
+    "reward_profile_analysis": {
+      "n": 17,
+      "p50": 657,
+      "p90": 751,
+      "p99": 756,
+      "max": 756
+    },
+    "structural_strategy_reasoning": {
+      "n": 17,
+      "p50": 713,
+      "p90": 758,
+      "p99": 768,
+      "max": 768
+    }
+  },
+  "over_max_examples": []
+}
