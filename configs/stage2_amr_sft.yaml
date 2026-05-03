@@ -22,34 +22,40 @@ model:
 # Data
 # -----------------------------------------------------------------------------
 dataset:
-  # The "pro" Stage 2 = scaffold-aware chemistry tuples + reasoning slice:
+  # The "pro v2" Stage 2 = scaffold-aware chemistry tuples + reasoning slice:
   #   • clean-split chemistry tuples       195,616 train + 15,584 valid
   #     (scaffold split: 0 SMILES leak, 0 pair leak)
-  #   • reasoning chains                     4,981 train +    207 valid
+  #   • original reasoning chains            4,981 train +    207 valid
   #     (Wikipedia mechanism/indication/resistance/history,
   #      PubMed abstract Q&A, CARD resistance-gene explanations)
-  # = total 200,597 train + 15,791 valid · 23 task types
+  #   • named-drug elite CoT                   311 train + 49 held-out test
+  #     (named genes/MICs/exact trial citations across 14 reasoning task types)
+  # = total 364,424 train + 29,300 valid + 49 named-drug-test
   # Versions on HF Hub:
   #   raw      → rahul24raj/lysos-amr-stage2          (leaky superset)
   #   dedup    → rahul24raj/lysos-amr-stage2-dedup    (hash dedup, leaky)
   #   clean    → rahul24raj/lysos-amr-stage2-clean    (scaffold-split, no leak)
   #   reasoning → rahul24raj/lysos-amr-stage2-reasoning (just reasoning)
-  #   pro      → rahul24raj/lysos-amr-stage2-pro      (DEFAULT: clean + reasoning)
+  #   pro      → rahul24raj/lysos-amr-stage2-pro      (clean + reasoning, no named-drug)
+  #   pro-v2   → rahul24raj/lysos-amr-stage2-pro-v2   (DEFAULT: pro + named-drug elite CoT)
   source: local
-  path: data/processed/amr-stage2-pro
-  hub_id: rahul24raj/lysos-amr-stage2-pro
+  path: data/processed/amr-stage2-pro-v2
+  hub_id: rahul24raj/lysos-amr-stage2-pro-v2
   split_train: train
   split_eval: valid
   text_field: messages
   response_template: "<start_of_turn>model\n"
   max_seq_length: 4096
   packing: true
-  # Multi-task mixing weights (sum = 1.0). Recalibrated 2026-05-01 after
-  # DrugCentral + NPAtlas wiring — total 13 task types, 221,338 examples.
+  # Held-out test slice for named-drug reasoning (independent eval, not loaded
+  # by trainer): data/processed/amr-stage2-pro-v2/test_named_drug.jsonl (49 rows)
+  # Multi-task mixing weights (sum = 1.0). Recalibrated 2026-05-03 after
+  # named-drug-elite-CoT injection — total 27 task types in train.
   task_mix:
-    # Core chemistry (50%) — these directly serve the design objective
-    generation_for_target: 0.20  # given pathogen → SMILES
-    activity_prediction: 0.18    # given molecule + pathogen → MIC
+    # Core chemistry (44%) — directly serve the design objective.
+    # Reduced 2pp from generation/activity to make room for elite reasoning slice.
+    generation_for_target: 0.18  # given pathogen → SMILES
+    activity_prediction: 0.16    # given molecule + pathogen → MIC
     peptide_design: 0.08         # given pathogen → AMP sequence
     drug_structure: 0.04         # name ↔ SMILES (DrugCentral)
 
@@ -57,13 +63,32 @@ dataset:
     safety_prediction: 0.08      # given molecule → hemolysis
     drug_likeness: 0.04          # given molecule → QED + Lipinski (rdkit-side)
 
-    # Drug + natural product knowledge (38%) — vocabulary tasks
+    # Drug + natural product knowledge (37%) — vocabulary tasks
     natural_products: 0.10       # NPAtlas — name ↔ SMILES ↔ producer organism
-    drug_id_lookup: 0.06         # name → DrugBank ID
+    drug_id_lookup: 0.05         # name → DrugBank ID  (was 0.06; 1pp redirected)
     drug_inchi_key: 0.05         # name → Standard InChI Key
     drug_synonyms: 0.05          # name → synonym list
     drug_cas_lookup: 0.06        # name → CAS
     drug_reverse_cas: 0.06       # CAS → name
+
+    # Elite named-drug reasoning slice (5%) — high-quality CoT to develop
+    # deep reasoning fingerprint. Aggressive oversample: ~720 rows are 0.2%
+    # of corpus but get 5% of training compute = 25x upsample. Sub-weights
+    # are proportional to per-task volume.
+    drug_pathogen_reasoning: 0.020       # 280 rows · clinical reasoning
+    drug_mechanism_deep_dive: 0.005      #  81 rows · target/SAR/PK/PD deep dive
+    counterfactual_design: 0.004         #  53 rows · "what if remove X" SAR
+    resistance_mechanism_explanation: 0.003  # 50 rows · named genes/enzymes
+    drug_combination_synergy: 0.003      #  44 rows · synergy + clinical evidence
+    cross_pathogen_spectrum: 0.003       #  37 rows · spectrum maps
+    structure_activity_comparison: 0.002 #  36 rows · drug-pair SAR
+    pathogen_specific_dive: 0.002        #  34 rows · hard-to-treat organisms
+    pk_pd_reasoning: 0.002               #  32 rows · TDM / dosing scenarios
+    stewardship_decision: 0.002          #  32 rows · empirical/de-escalation
+    design_challenge: 0.001              #  14 rows · de novo (low weight, filter-limited)
+    candidate_ranking: 0.001             #   9 rows · multi-objective triage
+    reward_profile_analysis: 0.001       #   9 rows · 7-component reward profiling
+    structural_strategy_reasoning: 0.001 #   9 rows · pathogen-arc analysis
 
 # -----------------------------------------------------------------------------
 # Training — gentler LR than Stage 1, fewer epochs (avoid forgetting Stage 1)
