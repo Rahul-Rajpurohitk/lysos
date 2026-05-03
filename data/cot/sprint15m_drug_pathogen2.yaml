@@ -1,0 +1,322 @@
+task: drug_pathogen_reasoning
+prompt_label: "Case"
+instructions: |
+  Instructions: A clinical drug-pathogen pair is presented. Reason through
+  (1) why this drug is appropriate (or not) for this organism in this site,
+  (2) the named resistance mechanism that would or might compromise activity,
+  (3) the PK/PD index (T greater than MIC, AUC/MIC, Cmax/MIC) and the numeric target,
+  (4) what other drug option to consider and the trade-off,
+  (5) the monitoring or follow-up step that determines whether to continue.
+
+entries:
+  - name: "Ceftaroline for MRSA bacteremia when vancomycin AUC cannot be attained"
+    body: |
+      55-year-old hemodialysis patient with MRSA right-sided endocarditis and
+      bacteremia day 5 of vancomycin; vanco AUC 380 (MIC 1, AUC/MIC 380 below
+      target 400-600) limited by AKI on emergence and unable to dose-escalate.
+      Ceftaroline (active metabolite of the prodrug ceftaroline fosamil) binds
+      PBP2a of MRSA at the allosteric site (residue Glu447 region), triggering
+      conformational opening of the closed PBP2a active-site groove that
+      excludes other cephalosporins. This allows the C7 aminothiazole-oxime
+      backbone carbonyl to acylate Ser403 of PBP2a, halting cell-wall
+      cross-linking. MIC50 against MRSA 1 ug/mL; ceftaroline retains activity
+      against vancomycin-tolerant strains and hVISA. Switch from vancomycin
+      to ceftaroline 600 mg IV q8h (renal-adjusted to q12h for HD; give post-HD
+      session). Combination with daptomycin (8 to 12 mg/kg q24h) supported by
+      Geriak 2019 randomized pilot — faster blood culture clearance (1.5 vs
+      4 days) and 30-day mortality 0 vs 26 percent. Resistance: PBP2a
+      Glu447Lys mutations near the allosteric site raise ceftaroline MIC.
+      PK/PD: fT greater than MIC at greater than 50 percent for stasis;
+      ceftaroline Cmax 18 ug/mL at 600 mg q8h. Monitoring: daily blood
+      cultures until 48-hour clearance; ECHO for vegetation reduction; renal
+      function, beta-lactam-related AKI risk; total course 6 weeks for
+      endocarditis per AHA/IDSA. Switch back to vancomycin only if
+      ceftaroline-resistance documented OR alternative drug fails.
+
+  - name: "Levofloxacin for Legionella pneumophila community-acquired pneumonia"
+    body: |
+      62-year-old returning from a hotel stay with severe pneumonia,
+      hyponatremia (Na 128), GI symptoms (diarrhea, nausea), confusion, and
+      Legionella urinary antigen positive (specific for L. pneumophila
+      serogroup 1, the dominant pathogenic serogroup). Legionella is an
+      intracellular gram-negative bacterium that replicates within alveolar
+      macrophages — drugs must penetrate cells to be effective. Levofloxacin
+      750 mg IV/PO q24h is first-line because: (1) excellent intracellular
+      concentration (cell-to-plasma ratio 5-10x via active transport into
+      phagocytes); (2) gyrA/parC inhibition gives bactericidal kill that
+      beta-lactams (ineffective intracellularly) cannot match; (3) MIC50
+      against L. pneumophila 0.03 ug/mL, achieved easily at standard dose.
+      Alternative: azithromycin 500 mg IV/PO daily (also intracellular,
+      time-dependent kill via 50S ribosome at A2058 of 23S rRNA);
+      moxifloxacin 400 mg daily. Avoid: beta-lactams (ceftriaxone,
+      pip-tazo) — they do NOT cover Legionella because they cannot
+      penetrate macrophages efficiently. Resistance: rare; gyrA mutations
+      reported sporadically; macrolide resistance rising in L. pneumophila
+      with prior macrolide exposure (point mutation at L4 ribosomal protein).
+      PK/PD: fAUC/MIC about 100 for fluoroquinolones in respiratory
+      pathogens; levofloxacin 750 mg gives fAUC of 75 mg.h/L, hitting
+      target. Duration: 5 to 7 days for severe Legionella pneumonia (ATS-IDSA
+      2019 CAP guideline supports short-course); 14 to 21 days if
+      immunocompromised or extra-pulmonary. Monitor: clinical response by
+      day 3 (defervescence, oxygenation), QTc on ECG (FQ class effect,
+      additive with other QT-prolonging drugs), Achilles tendon symptoms
+      (FDA black-box for tendinopathy), C. difficile risk; reassess if
+      no improvement at 72 hours.
+
+  - name: "Oral vancomycin plus IV metronidazole for fulminant Clostridioides difficile with ileus"
+    body: |
+      80-year-old with fulminant C. difficile (toxic megacolon, septic shock,
+      ileus, lactate 5, WBC 28000) day 4 of fidaxomicin 200 mg PO BID. Oral
+      vancomycin loaded as 500 mg PO/PR QID PLUS IV metronidazole 500 mg q8h
+      (the standard fulminant CDI regimen per IDSA-SHEA 2021 update). Rationale:
+      (1) ileus reduces gut transit so oral fidaxomicin or vancomycin alone
+      may not reach distal colon at therapeutic concentration; high-dose
+      vancomycin oral (500 mg QID instead of 125 mg) PLUS rectal vancomycin
+      retention enema (500 mg in 100 mL saline) to reach the colon
+      retrogradely; (2) IV metronidazole adds systemic-to-luminal penetration
+      (metronidazole concentrates in inflamed gut tissue). Vancomycin
+      oral binds C. difficile cell-wall D-Ala-D-Ala terminus of lipid II,
+      blocking transglycosylation; metronidazole prodrug is reduced by
+      C. difficile pyruvate-ferredoxin oxidoreductase (PFOR) to reactive
+      species that damage DNA. Resistance: rising metronidazole resistance in
+      C. difficile (5 to 15 percent in some surveillance, drove the IDSA
+      downgrade of metronidazole monotherapy from first-line); fidaxomicin
+      resistance via rpoB mutations rare but emerging. Surgical consultation
+      for emergency colectomy if hemodynamic deterioration despite medical
+      therapy (Sailhamer 2009 — colectomy reduces mortality 50 vs 90 percent
+      in fulminant CDI with peritonitis). Avoid: stopping fidaxomicin
+      prematurely if patient stabilizes; consider continuing fidaxomicin
+      AND adding vanco/metro for fulminant overlap. PK/PD: vanco oral
+      luminal AUC drives effect (no systemic level relevance for CDI);
+      metronidazole AUC/MIC about 70 systemically. Monitor: stool frequency,
+      WBC trend, lactate, abdominal exam, daily vital signs; surgical
+      reassessment if not improving by 48 to 72 hours.
+
+  - name: "Penicillin G for treponemal neurosyphilis with reactive CSF VDRL"
+    body: |
+      45-year-old HIV-positive male with positive serum RPR titer 1:64,
+      CSF VDRL reactive, CSF WBC 25 (lymphocyte predominant), CSF protein
+      80, focal neurologic symptoms (memory loss, gait ataxia). Diagnosed
+      neurosyphilis. Treponema pallidum is exquisitely susceptible to
+      penicillin (MIC 0.001 to 0.01 ug/mL); penicillin binds bacterial PBP3
+      and PBP1 with high affinity. CSF penetration of penicillin is
+      modest (about 10 percent of plasma) but adequate at high IV doses.
+      First-line: aqueous crystalline penicillin G 18 to 24 million units IV
+      daily (3 to 4 million units IV q4h or continuous infusion), continued
+      for 10 to 14 days (CDC STD treatment 2021). Alternative for penicillin
+      allergy without anaphylaxis: ceftriaxone 2 g IV daily x 14 days
+      (adequate CSF penetration, similar T. pallidum sensitivity). For
+      anaphylaxis-grade penicillin allergy, desensitization is preferred
+      because no other oral or short-course option reliably cures
+      neurosyphilis. Avoid: oral doxycycline (used for non-neurosyphilis
+      late latent if penicillin-allergic, 100 mg BID x 28 days, but
+      inadequate CSF penetration for neurosyphilis); benzathine penicillin G
+      IM (the one-dose treatment for primary syphilis or single-dose latent
+      reaches insufficient CSF concentration for neurosyphilis). Resistance:
+      no clinical penicillin resistance in T. pallidum reported in 80+ years
+      of use — a remarkable record. Macrolide resistance via 23S rRNA
+      A2058G is documented (azithromycin no longer recommended). PK/PD:
+      time-dependent kill, fT greater than MIC at greater than 60 percent.
+      Monitor: serum RPR/VDRL titer at 6 and 12 months for fourfold decline
+      (treatment success); CSF VDRL re-test at 6 months in HIV-positive
+      with neurosyphilis; clinical response (cognitive, neurologic
+      improvement); Jarisch-Herxheimer reaction (febrile reaction in first
+      24 hours from spirochete lysis releasing endotoxin-like products —
+      premedicate aspirin/acetaminophen, no contraindication to continuing
+      treatment).
+
+  - name: "Ceftriaxone for Neisseria meningitidis bacterial meningitis"
+    body: |
+      18-year-old college student with sudden fever, headache, vomiting,
+      nuchal rigidity, petechial rash; CSF: WBC 5000 (95 percent
+      polymorphonuclear), protein 200, glucose 25, gram-negative
+      diplococci on Gram stain. Suspected N. meningitidis bacterial
+      meningitis. Empirical regimen: ceftriaxone 2 g IV q12h (high-dose
+      meningitis dose, doubling the standard 2 g daily because CSF
+      penetration is ~30 percent of plasma) PLUS vancomycin 15 to 20
+      mg/kg q8h (until pneumococcus excluded; PRSP coverage). Add
+      dexamethasone 10 mg IV q6h x 4 days, ideally with or before
+      first antibiotic dose (the de Gans 2002 NEJM trial showed mortality
+      reduction in pneumococcal but not meningococcal meningitis;
+      practical guideline gives steroid empirically until pathogen
+      identified). Once N. meningitidis confirmed, continue ceftriaxone
+      monotherapy 2 g IV q12h x 7 days (IDSA 2004 bacterial meningitis
+      guideline). Resistance: N. meningitidis remains susceptible to
+      penicillin in most regions; ceftriaxone resistance rare; some
+      reduced-susceptibility strains (penA mosaic genes). Beta-lactamase-
+      producing strains rare. Alternative for severe penicillin allergy:
+      meropenem 2 g IV q8h, OR chloramphenicol (rarely used). PK/PD:
+      ceftriaxone fT greater than MIC at greater than 60 percent for
+      stasis; CSF Cmax 5 to 10 ug/mL for greater than 12 hours
+      post-dose vs N. meningitidis MIC 0.03. Public-health: notify
+      health department for outbreak investigation; CIP rifampin or
+      ciprofloxacin chemoprophylaxis for close contacts (household, intimate,
+      direct exposure to oral secretions); MenACWY conjugate vaccine for
+      college students and outbreak control. Monitor: clinical response
+      48 hours (defervescence, mental status); repeat LP only if not
+      responding; ICP management, seizure monitoring, long-term hearing
+      and neurologic sequelae assessment.
+
+  - name: "Doxycycline for suspected Rocky Mountain Spotted Fever"
+    body: |
+      30-year-old camper from southeastern US with 5-day fever, severe
+      headache, maculopapular-then-petechial rash starting on wrists and
+      ankles spreading centrally, abdominal pain, and elevated transaminases.
+      Lab: thrombocytopenia, hyponatremia, normal-to-low WBC. Clinically
+      consistent with Rocky Mountain Spotted Fever (Rickettsia rickettsii)
+      transmitted by Dermacentor variabilis (American dog tick).
+      EMPIRICAL DOXYCYCLINE 100 mg PO/IV q12h IS THE STANDARD —
+      delay can be fatal (mortality rises from less than 1 percent with
+      treatment in week 1 to greater than 30 percent if treatment delayed
+      to week 2). Doxycycline is the ONLY recommended treatment for
+      RMSF in all ages and pregnancy: AAP 2017 reversed prior pediatric
+      avoidance because tetracycline tooth-staining is dose- and
+      duration-dependent and short-course doxycycline has minimal
+      cosmetic effect; benefit greatly exceeds risk in suspected RMSF.
+      Mechanism: 30S ribosomal A-site binding via Mg2+-coordination with
+      the C5/C7/C9 hydroxyl/amino groups of the tetracycline core,
+      blocking aminoacyl-tRNA delivery; doxycycline penetrates intracellular
+      Rickettsia (obligate intracellular pathogen) where chloramphenicol
+      and quinolones are inferior. Avoid chloramphenicol (gray-baby risk in
+      pregnancy and pediatric, aplastic anemia, lower efficacy than
+      doxycycline per Holman 2001 retrospective). Resistance: NOT documented
+      in clinically encountered Rickettsia rickettsii (one of the most
+      doxycycline-stable pathogens). PK/PD: doxycycline AUC/MIC about 24
+      for stasis; standard dose hits target. Duration: continue 5 to 7
+      days minimum and at least 3 days after fever resolution
+      (typically 7 to 10 days total). Monitor: clinical response (fever,
+      rash, organ function); transaminases trend; consider Anaplasma or
+      Ehrlichia as differential (also tick-borne, also doxycycline-treated,
+      so empirical doxycycline covers all); tick-bite history is suggestive
+      but absent in 40 percent of RMSF cases.
+
+  - name: "Ceftolozane-tazobactam for cystic fibrosis Pseudomonas exacerbation with MexAB overexpression"
+    body: |
+      28-year-old CF patient with chronic Pseudomonas aeruginosa colonization,
+      worsening FEV1 from 65 to 45, increased sputum production, fever.
+      Sputum culture grows P. aeruginosa with mucoid morphology, susceptibility:
+      ceftazidime MIC 16 (R), cefepime 8 (I), piperacillin-tazobactam greater
+      than 64 (R), meropenem 4 (I), tobramycin 4 (S), ciprofloxacin 1 (I).
+      The pattern suggests MexAB-OprM efflux overexpression (raised across
+      multiple beta-lactam classes) plus partial OprD-loss. Ceftolozane-
+      tazobactam is well-suited: ceftolozane is engineered with a C7
+      aminothiazole-oxime + C3 pyrazolium-imidazolium that resists MexAB-OprM
+      efflux better than ceftazidime (lower substrate affinity for the
+      RND pump) and binds Pseudomonal PBP3 and PBP1b with higher affinity,
+      maintaining MIC of 1 to 4 against MexAB-overexpressing strains.
+      Tazobactam protects against ESBL co-existence. Dose: ceftolozane-
+      tazobactam 1 g + 0.5 g IV q8h (1.5 g per dose) infused over 1 hour;
+      for HAP/VAP use 3 g + 1.5 g q8h (the higher dose). Alternative:
+      cefiderocol (siderophore Trojan-horse uptake bypassing efflux);
+      meropenem-vaborbactam (less anti-Pseudomonal activity, KPC-targeted);
+      polymyxin combo (last-line, AKI risk). Avoid: monotherapy with
+      ceftazidime, cefepime, or piperacillin-tazobactam in this MIC pattern;
+      single-agent fluoroquinolone (rapid resistance emergence). Resistance:
+      PBP3 mutations in Pseudomonas (M313I, A452V) emerge under ceftolozane-
+      tazobactam selection pressure and raise MIC 4 to 16-fold. PK/PD:
+      ceftolozane fT greater than MIC at greater than 50 percent of
+      dosing interval for stasis. Monitor: FEV1 trend over 7 to 10 days,
+      sputum re-culture day 5 to 7, AKI risk (nephrotoxic class), hepatic
+      enzymes; CF-specific 14- to 21-day course with reassessment.
+
+  - name: "Clindamycin add-on for necrotizing soft-tissue infection (Eagle effect)"
+    body: |
+      30-year-old male with rapidly progressive painful necrotizing fasciitis
+      of right thigh, erythema spreading 2 cm/hour, hypotension, lactate 6;
+      OR for emergent debridement. Likely polymicrobial including group A
+      Streptococcus +/- Clostridium perfringens +/- gram-negatives.
+      Empirical: vancomycin 25 to 30 mg/kg load + 15 to 20 mg/kg q8 to 12h
+      (MRSA) PLUS piperacillin-tazobactam 4.5 g IV q6h extended infusion
+      (broad-spectrum gram-negative + anaerobe) PLUS clindamycin 600 to 900 mg
+      IV q8h (the toxin-suppression arm). Why clindamycin: independent of
+      bacterial growth, clindamycin halts ribosomal synthesis of streptococcal
+      M-protein, streptolysin, exotoxins (including streptococcal
+      pyrogenic exotoxin SpeA, SpeB) AND staphylococcal exotoxins (TSST-1,
+      Panton-Valentine leukocidin, alpha-hemolysin). Beta-lactams do NOT
+      block toxin synthesis at sub-MIC concentrations during stationary
+      phase ("Eagle effect" — Eagle 1952 observed that penicillin lost
+      bactericidal activity in stationary streptococcal cultures while
+      clindamycin retained activity). For S. pyogenes specifically, in vitro
+      and clinical data (Stevens 1988) show 50S ribosomal binding by clindamycin
+      reduces toxin output by greater than 90 percent independent of cidality.
+      Resistance: erm methylation of A2058 (MLSb) confers clindamycin
+      resistance — D-test mandatory (constitutive vs inducible). However,
+      in the necrotizing fasciitis emergency setting, empirical clindamycin
+      is given before D-test results because mortality without it rises
+      from 30 to greater than 70 percent in necrotizing strep TSS.
+      PK/PD: AUC/MIC about 30 for stasis, but the antitoxin effect is
+      not MIC-related — sustained tissue concentrations are the goal.
+      Surgery is THE definitive treatment (clindamycin alone insufficient;
+      every hour of debridement delay raises mortality 4 percent per
+      Wong 2003). IVIG 1 g/kg x 1 then 0.5 g/kg x 2 days for refractory
+      streptococcal TSS. Monitor: hemodynamics, lactate, surgical
+      reassessment q12 to 24h; clindamycin can be discontinued after toxin
+      clearance and definitive cidal monotherapy continues; total course
+      typically 14 days based on response.
+
+  - name: "Acyclovir for HSV-1 encephalitis with weight-based CSF target"
+    body: |
+      50-year-old presents with 3-day fever, confusion, focal seizures,
+      MRI showing temporal lobe enhancement, CSF lymphocytic pleocytosis
+      (WBC 200, protein 90, normal glucose), CSF HSV PCR positive.
+      Diagnosed HSV-1 encephalitis (mortality untreated greater than 70
+      percent, with treatment 20 to 30 percent; long-term cognitive deficit
+      common). Acyclovir 10 mg/kg IBW IV q8h (high-dose, weight-based on
+      ideal body weight, NOT actual body weight to avoid AKI risk in
+      obese patients) — START EMPIRICALLY before PCR result if encephalitis
+      suspected; delay raises mortality and disability. Mechanism: acyclovir
+      is a guanosine analog requiring sequential phosphorylation: HSV
+      thymidine kinase (TK, encoded by UL23) phosphorylates acyclovir to
+      acyclovir-monophosphate (FIRST step is HSV-specific — host TK does NOT
+      phosphorylate efficiently, giving selectivity); host kinases then
+      phosphorylate to triphosphate, which is incorporated by HSV DNA
+      polymerase (UL30) into nascent viral DNA and acts as obligate
+      chain terminator (lacks 3prime-OH). CSF penetration around 50 percent
+      of plasma, reaches Cmax 10 to 25 ug/mL at standard dose against
+      MIC of 0.1. Resistance: HSV TK mutations (most common) produce
+      acyclovir-resistant strains in immunocompromised (especially HIV/AIDS,
+      stem-cell transplant) — switch to foscarnet 60 mg/kg IV q8h (direct
+      DNA polymerase inhibitor, does not require TK activation). PK/PD:
+      AUC/MIC; standard 10 mg/kg q8h hits target. Tox: nephrotoxicity
+      (crystalluria — IV pre-hydration with normal saline 1L over 1 hour
+      before each dose; check creatinine daily), neurotoxicity at high
+      levels (myoclonus, encephalopathy in renal failure or overdose),
+      injection-site phlebitis. Monitor: clinical neurologic improvement,
+      EEG, repeat MRI at week 1, CSF HSV PCR at end of treatment to
+      confirm clearance; total duration 14 to 21 days. Long-term outcome:
+      neurologic sequelae common; rehabilitation referral.
+
+  - name: "Linezolid for daptomycin-nonsusceptible E. faecium endocarditis"
+    body: |
+      58-year-old with prosthetic mitral valve VRE faecium endocarditis,
+      day 7 of daptomycin 12 mg/kg q24h with persistent positive blood
+      cultures and rising MIC (initial daptomycin MIC 1, repeat MIC 8 on
+      day 7 — suggesting emergent dapto-non-susceptibility via mprF
+      mutation). VRE faecium is intrinsically resistant to penicillin and
+      ampicillin (low-affinity PBP5 in E. faecium); vanA-mediated D-Ala-D-Lac
+      defeats vancomycin/teicoplanin. Linezolid options: 600 mg PO/IV q12h
+      OR tedizolid 200 mg q24h. Linezolid binds 50S ribosomal A-site at
+      A2451 of 23S rRNA, blocking 70S initiation complex formation;
+      bacteriostatic against VRE (NOT bactericidal — endocarditis ideally
+      treated with bactericidal agent, but the clinical need for an active
+      drug overrides this in dapto-NS situation). Combination with
+      daptomycin (re-dose-escalated) PLUS ampicillin or ceftaroline for
+      synergy via membrane charge alteration is sometimes used. Total
+      duration 6 to 8 weeks for prosthetic valve endocarditis per AHA/IDSA.
+      Resistance: cfr methylation of A2503 (PhLOPSa) raises linezolid MIC
+      to 8 to 16, conferring cross-resistance to chloramphenicol, lefamulin,
+      tedizolid (partial). 23S rRNA G2576T mutations require multiple alleles
+      mutated. PK/PD: AUC/MIC greater than 100 for stasis; 600 mg q12h
+      hits target for MIC of 1 to 2. Tox: dose-related mitochondrial
+      protein synthesis inhibition — thrombocytopenia (greater than 30
+      percent at 14 days, monitor weekly platelets), peripheral and optic
+      neuritis greater than 28 days, lactic acidosis. Concurrent SSRI
+      raises serotonin syndrome risk via MAO-A inhibition (4-fold serotonin
+      level rise) — switch SSRI to non-serotonergic antidepressant if
+      possible during prolonged linezolid course. Surgical evaluation for
+      prosthetic valve replacement (Class I indication for E. faecium
+      prosthetic valve endocarditis with persistent bacteremia despite
+      adequate therapy). Monitor: blood cultures every 48 hours,
+      platelets weekly, repeat ECHO at week 2 and 4, peripheral
+      neurologic exam at week 3, ophthalmology at week 4, lactate
+      level if metabolic acidosis emerges.

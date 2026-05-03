@@ -1,0 +1,308 @@
+task: counterfactual_design
+prompt_label: "Counterfactual"
+instructions: |
+  Instructions: A specific structural feature of an existing antimicrobial is
+  hypothetically removed or substituted. Reason through (1) the role that
+  feature plays in target binding or PK, (2) the predicted MIC shift across
+  representative pathogens, (3) whether resistance mechanisms change, (4) the
+  PK or toxicity consequence, (5) the medicinal-chemistry lesson — what the
+  feature is "buying" the molecule.
+
+entries:
+  - name: "Remove the para-aminobenzoic-acid mimicry from sulfamethoxazole"
+    body: |
+      Sulfamethoxazole's antibacterial activity arises from its mimicry of
+      para-aminobenzoic acid (PABA), the natural substrate of bacterial
+      dihydropteroate synthase (DHPS). The 4-amino group on the phenyl ring of
+      sulfamethoxazole is critical — it occupies the PABA-recognition pocket of
+      DHPS at residues Arg63, Arg255, Asp184 (E. coli numbering), and the
+      sulfonamide group mimics PABA's carboxylate. Replace the 4-amino with
+      hydrogen (becoming a generic phenyl-sulfonamide without the amine handle):
+      DHPS no longer recognizes the molecule because the H-bond donor at the
+      4-position is gone, and the sulfonamide alone has no DHPS binding affinity.
+      Predicted MIC against susceptible E. coli rises from 1 to 4 ug/mL
+      (sulfamethoxazole) to greater than 128 (effectively inactive); same for
+      Stenotrophomonas, Listeria, PCP. Resistance mechanisms become irrelevant
+      (sul1, sul2 still mediate bacterial DHPS sub-pocket changes that hit any
+      sulfa-PABA mimic, but base-line activity is lost). Mammalian cells lack
+      DHPS (we acquire folate from diet) so removing the amine doesn't change
+      mammalian selectivity, just abolishes antibacterial activity entirely.
+      PK shift: 4-amino is the metabolic handle for N-acetylation (the cause
+      of sulfa hypersensitivity in slow-acetylator phenotypes). Removing it
+      eliminates that toxicity arc but also removes the drug. Lesson: the
+      4-amino is the entire pharmacophore of the sulfa class — every sulfonamide
+      antibiotic from sulfanilamide (1935) to sulfamethoxazole (1960s) retains it.
+      The medicinal chemistry insight is that PABA mimicry is non-negotiable;
+      the C5/C6 pyrazole or thiazole or oxazole substituents at the other end
+      of the molecule fine-tune PK (half-life, distribution) but cannot replace
+      the PABA-mimic head.
+
+  - name: "Remove the C6-fluorine from ciprofloxacin"
+    body: |
+      The C6-fluorine on ciprofloxacin (and all fluoroquinolones — this is the
+      "fluoro" of "fluoroquinolone") sits adjacent to the C7-piperazine and the
+      C8 position; it occupies a small hydrophobic pocket near the GyrA active
+      site that improves target binding by 4 to 10-fold versus the parent
+      nalidixic-acid-class quinolone (no fluorine, just a 6-H). The fluorine is
+      a small electron-withdrawing group that polarizes the adjacent carbonyl
+      at C4 (the keto-acid pharmacophore), strengthening the keto's hydrogen-bond
+      to GyrA Asp residue and the metal coordination to Mg2+ at the cleavage-
+      complex interface. Remove the fluorine (replace with H, reverting to
+      first-generation quinolone scaffold): predicted MIC against E. coli rises
+      from 0.015 to 0.5 to 2 ug/mL, against P. aeruginosa from 0.25 to greater
+      than 16, against S. aureus from 0.5 to 8 to 16. Spectrum collapses to
+      "uropathogen-only" (nalidixic-acid-like) and clinical utility is lost
+      for systemic indications. Resistance landscape: gyrA S83L and parC S80I
+      mutations still raise MIC further but the molecule is already clinically
+      inactive. PK consequence: the C6-fluorine also reduces hepatic CYP-mediated
+      oxidation, prolonging half-life and improving oral bioavailability;
+      removing it shortens half-life (would require q6h dosing instead of q12h)
+      and raises CNS penetration (more polar molecule might paradoxically
+      raise CNS toxicity if it gets in). Lesson: the C6-fluorine is the
+      foundation of the fluoroquinolone class's clinical utility; it converted
+      a urinary-only nalidixic acid into a broad-spectrum oral systemic drug.
+      Norfloxacin (1980), ciprofloxacin (1987), levofloxacin (1996), and
+      moxifloxacin (1999) all retain it.
+
+  - name: "Remove the C2-amidine of meropenem (carbapenem ring)"
+    body: |
+      Carbapenems share a bicyclic beta-lactam-pyrrolidine core; meropenem,
+      imipenem, ertapenem, and doripenem all carry a C2 amidine substituent
+      (a pyrrolidine carboxamide in meropenem's case, with various extensions).
+      The C2-amidine reaches into the active-site channel of PBP1a, PBP2, and
+      PBP3 of Enterobacterales and Pseudomonas, providing the "second-pocket"
+      contact that boosts affinity by 100-fold over a bare carbapenem
+      scaffold. The amidine also stabilizes the carbapenem ring against
+      hydrolysis by class A serine carbapenemases via electrostatic
+      interaction with active-site residues. Remove the C2-amidine (replace
+      with hydrogen or methyl, yielding the parent carbapenem-3-carboxylic
+      acid scaffold): predicted MIC against E. coli rises from 0.06 to 4 to 8;
+      against P. aeruginosa from 0.5 to greater than 32; against MSSA from
+      0.06 to 2 to 4. Anaerobic activity (B. fragilis) collapses too. Resistance
+      to KPC, NDM, OXA-48 carbapenemases is unchanged in pattern but the drug
+      is already clinically inactive. PK consequence: the C2-amidine is also
+      the metabolic handle for renal organic-anion-transporter (OAT) secretion;
+      its removal would alter renal clearance kinetics. Toxicity: C2 amidine
+      contributes to the GABA-receptor binding affinity that drives carbapenem
+      seizures (especially imipenem); removing it might reduce CNS toxicity
+      paradoxically while eliminating antibacterial activity. Lesson: the C2
+      substituent is the "antibiotic engine" of the carbapenem class —
+      every member retains it (with class-distinguishing modifications). The
+      carbapenem ring alone is necessary but not sufficient; class-defining
+      activity requires C2 elaboration.
+
+  - name: "Remove the triazole N4 nitrogen from fluconazole"
+    body: |
+      Fluconazole has two 1,2,4-triazole rings linked by a propan-2-ol with a
+      2,4-difluorophenyl group. The N4 of one triazole binds the heme iron of
+      fungal CYP51 (lanosterol-14-alpha-demethylase, ERG11) via dative bond
+      between the lone pair on N4 and the Fe(III) center, blocking the natural
+      substrate's access to the catalytic ferryl-oxo intermediate. Replace the
+      triazole-N4 with an N4 lacking the lone pair (e.g., make it a carbon by
+      replacing the triazole with imidazoline or just a phenyl ring): the dative
+      bond to heme iron is lost, and CYP51 inhibition collapses. Predicted MIC
+      against C. albicans rises from 0.25 ug/mL to greater than 64; against
+      Cryptococcus neoformans from 4 to greater than 64; against Aspergillus
+      (fluconazole already inactive). Resistance mechanisms (ERG11 Y132F,
+      CDR1/CDR2 efflux upregulation) become irrelevant — base-line target
+      binding is lost. Mammalian CYP51 (the cholesterol biosynthesis enzyme
+      14-alpha-demethylase in humans, encoded by CYP51A1) has different active-
+      site geometry and lower affinity for the standard azole; removing the
+      triazole would also abolish off-target mammalian CYP3A4/2C9 inhibition
+      that drives fluconazole drug-drug interactions, but at the cost of
+      removing the antifungal activity. PK consequence: the triazole is also
+      an H-bond acceptor that contributes to fluconazole's high water-solubility
+      and renal clearance; removing it would alter solubility and clearance.
+      Lesson: the triazole nitrogen lone pair is the entire azole-class
+      pharmacophore — every fluconazole, voriconazole, posaconazole,
+      isavuconazole, itraconazole retains it; the differences between agents
+      come from the OPPOSITE side of the molecule (lipophilic groups that
+      reach extended hydrophobic pockets unique to mold CYP51 in vori and
+      posa).
+
+  - name: "Remove the kynurenine-13 residue from daptomycin"
+    body: |
+      Daptomycin's macrocyclic structure depends on residue 13 — kynurenine
+      (Kyn), an oxidized indole-amino-acid not found in canonical proteins.
+      Kyn-13 forms an intramolecular ester bond with Thr4 closing the
+      macrocycle of the cyclic decapeptide; the indole's aromatic stack
+      anchors the structural fold that enables Ca2+-dependent membrane
+      insertion. Replace Kyn-13 with tryptophan (the most similar canonical
+      residue): the macrocyclic geometry is altered (Trp's N1 H-bond donor
+      makes it slightly larger), the ester bond cannot form correctly, and
+      the cyclic structure may not close — yielding a linear decapeptide.
+      Predicted MIC against MRSA, VRE, and S. agalactiae rises from 0.25 to
+      1 ug/mL to greater than 32 (essentially inactive); the linear peptide
+      cannot oligomerize at the membrane and cannot dissipate membrane
+      potential. The Ca2+-dependent kink-helical conformation collapses
+      because Kyn's electronic features specifically position the
+      Asp3/Asp7/Asp9 cluster in 3D space. Resistance via mprF lysinylation
+      becomes irrelevant — base-line activity is lost. PK consequence:
+      protein binding (around 92 percent for daptomycin) is partly mediated
+      by the Kyn aromatic system; removing it would lower protein binding,
+      raise free fraction, and accelerate renal clearance. Toxicity:
+      rhabdomyolysis is membrane-insertion-mediated; abolishing membrane
+      insertion would also abolish toxicity (and the drug). Lesson: daptomycin's
+      activity rests on a single non-canonical amino acid that makes synthesis
+      complex — fermentation-based production (Streptomyces roseosporus) is
+      the only practical route. The Kyn residue is one of the chemistry
+      features that makes daptomycin unusual to manufacture and the entire
+      lipopeptide class instructive: small structural details
+      (Kyn vs Trp; D-Asp vs L-Asp; Anhydroanthranilic acid in calcium
+      dependent antibiotics) define class membership.
+
+  - name: "Remove the 5-fluoro from 5-fluorocytosine (flucytosine)"
+    body: |
+      Flucytosine (5FC) is taken up by fungal cytosine permease (FCY2) and
+      converted intracellularly by cytosine deaminase (FCY1) to 5-fluorouracil
+      (5FU); 5FU is then phosphorylated to 5-FUMP/5-FUDP/5-FUTP and
+      incorporated into RNA, blocking protein synthesis, OR converted to
+      5-FdUMP that inhibits thymidylate synthase, blocking DNA synthesis.
+      Mammalian cells lack cytosine deaminase, so 5FC is NOT converted to
+      toxic 5FU in human tissue — the selectivity comes from this fungal-
+      specific activation step. Remove the 5-fluoro (returning to plain
+      cytosine): cytosine deaminase converts cytosine to uracil, which is a
+      normal cellular metabolite, NOT a toxic chain terminator. The molecule
+      is no longer antifungal (or anything) — just a precursor of normal
+      pyrimidine metabolism. Predicted MIC against C. albicans rises from
+      0.25 to greater than 256 (effectively no activity); against
+      Cryptococcus neoformans from 1 to greater than 256. Resistance landscape
+      becomes meaningless (cytosine deaminase loss-of-function FUR1 mutations
+      that confer 5FC resistance no longer matter because no antifungal effect
+      exists). PK consequence: 5-fluoro on the pyrimidine ring is a
+      metabolically stable feature; removing it would actually IMPROVE the
+      already excellent oral bioavailability, but again no antifungal point.
+      Tox: the bone-marrow suppression from 5FU systemic conversion (10 to 30
+      percent at high doses) would disappear with cytosine — but so would the
+      synergy with amphotericin B in cryptococcal meningitis. Lesson: the
+      single fluorine atom at the 5-position is the entire antifungal
+      pharmacophore — it converts a normal nucleobase into a fungal-selective
+      DNA/RNA chain terminator via the fungal-specific deaminase activation
+      step. Five-fluoropyrimidine chemistry (also seen in 5FU oncology drug
+      and floxuridine) is one of the cleanest examples of "single atom
+      changes class membership."
+
+  - name: "Remove the n-fatty acyl chain from polymyxin B (becoming polymyxin nonapeptide)"
+    body: |
+      Polymyxin B is a cyclic decapeptide with an N-terminal n-fatty-acyl tail
+      (predominantly 6-methyloctanoyl or 6-methylheptanoyl). The peptide bears
+      five 2,4-diaminobutyric acid (Dab) residues with positively charged side
+      chains, which electrostatically bind the negatively charged lipid-A
+      phosphate groups of LPS. The fatty acyl tail then inserts into the
+      outer-membrane lipid bilayer, displacing Mg2+/Ca2+ bridges between
+      adjacent LPS molecules and disrupting the OM. Remove the fatty acyl tail
+      (yielding "polymyxin nonapeptide" — the cyclic peptide minus the lipid
+      anchor): the cyclic peptide still binds LPS electrostatically (some
+      residual binding from the Dab residues) but cannot insert into the
+      membrane because the lipophilic anchor is gone. Predicted MIC against
+      E. coli rises from 0.5 (susceptible polymyxin B) to greater than 64
+      (effectively inactive nonapeptide). However, the nonapeptide retains
+      LPS-binding affinity AND can ENHANCE the activity of OTHER antibiotics
+      that need OM penetration — polymyxin B nonapeptide has been studied as
+      an OM-permeabilizing adjunct that increases erythromycin or rifampin
+      activity against gram-negatives at sub-toxic doses (Vaara 1992 review).
+      Resistance: pmrAB lipid-A modifications still affect electrostatic
+      binding equally. PK consequence: the fatty acyl tail drives renal
+      clearance and tissue distribution; without it, the nonapeptide
+      distributes more rapidly and clears faster, with markedly less
+      nephrotoxicity (the dose-limiting toxicity of polymyxin B). Lesson:
+      polymyxin's antibacterial activity is membrane-disruption-driven, and
+      the fatty acyl tail is the membrane-disruption arm. The cyclic peptide
+      alone is a "soft" LPS-binder useful as adjuvant but not as standalone
+      drug — analogous to "antibiotic synergists" like clavulanate (not
+      antibacterial alone, restores partner activity).
+
+  - name: "Remove the C3 quaternary pyrrolidinium of cefepime (revert to ceftazidime-style)"
+    body: |
+      Cefepime's signature feature is the N-methylpyrrolidinium quaternary
+      cation at C3, attached via a methylene linker. The permanently
+      positively-charged quaternary nitrogen drives two effects: (1) faster
+      outer-membrane porin penetration of Enterobacterales (the negatively-
+      charged porin lumen pulls cations in faster — the "zwitterion advantage"),
+      giving 2 to 4-fold lower MIC against Pseudomonas (cefepime MIC50 1 to 4
+      vs ceftazidime 1 to 8) and AmpC-derepressed Enterobacter (cefepime 0.5
+      vs ceftazidime greater than 32); (2) steric block of class C AmpC
+      beta-lactamase, where the bulky pyrrolidinium cannot fit AmpC's smaller
+      active-site groove. Remove the C3 pyrrolidinium (replace with ceftazidime's
+      pyridinium-aminothiadiazole-thiomethyl): predicted MIC pattern reverts
+      to ceftazidime's, with P. aeruginosa MIC at 1 to 8 (similar) but
+      AmpC-derepressed Enterobacter MIC rising from cefepime's 0.5 to ceftazidime's
+      greater than 32 (effective ineffectiveness against derepressed AmpC).
+      The "fourth-generation cephalosporin" classification depends on the
+      cation; without it, the drug becomes a third-generation cephalosporin
+      indistinguishable from ceftazidime. Resistance: ESBL hydrolysis (CTX-M-15,
+      TEM, SHV) defeats both equally. PK: pyrrolidinium contributes to fast
+      renal tubular secretion; reverting to pyridinium would slightly
+      lengthen half-life. Tox: cefepime's neurotoxicity (encephalopathy,
+      myoclonus, status epilepticus in renal failure when serum levels rise
+      greater than 22 ug/mL) is partly attributed to the cation; reverting
+      would lower this risk but at the cost of AmpC coverage. Lesson: a
+      single quaternary nitrogen converts a 3G cephalosporin into a
+      "fourth-generation" agent with the AmpC and Pseudomonas coverage profile.
+      Cefpirome (cyclopentapyridinium) and cefozopran achieve similar
+      "4G" effects with related but distinct C3 cations.
+
+  - name: "Remove the 6-methyl from doxycycline (revert to tetracycline-like 6-deoxy)"
+    body: |
+      Doxycycline's 6-methyl group is one of the SAR features distinguishing
+      it from tetracycline (which has 6-OH PLUS 6-methyl). Doxycycline retains
+      the 6-methyl but has 6-alpha-deoxy (no 6-OH); the 6-methyl provides
+      lipophilicity and crystal-lattice stability that contributes to
+      doxycycline's longer half-life (18 hours vs tetracycline's 8). Remove
+      the 6-methyl (replace with H, yielding 6-deoxy-6-demethyl-tetracycline):
+      predicted MIC remains similar against susceptible bacteria (target
+      binding at the 30S A-site is dominated by the C5/C7/C9 hydroxyl and
+      amino groups, NOT 6-methyl); however, lipophilicity drops, oral
+      absorption falls from 95 percent to 70 to 80 percent, half-life
+      shortens from 18 to about 8 hours, and tissue penetration into the
+      CNS, prostate, and pulmonary alveolar lining fluid is reduced. CNS
+      indications (neurosyphilis tertiary alternative, Lyme neuroborreliosis
+      adjunct) and intracellular pathogen activity (Rickettsia, Anaplasma,
+      Coxiella in macrophages) particularly suffer because cell penetration
+      depends on lipophilicity. Resistance: tet(M), tetA, tetX still affect
+      both molecules. PK: shorter half-life requires twice-daily-or-more
+      frequent dosing (loses doxycycline's once-daily option). Tox:
+      photosensitivity (driven partly by the chromophore) is unchanged; tooth
+      staining in pediatrics is class effect. Lesson: small lipophilic
+      substituents (6-methyl, 6-alpha-deoxy) at non-target-binding positions
+      are the PK levers in tetracyclines — they don't change the fundamental
+      antibacterial spectrum but determine clinical pharmacology (frequency
+      of dosing, tissue distribution, cell penetration). Demeclocycline,
+      sancycline, methacycline are SAR-related variants exploring this same
+      design space.
+
+  - name: "Replace the 4-methylpiperazine of rifampin with 4-spiropiperidine of rifabutin"
+    body: |
+      Rifampin and rifabutin share the same ansa-bridged naphthoquinone core
+      and the same target (rpoB beta-subunit of bacterial RNA polymerase).
+      The discriminator is at the C3 piperazine: rifampin has 4-methylpiperazine,
+      rifabutin replaces it with 4-spiropiperidine (a fused bicyclic substituent).
+      The spiropiperidine extends the molecule into a hydrophobic pocket
+      adjacent to the rpoB binding site, picking up additional contacts that
+      improve target binding 5 to 10-fold against M. avium complex (MAC) and
+      M. tuberculosis. Hypothetically REPLACING rifampin's 4-methylpiperazine
+      with rifabutin's 4-spiropiperidine: predicted MIC against MAC drops
+      from rifampin's MIC50 of 1 ug/mL (often "intermediate" against MAC) to
+      rifabutin's 0.06 (MAC-active first-line); MIC against M. tuberculosis
+      improves by 2 to 4-fold; staphylococci and streptococci see modest
+      improvement (already submicromolar with rifampin). Resistance: rpoB
+      Ser531Leu mutation defeats both molecules (cross-resistance), but
+      rpoB Asp516Val confers low-level resistance to rifampin while
+      preserving rifabutin (the Asp516Val mutation does not interact
+      significantly with the spiropiperidine's binding pocket). PK consequence:
+      rifabutin has a longer half-life (45 hours vs rifampin's 3 to 5) but
+      lower oral bioavailability (around 50 percent vs rifampin's 100
+      percent fasted). Critically, rifabutin is a WEAKER CYP3A4 inducer
+      than rifampin (about 30 percent of rifampin's induction strength),
+      making it preferred in HIV patients on protease inhibitors and
+      transplant patients on tacrolimus where rifampin would cause
+      drug-drug interaction failures. Toxicity: rifabutin causes uveitis
+      (anterior chamber inflammation, dose-related, especially when
+      combined with macrolide CYP3A4 inhibitors — clarithromycin raises
+      rifabutin AUC 2 to 3-fold and triggers uveitis in 20 to 40 percent
+      at standard rifabutin dose; reduce rifabutin to 150 mg q24h or
+      every-other-day with clarithromycin). Lesson: a single substituent
+      change at the C3 piperazine of the rifamycin core converts a
+      potent-but-broad-CYP-inducing drug into a MAC-targeted, weak-CYP-
+      inducing drug, illustrating that target affinity AND off-target
+      pharmacology can both be tuned by single-position SAR.
