@@ -1,0 +1,330 @@
+task: resistance_mechanism_explanation
+prompt_label: "Resistance mechanism"
+instructions: |
+  Instructions: A specific resistance mechanism (named gene/enzyme/mutation) is presented.
+  Reason through (1) the molecular event — what the gene product does to the drug or
+  target, (2) the pathogen distribution and how the mechanism is disseminated (chromosomal,
+  plasmid, transposon, integron), (3) the MIC shift it produces and which drugs are affected,
+  (4) which drugs it does NOT affect (the rescue option), (5) the diagnostic test and
+  clinical/epidemiologic implication.
+
+entries:
+  - name: "NDM-1 metallo-beta-lactamase"
+    body: |
+      Molecular event: NDM-1 (New Delhi metallo-beta-lactamase 1) is a class B Ambler
+      metallo-beta-lactamase encoded by blaNDM-1, with two zinc atoms (Zn1 and Zn2)
+      coordinated at the active site by His116, His118, Asp120, Cys221, His263 (E. coli
+      numbering convention, residues vary). The Zn1-Zn2 pair activates a bridging
+      hydroxide nucleophile that attacks the carbonyl of the beta-lactam ring,
+      hydrolyzing it to an inactive open-ring product. NDM-1 hydrolyzes ALL
+      beta-lactams except aztreonam (a monobactam — its structural isolation
+      from class B chemistry resists Zn coordination). Distribution: blaNDM-1
+      sits on conjugative plasmids (often IncL/M, IncN, IncFII) carrying
+      additional resistance genes (rmtB, dfrA, sul1, qnrB). First identified in
+      K. pneumoniae from a Swedish patient with prior India hospitalization
+      (2008), now globally disseminated; endemic in India, Pakistan, Egypt,
+      Vietnam; epidemic in Italy, Greece, Israel; sporadic in North America.
+      Found in E. coli, K. pneumoniae, Enterobacter cloacae, Acinetobacter
+      baumannii (chromosomal in CRAB), Pseudomonas aeruginosa. MIC shift: meropenem
+      from 0.06 to greater than 32 ug/mL; ceftazidime greater than 32; cefepime
+      greater than 32; piperacillin-tazobactam greater than 64; ceftazidime-
+      avibactam greater than 32 (avibactam DBO does not inhibit MBL — class B
+      requires Zn coordination chemistry). Drugs NOT affected: aztreonam (Zn-stable),
+      colistin/polymyxin B (membrane target, not beta-lactam), tigecycline (30S
+      target), aminoglycosides (30S target — UNLESS rmt gene also present),
+      cefiderocol (siderophore Trojan-horse, partial Zn stability), aztreonam-
+      avibactam (avibactam protects aztreonam from co-existing serine
+      beta-lactamases like CTX-M-15). Diagnostics: NG-Test CARBA-5 lateral-flow
+      detects NDM by immunoassay; molecular blaNDM PCR; phenotypic Carba NP
+      colorimetric test. Implication: requires active NDM-targeted therapy
+      (aztreonam-avibactam, cefiderocol, polymyxin combos); plasmid-borne nature
+      means containment via infection control AND rapid molecular surveillance.
+
+  - name: "OXA-48 class D weak carbapenemase"
+    body: |
+      Molecular event: OXA-48 (oxacillin-hydrolyzing class D beta-lactamase) is
+      encoded by blaOXA-48 and active-site Ser70 covalently acylates the
+      beta-lactam carbonyl in a Lys73-Tyr149-Trp157 catalytic motif, then a
+      water molecule deacylates the enzyme. OXA-48 hydrolyzes carbapenems weakly
+      (relative to KPC and NDM) but enough to confer clinically meaningful
+      resistance — it is the only class D enzyme in Enterobacterales with
+      carbapenemase activity. OXA-48 also hydrolyzes ampicillin, oxacillin, and
+      narrow-spectrum cephalosporins; it does NOT efficiently hydrolyze
+      ceftazidime, cefepime, or extended-spectrum cephalosporins, so an OXA-48-
+      producer with no co-existing ESBL appears CTX/CAZ-susceptible while being
+      meropenem-resistant — the so-called "stealth" carbapenemase. Distribution:
+      blaOXA-48 on a 62-kb conjugative plasmid (IncL/M) flanked by IS1999 insertion
+      sequences. Discovered in K. pneumoniae from Turkey (2001); now endemic in
+      Middle East, North Africa, Mediterranean Europe; sporadic globally. Variants
+      OXA-181, OXA-232 with similar activity. MIC shift: meropenem 1 to 16 ug/mL
+      (variable, often within "intermediate" range); imipenem 0.5 to 8; ertapenem
+      greater than 4 (most reliably elevated). Cefepime, ceftazidime usually
+      remain susceptible (less than or equal to 1) UNLESS co-existing CTX-M-15
+      ESBL is present (very common combination, since both are plasmid-borne).
+      Drugs NOT affected: ceftazidime-avibactam (avibactam efficiently inhibits
+      OXA-48 unlike NDM), cefiderocol, fosfomycin, aminoglycosides (without rmt),
+      tigecycline. Diagnostics: NG-Test CARBA-5 detects OXA-48 family; molecular
+      blaOXA-48-like PCR; ertapenem MIC greater than 0.5 is a sentinel screen.
+      Implication: ceftazidime-avibactam is first-line; molecular detection
+      essential because phenotypic carbapenem MIC is often only modestly elevated
+      and easily missed by routine MIC interpretation.
+
+  - name: "AmpC chromosomal derepression in Enterobacter, Citrobacter, Serratia"
+    body: |
+      Molecular event: AmpC is a chromosomally-encoded class C cephalosporinase
+      with active-site Ser64 acylating beta-lactams (similar mechanism to class A
+      serine enzymes but distinct catalytic residue arrangement). Expression of
+      ampC is normally repressed by AmpR (a LysR-family transcriptional regulator)
+      bound to N-acetyl-glucosamine-anhydro-muramyl-tripeptide, the natural ligand
+      from cell-wall recycling. Beta-lactam exposure (especially imipenem,
+      cefoxitin, clavulanate — strong inducers) increases the muropeptide pool,
+      switches AmpR to its activator conformation, and DEREPRESSES ampC
+      transcription. Stable derepression occurs when ampD (gene encoding the
+      anhydro-muropeptide amidase that consumes the inducer signal) carries a
+      loss-of-function mutation: ampD-null mutants constitutively overproduce
+      AmpC at 100 to 1000-fold baseline. Distribution: chromosomal in Enterobacter
+      cloacae complex (E. cloacae, E. asburiae, E. hormaechei), Citrobacter
+      freundii, Serratia marcescens, Providencia, Morganella, Pseudomonas
+      aeruginosa, Hafnia, Yersinia enterocolitica (the SPACE/SPICE-HAY-MY mnemonic).
+      Selection pressure during therapy: ampD-null mutants emerge at frequency
+      around 10^-6 to 10^-8 per replication; wild-type-then-derepressed
+      conversion under cefepime or piperacillin-tazobactam therapy is the
+      classic "Enterobacter problem." MIC shift on derepression: ceftriaxone
+      from 0.06 to greater than 64; ceftazidime from 0.5 to greater than 32;
+      piperacillin-tazobactam from 4 to greater than 64 (despite tazobactam,
+      because AmpC is poorly inhibited by tazo at clinical concentrations).
+      Drugs NOT affected: cefepime is partially stable (steric block by C3
+      pyrrolidinium quaternary group, MIC stays 0.5 to 4 even with derepression
+      — the basis for cefepime's "fourth-generation" classification);
+      meropenem, imipenem, ertapenem stable (carbapenem-AmpC complex is
+      unstable hydrolytic intermediate); aminoglycosides, fluoroquinolones
+      unaffected. Diagnostics: cefoxitin disk diffusion screen (resistance
+      hints AmpC); cloverleaf/D-test; molecular ampC PCR. Implication:
+      empirically AVOID ceftriaxone and ceftazidime monotherapy in SPACE
+      organisms; use cefepime, carbapenem, or aminoglycoside combination;
+      do NOT trust initial susceptibility report — repeat at day 3 to detect
+      emergent derepression.
+
+  - name: "mecA encoding PBP2a — MRSA mechanism"
+    body: |
+      Molecular event: mecA encodes PBP2a (penicillin-binding protein 2a), a 78-kDa
+      transpeptidase that performs cell-wall cross-linking with low affinity for
+      most beta-lactams. PBP2a's active site has a CLOSED conformation that
+      excludes most cephalosporins — the active-site Ser403 nucleophile is
+      buried, and the substrate-binding cleft is occluded by an alpha-loop
+      that does not open under beta-lactam pressure. When other PBPs (PBP1, 2,
+      3, 4) are inhibited by beta-lactams, PBP2a takes over peptidoglycan
+      cross-linking, allowing growth despite the drug. The cell wall produced
+      is structurally suboptimal but viable. Distribution: mecA sits on the
+      mobile genetic element SCCmec (Staphylococcal Cassette Chromosome mec),
+      with five major SCCmec types (I-V) varying in size and additional gene
+      content. SCCmec inserts at attBscc near the orfX origin of the
+      S. aureus chromosome. mecC is a related allele (formerly mecALGA251)
+      with around 70 percent amino acid identity to mecA, found in livestock-
+      associated MRSA. MIC shift: oxacillin from 0.5 (MSSA) to greater than 4
+      (MRSA, by CLSI breakpoint); cefazolin from 1 to greater than 16; ceftriaxone
+      from 8 to greater than 64. Drugs NOT affected: vancomycin (D-Ala-D-Ala
+      target unaffected by PBP2a), daptomycin (membrane target), linezolid (50S),
+      tigecycline (30S), clindamycin (50S), TMP-SMX (folate), ceftaroline
+      (allosteric PBP2a binder — the FIRST cephalosporin active vs MRSA via
+      the C3 thiazolyl-pyridinium reaching the allosteric site that opens
+      PBP2a's closed conformation). Diagnostics: mecA PCR is gold standard
+      (cefoxitin disk surrogate phenotypic test, oxacillin MIC). Implication:
+      mecA detection guides empirical and targeted therapy in S. aureus
+      bacteremia, pneumonia, endocarditis, and osteomyelitis; SCCmec typing
+      drives molecular epidemiology of nosocomial vs community-acquired
+      strains (USA300, USA400, ST398).
+
+  - name: "vanA operon — D-Ala-D-Ala to D-Ala-D-Lac"
+    body: |
+      Molecular event: vanA operon (Tn1546 transposon) encodes a six-gene
+      cassette (vanRSHAXY or vanRSHAXYZ) that synthesizes a depsipeptide
+      D-Ala-D-Lac instead of the dipeptide D-Ala-D-Ala. VanH is a dehydrogenase
+      that converts pyruvate to D-lactate; VanA is the ligase that joins D-Ala
+      to D-Lac (replacing the natural D-Ala-D-Ala ligase Ddl); VanX is a
+      dipeptidase that hydrolyzes existing D-Ala-D-Ala precursors so the
+      D-Lac variant is the only substrate available. Vancomycin binds D-Ala-
+      D-Ala via five hydrogen bonds; substituting the terminal D-Ala carbonyl
+      to a D-Lac ester eliminates one critical H-bond (oxygen lone pair vs NH),
+      reducing vancomycin affinity 1000-fold. Resistance is INDUCIBLE: VanS
+      kinase senses vancomycin and phosphorylates VanR, which then activates
+      transcription of the operon. Distribution: most commonly Enterococcus
+      faecium (vancomycin-resistant E. faecium, VREfm), with prevalence around
+      75 percent of nosocomial E. faecium in US ICUs. vanA on Tn1546 sits on
+      large conjugative plasmids carrying additional resistance (multi-drug-resistant
+      VRE phenotype). Rarely transferred to S. aureus (vancomycin-resistant
+      S. aureus, VRSA — about 14 cases since 2002, all carrying vanA from
+      VRE conjugation in patients with mixed wound colonization). vanB is a
+      related operon with vancomycin-only resistance (teicoplanin remains
+      active because VanS-B does not respond to teicoplanin induction).
+      MIC shift: vancomycin from 0.5 (susceptible) to greater than 256
+      (resistant); teicoplanin from 0.5 to 64 (vanA only — vanB stays
+      susceptible). Drugs NOT affected: linezolid (50S, MIC 1 to 2 in VRE),
+      daptomycin (8 to 12 mg/kg dose; mprF-mutant subpopulations exist but
+      bacterial population still controllable), tigecycline (30S), ampicillin
+      (only for E. faecalis — E. faecium is intrinsically penicillin-binding-
+      protein-5 mediated ampi-R), oritavancin/dalbavancin (lipoglycopeptides
+      with chlorobiphenyl arms that retain dual binding modes including
+      membrane disruption that bypasses D-Ala-D-Lac). Diagnostics: vanA/vanB
+      PCR; vancomycin MIC (broth microdilution preferred over disk diffusion).
+      Implication: gut colonization is the reservoir for VRE bacteremia;
+      contact precautions, rectal screening cultures, and antimicrobial
+      stewardship to limit vancomycin/cephalosporin pressure.
+
+  - name: "Erm methylation of A2058 — MLSb resistance"
+    body: |
+      Molecular event: Erm (erythromycin ribosome methylation) family enzymes
+      methylate A2058 of 23S rRNA at the N6 position (mono- or dimethylation),
+      sterically blocking macrolide, lincosamide (clindamycin), and streptogramin
+      B (MLSb) binding to the ribosomal exit tunnel near the peptidyl
+      transferase center. Single methylation gives modest cross-resistance;
+      dimethylation gives high-level cross-resistance (MIC greater than 64).
+      Multiple erm genes (ermA in S. aureus, ermB in S. pyogenes/S. pneumoniae/
+      enterococci/anaerobes, ermC in S. epidermidis, ermF in Bacteroides) all
+      target the same A2058 residue. Expression is INDUCIBLE in many strains:
+      basal expression is low; macrolide exposure leads to ribosomal stalling
+      on a leader ORF and methylation of the operator, allowing erm translation.
+      Inducible MLSb gives the classic "D-test" phenotype: erythromycin disk
+      induces a flat zone of inhibition on the clindamycin-side, while
+      clindamycin alone shows a normal zone — meaning that clindamycin
+      monotherapy in a D-test-positive isolate would select constitutive
+      erm-methylated mutants and therapy would fail. Distribution: ermA on
+      Tn554 in S. aureus (frequently MRSA-associated); ermB widely distributed
+      in streptococci, enterococci, and anaerobes via mobile genetic elements.
+      MIC shift: erythromycin/clarithromycin/azithromycin from 0.06 to greater
+      than 256; clindamycin from 0.06 to greater than 16 (full constitutive
+      MLSb) or remains apparently susceptible (inducible MLSb — unmasked by
+      the D-test). Drugs NOT affected: linezolid (50S A-site, distinct from
+      A2058 exit tunnel), tigecycline (30S), daptomycin (membrane), vancomycin
+      (D-Ala-D-Ala), TMP-SMX (folate), tetracycline (30S, mostly). Diagnostics:
+      D-test (CLSI mandatory before reporting clindamycin susceptibility in
+      MLSb-suspected isolates); ermA/B/C PCR. Implication: the D-test is
+      THE classic stewardship-driven phenotypic test that prevents in vivo
+      treatment failure; microbiology laboratories must perform it routinely
+      in S. aureus and S. pneumoniae isolates clinically considered for
+      clindamycin therapy.
+
+  - name: "KatG inactivation — isoniazid resistance in M. tuberculosis"
+    body: |
+      Molecular event: isoniazid (INH) is a prodrug requiring activation by
+      mycobacterial KatG (catalase-peroxidase, encoded by katG) to form the
+      active isonicotinoyl radical that covalently binds InhA (enoyl-ACP
+      reductase) of mycolic acid synthesis. KatG mutations that compromise
+      catalase-peroxidase activity (most commonly Ser315Thr, accounting for
+      around 70 percent of INH-resistant TB clinical isolates) reduce or
+      eliminate INH activation. The Ser315Thr mutation paradoxically retains
+      enough catalase activity for bacterial fitness (catalase is essential
+      for oxidative-stress survival) but loses INH-activation specificity —
+      this is what allows the mutation to spread without fitness cost. Other
+      INH-R mechanisms include inhA promoter mutations (overexpression of
+      target enzyme, low-level resistance, MIC 0.2 to 1 ug/mL) and ahpC
+      promoter mutations (compensatory for katG loss-of-function). Distribution:
+      M. tuberculosis chromosomal mutation; vertically inherited in clonal
+      lineages. INH resistance is the most common single-drug resistance in
+      TB globally, with around 12 percent of isolates worldwide (WHO 2022).
+      MIC shift: katG Ser315Thr raises INH MIC from 0.05 to greater than 5
+      ug/mL (high-level); inhA promoter mutation raises MIC to 0.2 to 1
+      (low-level — sometimes overcome with high-dose INH 15 mg/kg). Drugs NOT
+      affected: rifampin (different target — RNA polymerase), pyrazinamide
+      (PncA-mediated, different prodrug pathway), ethambutol (EmbB target,
+      different pathway), bedaquiline, linezolid. Diagnostics: GeneXpert
+      MTB/RIF screens for rifampin resistance only (proxy for MDR-TB);
+      GenoType MTBDRplus or whole-genome sequencing detect katG mutations;
+      Xpert MTB/XDR adds katG and inhA detection. Implication: INH-R-only
+      TB requires regimen modification (extending to 9 months and adding
+      a fluoroquinolone, per ATS 2019), not the standard 6-month regimen.
+      MDR-TB (INH + RIF resistance) requires entirely new regimen (BPaL,
+      BPaLM, or longer second-line).
+
+  - name: "tet(M) ribosomal protection protein"
+    body: |
+      Molecular event: tet(M) encodes a 73-kDa GTPase of the translation factor
+      family (homologous to elongation factors EF-G/EF-Tu) that physically
+      dislodges tetracycline from the 30S A-site of the ribosome. The Tet(M)
+      protein binds the ribosome at the GTPase-associated center, hydrolyzes
+      GTP, and induces a conformational change that releases the bound
+      tetracycline before it can interfere with aminoacyl-tRNA delivery. Unlike
+      efflux pumps (TetA-K) or 16S methylation (rare in tetracycline class),
+      Tet(M) acts on the drug-target complex itself, making the protection
+      relatively drug-broad: doxycycline, minocycline, and tetracycline are all
+      released from the ribosome. Tigecycline and eravacycline ESCAPE Tet(M)
+      because their bulky C9 side chains (t-butylglycyl and pyrrolidinoacetamido,
+      respectively) sterically prevent Tet(M) from accessing the A-site complex.
+      Distribution: tet(M) sits on conjugative transposons (Tn916 family) widely
+      disseminated across gram-positive (Streptococcus, Enterococcus, Staphylococcus),
+      gram-negative (Neisseria gonorrhoeae, Haemophilus), and anaerobic
+      (Bacteroides) bacteria. Among Streptococcus pyogenes and S. agalactiae,
+      tet(M) prevalence is 10 to 30 percent. MIC shift: tetracycline/doxycycline/
+      minocycline from 0.5 to 16 ug/mL (4 to 32-fold rise). Drugs NOT affected:
+      tigecycline MIC stays 0.06 to 0.5 (the C9 side chain advantage), eravacycline
+      similar; oxazolidinones, daptomycin, vancomycin, beta-lactams unaffected
+      (different targets). Diagnostics: tet(M) PCR; phenotypic tetracycline
+      MIC. Implication: rising tet(M) prevalence in Neisseria gonorrhoeae has
+      removed doxycycline from first-line gonococcal regimens; the same gene
+      drives tetracycline resistance in S. pneumoniae respiratory isolates,
+      reducing utility of doxycycline in CAP empirical treatment.
+
+  - name: "mcr-1 plasmid-mediated colistin resistance"
+    body: |
+      Molecular event: mcr-1 (mobile colistin resistance 1) encodes a
+      phosphoethanolamine (PEtN) transferase that adds PEtN to the lipid-A
+      4prime-phosphate of LPS, neutralizing one of the two negative charges
+      on lipid-A. Polymyxin/colistin binds lipid-A via electrostatic interaction
+      between the polypeptide's positively charged 2,4-diaminobutyric acid
+      residues and the lipid-A phosphate groups; PEtN modification reduces
+      this electrostatic affinity by approximately 8 to 16-fold, raising
+      colistin MIC to 4 to 16 ug/mL — clinically resistant. Mechanistically
+      similar to chromosomal pmrAB-mediated resistance (which adds 4-amino-
+      4-deoxy-arabinose to lipid-A, yielding higher-level resistance) but
+      mcr-1 confers lower-level resistance and is plasmid-borne, hence
+      transmissible. mcr-2 through mcr-10 are related variants discovered
+      since 2015. Distribution: blaMCR-1 on IncI2, IncHI2, IncX4 plasmids,
+      first described in E. coli from Chinese livestock (Liu 2016 Lancet ID);
+      now globally disseminated, with high prevalence in agricultural
+      gram-negatives (E. coli from poultry, swine), spreading to clinical
+      isolates. Found in E. coli, K. pneumoniae, Salmonella, occasionally
+      P. aeruginosa. MIC shift: colistin/polymyxin B from 0.25 to 4 to 16;
+      below the 4-ug/mL CLSI breakpoint for some isolates, often reported as
+      "intermediate" but clinically failing. Drugs NOT affected: tigecycline,
+      meropenem (unless co-existing carbapenemase), aminoglycosides (without
+      rmt), aztreonam-avibactam (unless ESBL also present), cefiderocol.
+      Diagnostics: mcr-1 PCR; rapid colistin NP test (colorimetric); colistin
+      broth microdilution MIC (NOT disk diffusion — colistin is too large for
+      reliable disk migration, leading to false susceptibility). Implication:
+      surveillance for mcr emergence is critical because polymyxins are
+      last-line for CRE; agricultural use of colistin (banned in EU 2017,
+      restricted in China 2017) is the selection pressure that drove
+      mcr-1 emergence.
+
+  - name: "qnrA/qnrB plasmid-mediated quinolone resistance"
+    body: |
+      Molecular event: qnrA (quinolone resistance gene A) encodes a 218-amino-
+      acid pentapeptide-repeat protein that binds DNA gyrase (GyrA-GyrB) and
+      topoisomerase IV (ParC-ParE), physically protecting them from
+      fluoroquinolone binding. The Qnr protein adopts a right-handed quadrilateral
+      beta-helix structure that mimics B-form DNA, binding the gyrase active site
+      cleft and competing with both DNA and the FQ. This protection is not
+      complete (Qnr binding is reversible and concentration-dependent), so it
+      confers low-level FQ resistance — typically a 4 to 8-fold MIC rise from
+      baseline. The clinical impact is amplified when combined with chromosomal
+      gyrA/parC mutations (S83L, D87N, S80I) — Qnr "buys time" for the
+      chromosomal mutations to emerge by allowing bacterial survival under
+      sub-MIC FQ pressure during the first days of therapy. Distribution: qnrA1
+      first identified on a plasmid in K. pneumoniae from Alabama (1998);
+      qnrB and qnrS variants since described, with qnrB now most prevalent.
+      qnrA/B/S sit on multi-resistance plasmids alongside blaCTX-M-15 and
+      aac(6prime)-Ib-cr (the latter is a fluoroquinolone-modifying enzyme that
+      acetylates ciprofloxacin and norfloxacin, additive with qnr). Found
+      widely in Enterobacterales (E. coli, Klebsiella, Enterobacter, Salmonella).
+      MIC shift: ciprofloxacin from 0.015 to 0.06 to 0.5 (low-level resistance
+      that may still test "susceptible" by CLSI breakpoint of less than or equal
+      to 0.25 — the so-called "silent" carrier). When qnr combines with
+      gyrA/parC mutations, MIC reaches greater than 4 (clearly resistant).
+      Drugs NOT affected: cephalosporins, carbapenems, aminoglycosides (without
+      modifying enzymes), TMP-SMX, fosfomycin, nitrofurantoin (urine-
+      restricted activity). Diagnostics: qnrA/B/S PCR; phenotypic FQ MIC.
+      Implication: rising prevalence of qnr in community E. coli (around
+      8 to 15 percent of ESBL strains) is one driver of fluoroquinolone
+      empirical failure in cystitis and pyelonephritis; supports the IDSA
+      cystitis recommendation that local FQ resistance above 10 percent
+      should remove FQs from empirical therapy.

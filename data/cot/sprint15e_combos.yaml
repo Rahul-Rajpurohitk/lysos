@@ -1,0 +1,267 @@
+task: drug_combination_synergy
+prompt_label: "Combination"
+instructions: |
+  Instructions: A specific antimicrobial combination is named. Reason through
+  (1) the mechanistic basis for synergy (target interaction, permeability,
+  resistance suppression), (2) the named pathogen and clinical setting where
+  it is indicated, (3) the trial or guideline evidence, (4) the dose and
+  PK/PD targets for each component, (5) the trade-offs (toxicity, cost,
+  spectrum mismatch).
+
+entries:
+  - name: "Ampicillin + ceftriaxone for Enterococcus faecalis endocarditis"
+    body: |
+      Mechanism: ampicillin acylates PBP4 and PBP5 of E. faecalis; ceftriaxone
+      saturates PBP2 and PBP3 in the same organism (PBP5 of E. faecalis is the
+      low-affinity PBP that confers ampicillin tolerance, but PBP2/PBP3 remain
+      ceftriaxone-vulnerable). Combined occupancy of all functional PBPs gives
+      bactericidal kill that single-agent ampicillin (bacteriostatic in many
+      isolates) cannot achieve. The combination avoids the gentamicin nephrotoxicity
+      that historically partnered ampicillin in enterococcal endocarditis. Pathogen:
+      E. faecalis native or prosthetic valve endocarditis; particularly indicated
+      when high-level aminoglycoside resistance (HLAR — gentamicin MIC greater
+      than 500) precludes the standard ampicillin-gentamicin combination.
+      Evidence: Mathews 2012 CID prospective cohort (n=84) showed 96 percent cure
+      rate with amp-ceftriaxone vs amp-gent, with 10-fold lower nephrotox.
+      Subsequent IDSA/ESC IE guidelines endorse it as first-line for HLAR strains
+      and reasonable alternative for non-HLAR. Dose: ampicillin 2 g IV q4h x 6
+      weeks PLUS ceftriaxone 2 g IV q12h x 6 weeks. PK/PD: both target T greater
+      than MIC at greater than 50 percent of dosing interval. Trade-offs: high
+      total beta-lactam exposure increases C. difficile risk (~5 percent) and
+      hypersensitivity; cost is twofold over amp-gent. NOT effective against
+      E. faecium because PBP5 expression and beta-lactam affinity profile are
+      different in E. faecium — E. faecium endocarditis requires daptomycin or
+      linezolid plus ampicillin or ceftaroline.
+
+  - name: "Daptomycin + ceftaroline for MRSA bacteremia with persistent positive cultures"
+    body: |
+      Mechanism: daptomycin requires Ca2+-dependent insertion into phosphatidylglycerol-
+      enriched membrane patches and depolarization for kill. mprF lysinylation of
+      PG (the dominant daptomycin-tolerance mechanism) raises surface positive charge
+      and repels the Ca-daptomycin complex. Ceftaroline binds PBP2a allosterically
+      AND PBP1, which alters membrane lipid composition and surface charge — the
+      "see-saw" or "reciprocal" effect — restoring the negative-PG patches that
+      daptomycin needs to insert. Studies (Rose 2012 AAC, Sakoulas 2014 IJAA)
+      showed that adding ceftaroline 600 mg q8h to daptomycin 8 to 12 mg/kg
+      restores bactericidal activity against daptomycin-tolerant MRSA. Pathogen:
+      MRSA bacteremia, particularly with MIC creep (vanco MIC 2), persistent
+      positive cultures more than 5 days on monotherapy, or documented
+      daptomycin-nonsusceptible isolate (mprF mutation). Evidence: Geriak 2019
+      randomized pilot showed faster clearance with combination (median 1.5 days
+      vs 4 days), and 30-day mortality 0 vs 26 percent. Dose: daptomycin 8 to 12
+      mg/kg q24h IV PLUS ceftaroline 600 mg IV q8h. PK/PD: dapto AUC/MIC greater
+      than 666, ceftaroline fT greater than MIC greater than 50 percent. Trade-offs:
+      daptomycin CK monitoring weekly (rhabdomyolysis), beta-lactam-related
+      C. difficile and hypersensitivity, cost (around $800/day combined). Avoid
+      in pulmonary infection (daptomycin inactivated by surfactant).
+
+  - name: "Vancomycin + ceftaroline for MRSA bacteremia bridge therapy"
+    body: |
+      Mechanism: similar reciprocal effect as daptomycin + ceftaroline. Vancomycin
+      blocks transglycosylation at D-Ala-D-Ala on lipid II; ceftaroline binds
+      PBP2a (the mecA gene product that confers MRSA's beta-lactam resistance) at
+      its allosteric pocket and sterically prevents the closed-conformation lid
+      that excludes other cephalosporins. Together they hit transglycosylation
+      and transpeptidation at distinct steps of cell wall synthesis — synergy
+      via parallel-pathway saturation. Importantly, ceftaroline may compensate for
+      heteroresistant VISA (hVISA) subpopulations that escape vancomycin alone:
+      ceftaroline retains MIC of 1 to 2 ug/mL against vancomycin-tolerant strains.
+      Pathogen: MRSA bacteremia in patients failing vancomycin monotherapy, used
+      as bridge therapy while sensitivity refines or while transitioning to
+      definitive monotherapy. Evidence: smaller observational studies (Hutton 2017,
+      Casapao 2016) showed faster blood culture clearance and reduced 30-day
+      mortality vs vancomycin alone. Less studied than dapto + ceftaroline. Dose:
+      vancomycin AUC/MIC 400 to 600 (typically 15 to 20 mg/kg q8 to 12h after
+      25 to 30 mg/kg load) PLUS ceftaroline 600 mg IV q8h. PK/PD: vanco AUC
+      target as above; ceftaroline fT greater than MIC. Trade-offs: doubled AKI
+      risk from concurrent beta-lactam (especially in critically ill), C. difficile,
+      cost. Often used briefly before switching to dapto-ceftaroline or definitive
+      drug-susceptibility-guided therapy.
+
+  - name: "Trimethoprim + sulfamethoxazole sequential folate-pathway blockade"
+    body: |
+      Mechanism: classic sequential metabolic blockade. Sulfamethoxazole inhibits
+      dihydropteroate synthase (DHPS), the enzyme that condenses para-aminobenzoic
+      acid with pterin to form dihydropteroate. Trimethoprim inhibits dihydrofolate
+      reductase (DHFR), the enzyme that reduces dihydrofolate to tetrahydrofolate.
+      The two enzymes lie sequentially in the folate biosynthesis pathway. Single-agent
+      sulfa is bacteriostatic; single-agent TMP is bacteriostatic; combined, they
+      become bactericidal because residual flux through one enzyme is killed by
+      the inhibitor of the next. Standard ratio is 1 TMP : 5 SMX, mimicking
+      relative potencies and Ki values. Pathogen: broad — Stenotrophomonas
+      maltophilia, Pneumocystis jirovecii (first-line PCP treatment AND prophylaxis),
+      Listeria (alternative when penicillin-allergic), uncomplicated UTI,
+      MRSA SSTI (community CA-MRSA), Toxoplasma gondii (alternative regimen),
+      Burkholderia cepacia, Nocardia. Evidence: foundational drug, decades of
+      use; PCP first-line per IDSA 2018, Stenotrophomonas first-line per
+      multiple guidelines. Dose: oral 160/800 mg q12h (DS tab), IV 5 mg/kg TMP
+      component q6 to 8h for severe. PCP treatment 15 to 20 mg/kg/day TMP
+      component IV/PO divided q6-8h x 21 days. PK/PD: AUC/MIC about 80 for
+      stasis. Trade-offs: hyperkalemia (TMP blocks ENaC like amiloride),
+      bone marrow suppression, sulfa hypersensitivity (SJS/TEN risk in HLA-B*15:02),
+      hepatic enzyme rise, nephrolithiasis (sulfa crystallization). Resistance via
+      dfrA17, sul1, sul2 plasmids rising in CRE-context strains.
+
+  - name: "Bedaquiline + pretomanid + linezolid (BPaL) for highly drug-resistant TB"
+    body: |
+      Mechanism: three-mechanism kill targeting persistent and dormant M. tuberculosis.
+      Bedaquiline binds atpE c-ring of mycobacterial F1-F0 ATP synthase, halting
+      ATP generation including in non-replicating bacilli. Pretomanid is a
+      Ddn-activated nitroimidazole that releases NO and disrupts mycolic acid
+      synthesis under hypoxic granuloma conditions. Linezolid binds the 50S A-site
+      at A2451 and blocks 70S initiation complex formation across replicating
+      bacilli. The three-target attack ensures coverage of all metabolic states
+      (replicating, dormant, hypoxic) and minimizes single-mutation escape — three
+      independent target genes (atpE, ddn, 23S rRNA) would have to mutate
+      simultaneously for resistance. Pathogen: pulmonary M. tuberculosis confirmed
+      MDR (rifampin and isoniazid resistance) or pre-XDR/XDR (additional resistance
+      to fluoroquinolones and second-line injectables). Evidence: Nix-TB trial
+      (Conradie 2020 NEJM) showed 90 percent cure rate at 6 months in highly
+      drug-resistant TB, far better than historical 50 to 60 percent at 18 to 24
+      months. ZeNix follow-up (Conradie 2022) showed dose-reduced linezolid
+      (600 mg vs 1200 mg) maintains cure with reduced toxicity. Dose: bedaquiline
+      400 mg PO daily x 14 days then 200 mg three times weekly x 22 weeks;
+      pretomanid 200 mg PO daily x 26 weeks; linezolid 1200 mg PO daily (or
+      600 mg with optional dose reduction) x 26 weeks. PK/PD: BDQ AUC/MIC about
+      400, pretomanid AUC/MIC about 70, linezolid AUC/MIC greater than 100.
+      Trade-offs: peripheral neuropathy from linezolid (~80 percent at 1200 mg,
+      30 percent at 600), thrombocytopenia, optic neuritis; bedaquiline QTc
+      prolongation 15 to 20 ms; pretomanid hepatic enzyme rise. WHO 2022 endorses
+      BPaLM (adds moxifloxacin) as preferred 6-month all-oral MDR-TB regimen.
+
+  - name: "Polymyxin B + meropenem for CR-Klebsiella pneumoniae bacteremia"
+    body: |
+      Mechanism: polymyxin-B binds outer-membrane LPS lipid-A and permeabilizes
+      the OM, displacing Mg2+ bridges. The OM disruption exposes inner-membrane
+      and periplasmic-targeted antibiotics that otherwise cannot cross the OM at
+      effective concentrations. Adding meropenem (which is normally hydrolyzed by
+      KPC carbapenemase, raising MIC to greater than 16) gives partial activity
+      because the residual unhydrolyzed drug now has higher periplasmic
+      concentration AND higher access to PBP1a/PBP2/PBP3 once in the periplasm —
+      effectively reducing the functional MIC under permeability stress.
+      Time-kill studies (Pogue 2013, Daikos 2014) showed synergy at sub-MIC
+      meropenem in CRKP. Pathogen: KPC-2 or KPC-3 producing K. pneumoniae
+      bacteremia in critically ill ICU patients, particularly when ceftazidime-
+      avibactam is unavailable or resistant (KPC-31 escape mutation). Evidence:
+      Daikos 2014 reported lower mortality with combination (29 percent) vs
+      polymyxin monotherapy (47 percent) in retrospective cohort; subsequent
+      OPTIONS trial showed mixed results, with combination preferred when MIC of
+      meropenem was less than or equal to 8. Dose: polymyxin-B 2.5 mg/kg IV
+      load then 1.5 mg/kg q12h (NOT colistin — polymyxin-B has more predictable
+      PK without prodrug-conversion lag) PLUS meropenem 2 g IV q8h infused
+      over 3 hours (extended-infusion to maximize T greater than MIC). PK/PD:
+      polymyxin-B AUC0-24 50 to 100 mg.h/L; meropenem fT greater than MIC at
+      least 40 percent. Trade-offs: polymyxin nephrotox 25 to 30 percent,
+      neurotox (paresthesias), meropenem C. difficile risk. Now largely supplanted
+      by ceftazidime-avibactam or meropenem-vaborbactam where available.
+
+  - name: "Amphotericin B + flucytosine for cryptococcal meningitis"
+    body: |
+      Mechanism: amphotericin-B inserts into ergosterol-rich fungal membranes,
+      forming pores that lyse the cell. Flucytosine (5-fluorocytosine) is taken
+      up by fungal cytosine permease (FCY2) and converted by cytosine deaminase
+      (FCY1) to 5-fluorouracil, which is then phosphorylated to 5-FU-monophosphate
+      and incorporated into RNA, blocking protein synthesis; alternatively,
+      conversion to 5-FdUMP inhibits thymidylate synthase, blocking DNA synthesis.
+      Mammalian cells lack cytosine deaminase, giving selectivity. Synergy:
+      amphotericin's pore formation increases fungal membrane permeability,
+      enhancing 5FC uptake; combined fungicidal kill is faster than either alone.
+      Pathogen: Cryptococcus neoformans/gattii meningoencephalitis, particularly
+      in HIV/AIDS or solid-organ-transplant recipients with high CSF burden.
+      Evidence: van der Horst 1997 NEJM showed faster CSF sterilization with
+      ampho + 5FC vs ampho alone (CSF clearance 9 vs 19 days). IDSA 2010 and
+      WHO 2022 guidelines endorse two-week induction with amphoB + 5FC followed
+      by fluconazole consolidation/maintenance. Dose: amphotericin B liposomal
+      3 to 4 mg/kg IV q24h (less nephrotoxic than amphoB-deoxycholate)
+      PLUS flucytosine 25 mg/kg PO q6h x 2 weeks induction; then transition
+      to fluconazole 800 mg daily x 8 weeks consolidation, then 200 mg
+      daily x 6 to 12 months maintenance (or until CD4 greater than 200 in HIV).
+      PK/PD: amphoB Cmax/MIC about 10; 5FC trough less than 100 ug/mL (above
+      this drives bone marrow toxicity). Trade-offs: amphoB infusion reactions,
+      nephrotoxicity (5 to 25 percent even with liposomal), hypokalemia,
+      hypomagnesemia; 5FC marrow suppression, hepatic enzyme rise; total cost
+      can exceed $20,000 per induction course.
+
+  - name: "Rifampin + adjunct for prosthetic-joint or hardware-associated S. aureus infection"
+    body: |
+      Mechanism: rifampin uniquely penetrates biofilm matrix and binds bacterial
+      DNA-dependent RNA polymerase beta-subunit (rpoB), inhibiting transcription
+      initiation. Single-agent rifampin selects for rpoB mutants at frequency
+      around 10^-7 to 10^-8 per bacterial division — high enough that resistance
+      emerges within days during monotherapy. Combination with a partner drug
+      (vancomycin, daptomycin, or anti-staph beta-lactam like nafcillin) prevents
+      this single-step rpoB resistance because the partner suppresses replication
+      below the rifampin mutation frequency threshold. Rifampin also breaks
+      surface-attached persister phenotypes via biofilm matrix disruption, the
+      property that makes it irreplaceable for hardware-associated infection.
+      Pathogen: S. aureus or coagulase-negative staphylococci on prosthetic joints,
+      cardiac devices, or osteomyelitis with retained hardware. Evidence: Zimmerli
+      1998 JAMA RCT showed cure rate 100 percent (rifampin + ciprofloxacin)
+      vs 58 percent (ciprofloxacin alone) in staphylococcal hardware infection.
+      IDSA prosthetic joint and hardware guidelines endorse rifampin combination
+      after surgical debridement. Dose: rifampin 600 mg PO q24h (or 300 to 450
+      mg q12h) PLUS partner: vancomycin AUC/MIC 400 to 600 IV, OR daptomycin
+      8 mg/kg IV, OR nafcillin 2 g IV q4h, OR levofloxacin 750 mg PO daily
+      (for chronic oral suppression). PK/PD: rifampin AUC/MIC about 65 for
+      stasis. Trade-offs: rifampin is a potent CYP3A4 inducer — major
+      drug-drug interactions (warfarin INR loss, contraceptive failure, HIV
+      protease inhibitor reduction, tacrolimus level drop); orange-red urine/tears
+      (cosmetic but counsel); hepatic enzyme rise. NEVER use as monotherapy
+      because of rapid rpoB resistance.
+
+  - name: "Cefepime + amikacin for empirical febrile neutropenia high-risk"
+    body: |
+      Mechanism: dual gram-negative coverage via two distinct mechanisms reduces
+      probability of monotherapy failure when local epidemiology shows ESBL or
+      AmpC-derepressed Enterobacterales prevalence over 10 percent. Cefepime
+      saturates PBP3 of Pseudomonas and Enterobacterales; amikacin binds 30S
+      A-site at h44 and disrupts proofreading. Aminoglycosides retain activity
+      against most cefepime-resistant strains because target genes (ribosomal
+      RNA) are independent of beta-lactamase and PBP genes. Synergy in vitro is
+      well-documented (FIC index 0.25 to 0.5) for Pseudomonas. Pathogen: febrile
+      neutropenic patient (ANC less than 500) with hemodynamic instability or
+      mucositis or known prior multidrug-resistant gram-negative colonization,
+      where IDSA 2018 supports broader empirical coverage. Standard low-risk
+      febrile neutropenia uses single-agent antipseudomonal beta-lactam
+      (cefepime, piperacillin-tazobactam, or meropenem) without aminoglycoside.
+      Evidence: Paul 2014 Cochrane meta of beta-lactam monotherapy vs
+      beta-lactam plus aminoglycoside in febrile neutropenia found NO mortality
+      benefit and 3-fold higher nephrotoxicity for combination, leading to
+      reservation for specific high-risk cases only. Dose: cefepime 2 g IV
+      q8h PLUS amikacin 15 mg/kg IV q24h with TDM (target Cmax 56 to 64 ug/mL,
+      trough less than 4). PK/PD: cefepime fT greater than MIC at least 60
+      percent of dosing interval for stasis; amikacin Cmax/MIC about 10 for
+      1-log kill. Trade-offs: amikacin nephrotox (8 to 15 percent), ototoxicity
+      (irreversible cochlear damage in 1 to 2 percent), TDM burden;
+      add-on duration limited to 48 to 72 hours unless gram-negative documented.
+
+  - name: "Standard four-drug TB regimen — isoniazid + rifampin + pyrazinamide + ethambutol"
+    body: |
+      Mechanism: four-target attack to suppress emergence of single-mutation
+      resistance. Isoniazid is a prodrug activated by mycobacterial KatG
+      (catalase-peroxidase) to form an isonicotinoyl radical that covalently
+      binds InhA (enoyl-ACP reductase), blocking mycolic acid synthesis; kills
+      replicating bacilli. Rifampin binds rpoB of RNA polymerase, killing both
+      replicating and minimally-active bacilli. Pyrazinamide is a prodrug
+      activated by mycobacterial PncA (pyrazinamidase) to pyrazinoic acid,
+      which acidifies the bacillus cytoplasm and disrupts membrane potential —
+      uniquely active against semi-dormant bacilli in acidic granulomas.
+      Ethambutol inhibits arabinosyl transferase (EmbB) of arabinogalactan
+      cell-wall synthesis, bacteriostatic, prevents resistance emergence to
+      the other three. Combination ensures three-pronged kill of replicating
+      (INH + RIF), semi-dormant (PZA + RIF), and biosynthetic (EMB) targets,
+      preventing single-mutation rescue. Pathogen: drug-susceptible pulmonary
+      and extrapulmonary M. tuberculosis (initial 2-month intensive phase, then
+      INH + RIF only continuation phase x 4 months). Evidence: foundational TB
+      regimen, established by BMRC 1948 onwards; ATS/CDC/IDSA 2016 TB guidelines
+      reaffirm for drug-susceptible disease. Dose: INH 300 mg PO daily, RIF
+      600 mg PO daily (or weight-based 10 mg/kg), PZA 25 mg/kg PO daily, EMB
+      15 mg/kg PO daily x 8 weeks (intensive); INH+RIF x 18 weeks (continuation).
+      PK/PD: INH AUC/MIC about 100, RIF AUC/MIC about 65, PZA AUC/MIC about 11,
+      EMB AUC/MIC about 50. Trade-offs: INH hepatitis (1 to 5 percent at
+      baseline ALT, much higher with alcohol or hepatitis B/C), peripheral
+      neuropathy (give pyridoxine 25 mg daily); RIF orange body fluids,
+      CYP3A4 induction; PZA hyperuricemia and hepatitis (additive with INH);
+      EMB optic neuritis (red-green color blindness — monthly vision testing).
+      DOT (directly observed therapy) recommended to ensure adherence and
+      prevent resistance emergence.
