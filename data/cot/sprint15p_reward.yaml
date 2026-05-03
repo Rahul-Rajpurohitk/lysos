@@ -1,0 +1,276 @@
+task: reward_profile_analysis
+prompt_label: "Drug profile"
+instructions: |
+  Instructions: An existing antimicrobial is named. Analyze its profile across
+  the 7 multi-objective reward components used in antibacterial generative
+  scoring: (1) predicted MIC / activity (against the named pathogen target),
+  (2) drug-likeness QED (Lipinski-like + electronic properties),
+  (3) synthetic accessibility SA score (smaller is easier),
+  (4) hemolysis / safety, (5) Tanimoto novelty (Morgan fingerprint vs known
+  antibiotics), (6) semantic / embedding novelty (concept-level distance from
+  approved drugs), (7) chemical validity. Discuss what trade-offs the molecule
+  illustrates and what features future generators should retain or improve.
+
+entries:
+  - name: "Vancomycin scoring profile against MRSA"
+    body: |
+      (1) Predicted MIC / activity: vancomycin MIC50 against MSSA/MRSA 0.5 to
+      2 ug/mL via D-Ala-D-Ala binding at lipid II — strong activity with no
+      cross-reactivity to gram-negatives. Score component: high. (2) QED
+      drug-likeness: very low. Vancomycin is a 1450-Da heptapeptide
+      glycopeptide with multiple stereocenters, a chlorinated biphenyl arm,
+      and two sugars; fails Lipinski (MW greater than 500, HBA greater than
+      10, HBD greater than 5, logP unusual). QED score around 0.05. (3) SA
+      synthesizability: very low (very hard to synthesize). Vancomycin is
+      produced exclusively by Streptomyces orientalis fermentation; total
+      synthesis is a 100+ step nightmare; SA score around 0.08. (4) Hemolysis
+      / safety: moderate. Causes red-man syndrome (histamine release from
+      rapid IV — slow infusion mitigates); nephrotoxicity 16 percent at
+      AUC greater than 600; ototoxicity at high cumulative dose. (5) Tanimoto
+      novelty: zero (it IS one of the reference antibiotics in any Morgan
+      fingerprint database). (6) Semantic novelty: zero (every known
+      antibacterial textbook has it). (7) Validity: 100 percent (RDKit parses
+      it as canonical glycopeptide). Trade-off illustrated: vancomycin is a
+      historical case where exquisite gram-positive activity + no analog
+      alternative justified clinical use despite catastrophic QED/SA scores
+      — a generative model trained naively on QED would never propose a
+      vancomycin-like molecule. Lesson: any antibacterial generator must
+      have task-specific reward weighting that values activity and novelty
+      heavily for difficult pathogens, NOT just generic drug-likeness; the
+      clinical reality is that elite gram-positive activity has historically
+      come from large complex peptides that are fermentation-produced.
+
+  - name: "Linezolid scoring profile against MRSA + VRE"
+    body: |
+      (1) Predicted MIC / activity: linezolid MIC50 against MRSA, VRE
+      faecium, S. pneumoniae, M. tuberculosis 1 to 2 ug/mL via 50S A-site
+      binding at A2451 of 23S rRNA — broad gram-positive plus mycobacterial,
+      bacteriostatic. Score: high. (2) QED drug-likeness: high. Linezolid is
+      a 337-Da synthetic small molecule with the canonical oxazolidinone
+      scaffold (5(S)-acetamidomethyl + fluorinated phenyl + morpholine);
+      passes all Lipinski rules; QED score around 0.85. (3) SA
+      synthesizability: high (relatively easy). Eight-step total synthesis
+      from commercial precursors; small molecule with no unusual functional
+      groups; SA score around 0.32 (low SA = good). (4) Hemolysis / safety:
+      low intrinsic hemolytic potential, but mitochondrial protein synthesis
+      inhibition drives thrombocytopenia (30 percent at 14 days), peripheral
+      and optic neuritis (greater than 28 days), lactic acidosis. Serotonin-
+      syndrome with SSRI via MAO-A inhibition. (5) Tanimoto novelty: zero
+      (oxazolidinone class drug, included in reference antibiotic library).
+      (6) Semantic novelty: low (oxazolidinone is a recognized class).
+      (7) Validity: 100 percent. Trade-off illustrated: linezolid is the
+      "ideal" antibacterial drug-likeness profile — small, drug-like,
+      synthesizable, oral 100 percent bioavailable, tissue-penetrating —
+      paired with a NEW target (50S A2451 binding distinct from
+      macrolide/lincosamide/streptogramin). A generative model targeting
+      gram-positive should aim for linezolid-style QED and SA while seeking
+      higher novelty than the now-validated oxazolidinone scaffold.
+      Tedizolid (extended D-ring pyridinyl-pyrimidinyl) and contezolid
+      (lower MAO-A) are SAR descendants — modest gains, not breakthrough.
+
+  - name: "Cefiderocol scoring profile against MBL Pseudomonas + CRAB"
+    body: |
+      (1) Predicted MIC / activity: cefiderocol MIC50 against NDM-positive
+      Pseudomonas 1 to 2, KPC-CRE 0.5 to 1, OXA-48 0.5, CRAB 1 to 4 ug/mL
+      via siderophore Trojan-horse uptake bypassing OprD porin loss + MexAB
+      efflux + multi-class beta-lactamase hydrolysis. Score: very high
+      across the most-difficult-to-treat gram-negatives. (2) QED: moderate.
+      Molecular weight 752, contains the catechol-Fe-chelating C3 chain
+      plus C7 aminothiazole-oxime + pyrrolidinium; passes most Lipinski
+      filters with caveat. QED around 0.35. (3) SA: moderate. Multi-step
+      synthesis (15+ steps) but precedented cephalosporin chemistry plus
+      catechol coupling; SA around 0.50. (4) Hemolysis / safety: low.
+      Generally well-tolerated; CREDIBLE-CR trial showed numerically higher
+      mortality vs comparators in CRAB pneumonia (FDA black-box flagged,
+      attribution debated). (5) Tanimoto novelty: moderate to high (catechol-
+      siderophore feature is unique among cephalosporins; Morgan fingerprint
+      similarity to other cephs around 0.3). (6) Semantic novelty: high
+      (siderophore-Trojan-horse paradigm is a relatively new strategy in
+      antibacterials). (7) Validity: 100 percent. Trade-off illustrated:
+      cefiderocol shows that SOMETIMES novelty (siderophore moiety) is
+      required to defeat the resistance — generic drug-likeness tweaks of
+      a cephalosporin do not produce MBL/CRAB activity, the catechol-Fe
+      mechanism is the differentiator. Future MBL-active chemistry should
+      retain the siderophore-Trojan-horse paradigm OR the monobactam
+      scaffold (aztreonam-avibactam).
+
+  - name: "Daptomycin scoring profile against MRSA bacteremia"
+    body: |
+      (1) Predicted MIC / activity: daptomycin MIC50 against MSSA/MRSA 0.25
+      to 0.5 ug/mL via Ca2+-dependent membrane insertion and depolarization;
+      bactericidal against persisters that vancomycin cannot kill. Score:
+      high. (2) QED: very low. 1620-Da cyclic lipopeptide with kynurenine-13
+      (non-canonical amino acid), three Asp residues, and an n-decanoyl
+      tail; severely fails Lipinski. QED score around 0.04. (3) SA: very
+      low (extremely hard to synthesize). Produced by Streptomyces
+      roseosporus fermentation; total synthesis intractable; SA around 0.10.
+      (4) Hemolysis / safety: moderate. Rhabdomyolysis 1 to 7 percent at
+      10 to 12 mg/kg (CK monitoring), eosinophilic pneumonia (delayed
+      week 2 to 4 immunologic), peripheral neuropathy at high cumulative
+      dose. Pulmonary contraindication (surfactant inactivation). (5) Tanimoto
+      novelty: zero (in reference database). (6) Semantic novelty: low (cyclic
+      lipopeptide is established class). (7) Validity: 100 percent. Trade-off
+      illustrated: daptomycin's elite anti-MRSA bactericidal activity comes
+      with truly catastrophic QED/SA scores — the entire fermentation-derived
+      lipopeptide class shares this. A small-molecule generator pursuing
+      drug-likeness will never propose daptomycin-style chemistry; either
+      the reward function must be class-aware OR the model must be told
+      that target-engagement (Ca2+-dependent membrane depolarization)
+      justifies large-peptide cost.
+
+  - name: "Bedaquiline scoring profile against Mycobacterium tuberculosis (incl. persisters)"
+    body: |
+      (1) Predicted MIC / activity: bedaquiline MIC50 against M. tuberculosis
+      (drug-susceptible AND MDR-XDR) 0.03 to 0.06 ug/mL via atpE c-ring
+      binding of mycobacterial ATP synthase; uniquely active against
+      non-replicating persisters. Score: very high. (2) QED: moderate. 555-Da
+      diarylquinoline with extended hydrophobic substituents; logP around
+      6.5 (high), MW high but borderline-acceptable. QED around 0.30. (3) SA:
+      moderate. Multi-step synthesis but no exotic chemistry; SA around 0.45.
+      (4) Hemolysis / safety: low intrinsic hemolysis but DOSE-LIMITING QTc
+      prolongation (15 to 20 ms mean rise; black-box for QT monitoring); long
+      half-life of M2 metabolite 5.5 months drives drug-drug interaction
+      management complexity. (5) Tanimoto novelty: high (diarylquinoline
+      scaffold unique among approved antibacterials; Morgan FP similarity
+      around 0.2 to 0.3). (6) Semantic novelty: very high (ATP synthase
+      target is brand-new for clinical antibacterials; first-in-class).
+      (7) Validity: 100 percent. Trade-off illustrated: bedaquiline shows
+      that targeting a NEW pathway (ATP synthesis vs ribosome / cell wall /
+      DNA / folate) is feasible AND clinically transformative — a generative
+      model that explores beyond the canonical 5 target families gains
+      novelty AND opens activity against persister populations. The QTc
+      cost is the trade-off; future TB chemistry should aim for
+      bedaquiline's target novelty with reduced QT effect (Q203/telacebec
+      cytochrome bc1 inhibitor approach also targets oxidative phosphorylation
+      with potentially cleaner cardiac profile).
+
+  - name: "Tigecycline scoring profile against MRSA/VRE/ESBL/anaerobes"
+    body: |
+      (1) Predicted MIC / activity: tigecycline MIC50 against MRSA 0.25,
+      VRE 0.06 to 0.5, ESBL Enterobacterales 0.5 to 2, anaerobes 0.5 to 4
+      ug/mL via 30S A-site binding with C9 t-butylglycyl side chain that
+      escapes TetA efflux and Tet(M) ribosomal protection. Score: high
+      breadth, moderate potency. (2) QED: moderate. 586-Da glycylcycline
+      with the tetracycline core plus C9 side chain; passes Lipinski with
+      caveats. QED around 0.40. (3) SA: moderate to low. Tetracycline core
+      synthesis is established; C9 amination requires protected
+      regiospecific chemistry; SA around 0.55. (4) Hemolysis / safety:
+      moderate. Pancreatitis (1 percent), nausea/vomiting (28 percent) limit
+      tolerability. The CRITICAL liability is Cmax 0.6 ug/mL ceiling that
+      drives AUC/MIC failure in BACTEREMIA — FDA mortality black-box.
+      (5) Tanimoto novelty: low (tetracycline scaffold is well-established).
+      (6) Semantic novelty: low (glycylcycline class is recognized variant).
+      (7) Validity: 100 percent. Trade-off illustrated: tigecycline retains
+      the tetracycline scaffold's established target binding but pays the
+      tetracycline-class PK ceiling — Cmax cannot be raised beyond 0.6
+      because dose-related GI toxicity and tissue saturation limit it.
+      Future tetracycline-class chemistry should focus on raising Cmax
+      (eravacycline does, modestly via different sub-pocket binding) OR
+      switch scaffolds entirely if bacteremia is the target indication.
+
+  - name: "Caspofungin scoring profile against Candida glabrata"
+    body: |
+      (1) Predicted MIC / activity: caspofungin MIC50 against C. glabrata
+      0.06 ug/mL via 1,3-beta-D-glucan synthase inhibition (Fks1/Fks2
+      hot-spots); fungicidal against most Candida spp. Score: high (with
+      FKS-mutation caveat — 8 to 12 percent of tertiary-center C. glabrata
+      isolates carry FKS hot-spot mutations). (2) QED: very low. 1093-Da
+      cyclic hexapeptide lipopeptide with palmitoyl side chain; severely
+      fails Lipinski (MW, HBA, HBD all out of range). QED around 0.05.
+      (3) SA: very low. Semi-synthetic from natural pneumocandin B0
+      fermentation; scale-up requires the natural-product host; SA around
+      0.10. (4) Hemolysis / safety: moderate. Histamine-like infusion
+      reaction (slow infusion mitigates), thrombophlebitis at IV site,
+      hepatic enzyme rise 5 to 10 percent. (5) Tanimoto novelty: low (in
+      reference echinocandin library). (6) Semantic novelty: moderate
+      (echinocandins are an established class but newer than azoles).
+      (7) Validity: 100 percent. Trade-off illustrated: echinocandins
+      again show that elite anti-fungal activity requires large peptide
+      lipopeptide chemistry that scores poorly on QED/SA — the glucan
+      synthase target is fungal-specific (humans have no glucan cell
+      wall) which gives clean selectivity, but the ligand-target geometry
+      requires the cyclic hexapeptide architecture. Drug-likeness-driven
+      antifungal generation will never propose echinocandin-class
+      chemistry; the reward function must accommodate target-class realities.
+
+  - name: "Ceftaroline scoring profile against MRSA"
+    body: |
+      (1) Predicted MIC / activity: ceftaroline MIC50 against MRSA 1 ug/mL
+      via PBP2a allosteric binding at Glu447 region triggering closed-to-open
+      conformational change; also active against MSSA, S. pneumoniae
+      (incl. PRSP), 3G-susceptible Enterobacterales. Inactive against
+      Pseudomonas, ESBL, enterococci. Score: moderate-high (anti-MRSA niche).
+      (2) QED: moderate. 685-Da cephalosporin with C7 aminothiazole-oxime
+      + C3 thiazolyl-pyridinium-thio + phosphono prodrug; large but
+      structurally cephalosporin-typical. QED around 0.30. (3) SA: moderate.
+      Cephalosporin chemistry well-precedented but the C3 thiazolyl-
+      pyridinium requires protected coupling; SA around 0.50. (4) Hemolysis
+      / safety: low. Rash (3 percent), elevated transaminases (2 percent),
+      generally clean. (5) Tanimoto novelty: moderate. The C3 thiazolyl-
+      pyridinium is unusual among cephalosporins; Morgan FP similarity to
+      ceftriaxone around 0.45. (6) Semantic novelty: high (anti-MRSA
+      cephalosporin is a class-defining first; "allosteric PBP2a binder"
+      is a paradigm). (7) Validity: 100 percent. Trade-off illustrated:
+      ceftaroline shows that cephalosporin chemistry CAN be redirected to
+      a difficult target (PBP2a) via allosteric extension at C3 — the
+      semantic novelty is in the binding paradigm, not in the
+      molecular-formula sense. This is a cleaner generative target than
+      brand-new-class chemistry: stay in a known scaffold, reach a new
+      target. Ceftobiprole (different C3 vinyl-pyrrolidinone) and future
+      anti-MRSA cephalosporins will follow this arc.
+
+  - name: "Plazomicin scoring profile against ESBL- and KPC-CRE"
+    body: |
+      (1) Predicted MIC / activity: plazomicin MIC50 against ESBL E. coli
+      and K. pneumoniae 0.5 to 2 ug/mL, KPC-CRE 1 to 2 ug/mL via 30S A-site
+      binding with C1 HABA (4-amino-2-hydroxybutyryl) and C6prime hydroxyethyl
+      that occlude AAC(3), AAC(6prime), and ANT(2double-prime) modifying
+      enzymes. Score: high vs typical CRE. Inactive against rmt-positive
+      strains (16S rRNA methylation). (2) QED: low. 593-Da aminoglycoside
+      with multiple amino sugar groups; high HBD count, polyamine character;
+      severely fails Lipinski. QED around 0.10. (3) SA: low. Sisomicin
+      scaffold semi-synthetic chemistry with multiple regiospecific
+      protections; SA around 0.20. (4) Hemolysis / safety: moderate.
+      Nephrotoxicity 7 percent (lower than amikacin's 10 percent due to
+      once-daily dosing); ototoxicity less than 1 percent in registration
+      trials. TDM-mandatory. (5) Tanimoto novelty: low (in reference
+      aminoglycoside library). (6) Semantic novelty: moderate (rational
+      AME-escape SAR strategy is an advance over earlier aminoglycoside
+      modifications). (7) Validity: 100 percent. Trade-off illustrated:
+      aminoglycosides retain their canonical PK profile — large polar
+      polyamine, IV-only, narrow therapeutic window — but the SAR work to
+      simultaneously mask multiple AME hot spots was 5+ years of research.
+      A generator targeting CRE that sticks to drug-like small molecules
+      would not propose aminoglycoside chemistry; either the reward must
+      include "rescue activity vs CRE" weighted heavily OR the model must
+      explore polyamine-glycoside chemical space deliberately.
+
+  - name: "Fidaxomicin scoring profile against C. difficile"
+    body: |
+      (1) Predicted MIC / activity: fidaxomicin MIC50 against C. difficile
+      0.06 to 0.5 ug/mL via bacterial RNA polymerase binding at a site
+      distinct from rifampin's pocket; gut-restricted PK keeps drug at the
+      site of infection. Score: very high vs C. difficile, narrow-spectrum
+      sparing of gut microbiome. (2) QED: low. 1058-Da 18-membered
+      macrolactone with methylated dihydroxysugar and aromatic isobutyric
+      ester; complex stereochemistry. QED around 0.10. (3) SA: very low.
+      Produced by Dactylosporangium aurantiacum fermentation; total
+      synthesis intractable; SA around 0.10. (4) Hemolysis / safety: very
+      low (gut-restricted, less than 0.4 percent oral absorption — minimal
+      systemic exposure means minimal systemic tox; main side effect is
+      GI). (5) Tanimoto novelty: high. Fidaxomicin's macrolactone scaffold
+      is unrelated to other approved antibacterials; Morgan FP similarity
+      to azithromycin or erythromycin around 0.25. (6) Semantic novelty:
+      very high. The "narrow-spectrum + gut-restricted + novel rpoB pocket"
+      paradigm is unprecedented in approved antibacterials. (7) Validity:
+      100 percent. Trade-off illustrated: fidaxomicin is the textbook
+      "elite reward profile across multiple dimensions" — high activity,
+      high novelty (semantic AND Tanimoto), elite safety from PK
+      compartmentalization, narrow spectrum that protects microbiome.
+      Trade-off is QED and SA (large macrolactone). A generator that
+      can reach beyond drug-like small molecules into macrolactone
+      space, AND that values gut-restricted PK, AND that targets novel
+      RNA polymerase pockets is the kind of approach that would
+      reproduce fidaxomicin-class wins. The microbiome-sparing dimension
+      is itself a reward-function consideration that is not standard in
+      generative antibacterial chemistry today.

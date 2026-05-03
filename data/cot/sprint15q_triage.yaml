@@ -1,0 +1,288 @@
+task: candidate_ranking
+prompt_label: "Triage scenario"
+instructions: |
+  Instructions: A pathogen and clinical setting is named, with multiple
+  approved or late-stage investigational antibacterials in the candidate set.
+  Rank the candidates by net clinical effectiveness considering activity
+  vs the pathogen, safety, practicality (route, frequency, monitoring),
+  resistance evolution risk, and stewardship cost. Justify the ranking
+  position by position with reference to specific drug features and
+  cite the trial / guideline that supports the conclusion.
+
+entries:
+  - name: "KPC-CRE bacteremia — rank meropenem-vaborbactam vs ceftazidime-avibactam vs cefiderocol"
+    body: |
+      Setting: bacteremia from a confirmed KPC-2 or KPC-3 producing K.
+      pneumoniae bloodstream isolate, no co-existing MBL, normal renal
+      function. Ranking. (1) Meropenem-vaborbactam — first-line in 2024
+      guidelines (IDSA AMR) when KPC is the only carbapenemase. Reasons:
+      (a) cyclic boronic-acid vaborbactam reversibly covalently inhibits
+      KPC-2/3 with sustained activity; (b) meropenem is well-validated for
+      gram-negative bacteremia at 2 g IV q8h with extended infusion; (c)
+      retains activity against KPC-31 D179Y avibactam-escape mutants where
+      ceftaz-avi fails; (d) TANGO-II RCT (Wunderink 2018) showed superior
+      cure vs best-available therapy in KPC-CRE infections. Trade-off:
+      cost ($1500/day), no MBL coverage. (2) Ceftazidime-avibactam — solid
+      second choice; first-line if cost is decisive or if ceftaz-avi is
+      already on hand. Reasons: covalent reversible avibactam inhibition
+      of KPC; once-daily-with-extended-infusion dosing; trial-supported
+      (Shields 2017 retrospective showed mortality benefit in KPC-CRE
+      bacteremia). Trade-off: KPC-31 D179Y emergence drives resistance during
+      prolonged therapy (~10 percent failure rate at 2-4 weeks); add the
+      see-saw consideration with mero-vab. (3) Cefiderocol — third-line for
+      KPC-only because it lacks the focused KPC-specific activity that
+      ceftaz-avi and mero-vab provide; reserved for MBL- or CRAB-positive
+      isolates where it is uniquely active. Reasons not to deploy
+      first-line for KPC-only: CREDIBLE-CR mortality concern, cost, the fact
+      that ceftaz-avi and mero-vab are clinically more validated for KPC.
+      Net: mero-vab > ceftaz-avi > cefiderocol for KPC-only bacteremia.
+
+  - name: "NDM-1 Pseudomonas aeruginosa pneumonia — rank aztreonam-avibactam vs cefiderocol vs polymyxin-B + meropenem"
+    body: |
+      Setting: VAP from confirmed NDM-1 producing P. aeruginosa with
+      co-existing CTX-M-15 ESBL (typical MBL plasmid co-resident gene).
+      Ranking. (1) Aztreonam-avibactam — first-line where available
+      (FDA approval 2024 for cIAI/cUTI/HAP/VAP from MBL Enterobacterales,
+      pending Pseudomonas approval but used off-label). Reasons: (a)
+      monobactam (aztreonam) is intrinsically MBL-stable because Zn1-Zn2
+      coordination of class B chemistry cannot orient the monobactam ring;
+      (b) avibactam covalently inhibits the co-existing CTX-M-15 ESBL and
+      AmpC if present; (c) Pseudomonas has chromosomal AmpC that is
+      avibactam-inhibited; (d) phase 3 REVISIT and ASSEMBLE trials supportive.
+      Trade-offs: emerging NDM-7 with PBP3 inserts can escape; expensive.
+      (2) Cefiderocol — strong second choice; first-line in some hospitals.
+      Reasons: catechol-Fe siderophore Trojan-horse uptake bypasses OprD
+      porin loss and MexAB efflux; structural orientation of catechol-Fe
+      complex confers MBL hydrolytic stability; CREDIBLE-CR data mixed for
+      Acinetobacter but for Pseudomonas pneumonia the non-inferiority data
+      are reasonable. Trade-off: cirA siderophore-receptor mutations cause
+      MIC rise during prolonged therapy. (3) Polymyxin-B + meropenem
+      combination — third-line salvage. Reasons: outer-membrane
+      permeabilization by polymyxin partially restores residual meropenem
+      activity; combined effect on Pseudomonas hetero-resistant
+      subpopulations. Trade-offs: nephrotoxicity 25 to 30 percent
+      (polymyxin), neurotoxicity, last-line agent that should not be used
+      where newer agents work. Net: aztreonam-avi > cefiderocol > polymyxin
+      combo for NDM-1 Pseudomonas pneumonia.
+
+  - name: "CRAB ventilator-associated pneumonia — rank sulbactam-durlobactam vs cefiderocol vs polymyxin combo"
+    body: |
+      Setting: VAP from carbapenem-resistant A. baumannii with confirmed
+      OXA-23 production, additional AdeABC overexpression. Ranking. (1)
+      Sulbactam-durlobactam — first-line per IDSA AMR 2024 guidance.
+      Reasons: (a) sulbactam has intrinsic affinity for PBP1 and PBP3 of
+      A. baumannii (uniquely active among penam scaffolds); (b) durlobactam
+      DBO covalently inhibits class A (TEM, KPC), C (AmpC), AND class D
+      (OXA-23, OXA-24/40, OXA-58) — uniquely broad among DBOs; (c) ATTACK
+      trial (Bouza 2023) showed superiority vs polymyxin-based therapy;
+      (d) better safety profile than polymyxin (no nephrotox concern).
+      Trade-offs: narrow gram-negative spectrum (no Pseudomonas, no
+      Enterobacterales beyond Acinetobacter), expensive. (2) Cefiderocol
+      — second choice when sulbactam-durlobactam unavailable or
+      contraindicated. Reasons: catechol-Fe siderophore uptake bypasses
+      OprD-loss-equivalent in Acinetobacter. Trade-off: CREDIBLE-CR trial
+      flagged numerically higher mortality in CRAB pneumonia — attribution
+      debated, FDA black-box for use in CRAB. (3) Polymyxin-B + tigecycline
+      (high-dose 100 mg IV q12h) combination — third-line salvage. Reasons:
+      polymyxin OM permeabilization plus tigecycline 30S binding gives
+      multi-target attack. Trade-offs: polymyxin nephrotoxicity, tigecycline
+      Cmax-ceiling AUC/MIC failure (FDA black-box for tigecycline).
+      Net: sulbactam-durlobactam > cefiderocol > polymyxin combo for CRAB
+      VAP — major shift from pre-2023 polymyxin-first paradigm.
+
+  - name: "ESBL E. coli complicated UTI — rank meropenem vs ceftolozane-tazobactam vs plazomicin"
+    body: |
+      Setting: cUTI with bacteremia from CTX-M-15-positive E. coli, no
+      co-existing carbapenemase, hospital inpatient. Ranking. (1)
+      Meropenem 1 g IV q8h — first-line per MERINO trial (Harris 2018 JAMA).
+      Reasons: (a) MERINO showed meropenem superior to piperacillin-tazo
+      for E. coli ESBL bacteremia (mortality 4 vs 12 percent at 30 days);
+      (b) carbapenem stability against CTX-M-15 hydrolysis is robust; (c)
+      cheap (around $50/day for generic mero); (d) penetrates urine well
+      (renal excretion); (e) penetrates blood, gut tissue. Trade-offs:
+      C. difficile risk; selection pressure for KPC and AmpC in long
+      courses. (2) Ceftolozane-tazobactam — second choice when carbapenem-
+      sparing is desired (stewardship priority for hospitals with high
+      KPC pressure) OR when concomitant Pseudomonas suspected. Reasons:
+      tazobactam inhibits CTX-M-15 less efficiently than avibactam, but at
+      clinical dose ceftolozane-tazo retains MIC of 1 to 2 against ESBL
+      E. coli; preserves carbapenem use for CRE. Trade-off: more expensive
+      than meropenem (around $300/day). (3) Plazomicin 15 mg/kg IV q24h
+      — third choice; reserved for MDR-CRE where meropenem and
+      ceftolozane-tazo fail. Reasons: aminoglycoside with engineered
+      resistance to AAC and ANT modifying enzymes; EPIC trial (Wagenlehner
+      2019 NEJM) showed superiority vs meropenem for cUTI but the ESBL-only
+      sub-analysis was less compelling. Trade-offs: nephrotox 7 percent,
+      TDM-required, ototoxicity, IV-only. Net: meropenem > ceftolozane-tazo
+      > plazomicin for ESBL E. coli bacteremic cUTI in most hospital settings.
+
+  - name: "VRE faecium endocarditis — rank linezolid vs daptomycin vs oritavancin"
+    body: |
+      Setting: prosthetic-valve E. faecium endocarditis with vanA, blood
+      cultures persistent at day 5 of empirical therapy. Ranking. (1)
+      Daptomycin 10 to 12 mg/kg IV q24h — first-line per AHA/IDSA endocarditis
+      2015 guidelines. Reasons: (a) bactericidal against VRE (rare
+      bactericidal option here — linezolid is bacteriostatic); (b)
+      Ca2+-dependent membrane depolarization works against persisters
+      and biofilm in vegetations; (c) high-dose 10 to 12 mg/kg achieves
+      AUC/MIC 666+ for 1-log kill; (d) extensive clinical experience.
+      Trade-offs: emergent mprF lysinylation under prolonged therapy
+      (re-MIC at day 5-7 to detect rise); rhabdomyolysis 1 to 7 percent
+      at high dose (CK monitoring); concurrent statin caution; combination
+      with ceftaroline or ampicillin to enhance "see-saw" membrane
+      sensitivity. (2) Linezolid 600 mg IV/PO q12h — second choice or
+      first if dapto-NS confirmed. Reasons: (a) gold-standard activity
+      against VRE faecium (MIC 1 to 2); (b) oral 100 percent bioavailable
+      enabling outpatient transition; (c) bacteriostatic limitation
+      mitigated in source-controlled or post-replacement infections.
+      Trade-offs: thrombocytopenia greater than 14 days (~30 percent),
+      peripheral and optic neuropathy beyond 28 days (BPaL TB experience
+      shows the cumulative toxicity), MAO-A inhibition with SSRI
+      contraindication; bacteriostatic mechanism. (3) Oritavancin —
+      third-line; off-label for endocarditis (registration is for
+      ABSSSI single-dose). Reasons: lipoglycopeptide with chlorobiphenyl
+      arm gives membrane-anchored dual binding active against vanA;
+      8.5-day terminal half-life. Trade-offs: limited endocarditis
+      experience; concerns about achieving bactericidal exposure across
+      6+ weeks; surgical valve replacement is class-I indication for
+      vanA E. faecium prosthetic-valve IE — surgery often the right
+      answer. Net: dapto > linezolid > oritavancin for vanA VRE
+      prosthetic-valve endocarditis with surgical evaluation always
+      first.
+
+  - name: "Severe Candida glabrata candidemia — rank micafungin vs caspofungin vs liposomal amphotericin B"
+    body: |
+      Setting: ICU patient with C. glabrata candidemia, no FKS-mutation
+      data yet (FKS sequencing pending), creatinine 1.4. Ranking. (1)
+      Micafungin 100 mg IV q24h — first-line per IDSA candidiasis 2016.
+      Reasons: (a) echinocandin glucan-synthase inhibitor with fungicidal
+      activity against most C. glabrata; (b) MIC50 0.06 ug/mL; (c) no
+      renal dose adjustment (hepatic clearance); (d) once-daily simple
+      dosing; (e) lower hepatic enzyme rise than caspofungin in some
+      registry data. Trade-offs: 8 to 12 percent FKS-mutant prevalence in
+      tertiary centers — repeat MIC essential, switch if rising. (2)
+      Caspofungin 70 mg IV load then 50 mg q24h — equivalent first-line
+      choice. Reasons: same echinocandin mechanism; well-validated trial
+      data (Mora-Duarte 2002 NEJM); slightly different metabolism. Trade-offs:
+      hepatic enzyme rise 5 to 10 percent (vs micafungin's lower); caspofungin
+      Child-Pugh B requires dose reduction to 35 mg q24h. The clinical
+      preference between micafungin and caspofungin is institution-driven.
+      (3) Liposomal amphotericin B 3 to 4 mg/kg IV q24h — second-line
+      reserved for echinocandin-intolerant or echinocandin-resistant
+      (FKS-mutant) C. glabrata. Reasons: ergosterol pore mechanism is
+      orthogonal to echinocandin glucan-synthase target — no cross-resistance
+      to FKS mutations. Trade-offs: nephrotoxicity even with liposomal
+      formulation (5 to 10 percent), potassium and magnesium wasting,
+      infusion reactions; clinical efficacy somewhat lower against
+      C. glabrata than echinocandins. Net: echinocandin (micafungin or
+      caspofungin) > liposomal AmphoB for first-line C. glabrata candidemia.
+
+  - name: "Severe pulmonary mucormycosis — rank liposomal amphotericin vs isavuconazole vs combination"
+    body: |
+      Setting: solid-organ transplant patient with biopsy-confirmed
+      Rhizopus oryzae pulmonary mucormycosis, neutropenic post-induction.
+      Ranking. (1) Liposomal amphotericin B 5 to 10 mg/kg IV q24h
+      (high-dose) — first-line per IDSA mucormycosis guideline. Reasons:
+      (a) gold-standard fungicidal activity against Mucorales (Rhizopus,
+      Mucor, Lichtheimia, Cunninghamella); ergosterol pore mechanism;
+      (b) decades of clinical experience; (c) liposomal formulation reduces
+      nephrotox and allows higher dosing than amphoB-deoxycholate;
+      (d) surgery (debridement of necrotic tissue) is a co-equal first-line
+      intervention — antifungal alone insufficient. Trade-offs: nephrotoxicity
+      5 to 10 percent even with liposomal at high dose; hypokalemia,
+      hypomagnesemia; infusion reactions. (2) Isavuconazole 200 mg PO/IV
+      q8h x 6 doses load then daily — second-line; option for liposomal-
+      AmphoB-intolerant patients OR for transition therapy after initial
+      AmphoB phase. Reasons: extended hydrophobic side chain reaches
+      deeper CYP51 pocket of Mucorales (not accessible to voriconazole);
+      MIC50 0.5 to 2 ug/mL against Rhizopus. Trade-offs: oral option, no
+      TDM required, but somewhat lower fungicidal activity than AmphoB
+      in clinical experience. (3) Combination (AmphoB + isavuconazole or
+      AmphoB + caspofungin) — sometimes used in severe disease; evidence
+      mixed. Reasons: theoretical mechanistic complementarity; some
+      retrospective survival benefit data. Trade-offs: expense, additive
+      tox, no clear RCT. Net: liposomal AmphoB high-dose plus surgical
+      debridement > isavuconazole > combination for pulmonary mucormycosis.
+
+  - name: "MDR-TB pulmonary — rank BPaL vs BPaLM vs longer-course second-line regimen"
+    body: |
+      Setting: pulmonary M. tuberculosis MDR (rifampin + isoniazid resistance
+      confirmed by Xpert MTB/XDR), no fluoroquinolone resistance, HIV-
+      negative. Ranking. (1) BPaLM (bedaquiline + pretomanid + linezolid +
+      moxifloxacin) — first-line per WHO 2022. Reasons: (a) 6-month all-oral
+      regimen vs historical 18 to 24 months; (b) ZeNix sub-trial supports
+      lower-dose linezolid (600 mg daily) for tolerability; (c) four-drug
+      attack on multiple targets prevents single-mutation escape;
+      (d) cure rate around 90 percent in trials (Conradie 2020 Nix-TB,
+      Esmail 2021 ZeNix); (e) all-oral, simpler than older injectable
+      regimens. Trade-offs: bedaquiline QTc 15 to 20 ms (additive with
+      moxifloxacin and clofazimine — monitor ECG); pretomanid hepatic
+      enzyme rise; linezolid peripheral neuropathy and thrombocytopenia
+      at 6 months; expense. (2) BPaL (bedaquiline + pretomanid + linezolid)
+      — second choice for FQ-intolerant or FQ-resistant patients; same
+      6-month duration. Reasons: three-target attack; preserves
+      moxifloxacin for future use; same Nix-TB data. Trade-off: marginally
+      lower cure rate than BPaLM in some sub-analyses (around 89 vs 91
+      percent). (3) Longer-course (18 to 24 months) second-line with
+      kanamycin/capreomycin + ethionamide + cycloserine + PAS + others —
+      third choice; reserved for BPaL/BPaLM failure or contraindication.
+      Trade-offs: 4x longer treatment, injectable kanamycin causes
+      ototoxicity, lower adherence, lower cure rate (~50 to 60 percent).
+      Net: BPaLM > BPaL > longer-course for pulmonary MDR-TB without
+      FQ-resistance.
+
+  - name: "MRSA hospital-acquired pneumonia — rank linezolid vs vancomycin vs ceftaroline"
+    body: |
+      Setting: ICU patient with HAP/VAP day 5, sputum and BAL growing
+      MRSA with vancomycin MIC of 2 (Etest), normal renal function.
+      Ranking. (1) Linezolid 600 mg IV/PO q12h — first-line for MRSA
+      pneumonia per ATS-IDSA 2016 HAP/VAP and Wunderink ZEPHyR trial
+      (CID 2012). Reasons: (a) superior epithelial-lining-fluid penetration
+      (4-fold vs vancomycin) targeting alveolar bacteria more reliably;
+      (b) bacteriostatic but ZEPHyR showed clinical-cure benefit;
+      (c) oral 100 percent bioavailable enabling step-down. Trade-offs:
+      thrombocytopenia at greater than 14 days, peripheral and optic
+      neuritis at 28+ days, serotonin syndrome with SSRI. (2) Vancomycin
+      AUC-targeted 400 to 600 — second choice if linezolid contraindicated;
+      first choice in many hospitals due to cost. Reasons: extensive
+      experience; AUC-guided dosing per 2020 consensus; cheap. Trade-offs:
+      ELF penetration is only 50 percent of plasma, requiring AUC of
+      600 (upper end of target range) for MRSA pneumonia; AKI risk 16
+      percent at AUC greater than 600, additive with piperacillin-tazo;
+      MIC creep concern when MIC equals 2. (3) Ceftaroline 600 mg IV q8h
+      — third-line for MRSA pneumonia; off-label for HAP. Reasons:
+      allosteric PBP2a binding gives MRSA activity; phase 4 data from
+      community-acquired bacterial pneumonia (CABP) approval are limited
+      to outpatient settings; not gold-standard for HAP. Trade-off: not
+      registered for HAP; combination with daptomycin sometimes used for
+      bacteremic spread. Net: linezolid > vancomycin > ceftaroline for
+      MRSA HAP/VAP, with hospital-specific cost factor.
+
+  - name: "Severe Clostridioides difficile with ileus — rank fidaxomicin vs oral vancomycin vs combination"
+    body: |
+      Setting: 80-year-old fulminant CDI with toxic megacolon, ileus,
+      septic shock, lactate 5, WBC 28000, after 4 days fidaxomicin oral
+      monotherapy without improvement. Ranking. (1) Combination — oral/
+      rectal vancomycin 500 mg PO/PR QID PLUS IV metronidazole 500 mg q8h
+      — first-line for fulminant CDI per IDSA-SHEA 2021 update. Reasons:
+      (a) ileus reduces gut transit so high-dose oral vancomycin and
+      rectal retention enema are needed to reach distal colon; (b) IV
+      metronidazole adds systemic-to-luminal penetration via inflamed
+      gut tissue; (c) emergency surgical evaluation for colectomy if
+      hemodynamic deterioration (Sailhamer 2009 — colectomy reduces
+      mortality 50 vs 90 percent in fulminant CDI with peritonitis).
+      Trade-offs: vancomycin oral has zero systemic absorption (luminal
+      only) so does not contribute to extracolonic toxin clearance; IV
+      metronidazole provides that arm. (2) Oral vancomycin 125 mg PO QID
+      — first-line for non-fulminant severe CDI; second-choice in this
+      fulminant case. Reasons: same mechanism but lower dose insufficient
+      for toxic megacolon scenarios. (3) Fidaxomicin 200 mg PO BID monotherapy
+      — already failed in this case; not appropriate for fulminant due
+      to (a) lower ribotype-027 activity in some studies, (b) the
+      narrow-spectrum advantage matters less in fulminant disease where
+      survival is the priority, (c) no IV adjunct option. Trade-offs of
+      switching: fidaxomicin's 40 percent recurrence reduction (vs oral
+      vanco) is irrelevant in fulminant disease, where survival is the
+      goal. Net: combination (oral/PR vancomycin + IV metronidazole) >
+      oral vancomycin alone > fidaxomicin alone for fulminant CDI with
+      ileus, with surgical consultation.

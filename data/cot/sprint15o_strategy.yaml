@@ -1,0 +1,310 @@
+task: structural_strategy_reasoning
+prompt_label: "Strategy"
+instructions: |
+  Instructions: A pathogen and resistance landscape is presented. Analyze the
+  structural arc that successful drugs against this pathogen have followed.
+  Identify (1) the named target preserved across the pathogen, (2) the named
+  drugs that have worked clinically and the specific structural feature each
+  carries that defeats the resistance, (3) what structural arcs the chemistry
+  has converged on, (4) what features future antibacterial chemistry against
+  this pathogen should retain — referencing existing approved or late-stage
+  investigational compounds, (5) the resistance evolution pathway to monitor.
+
+entries:
+  - name: "Structural arc against KPC-producing carbapenem-resistant Enterobacterales (CRE)"
+    body: |
+      Target: PBP3 (FtsI) and PBP1a/2 of Enterobacterales remain the high-affinity
+      cell-wall biosynthesis targets across CRE strains; what changes is the
+      protective beta-lactamase repertoire (KPC-2, KPC-3, occasional KPC-31
+      escape mutants). Successful drug chemistries against KPC-CRE: (1)
+      ceftazidime-avibactam — combines a 3G cephalosporin (ceftazidime, C7
+      aminothiazole-oxime + C3 pyridinium-thiomethyl) with avibactam, a
+      diazabicyclooctane (DBO) class beta-lactamase inhibitor whose 2-hydroxyl
+      bridgehead nitrogen and carbamoyl warhead covalently acylate KPC's
+      Ser70 and recyclize (slow off-rate, sustained inhibition); (2) meropenem-
+      vaborbactam — pairs meropenem (1-beta-methyl carbapenem with C2
+      pyrrolidine carboxamide) with vaborbactam, a cyclic boronic-acid
+      inhibitor whose Ser-O-B(OH)2 tetrahedral intermediate mimics the
+      hydrolysis transition state of class A serine carbapenemases; (3)
+      imipenem-relebactam — relebactam is a DBO with a 2-piperidinyl
+      extension (analog of avibactam, broader OmpK porin-loss compensation).
+      Convergent structural arc: a class A serine-carbapenemase inhibitor
+      tethered to a beta-lactam backbone — the inhibitor protects the warhead.
+      Future chemistry against KPC-CRE should retain (a) a high-PBP-affinity
+      beta-lactam scaffold (cephalosporin or carbapenem), (b) a covalent or
+      reversible-covalent serine-BLI partner, (c) compatibility with rapid
+      penetration through OmpK35/36 porins of K. pneumoniae. KPC-31 D179Y
+      escape from avibactam (loses avibactam binding while losing carbapenemase
+      activity) opens meropenem-vaborbactam as the rescue — the see-saw of
+      complementary serine-BLI chemistries is itself a strategic signature.
+      Resistance evolution: KPC point mutations (D179Y, D178A) and porin-loss
+      (OmpK35/36) require parallel monitoring; the long-game arc is toward
+      multi-class inhibitors plus enhanced porin penetration.
+
+  - name: "Structural arc against NDM/VIM/IMP metallo-beta-lactamase Enterobacterales and Pseudomonas"
+    body: |
+      Target: same PBP3/2/1a backbone, but the MBL hydrolysis chemistry
+      (Zn1-Zn2 coordinated bridging hydroxide attacking beta-lactam carbonyl)
+      differs from class A/C/D serine enzymes — Zn coordination cannot be
+      defeated by serine-BLI chemistry of avibactam class. Successful drug
+      chemistries: (1) cefiderocol — siderophore-cephalosporin where a
+      catechol moiety on C3 chelates Fe3+, and the Fe-cefiderocol complex is
+      actively imported via TonB-dependent siderophore receptors (PiuA, PirA,
+      FiuA) into the periplasm of gram-negatives; structural orientation of
+      the catechol-Fe complex confers stability to MBL hydrolysis at clinical
+      concentrations; the C7 aminothiazole-oxime backbone retains the typical
+      cephalosporin pharmacophore for PBP3 affinity; (2) aztreonam-avibactam —
+      aztreonam is a monobactam (single beta-lactam ring without bicyclic
+      fusion) that is intrinsically MBL-stable because the Zn coordination
+      chemistry of MBLs requires bicyclic ring orientation; avibactam protects
+      aztreonam from co-existing class A ESBLs (CTX-M-15) and class C AmpC
+      that are nearly always plasmid-co-resident with NDM. Convergent
+      structural arc: defeat MBL by chemistry that is INTRINSICALLY MBL-stable
+      (siderophore Trojan-horse uptake plus cephalosporin orientation, OR
+      monobactam ring) AND pair with a serine-BLI for the parallel ESBL/AmpC
+      threat. Future chemistry against MBL-positive gram-negatives should
+      retain (a) MBL-stable scaffold (siderophore-modified cephalosporin or
+      monobactam), (b) serine-BLI partner for co-existing ESBL/AmpC, (c)
+      siderophore-receptor uptake to bypass porin loss and efflux. Resistance
+      evolution: cirA siderophore-receptor mutations (against cefiderocol),
+      PBP3 inserts (against aztreonam-avibactam — emerging in NDM-7 strains)
+      are the next escape pathways.
+
+  - name: "Structural arc against MRSA — anti-PBP2a allosteric cephalosporins"
+    body: |
+      Target: PBP2a (mecA gene product), a 78-kDa transpeptidase with a CLOSED
+      active-site groove that excludes most beta-lactams via an alpha-loop
+      occluding the catalytic Ser403. Successful drug chemistries: (1)
+      ceftaroline — 3G/4G cephalosporin with a 1,3-thiazole-2-yl-thio C3
+      linker bearing a positively charged pyridinium and a phosphono prodrug
+      group on the thiazolyl-thio for water solubility; the cationic-thiazolyl
+      extension reaches the PBP2a allosteric site at residue Glu447 region,
+      triggering conformational opening of the closed active-site groove
+      that allows the C7 aminothiazole-oxime carbonyl to acylate Ser403;
+      (2) ceftobiprole — similar allosteric strategy with a different C3
+      vinyl-pyrrolidinone extension; better Pseudomonas activity than
+      ceftaroline; (3) ceftolozane and ceftaz-avi do NOT bind PBP2a allosterically
+      and are NOT anti-MRSA. Convergent structural arc: extend the C3 chain
+      with a positively-charged or large hydrophobic group that reaches the
+      PBP2a allosteric pocket and induces the closed-to-open conformational
+      switch — a paradigm for "allosteric activation of a resistant target"
+      that ALSO appears in beta-lactamase chemistry (vaborbactam's reversible
+      transition-state mimic). Future anti-MRSA cephalosporin chemistry
+      should retain (a) the C7 aminothiazole-oxime backbone for typical 3G
+      cephalosporin activity vs gram-negatives, (b) a C3 substituent that
+      reaches the PBP2a allosteric site (cationic or large-aromatic), (c)
+      good water solubility (phosphono prodrug if needed). Resistance evolution:
+      PBP2a mutations near the allosteric site (Glu447Lys, Tyr446Asn) raise
+      ceftaroline MIC; ESBL hydrolysis defeats both — pair with serine-BLI
+      for ESBL coverage if Enterobacterales co-infection.
+
+  - name: "Structural arc against vancomycin-resistant enterococci (VRE) — lipoglycopeptide chlorobiphenyl"
+    body: |
+      Target: D-Ala-D-Ala terminus of lipid II remains the binding site for the
+      glycopeptide heptapeptide core; vanA-mediated D-Ala-D-Lac substitution
+      eliminates one critical H-bond, reducing vancomycin affinity 1000-fold.
+      Successful drug chemistries: (1) oritavancin — chloroeremomycin scaffold
+      with a 4-(4-chlorobiphenyl)methyl group on the disaccharide vancosamine;
+      the chlorobiphenyl arm anchors the molecule into the bacterial membrane
+      AND interacts with phospholipids in addition to D-Ala-D-Ala/D-Lac,
+      creating a dual-binding mode independent of the D-Lac substitution;
+      (2) telavancin — vancomycin scaffold with a decylaminoethyl lipophilic
+      tail off the vancosamine sugar; same dual-mechanism (membrane
+      depolarization + transglycosylation block) as oritavancin; (3)
+      dalbavancin — A-40926 (teicoplanin-like glycolipopeptide) modified with
+      a 3,3-dimethylaminopropyl group; very long terminal half-life (8.5 days)
+      enabling single-dose therapy. Convergent structural arc: append a
+      lipophilic anchor (chlorobiphenyl or fatty acyl) to the glycopeptide
+      core — the appendage adds a SECOND binding mode (membrane disruption)
+      that survives D-Ala-D-Lac substitution AND extends half-life by
+      anchoring drug into tissues. Future anti-VRE glycopeptide chemistry
+      should retain (a) the D-Ala-D-Ala-binding heptapeptide core, (b) a
+      lipophilic side chain off the vancosamine or hexapeptide for
+      membrane anchoring, (c) ideally chlorinated-aromatic for tissue
+      retention and dual binding. Resistance evolution: dimerization
+      mutations in vanA operon and emerging vanD/vanE/vanG operons produce
+      different D-Lac/D-Ser termini; lipoglycopeptide membrane-disruption
+      arm partly compensates for any single-step target evasion.
+
+  - name: "Structural arc against Clostridioides difficile — narrow-spectrum gut-restricted RNA polymerase"
+    body: |
+      Target: bacterial DNA-dependent RNA polymerase (rpoB) in C. difficile
+      vegetative cells. C. difficile is anaerobic gram-positive; the
+      stewardship constraint is to avoid disturbing the gut microbiome that
+      keeps C. difficile spores in check (avoid broad-spectrum kill of
+      Bacteroidetes that confer colonization resistance). Successful drug
+      chemistries: (1) fidaxomicin — an 18-membered macrolactone with a
+      methylated dihydroxysugar and aromatic isobutyric ester; binds
+      bacterial RNA polymerase at a site distinct from rifampin's pocket
+      (so no cross-resistance to rifamycin); narrow spectrum (gram-positive
+      anaerobic preferred), minimal systemic absorption (less than 0.4
+      percent), so the drug stays luminal where C. difficile lives;
+      microbiome footprint sparing (preserves Bacteroidetes); (2) oral
+      vancomycin — glycopeptide with no oral absorption (less than 1 percent),
+      stays luminal, binds D-Ala-D-Ala of vegetative C. difficile;
+      microbiome-disturbing (broad gram-positive kill including
+      Bacteroidetes); (3) rifaximin — gut-restricted rifamycin (less than
+      0.4 percent oral absorption); rpoB target, but used adjunctively due
+      to single-step rpoB resistance. Convergent structural arc: the
+      drug's pharmacology must be GUT-LUMINAL (oral absorption near zero)
+      so it kills C. difficile without disturbing systemic microbiome OR
+      driving systemic resistance to its target. Future anti-CDI chemistry
+      should retain (a) gut-restricted PK (no systemic absorption), (b)
+      gram-positive anaerobic spectrum WITHOUT broad-spectrum collateral
+      (preserve Bacteroides, Bifidobacterium), (c) novel target if possible
+      to avoid driving resistance to rpoB or D-Ala-D-Ala. Resistance
+      evolution: rpoB mutations defeat fidaxomicin alone (reason for monotherapy
+      caution), but the narrow microbiome footprint reduces the absolute
+      number of organisms exposed at any time.
+
+  - name: "Structural arc against M. tuberculosis non-replicating persisters — ATP synthase rotor and Ddn-activated nitroimidazole"
+    body: |
+      Target: persisters and dormant bacilli within hypoxic granulomas pose
+      the duration-of-therapy problem (historic 6 to 9 months for drug-
+      sensitive TB, 18 to 24 months for MDR-TB) because most antibiotics
+      require active growth to kill. Persisters retain residual oxidative
+      phosphorylation and minimal protein synthesis, vulnerable to
+      energy-targeted chemistry. Successful drug chemistries: (1) bedaquiline
+      — diarylquinoline binding the c-ring of mycobacterial F1-F0 ATP synthase
+      (atpE gene), specifically a hydrophobic pocket that Lies between the
+      c-ring and a-subunit interface; bedaquiline's hydroxyl-quinoline
+      pharmacophore binds Glu61 of the c-subunit, sterically blocking c-ring
+      rotation against the static a-subunit; mycobacterial selectivity over
+      mammalian mitochondrial ATP synthase is 10,000-fold (different c-subunit
+      Glu geometry); (2) pretomanid — bicyclic 4-nitroimidazole prodrug
+      activated by mycobacterial Ddn (deazaflavin-dependent nitroreductase)
+      to release nitric oxide and reactive intermediates that inactivate
+      cytochrome bd oxidase and disrupt mycolic acid synthesis under hypoxia;
+      (3) delamanid — similar nitroimidazole prodrug with a different
+      stereochemistry. Convergent structural arc: target oxidative
+      phosphorylation (not protein synthesis) to kill non-replicating
+      bacilli, AND use a pathway selectively present in mycobacteria
+      (atpE c-ring, Ddn nitroreductase) for mammalian sparing. Future
+      anti-TB persister chemistry should retain (a) energy-pathway target
+      OR mycolic acid synthesis OR cytochrome-targeted, (b) prodrug
+      activation by mycobacterial-specific enzyme for selectivity, (c)
+      pharmacology suitable for short-course (6-month) regimens with
+      thrice-weekly intermittent dosing. Resistance evolution: atpE Asp28Val,
+      Ile66Met for bedaquiline; Rv0678-mediated MmpS5-MmpL5 efflux
+      derepression confers cross-resistance to bedaquiline AND clofazimine;
+      ddn loss-of-function for pretomanid AND delamanid (cross-resistance).
+
+  - name: "Structural arc against carbapenem-resistant Acinetobacter baumannii — sulbactam plus DBO"
+    body: |
+      Target: PBP1, PBP2, PBP3 of A. baumannii. Resistance is dominated by
+      blaOXA-23, blaOXA-24/40, blaOXA-58 (acquired class D carbapenemases)
+      plus chromosomal blaOXA-51 overexpression via ISAba1 insertion;
+      additional efflux (AdeABC overexpression) and PBP modifications. Most
+      beta-lactams fail; only sulbactam retains intrinsic affinity for
+      PBP1 and PBP3 of Acinetobacter (sulbactam is normally thought of as a
+      class A serine-BLI for use with ampicillin, but in A. baumannii it
+      functions as the actual antibiotic). Successful drug chemistries: (1)
+      sulbactam-durlobactam — sulbactam (penicillanic acid sulfone) provides
+      the antibiotic backbone; durlobactam (ETX2514) is a DBO-class
+      beta-lactamase inhibitor with a 2-hydroxyl bridgehead and extended
+      sulfonyloxy tether that covalently inhibits class A (TEM, KPC),
+      class C (AmpC), AND class D (OXA-23, OXA-24, OXA-58) beta-lactamases
+      — uniquely broad coverage among DBO inhibitors; the slow off-rate
+      gives sustained protection; (2) cefiderocol — siderophore Trojan-horse
+      uptake bypasses outer-membrane porin loss in CRAB; (3) tigecycline at
+      high dose (100 mg q12h) for non-bacteremia; (4) high-dose ampicillin-
+      sulbactam (9 g IV q8h) for sulbactam-driven activity. Convergent
+      structural arc: pair the only remaining active beta-lactam (sulbactam
+      or cefiderocol) with a class-D-active DBO that protects from
+      OXA-23/24/58 hydrolysis. Future anti-CRAB chemistry should retain
+      (a) sulbactam-class beta-lactam for direct PBP affinity, (b) DBO
+      with class D (OXA) coverage in addition to class A and C, (c) compatibility
+      with siderophore-receptor or other uptake mechanism for AdeABC efflux
+      bypass. Resistance evolution: PBP3 mutations and emerging OXA variants
+      with reduced DBO affinity are the escape pathways; molecular OXA
+      typing should drive empirical-to-targeted therapy.
+
+  - name: "Structural arc against MexAB-OprM-overexpressing Pseudomonas — engineered low-efflux cephalosporin"
+    body: |
+      Target: PBP3 of Pseudomonas remains the high-affinity cephalosporin
+      target. Resistance: the chromosomal RND efflux pump MexAB-OprM (and
+      related MexCD-OprJ, MexEF-OprN, MexXY-OprM) extrudes most beta-lactams,
+      fluoroquinolones, tetracyclines, and chloramphenicol; pump
+      overexpression via mexR/nalB/C/D regulator mutations raises MIC 4 to
+      32-fold above baseline. Combined with OprD porin loss (which reduces
+      meropenem and imipenem influx), MexAB overexpression is the dominant
+      MDR-Pseudomonas resistance arc. Successful drug chemistries: (1)
+      ceftolozane — engineered cephalosporin with C7 aminothiazole-oxime
+      backbone PLUS a C3 pyrazolium-imidazolium that has reduced MexAB-OprM
+      substrate affinity (the structure-based design specifically picked
+      groups that the pump's hydrophobic substrate channel does not recognize
+      well); MIC against MexAB-overexpressing Pseudomonas remains 1 to 4
+      ug/mL where ceftazidime's rises to 8 to 32; paired with tazobactam
+      to defeat ESBL co-existence; (2) cefiderocol — siderophore-mediated
+      Trojan-horse uptake bypasses both efflux AND porin loss; (3) imipenem-
+      relebactam — relebactam DBO partially compensates for OprD loss by
+      protecting imipenem from periplasmic AmpC. Convergent structural arc:
+      either ENGINEER the molecule to be a poor efflux substrate (ceftolozane
+      C3 strategy) OR USE A COMPLETELY DIFFERENT UPTAKE PATHWAY (siderophore-
+      receptor like cefiderocol). Future anti-Pseudomonas cephalosporin
+      chemistry should retain (a) C7 aminothiazole-oxime for PBP3 affinity,
+      (b) C3 substituents that minimize RND-pump substrate fit (cation,
+      bulky-rigid, appropriate logP), (c) ideally complementary uptake
+      pathway (TonB siderophore receptor). Resistance evolution: PBP3
+      mutations (M313I, A452V) emerge under ceftolozane-tazobactam pressure
+      and raise MIC 4 to 16-fold; cirA mutations defeat cefiderocol uptake.
+
+  - name: "Structural arc against ESBL CTX-M-15 — DBO covalent reversible BLI restoring 3G cephalosporin"
+    body: |
+      Target: cephalosporin PBP3 + PBP2 + PBP1a affinity remains the
+      mainstay; class A serine ESBL (CTX-M-15 most common globally,
+      followed by SHV and TEM variants) hydrolyzes 3G and 4G cephalosporins,
+      cefepime, and aztreonam. Carbapenems (mero, imi, ert, doripenem) are
+      stable but their use selects for KPC and AmpC. Successful drug
+      chemistries: (1) ceftazidime-avibactam — avibactam DBO covalently
+      acylates Ser70 of CTX-M-15 with carbamoyl warhead; the slow
+      off-rate (carbamoyl recyclizes after acylation, unlike clavulanate
+      which is mechanistically a suicide inhibitor) gives sustained
+      inhibition for hours; restores ceftazidime against CTX-M-15 with MIC
+      0.25 to 1 ug/mL; (2) cefepime-taniborbactam (investigational) and
+      meropenem-zidebactam (investigational) — newer DBOs with broader spectra;
+      (3) ceftolozane-tazobactam — tazobactam (penicillanic-acid-sulfone
+      class) inhibits CTX-M-15 less efficiently than avibactam at clinical
+      concentrations, so ceftolozane-tazo retains MIC of 1 to 4 against
+      ESBL E. coli but does not match ceftaz-avi's potency. Convergent
+      structural arc: pair a 3G/4G cephalosporin with a covalent reversible
+      DBO inhibitor (avibactam class) that protects the warhead from class
+      A serine hydrolysis. Future ESBL-active chemistry should retain (a)
+      C7 aminothiazole-oxime cephalosporin for direct PBP3 affinity, (b)
+      DBO partner with appropriate active-site fit for class A enzymes, (c)
+      ideally also class C (AmpC) coverage for hospital-acquired infections.
+      Resistance evolution: KPC-31 D179Y (loss of avibactam binding) is
+      the see-saw escape from ceftaz-avi; meropenem-vaborbactam is the
+      complementary chemistry restoring activity in those isolates.
+
+  - name: "Structural arc against Mycobacterium abscessus complex — three-target intensive plus continuation"
+    body: |
+      Target: M. abscessus is a rapidly-growing nontuberculous mycobacterium
+      with cell-wall mycolic acid layer, intrinsic blaMab class A
+      beta-lactamase, erm(41) inducible macrolide methylase (subspecies-
+      dependent — present in subsp. abscessus and subsp. bolletii, truncated
+      and inactive in subsp. massiliense, which is therefore macrolide-
+      sensitive). Combination chemistry is mandatory because no single drug
+      reliably kills. Successful drug chemistries: (1) amikacin — 30S A-site
+      binding via h44 of 16S rRNA, with H66Q lipid-A modification of M.
+      abscessus making aminoglycoside uptake variable; bactericidal at
+      adequate Cmax/MIC; (2) imipenem — carbapenem with C2 amidine PBP3
+      affinity; M. abscessus carries chromosomal blaMab that hydrolyzes
+      imipenem partially but high doses overcome it; (3) cefoxitin — 7-alpha-
+      methoxy cephamycin sterically blocks blaMab hydrolysis (similar
+      strategy to AmpC defeat in Enterobacter); (4) azithromycin — 15-membered
+      macrolide binding 50S A2058 of 23S rRNA, active in macrolide-
+      sensitive subspecies (massiliense or erm(41)-truncated); (5)
+      continuation phase with clofazimine + linezolid + bedaquiline +
+      tigecycline combinations for 12 to 24 months. Convergent structural
+      arc: combine three-target attack (cell wall via beta-lactam +
+      ribosome via aminoglycoside + ribosome via macrolide if susceptible)
+      to overcome the resistance redundancy of M. abscessus. Future
+      M. abscessus chemistry should retain (a) cell-wall-targeted beta-lactam
+      compatible with blaMab stability or paired with class-A-DBO inhibitor,
+      (b) parallel ribosomal target (50S or 30S) to suppress single-step
+      escape, (c) lipophilicity sufficient to penetrate mycolic acid
+      layer. Resistance evolution: erm(41) constitutive expression in
+      previously-inducible isolates; rrl 23S rRNA mutations for macrolides;
+      rrs A1408G for amikacin; treatment failure rates remain 40 to 60
+      percent and the field needs new chemistry urgently.
