@@ -1,0 +1,177 @@
+task: structure_activity_comparison
+prompt_label: "SAR comparison"
+instructions: |
+  Instructions: Two structurally related antibiotics are given. Explain
+  (1) the specific structural difference at a named position or functional group,
+  (2) why that change shifts target binding, target evasion, or PK,
+  (3) how it affects MIC ranges across key pathogens,
+  (4) how it affects resistance susceptibility (e.g. enzyme hydrolysis, efflux),
+  (5) the medicinal-chemistry or clinical lesson learned.
+
+entries:
+  - name: "Ceftriaxone vs cefotaxime — C3 thiomethyl-triazinone and biliary excretion"
+    body: |
+      Both are 3G cephalosporins sharing an identical C7 aminothiazole-oxime side
+      chain (the ESBL-naive activity driver). The SAR lever is at C3.
+      Cefotaxime carries a 3-acetoxymethyl group; in vivo deacetylation to a
+      desacetyl metabolite contributes activity but pulls half-life to ~1 hour.
+      Ceftriaxone replaces that with a 3-thiomethyl-1,2,4-triazinone — increasing
+      protein binding to 95 percent and shifting 40 percent of clearance into
+      biliary excretion. Half-life climbs to 8 hours, enabling once-daily IV.
+      MICs across Enterobacterales are essentially identical (E. coli ESBL-neg
+      MIC50 0.06 ug/mL for both). Resistance is identical too — both fall to
+      CTX-M-15 hydrolysis at the oxime-bearing acyl bond; no SAR rescue here.
+      The C3 trade-off causes calcium-ceftriaxone pseudolithiasis, contraindicating
+      ceftriaxone in neonates under 28 days receiving calcium-containing IV fluids.
+      Lesson: C3 is the PK lever for cephalosporins. Thio-azole substituents drive
+      biliary handling and protein binding without altering target-binding spectrum.
+
+  - name: "Levofloxacin vs ofloxacin — S-isomer enrichment at the chiral methyl-oxazine carbon"
+    body: |
+      Ofloxacin is the racemic mixture; levofloxacin is the purified S-(minus)
+      enantiomer (also called L-ofloxacin, hence the name). The chiral center sits
+      at the C3 carbon of the methyl-substituted oxazine fused to the quinolone
+      core. Only the S-enantiomer binds the GyrA and ParC quinolone-resistance
+      determining region productively — the R-enantiomer is roughly 8–128-fold
+      less potent depending on species. Removing the inactive R-isomer doubles
+      effective potency on a per-mg basis: levofloxacin MIC50 for S. pneumoniae
+      drops to 1 ug/mL versus 2 for ofloxacin, with the same fAUC/MIC target.
+      Resistance landscape is identical (gyrA S83L, parC S80I, qnr plasmid acetylation
+      via aac(6')-Ib-cr) — chirality does not rescue against pre-formed mutants.
+      Toxicity profile improves modestly: less CNS phototoxicity than the racemate.
+      Lesson: chiral resolution doubled clinical potency without changing the
+      mechanism — a textbook example of stereochemistry as a development lever.
+
+  - name: "Doxycycline vs tetracycline — C5 hydroxyl and 6-alpha-deoxy modification"
+    body: |
+      Tetracycline has C5 hydrogen and a C6 hydroxyl plus C6-methyl. Doxycycline
+      retains the C6-methyl but is 6-alpha-deoxy (the C6 hydroxyl is removed) and
+      adds a C5-alpha hydroxyl. The 6-deoxy change strips the chelating hydroxyl
+      that complexed divalent cations — doxycycline therefore has higher oral
+      bioavailability (around 95 percent) and is less perturbed by milk, antacids,
+      and iron than tetracycline (around 60 percent). The C5 hydroxyl improves
+      crystal-lattice stability, extending half-life from 8 to 18 hours and
+      enabling q12h dosing. Spectrum is otherwise comparable, with doxycycline
+      retaining better activity against tet(M)-bearing pneumococci and B. burgdorferi
+      due to better tissue penetration. Both lose to ribosomal protection
+      (Tet(M), Tet(O)) and tet efflux pumps (TetA-K) equally — SAR did not rescue
+      target-mediated resistance. Lesson: removing a metal-chelating hydroxyl is
+      one of the cleanest oral-bioavailability levers in tetracycline chemistry.
+
+  - name: "Amoxicillin vs ampicillin — para-hydroxyl on the phenyl ring and oral absorption"
+    body: |
+      Both are aminopenicillins with the same 6-aminopenicillanic acid core and an
+      alpha-amino phenylacetamide side chain at C6. The single SAR change is a
+      para-hydroxyl on the phenyl ring of amoxicillin. That hydroxyl reduces
+      protonation of the alpha-amino group at gastric pH, dramatically improving
+      oral absorption — amoxicillin reaches 95 percent bioavailability versus
+      40 percent for ampicillin. Plasma concentrations and AUC roughly double for
+      the same oral dose. MIC values against susceptible Enterobacterales,
+      streptococci, enterococci, and Listeria are essentially identical.
+      Resistance landscape is shared: both fall to TEM-1 and SHV-1 penicillinases,
+      both are restored by clavulanate, both are intrinsically inactive against
+      AmpC and ESBL producers. Lesson: a single para-hydroxyl can rewrite an
+      antibiotic's clinical role from IV-only to oral first-line — amoxicillin
+      replaced ampicillin in essentially every outpatient indication.
+
+  - name: "Cefoxitin vs cefamandole — 7-alpha-methoxy cephamycin substitution and AmpC stability"
+    body: |
+      Cefamandole is a 2G cephalosporin with a 7-alpha-hydrogen and a tetrazole-thiomethyl
+      C3. Cefoxitin is a 7-alpha-methoxy cephamycin (the 7-alpha-H replaced by
+      OCH3). That single methoxy creates a steric block in the active site of
+      AmpC class C beta-lactamases — the methoxy clashes with the catalytic
+      Ser64 nucleophile orientation, preventing acylation. Cefoxitin therefore
+      retains activity against AmpC-derepressed Enterobacter cloacae and Citrobacter
+      freundii where cefamandole fails. The same methoxy gives anaerobic activity
+      (Bacteroides fragilis MIC50 8 ug/mL) by stabilizing PBP binding. Trade-offs:
+      methoxy weakens binding to PBP1a/3 of Pseudomonas (no PsAer activity, while
+      cefamandole had marginal coverage), and cefoxitin loses gram-positive potency
+      (S. pneumoniae MIC drifts up). Resistance: cefoxitin still falls to ESBLs
+      (CTX-M-15) and high-level plasmid-AmpC (CMY-2). Lesson: 7-alpha-methoxy was
+      the first conscious SAR move to defeat a beta-lactamase class — paradigm for
+      later DBO inhibitors that mimic this steric strategy in a separate molecule.
+
+  - name: "Tigecycline vs minocycline — C9 glycylamido side chain and Tet-pump escape"
+    body: |
+      Minocycline is a tetracycline with a C7 dimethylamino group; tigecycline
+      retains that C7 substituent and adds a bulky C9 t-butylglycylamido (the
+      9-glycyl that names the glycylcycline class). The C9 side chain is too
+      large for TetA-class efflux pumps to recognize as a substrate and sterically
+      blocks Tet(M) ribosomal-protection protein binding to the A-site. MIC fold-changes
+      are dramatic: tet(M)-positive S. aureus minocycline MIC ~16 ug/mL vs tigecycline
+      0.25; tetA-positive E. coli minocycline 32 vs tigecycline 0.5. Tigecycline
+      thereby restores activity against MRSA, VRE, ESBL Enterobacterales, and
+      anaerobes carrying tet genes. New resistance pathway emerges in Acinetobacter
+      via AdeABC overexpression and in Enterobacterales via tetX (FAD-monooxygenase
+      that hydroxylates the C11a position). Trade-offs: low Cmax (0.6 ug/mL) makes
+      tigecycline AUC/MIC fail in bacteremia, leading to FDA mortality black-box.
+      Lesson: a single C9 side-chain pickup defeated the dominant Tet resistance
+      mechanisms, but PK ceiling capped clinical positioning to soft-tissue and
+      intra-abdominal use.
+
+  - name: "Ceftaroline vs ceftriaxone — C3 thiazolyl-pyridinium and PBP2a binding for MRSA"
+    body: |
+      Ceftriaxone has a 3-thiomethyl-triazinone at C3 and the standard 7-aminothiazole-oxime
+      at C7. Ceftaroline shares the C7 oxime backbone but replaces the C3 with a
+      1,3-thiazole-2-yl-thio linker bearing a pyridinium (positively charged) and
+      adds a phosphono group on the thiazolyl-thio for water-solubility (ceftaroline
+      fosamil prodrug). The C3 cationic-thiazolyl extension reaches the PBP2a allosteric
+      site of MRSA: PBP2a normally has a closed active-site groove that excludes
+      cephalosporins, but ceftaroline binding at the allosteric site triggers
+      conformational opening that allows the beta-lactam carbonyl to acylate
+      Ser403. MIC50 against MRSA drops to 1 ug/mL (ceftriaxone is greater than 64).
+      Spectrum vs gram-negs is preserved at 3G level (E. coli 0.06) but loses
+      Pseudomonas. Resistance: PBP2a mutations near the allosteric site (Glu447Lys)
+      raise ceftaroline MIC, and ceftaroline still falls to ESBL hydrolysis.
+      Lesson: the allosteric-PBP2a strategy was the first truly anti-MRSA cephalosporin
+      and validated allosteric binding as a paradigm for ceftobiprole and beyond.
+
+  - name: "Plazomicin vs gentamicin — C1 HABA group and C6prime hydroxyethyl, AME-escape"
+    body: |
+      Gentamicin C1 has free 1-amino, 3-amino, 2prime-amino, 6prime-amino, and
+      3prime-OH; each is a substrate for an aminoglycoside-modifying enzyme (AME):
+      AAC(3) acetylates 3-N, AAC(6prime) acetylates 6prime-N, ANT(2double-prime)
+      adenylates 2double-prime-OH, and APH(2double-prime) phosphorylates the same
+      site. Plazomicin (sisomicin scaffold) protects three of four hot spots:
+      C1 carries a 4-amino-2-hydroxybutyryl (HABA) acyl group that occludes ANT(2double-prime)
+      and AAC(3); C6prime is converted to a hydroxyethyl that occludes AAC(6prime).
+      Result: plazomicin retains MIC less than or equal to 2 ug/mL against ESBL and
+      KPC-CRE strains that carry typical AAC and ANT enzymes, while gentamicin MICs
+      hit 32 to 128. Plazomicin still falls to 16S rRNA methyltransferases
+      (RmtB, ArmA), which methylate G1405 universally; pan-resistance follows.
+      Lesson: rational masking of multiple AME hot spots simultaneously buys
+      5 to 10 years of utility, but the rRNA-methylation pathway is the next
+      inevitable resistance frontier.
+
+  - name: "Eravacycline vs tigecycline — C7-fluoro and C9-pyrrolidinoacetamido"
+    body: |
+      Tigecycline has C7 dimethylamino and a C9 t-butylglycylamido. Eravacycline
+      modifies both: C7 dimethylamino is replaced by a C7 fluoro (small electron-withdrawing
+      group), and C9 carries a pyrrolidinoacetamido (rigid 5-ring) instead of the
+      flexible t-butylglycyl. The C7 fluoro tightens A-site ribosomal binding by
+      filling a small hydrophobic pocket; fluorocycline MIC50 against MRSA, VRE,
+      and ESBL E. coli drops 2 to 4-fold versus tigecycline. The pyrrolidino-C9
+      maintains TetA / Tet(M) escape. Crucially, eravacycline retains activity against
+      TetX-positive Enterobacterales (where tigecycline rises to 8 ug/mL); the
+      C7 fluoro deflects FAD-monooxygenase orientation enough to slow hydroxylation.
+      Pharmacology improves: oral bioavailability around 28 percent and Cmax reaches
+      1.2 ug/mL on standard 1 mg/kg q12h IV (twice tigecycline). Lesson: small
+      electron-withdrawing perturbations at C7 shift both potency AND enzymatic
+      stability, a higher-order SAR move than the C9 alone.
+
+  - name: "Meropenem vs imipenem — 1-beta-methyl group and DHP-1 stability"
+    body: |
+      Imipenem is a thienamycin amidine with no substituent at C1 of the carbapenem
+      ring. The C1 hydrogen is the substrate handle for renal dehydropeptidase-1
+      (DHP-1), which hydrolyzes the beta-lactam to an inactive ring-opened metabolite;
+      imipenem must be co-administered with cilastatin (a DHP-1 inhibitor) at 1:1
+      ratio to retain urinary recovery. Meropenem adds a 1-beta-methyl, sterically
+      blocking DHP-1 entry to the C1 position. Meropenem is therefore stable as
+      monotherapy without cilastatin. The methyl also modifies PBP binding kinetics:
+      meropenem is more bactericidal against Pseudomonas (MIC50 0.5 vs 2 ug/mL for
+      imipenem) and has lower seizure risk because of reduced GABA-receptor binding
+      affinity (imipenem-cilastatin has 1 to 3 percent seizure incidence at high dose;
+      meropenem under 0.5 percent). Both equally potent vs MSSA and Enterobacterales
+      and both lose to KPC, NDM, OXA-48 carbapenemases identically. Lesson: a single
+      methyl removed the need for a partner drug AND lowered CNS toxicity, one
+      of the highest-leverage SAR moves in the carbapenem class.

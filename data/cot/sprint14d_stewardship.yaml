@@ -1,0 +1,203 @@
+task: stewardship_decision
+prompt_label: "Stewardship case"
+instructions: |
+  Instructions: An empirical-therapy or de-escalation decision is presented.
+  Reason through (1) what the local epidemiology and prior cultures imply about
+  resistance probability, (2) which drug to choose or de-escalate to and why,
+  (3) the duration appropriate for this syndrome with citation to landmark
+  duration trials (POET, IDSA shorter-course pneumonia, etc.),
+  (4) collateral damage to consider (C. difficile, ESBL induction, AKI),
+  (5) what the next decision point is and what data triggers it.
+
+entries:
+  - name: "De-escalate piperacillin-tazobactam to amoxicillin-clavulanate after E. coli ESBL-negative culture"
+    body: |
+      Day-3 culture from a community-onset urosepsis returns E. coli, susceptible
+      to amoxicillin-clavulanate, ceftriaxone, ciprofloxacin, and TMP-SMX. The
+      patient was started empirically on piperacillin-tazobactam 4.5 g q6h based
+      on prior ESBL exposure 2 years ago. ESBL is now ruled out by negative ESBL
+      confirmatory test plus susceptible cefotaxime and ceftriaxone disks. The
+      stewardship move is to de-escalate immediately: ceftriaxone 2 g IV q24h
+      (cheaper, narrower) for 24 to 48 hours, then oral amoxicillin-clavulanate
+      875/125 mg q12h to complete a 7-day course (IDSA 2010 + Yahav 2019 short-course
+      gram-negative bacteremia trial, JAMA: 7 days non-inferior to 14). Avoid
+      continuing piperacillin-tazobactam: it adds AKI risk by 30 percent in the
+      MERINO meta (Tamma 2017), drives Pseudomonas selection pressure, and offers
+      no marginal benefit over ceftriaxone for non-ESBL Enterobacterales bacteremia.
+      Next decision point: day-5 follow-up culture (negative); transition to oral
+      and discharge. Trigger to escalate again would be persistent fever beyond
+      72 hours, worsening WBC, or repeat blood culture positivity.
+
+  - name: "Empirical cefepime selection in febrile neutropenia per IDSA 2018"
+    body: |
+      AML induction patient day 12 develops temperature 38.7C with ANC 200. No
+      localizing symptoms. IDSA 2018 febrile-neutropenia guideline supports
+      monotherapy with an antipseudomonal beta-lactam: cefepime 2 g IV q8h is
+      first-line at most centers, with piperacillin-tazobactam, meropenem, and
+      imipenem-cilastatin as alternatives. Add vancomycin only if criteria are
+      met: hemodynamic instability, mucositis, catheter-related infection, prior
+      MRSA colonization, or pneumonia. Current patient has none of those triggers,
+      so vancomycin is not added (preserves linezolid, daptomycin for true MRSA).
+      Duration: continue empirical regimen until ANC recovers above 500 AND afebrile
+      48 hours; if fevers persist beyond 4 to 7 days without source, add empirical
+      antifungal (voriconazole or anidulafungin per local epidemiology) per IDSA.
+      Avoid carbapenem first-line: reserves carbapenems for documented ESBL or
+      cefepime-resistant gram-negs. Next decision: blood cultures, lactate trend,
+      imaging if persisting fever; de-escalate or stop at engraftment.
+
+  - name: "Switch from meropenem to ceftriaxone after ESBL false-alarm via NG-Test CARBA-5"
+    body: |
+      Patient on meropenem started after rapid PCR called blaCTX-M positive on a
+      blood-culture E. coli; subsequent NG-Test CARBA-5 lateral-flow plus phenotypic
+      MIC report comes back as ESBL-positive but carbapenemase-negative. The PCR
+      blaCTX-M flag was correct, but the patient was incidentally also susceptible
+      to ceftriaxone on confirmatory testing because blaCTX-M-15 was on a low-copy
+      plasmid with low expression and the strain was ceftriaxone-S in disk diffusion.
+      Stewardship move: discuss with micro lab; if susceptibility is confirmed
+      (MIC less than or equal to 1 ug/mL), de-escalate from meropenem to ceftriaxone
+      2 g IV q24h. ESBL bacteremia carbapenem-sparing is supported by MERINO trial
+      caveat (pip-tazo failed there, but ceftriaxone is appropriate when phenotypically
+      susceptible; cefepime should NOT be used in CTX-M ESBL even if reported S
+      due to inoculum effect, per IDSA AMR 3.0 guidance 2024). Duration: 7 days
+      total. Next decision: day-5 reassessment; if afebrile and clinically improved,
+      complete course. Avoid pip-tazo retreatment if recurrence.
+
+  - name: "Stop fluconazole prophylaxis at neutrophil engraftment day plus 7 in AML induction"
+    body: |
+      AML induction patient on fluconazole 400 mg daily for invasive candidiasis
+      prophylaxis since chemotherapy day 0. ANC recovers to 500 on day 21 and rises
+      sustainably above 1000 by day 24. IDSA 2016 candidiasis guideline supports
+      prophylaxis only through neutrophil recovery; continuing past engraftment
+      adds no benefit and selects for fluconazole-resistant Candida glabrata
+      (intrinsic fluconazole-R) and azole-resistant C. krusei. Stewardship move:
+      stop fluconazole on engraftment day plus 7 (allows margin for stability),
+      counsel patient on warning signs (oral thrush, persistent fever, abdominal
+      pain), draw blood cultures including fungal isolator if febrile. Avoid
+      transition to extended posaconazole or isavuconazole unless documented
+      Aspergillus colonization or high local mold incidence (greater than 5
+      percent). Next decision: monitor for breakthrough candidemia; if any febrile
+      neutropenia in subsequent cycle, restart prophylaxis from chemo day 0.
+      Echinocandin reserved for breakthrough or mold-spectrum need.
+
+  - name: "Avoid empirical anti-MRSA in CAP if no MRSA risk (per ATS-IDSA 2019)"
+    body: |
+      72-year-old admitted with community-acquired pneumonia, CURB-65 score 2,
+      no prior MRSA culture in past 12 months, no recent IV antibiotic exposure,
+      no recent hospitalization, no end-stage renal disease on hemodialysis. The
+      ATS-IDSA 2019 CAP guideline recommends empirical ceftriaxone plus a macrolide
+      or doxycycline for inpatient non-ICU CAP. Vancomycin or linezolid are added
+      ONLY if specific MRSA risk factors are present: prior MRSA colonization,
+      recent hospitalization with IV antibiotic, severe necrotizing pneumonia
+      with cavitation, or hemoptysis with rapid progression. Current patient has
+      none. Avoid reflexive vancomycin: drives nephrotoxicity (16 percent at
+      AUC greater than 600), selects vanA in colonized enterococci, and
+      delays narrowing. Stewardship move: ceftriaxone 1 g IV q24h plus azithromycin
+      500 mg daily; obtain MRSA nasal PCR (negative predictive value 99 percent
+      for excluding MRSA pneumonia per Parente 2018, CID). De-escalate to oral
+      amoxicillin-clavulanate at clinical improvement; total 5 days for inpatient
+      stable pneumonia (IDSA short-course CAP). Next: 48-hour clinical assessment;
+      cultures; switch oral when stable.
+
+  - name: "C. difficile first-episode treatment — fidaxomicin vs oral vancomycin (IDSA 2021 update)"
+    body: |
+      72-year-old with prior fluoroquinolone exposure presents with 8 watery
+      stools per day, WBC 18 000, creatinine 1.4. Stool toxin EIA positive,
+      NAAT positive for tcdB and binary toxin (cdtA/B), suggesting an epidemic
+      ribotype 027-like strain. IDSA-SHEA 2021 update flipped the first-line:
+      fidaxomicin 200 mg PO BID x 10 days is now preferred over oral vancomycin
+      125 mg PO QID x 10 days for non-severe AND severe non-fulminant first
+      episodes. Rationale: fidaxomicin shows 40 percent lower 30-day recurrence
+      (Cornely 2012, Lancet ID; Louie 2011, NEJM), narrower microbiome footprint
+      (spares Bacteroidetes vs vancomycin's broad gram-positive collateral kill),
+      and equivalent initial cure ~88 percent. Cost barrier (around $4500 per
+      course) is the practical issue; oral vancomycin remains acceptable when
+      fidaxomicin not on formulary. Avoid metronidazole now (downgraded to
+      alternative-only for non-severe with no other option) — efficacy 73 percent
+      vs vancomycin 81 percent at 10 days (Johnson 2014, CID). Fulminant disease
+      (ileus, megacolon, shock): oral vancomycin 500 mg QID PLUS IV metronidazole
+      500 mg q8h, surgical consult. Next decision: day-3 stool frequency and
+      WBC trend; persistent toxin positivity at end-of-treatment is NOT an
+      indication for re-treatment (test of cure not recommended).
+
+  - name: "Uncomplicated cystitis — nitrofurantoin or fosfomycin first-line, NOT fluoroquinolone"
+    body: |
+      28-year-old healthy female with 2-day dysuria, frequency, no flank pain,
+      no fever, no pregnancy. Urinalysis positive nitrites and leukocyte esterase.
+      Cumulative resistance data: local E. coli ciprofloxacin resistance 18 percent
+      (above the 10 percent IDSA threshold for empirical use), TMP-SMX 22 percent,
+      nitrofurantoin 3 percent, fosfomycin under 5 percent. Stewardship move:
+      nitrofurantoin macrocrystals 100 mg PO BID x 5 days OR fosfomycin trometamol
+      3 g PO single-dose. Both are concentrated in urine (nitrofurantoin urinary
+      AUC 30x serum; fosfomycin urinary level greater than 100 ug/mL for 48 hours)
+      with minimal systemic exposure, sparing the gut microbiome. Avoid
+      ciprofloxacin or levofloxacin: FDA 2016 black-box for tendinopathy, aortic
+      dissection, peripheral neuropathy, AND C. difficile risk; reserve FQs for
+      pyelonephritis or complicated UTI. Avoid TMP-SMX in this region (resistance
+      above 20 percent threshold per Gupta 2011, CID empirical-therapy
+      recommendations). Avoid amoxicillin-clavulanate: inferior to nitrofurantoin
+      in head-to-head (Hooton 2005, NEJM). Next decision: symptom resolution by
+      day 3; if persisting, send urine culture and reassess. Pyelonephritis would
+      shift to ceftriaxone 1 g IV daily plus oral step-down per IDSA 2010.
+
+  - name: "Asymptomatic bacteriuria in non-pregnant adult — no antibiotic needed (IDSA 2019)"
+    body: |
+      78-year-old woman in long-term care, ambulatory, no urinary symptoms, no
+      fever, no delirium attributable to UTI. Routine urinalysis as part of
+      pre-procedural screen shows pyuria and urine culture grows greater than 10^5
+      CFU/mL E. coli. IDSA 2019 ASB guideline (Nicolle): do NOT treat asymptomatic
+      bacteriuria in non-pregnant adults regardless of pyuria, regardless of
+      catheter status (treatment is indicated only in pregnancy and prior to
+      urological procedures with mucosal trauma — TURP, etc). Treatment is
+      actively harmful: increases C. difficile risk 8.5x, drives ESBL and
+      carbapenem resistance selection, prolongs hospital stay 2.5 days, and
+      paradoxically increases symptomatic UTI rate over 6 months. Stewardship
+      move: do not treat. Educate clinician and family. Repeat culture is NOT
+      indicated. Avoid empirical fluoroquinolone, cephalosporin, TMP-SMX based
+      on lab result alone. Pyuria does NOT distinguish ASB from UTI in elderly
+      catheterized patients. Next decision: monitor for true symptoms (dysuria,
+      flank pain, hemodynamic change, NEW delirium with sterile workup) before
+      treating. Documented true UTI would shift to nitrofurantoin or short-course
+      cephalexin; never start solely on lab finding.
+
+  - name: "Surgical prophylaxis duration — single dose vs 24h (CDC 2017 + ASHP 2013)"
+    body: |
+      Patient undergoing elective open colorectal resection. CDC 2017 guideline
+      plus ASHP-IDSA-SHEA-SIS 2013 surgical prophylaxis: single preoperative
+      dose of cefoxitin 2 g IV (or cefazolin 2 g plus metronidazole 500 mg) within
+      60 minutes of incision; redose cefoxitin at 2 hours intraoperatively if
+      surgery exceeds 4 hours OR estimated blood loss greater than 1500 mL. NO
+      postoperative antibiotic doses. The randomized de Jonge 2020 (Lancet ID)
+      and CDC meta-analysis confirmed single-dose non-inferiority to 24-hour
+      regimens for SSI prevention, with 35 percent fewer C. difficile cases and
+      28 percent fewer AKI events. Stewardship move: stop the prophylactic
+      antibiotic at incision closure. Document closure time. Avoid the still-common
+      practice of continuing 24 to 72 hours: zero SSI benefit, drives resistance,
+      adds AKI risk (especially with vancomycin or aminoglycoside continuation).
+      Specific exceptions: obesity (BMI greater than 30) gets weight-based
+      cefazolin 3 g; MRSA-colonized adds preoperative vancomycin 15 mg/kg; beta-lactam
+      allergy gets clindamycin 900 mg plus gentamicin 5 mg/kg. Next decision:
+      monitor for true SSI signs at days 5, 14, 30; treat empirically only if
+      established infection present, never prophylactically beyond closure.
+
+  - name: "Native-valve uncomplicated streptococcal endocarditis — POET partial-oral switch (NEJM 2019)"
+    body: |
+      45-year-old with viridans-group streptococcus mitis bacteremia and TEE-confirmed
+      mitral-valve vegetation under 10 mm, ejection fraction 60 percent, no
+      embolic events, no abscess, no heart block, no prosthetic material, blood
+      cultures negative by day 5 after IV ceftriaxone initiation. Patient meets
+      all POET trial criteria (Iversen 2019, NEJM): IV phase greater than or
+      equal to 10 days completed, clinically stable, valve abnormalities not
+      requiring surgery, oral absorption preserved. Stewardship move: switch from
+      ceftriaxone 2 g IV q24h to oral amoxicillin 1 g PO TID PLUS rifampin 600 mg
+      PO daily (combination with documented penetration into vegetation per
+      POET arm 2 dosing scheme; alternatives in POET include fusidic acid,
+      moxifloxacin, depending on organism). Total duration 4 weeks (matches IV-only
+      arm). Outpatient transition with weekly clinical follow-up, repeat TTE at
+      week 2 and end of treatment. POET demonstrated non-inferiority for
+      6-month all-cause mortality, unplanned cardiac surgery, embolic events,
+      and bacteremia relapse (3.1 vs 3.7 percent), with 3-day shorter hospital
+      stay. Avoid IV continuation after stabilization: line-related bacteremia
+      and C. difficile rates rise after day 14 of IV antibiotics. Next decision:
+      week-2 clinical reassessment; oral compliance check (TDM not standard for
+      amoxicillin but rifampin levels can be confirmed); definitive end-of-treatment
+      blood cultures and TTE.
