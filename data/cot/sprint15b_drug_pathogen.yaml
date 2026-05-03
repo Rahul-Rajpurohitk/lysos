@@ -1,0 +1,266 @@
+task: drug_pathogen_reasoning
+prompt_label: "Case"
+instructions: |
+  Instructions: A clinical drug-pathogen pair is presented. Reason through
+  (1) why this drug is appropriate (or not) for this organism in this site,
+  (2) the named resistance mechanism that would or might compromise activity,
+  (3) the PK/PD index (T greater than MIC, AUC/MIC, Cmax/MIC) and the numeric target,
+  (4) what other drug option to consider and the trade-off,
+  (5) the monitoring or follow-up step that determines whether to continue.
+
+entries:
+  - name: "Cefiderocol for NDM-1 Pseudomonas pneumonia"
+    body: |
+      Patient is intubated with VAP, sputum grows P. aeruginosa carrying blaNDM-1
+      and blaCTX-M-15 confirmed by molecular panel. Cefiderocol is a siderophore-
+      cephalosporin: the catechol moiety on the C3 chain chelates ferric iron,
+      and the Fe3+-cefiderocol complex is actively imported through bacterial
+      siderophore receptors (TonB-dependent PiuA, PirA in Pseudomonas) that are
+      upregulated under iron-limited conditions like the human respiratory tract.
+      This Trojan-horse uptake bypasses outer-membrane porin loss (oprD downregulation),
+      a mechanism that defeats most carbapenems against Pseudomonas. The cephalosporin
+      warhead retains stability against NDM-1 (a class B Zn metallo-beta-lactamase)
+      because the catechol-Fe complex orientation and the C7 oxime side chain
+      together resist Zn-mediated hydrolysis at clinically relevant concentrations.
+      MIC50 vs NDM-1 P. aeruginosa is 1 to 2 ug/mL. PK/PD: fT greater than MIC at
+      least 75 percent of dosing interval; 2 g IV q8h infused over 3 hours achieves
+      it (CrCl normal). Resistance emerges via PBP3 mutations and cirA siderophore-
+      receptor mutations — cirA loss reduces uptake 10-fold and shifts MIC to 8 to
+      32. Alternative: aztreonam-avibactam (when available) for MBL coverage with
+      different uptake. Monitoring: day-3 sputum culture and clinical PaO2/FiO2;
+      if not improving, re-test cirA-loss susceptibility profile and consider
+      polymyxin-B add-on with caution about AKI.
+
+  - name: "Daptomycin for MRSA bacteremia with vancomycin MIC 2"
+    body: |
+      Patient with MRSA bloodstream infection, persistent positive blood cultures
+      day 4 of vancomycin (AUC 580, MIC 2 by Etest — vancomycin AUC/MIC 290 is
+      sub-target since 1-log kill needs AUC/MIC greater than 400). Daptomycin
+      depolarizes the gram-positive membrane via Ca2+-dependent insertion of the
+      lipopeptide tail (n-decanoyl) into membrane patches enriched in
+      phosphatidylglycerol; the kinked alpha-helical conformation flips Ca2+ ions
+      across the bilayer, dissipating membrane potential and killing the cell
+      without protein synthesis steps (so works on stationary-phase persisters
+      unlike vancomycin). Switch is supported by Fowler 2006 NEJM: 6 mg/kg dapto
+      is non-inferior to vancomycin or anti-staph beta-lactam for MRSA bacteremia
+      and right-sided endocarditis. For SOURCE-controlled bacteremia OR MIC-creep
+      vancomycin failure, dose dapto at 8 to 12 mg/kg q24h IV (off-label
+      high-dose, supported by van Hal 2012 CID and Liu 2011 IDSA MRSA guideline).
+      Resistance: mprF lysinylation of phosphatidylglycerol reduces negative
+      surface charge and repels the Ca-dapto complex; yycG/yycF cell-wall
+      thickening also raises MIC. PK/PD: Cmax/MIC about 60 and AUC/MIC about 666
+      for 1-log kill. Alternative: ceftaroline 600 mg IV q8h or daptomycin +
+      ceftaroline combo (synergy via PBP1 binding altering membrane charge).
+      Monitor: weekly CK (rhabdomyolysis risk at high dose), repeat blood
+      cultures every 24 hours until two consecutive negatives.
+
+  - name: "Linezolid for Listeria monocytogenes meningitis in penicillin-allergic patient"
+    body: |
+      Listeria meningitis in a 65-year-old with documented type-1 penicillin
+      anaphylaxis (precluding ampicillin). Listeria is intrinsically resistant
+      to all cephalosporins because of low-affinity PBP3 in this gram-positive
+      facultative intracellular rod. First-line is ampicillin plus gentamicin
+      (synergy + bactericidal); allergy forces alternatives. Linezolid is
+      bacteriostatic against Listeria via 50S ribosomal A-site binding at
+      A2451 of 23S rRNA, and crosses the inflamed blood-brain barrier with
+      CSF concentrations 70 to 80 percent of plasma (the CSF AUC of 90 ug.h/mL
+      at 600 mg q12h gives free CSF AUC/MIC about 60, near the bactericidal
+      target for Listeria MIC 1 to 2 ug/mL). However, bacteriostatic activity
+      against an intracellular pathogen with a high-mortality CNS infection is
+      a concern; pair with TMP-SMX (15 mg/kg/day TMP component IV q6-8h),
+      which is bactericidal against Listeria with greater than 95 percent
+      CSF penetration via folate-pathway disruption. Resistance: cfr methyl-
+      transferase (transmissible plasmid) and 23S G2576T target mutations
+      raise MIC to greater than 8 (rare in Listeria). PK/PD for linezolid:
+      AUC/MIC greater than 100 for stasis; 600 mg IV q12h hits target.
+      Tox: thrombocytopenia greater than 14 days therapy, peripheral and
+      optic neuritis on prolonged use, serotonin-syndrome with SSRI. Monitor
+      CSF glucose/protein and culture day 5; consult ID for total duration
+      (3 weeks minimum) and lumbar drain reassessment.
+
+  - name: "Polymyxin B vs CRKP bacteremia with hetero-resistance"
+    body: |
+      Carbapenem-resistant K. pneumoniae (KPC-3 producer) bacteremia in ICU.
+      Polymyxin-B binds bacterial outer-membrane lipopolysaccharide (LPS) lipid-A
+      via electrostatic interaction between the positively charged 2,4-diaminobutyric
+      acid residues of the cyclic decapeptide and the negatively charged
+      phosphate groups on lipid-A. The fatty-acyl tail then inserts into the
+      outer membrane, displacing Ca2+/Mg2+ bridges that cross-link adjacent LPS
+      molecules, leading to membrane permeabilization and inner-membrane disruption.
+      Hetero-resistance is the dominant problem: a single colony may have an MIC
+      of 0.5 to 2 ug/mL by routine broth microdilution, but a subpopulation of
+      around 1 in 10^4 to 10^6 cells expresses pmrAB-mediated lipid-A modification
+      (4-amino-4-deoxy-arabinose addition) and survives polymyxin exposure;
+      this subpopulation expands clonally during therapy and causes treatment
+      failure. Strategy: combine polymyxin-B 2.5 mg/kg IV loading then 1.5 mg/kg
+      q12h (NOT colistin — polymyxin-B has more predictable PK and skips the
+      prodrug-conversion lag of CMS) with meropenem 2 g q8h (high-dose, even if
+      MIC greater than 8, on the principle that polymyxin damages outer membrane
+      and exposes PBPs to residual carbapenem activity per Pogue 2013) and
+      consider ceftazidime-avibactam if KPC-3 is confirmed without KPC-31
+      mutation. PK/PD: AUC0-24,ss target 50 to 100 mg.h/L for clinical efficacy
+      (Sandri 2013). Tox: nephrotoxicity ~25 percent (additive with
+      vancomycin/aminoglycoside), neurotoxicity (paresthesias). Monitor: daily
+      creatinine, blood cultures every 48 hours, and discontinue if susceptibility
+      to a less-toxic option (ceftazidime-avibactam, plazomicin) emerges.
+
+  - name: "Plazomicin for ESBL-CRE complicated UTI with bacteremia"
+    body: |
+      cUTI/bacteremia from CTX-M-15-positive K. pneumoniae also carrying KPC-2.
+      Plazomicin (sisomicin scaffold with C1 HABA group and C6prime hydroxyethyl)
+      is engineered to escape AAC(3), AAC(6prime), ANT(2double-prime), and
+      APH(2double-prime) modifying enzymes that defeat gentamicin, tobramycin,
+      and amikacin. Plazomicin retains MIC less than or equal to 2 ug/mL against
+      ESBL and KPC-CRE strains where gentamicin MIC hits 32 to 128. The drug
+      binds the 30S A-site at h44 of 16S rRNA, causing ribosomal mistranslation
+      and concentration-dependent killing. EPIC trial (Wagenlehner 2019, NEJM)
+      showed superiority of plazomicin 15 mg/kg q24h IV over meropenem 1 g q8h
+      for cUTI. The 16S rRNA methyltransferases (RmtB, RmtC, ArmA) methylate
+      G1405 of 16S rRNA universally and confer pan-aminoglycoside resistance
+      including plazomicin (MIC greater than 64) — molecular surveillance for
+      these genes is rising in CRE epidemiology and is the next resistance
+      frontier. PK/PD: AUC/MIC about 100 for stasis; 15 mg/kg IV q24h with
+      TDM (target Cmax 45 to 60 ug/mL, trough less than 2). Tox: nephrotoxicity
+      ~7 percent (lower than amikacin's ~10) due to once-daily dosing and
+      shorter accumulation; ototoxicity less than 1 percent in registration
+      trials. Alternative: ceftazidime-avibactam if plazomicin MIC raised; if
+      both fail, polymyxin combo. Monitor: daily creatinine, plazomicin
+      trough TDM, repeat urine culture day 7.
+
+  - name: "Posaconazole for breakthrough invasive aspergillosis on voriconazole prophylaxis"
+    body: |
+      Allogeneic stem-cell transplant patient on voriconazole 300 mg q12h
+      prophylaxis develops new pulmonary nodules; BAL galactomannan greater than
+      1.0 and PCR positive for A. fumigatus. Voriconazole TDM trough is sub-
+      therapeutic at 0.6 ug/mL (target 1 to 5.5; CYP2C19 ultra-rapid metabolizer
+      genotype confirmed) which explains breakthrough. Switch options: posaconazole
+      delayed-release tablet 300 mg q12h x 1 day load then 300 mg daily PO with
+      food (DR-tab gives reliable absorption around 50 percent versus the
+      oral-suspension formulation's erratic bioavailability), or isavuconazole
+      200 mg q8h x 6 doses load then daily. Posaconazole binds CYP51A
+      (lanosterol-14-alpha-demethylase) more tightly than voriconazole at the
+      heme-iron pocket due to its longer side chain (extra furanyl ring extending
+      into the substrate channel), giving higher MIC penetration against
+      voriconazole-resistant TR34/L98H Aspergillus carrying the tandem-repeat
+      promoter mutation that overexpresses and remodels CYP51A. MIC50 of
+      posaconazole against TR34/L98H A. fumigatus around 0.5 ug/mL versus
+      voriconazole 4 to 8. PK/PD: AUC/MIC about 200 for static effect;
+      posaconazole serum level target greater than 1.25 ug/mL; isavuconazole
+      no TDM required (predictable PK). Tox: posaconazole hepatic enzyme rise
+      ~12 percent, QTc 5 to 10 ms, mineralocorticoid-like effect from
+      11-beta-hydroxysteroid dehydrogenase inhibition (hypokalemia, edema,
+      hypertension, especially at trough greater than 4). Monitor: weekly
+      posaconazole TDM, K+/BP, repeat CT chest at week 4; consult ID for
+      duration (12 weeks minimum, often months in stem-cell transplant).
+
+  - name: "Caspofungin for Candida glabrata candidemia with FKS mutation surveillance"
+    body: |
+      Candidemia in ICU patient with central line; speciation returns C. glabrata.
+      Caspofungin and the echinocandin class (micafungin, anidulafungin) inhibit
+      1,3-beta-D-glucan synthase encoded by FKS1 (and FKS2 in C. glabrata),
+      blocking incorporation of glucan into the fungal cell wall and causing
+      osmotic lysis. C. glabrata is the species most likely to develop FKS
+      mutations under echinocandin pressure: hot-spot 1 (S629/S645 of Fks1p,
+      F659 of Fks2p) and hot-spot 2 (R1377/R1378) substitutions raise MIC
+      4 to 16-fold and confer cross-class resistance among all echinocandins.
+      Pre-existing FKS mutation prevalence is 8 to 12 percent in tertiary-center
+      C. glabrata isolates in 2024 surveillance (CDC Antibiotic Resistance &
+      Patient Safety Portal). Caspofungin loading dose 70 mg IV x 1 then 50
+      mg q24h; clinical efficacy noninferior to fluconazole for candidemia
+      and superior for invasive candidiasis when fluconazole-R Candida
+      anticipated (Mora-Duarte 2002, NEJM). PK/PD: AUC0-24/MIC about 250 for
+      stasis; serum trough about 1.5 ug/mL routinely; no TDM required.
+      Resistance management: FKS sequencing on isolates with elevated MIC
+      (caspofungin breakpoint less than or equal to 0.25 for C. glabrata,
+      where standard MIC interpretation is unreliable due to "paradoxical
+      growth" phenomenon at high concentrations — micafungin or anidulafungin
+      MIC are more reliable surrogates). Alternative: fluconazole 800 mg load
+      then 400 mg daily ONLY if isolate is fluconazole-S (uncommon for
+      C. glabrata, which has intrinsically reduced fluconazole binding).
+      Monitor: daily blood cultures until 48-hour clearance, central line
+      removal, ophthalmology exam, ECHO, and 2-week minimum duration after
+      first negative culture per IDSA candidiasis 2016.
+
+  - name: "Vancomycin AUC dosing for MRSA pneumonia in normal renal function"
+    body: |
+      MRSA pneumonia (HABP) in a 60-year-old with CrCl 95 mL/min, weight 80 kg.
+      Vancomycin binds the D-Ala-D-Ala terminus of the lipid-II precursor at the
+      transglycosylation step of peptidoglycan synthesis. The 2020 ASHP-IDSA-PIDS-SIDP
+      vancomycin consensus guideline updates dosing to AUC0-24/MIC ratio of 400 to 600
+      (target by Bayesian posterior or two-level pharmacokinetic estimate, NOT
+      trough alone — trough is no longer recommended as primary metric). For
+      MRSA pneumonia, MIC by broth microdilution is typically 1 ug/mL and AUC
+      target is 600 mg.h/L (the upper end, because lung epithelial-lining-fluid
+      penetration is approximately 50 percent of plasma). Loading dose 25 to 30
+      mg/kg actual body weight x 1 (rounded to 2.5 g for an 80 kg patient),
+      then 15 to 20 mg/kg q8 to 12h to target steady-state AUC. Risk of nephrotoxicity
+      rises sharply when AUC exceeds 700 (Lodise 2019); concurrent piperacillin-
+      tazobactam doubles AKI rate (Hammond 2017 meta), so avoid that combo when
+      possible. Resistance: hVISA (heterogeneous VISA) prevalence is 5 to 30
+      percent of MRSA bacteremia isolates and is the cryptic explanation for
+      4 to 7 day persistent positive cultures despite "susceptible" routine MIC;
+      detect by population analysis profile-AUC (PAP-AUC). PK/PD: AUC/MIC
+      400 to 600 for clinical efficacy in pneumonia, with target attainment
+      probability around 90 percent at appropriate dose. Alternative: linezolid
+      600 mg IV/PO q12h has superior epithelial-lining-fluid penetration (4-fold
+      vs vancomycin) and ZEPHyR trial showed clinical-cure benefit in
+      MRSA pneumonia (Wunderink 2012, CID); switch if vancomycin AUC cannot be
+      titrated or AKI develops. Monitor: AUC by 24-hour Bayesian estimate, daily
+      creatinine, and clinical response by day 3 to 4.
+
+  - name: "Doxycycline for early Lyme borreliosis with erythema migrans"
+    body: |
+      35-year-old hiker with new 6-cm bulls-eye rash on thigh, low-grade fever,
+      myalgia, no neurologic or cardiac symptoms. Borrelia burgdorferi via
+      Ixodes scapularis tick exposure; clinical erythema migrans is sufficient
+      for diagnosis (serology is INSENSITIVE in early disease at less than 4
+      weeks because of B-cell maturation lag). Doxycycline binds the 30S
+      ribosomal A-site via Mg2+-mediated coordination with the C5/C7/C9 hydroxyl/amino
+      groups on the tetracycline core, blocking aminoacyl-tRNA delivery.
+      Doxycycline penetrates the outer-membrane and enters spirochetes via passive
+      diffusion (lipophilic enough to cross both leaflets), giving intracellular
+      concentrations above MIC for sustained periods. MIC50 against B. burgdorferi
+      0.5 to 2 ug/mL. Wormser 2003, CID, IDSA Lyme guideline: doxycycline 100 mg
+      PO BID x 10 days for early localized erythema migrans, x 14 days for
+      early disseminated. Equivalent options: amoxicillin 500 mg TID, cefuroxime
+      axetil 500 mg BID; doxycycline preferred because it ALSO covers Anaplasma
+      phagocytophilum (granulocytic anaplasmosis carried by the same tick — co-
+      infection rate 5 to 15 percent in endemic areas). Avoid azithromycin (less
+      effective than doxycycline in Strle 2010 trial) and avoid first-generation
+      cephalosporins (poor MIC). Resistance: tet(M)-mediated ribosomal protection
+      is theoretically possible but B. burgdorferi clinical resistance has not
+      been reported. PK/PD: AUC/MIC about 24 for static effect; standard dose
+      hits target. Tox: photosensitivity, GI intolerance, esophagitis (take with
+      water and stay upright), tooth staining in children less than 8 years
+      (avoid in pediatrics OR use a 14-21 day exception per AAP for severe
+      Rocky-Mountain-Spotted-Fever overlap). Monitor: rash regression 1 to 3
+      weeks, neurologic/cardiac symptoms (would require IV ceftriaxone), and
+      delayed-onset Post-Treatment Lyme Disease Syndrome with continued fatigue
+      (NOT antibiotic-responsive — Klempner 2001, NEJM showed prolonged retreatment
+      ineffective, harmful, and inflammatory).
+
+  - name: "TMP-SMX for Stenotrophomonas maltophilia pneumonia in cystic-fibrosis patient"
+    body: |
+      CF patient with chronic Pseudomonas colonization, now develops Stenotrophomonas
+      maltophilia from sputum culture along with worsening FEV1 and increased
+      sputum production. Stenotrophomonas is intrinsically resistant to most
+      beta-lactams (chromosomal class B L1 metallo-beta-lactamase + L2 cephalosporinase
+      hydrolyze nearly all penicillins, cephalosporins, AND carbapenems including
+      meropenem), and to aminoglycosides (chromosomal aac(6prime)-Iz). TMP-SMX
+      remains first-line: TMP inhibits dihydrofolate reductase and SMX inhibits
+      dihydropteroate synthase, sequentially blocking folate biosynthesis with
+      synergy that gives bactericidal kill against Stenotrophomonas at MIC of
+      0.06 to 0.5 ug/mL TMP component. Dose: 15 mg/kg/day of TMP component IV
+      divided q8h (so for 70 kg patient about 1050 mg TMP q8h, often as 5 mL of
+      80/400 ampoules q8h). Resistance via dfrA17 (acquired DHFR variant) and
+      sul1/sul2 (sulfonamide-resistant DHPS) is rising in CF cohorts; resistance
+      prevalence 10 to 30 percent in some CF centers. Alternative regimens:
+      levofloxacin 750 mg IV/PO daily (resistance ~30 percent in CF), minocycline
+      100 mg q12h, tigecycline (limited by Cmax), or cefiderocol (recent option
+      with siderophore uptake bypassing L1 hydrolysis at clinically achievable
+      Cmax). Combination TMP-SMX + levofloxacin is sometimes used for severe
+      cases. PK/PD: AUC/MIC about 80 for stasis. Tox: hyperkalemia (ENaC blockade
+      by TMP — relevant in CF with already labile electrolytes), bone marrow
+      suppression (reversible), hepatic enzyme rise, sulfonamide hypersensitivity
+      including SJS, hyponatremia. Monitor: weekly K+, CBC, hepatic enzymes;
+      sputum culture day 7 to 10 for response; FEV1 trend.

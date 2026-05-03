@@ -1,0 +1,245 @@
+task: drug_mechanism_deep_dive
+prompt_label: "Drug"
+instructions: |
+  Instructions: A specific antimicrobial is named. Reason through (1) the molecular
+  target and the binding event at named residues, (2) the chemotype/scaffold and
+  what each functional group contributes, (3) the dominant resistance mechanism
+  and its named gene/enzyme, (4) the PK/PD index that predicts efficacy with
+  numeric target, (5) the dose-limiting toxicity and the mechanism behind it.
+
+entries:
+  - name: "Telavancin"
+    body: |
+      Lipoglycopeptide derivative of vancomycin: retains the 7-residue glycopeptide
+      heptapeptide core that binds D-Ala-D-Ala on lipid II, and adds two engineered
+      groups. (1) A decylaminoethyl lipophilic tail off the vancosamine sugar
+      anchors telavancin into the bacterial membrane, raising local drug
+      concentration at the transglycosylation site and depolarizing the membrane
+      itself — telavancin therefore has dual mechanism (transglycosylase/PBP
+      inhibition + membrane depolarization), unlike vancomycin's single
+      D-Ala-D-Ala mechanism. (2) A phosphonomethylaminomethyl group on the
+      vancosamine improves water solubility for IV formulation. MIC vs MSSA/MRSA
+      0.06 to 0.5 ug/mL; vs hVISA 0.5 to 1 (about 4-fold better than vancomycin).
+      Resistance: vanA operon (Ent. faecium VRE) inactivates D-Ala-D-Ala by
+      replacing it with D-Ala-D-Lac, raising telavancin MIC to greater than 32;
+      partial preservation of activity against vanB strains because of the
+      membrane-disruption arm. PK/PD: AUC0-24/MIC greater than 219 for
+      bacteriostasis and greater than 800 for 1-log kill (Lodise 2013); 10
+      mg/kg q24h IV achieves it. Dose-limiting tox: nephrotoxicity (12 to 16
+      percent serum creatinine rise) plus QTc prolongation (around 8 ms);
+      teratogenicity (FDA category C, REMS pregnancy-test protocol) caps
+      use to non-pregnant adults with HABP/VABP or cSSSI when other
+      glycopeptides fail.
+
+  - name: "Lefamulin"
+    body: |
+      Pleuromutilin antibiotic that binds the peptidyl transferase center (PTC) of
+      the 50S ribosomal subunit at the A- and P-site cleft, forming hydrogen
+      bonds with G2061, A2451, U2506, U2585, and C2452 of 23S rRNA (E. coli
+      numbering). The tricyclic 5,6,8-mutilin core sits in the PTC pocket and
+      the C14 acyl side chain (the SAR lever in this class) reaches a hydrophobic
+      groove that determines class potency. Lefamulin's C14 carries a
+      4-amino-2-((R)-2-hydroxycyclohexylsulfanyl)acetate — the cyclohexyl-thiol
+      improves binding 10-fold over older pleuromutilins (tiamulin, valnemulin)
+      and shifts MIC50 vs S. pneumoniae to 0.12 ug/mL, MRSA 0.12, M. pneumoniae
+      0.06, Legionella 0.5. The PTC binding site is largely free of cross-resistance
+      to macrolides, oxazolidinones, and chloramphenicol (different sub-pockets),
+      though ribosomal mutations at A2058, A2059, and protein L3/L4 can confer
+      modest MIC shifts. Resistance: cfr methyltransferase methylates A2503
+      (linezolid resistance gene) and gives ~4-fold lefamulin MIC rise but
+      typically remains susceptible. PK/PD: fAUC/MIC around 11 for
+      stasis (Wicha 2018); 150 mg IV q12h or 600 mg PO q12h hits target for
+      respiratory pathogens. Tox: GI (diarrhea, nausea) ~12 percent, QTc
+      prolongation 5 to 10 ms, hepatic enzyme rise ~4 percent. Indication
+      currently CABP only.
+
+  - name: "Omadacycline"
+    body: |
+      Aminomethylcycline tetracycline with a C7 dimethylamino (like minocycline)
+      and a C9 aminomethyl group attached via a methylenamino linker (the C9
+      position is the SAR pocket that defines glycylcyclines and aminomethyl-
+      cyclines). The C9 aminomethyl is small enough to preserve oral
+      bioavailability (around 35 percent fasted) but bulky enough to evade
+      both TetA-class efflux pumps and Tet(M) ribosomal-protection proteins.
+      Binds the 30S ribosomal A-site at h34 of 16S rRNA, blocking aminoacyl-tRNA
+      delivery. MIC50 against MRSA 0.25 ug/mL, VRE 0.06, S. pneumoniae 0.06,
+      tetA-positive E. coli 1, tet(M)-positive S. agalactiae 0.25.
+      Active against atypicals (M. pneumoniae 0.06) and anaerobes
+      (B. fragilis 0.5). Resistance: tetX (FAD-monooxygenase that hydroxylates
+      C11a) and the newer tet(X3)/tet(X4) variants from livestock raise
+      omadacycline MIC to 4 to 16 — same vulnerability as tigecycline. AdeABC
+      overexpression in Acinetobacter raises MIC modestly.
+      PK/PD: AUC0-24/MIC about 12 for stasis (Lakota 2017); IV 100 mg q12h x 2 then
+      100 mg q24h, oral 300 mg q24h (must avoid divalent cations 4 hours
+      pre-dose). Tox: GI intolerance limits oral compliance; mortality
+      imbalance vs linezolid in CABP study (the FDA labeled it as a
+      caution for HABP not approved for CABP). No pediatric (tooth staining
+      class effect).
+
+  - name: "Contezolid"
+    body: |
+      Newer oxazolidinone (China-approved, late-stage US development) that retains
+      the linezolid 5(S)-acetamidomethyl pharmacophore but replaces the morpholine
+      N4-substituent with a 2,3-dihydropyridin-4(1H)-one ring, and adds a fluorine
+      at C-3 of the central phenyl. Binds the 50S A-site at A2451 and the peptidyl
+      transferase center, blocking 70S initiation complex formation. Spectrum:
+      MIC50 vs MRSA 0.5 ug/mL, VRE faecium 1, M. tuberculosis 0.5 (similar to
+      linezolid). The C-3 fluoro and dihydropyridinone reduce monoamine oxidase
+      (MAO) inhibition by approximately 70-fold compared to linezolid, lowering
+      the serotonin-syndrome risk that limits linezolid use with SSRIs. The
+      mitochondrial toxicity (linezolid's marrow-suppression mechanism via
+      mitochondrial protein synthesis inhibition at MtRNA A2451 homolog) is
+      reduced about 5-fold; phase 3 thrombocytopenia rate around 6 percent
+      versus 30 percent for linezolid at 14 days. Resistance: cfr methyltransferase
+      and 23S rRNA G2576T mutations confer cross-resistance to all oxazolidinones
+      including contezolid. PK/PD: AUC/MIC around 100 for 1-log kill; oral 800 mg
+      q12h with food. Tox: mild GI, no MAO drug-drug interactions in clinical use,
+      reduced bone marrow suppression. Filling the niche where linezolid would
+      be used but for safety constraints (longer courses, SSRI co-therapy).
+
+  - name: "Sulbactam-durlobactam"
+    body: |
+      Combination targeting Acinetobacter baumannii. Sulbactam is a penicillanic
+      acid sulfone that has intrinsic affinity for PBP1 and PBP3 of Acinetobacter,
+      providing the antibiotic backbone. Durlobactam (ETX2514) is a diazabicyclo-
+      octane (DBO) class beta-lactamase inhibitor — the same scaffold family as
+      avibactam and relebactam, with a 2-hydroxyl on the bicyclic nitrogen and
+      an extended sulfonyloxy tether — that covalently inhibits class A
+      (TEM, KPC), class C (AmpC), AND class D (OXA-23, OXA-24, OXA-58)
+      beta-lactamases that hydrolyze sulbactam. The DBO acylates the active-site
+      serine and the carbamoyl group recyclizes (unlike clavulanate which is
+      mechanistically a suicide inhibitor); durlobactam's t1/2 of acylation
+      stability is hours (versus seconds for clavulanate), which allows sustained
+      inhibition. MIC of sulbactam alone against carbapenem-resistant A. baumannii
+      (CRAB) is greater than 32 ug/mL because of OXA-23 hydrolysis; addition of
+      durlobactam restores MIC50 to 1 to 2 ug/mL. Spectrum is otherwise narrow:
+      no Pseudomonas, no Enterobacterales (sulbactam too weak vs PBP3 of
+      gram-negatives). Resistance: PBP3 mutations in A. baumannii, NDM/VIM
+      metallo-beta-lactamases (durlobactam does not cover MBL — class B requires
+      Zn coordination chemistry that DBO chemistry cannot mimic). PK/PD:
+      sulbactam fT greater than MIC 60 percent for static effect; 1 g + 1 g IV q6h.
+      Tox: hepatic enzyme rise ~6 percent, hypersensitivity, mild GI. First-in-class
+      DBO-class targeted at CRAB.
+
+  - name: "Gepotidacin"
+    body: |
+      Triazaacenaphthylene novel bacterial topoisomerase inhibitor (NBTI) that
+      binds DNA gyrase (GyrA-GyrB) and topoisomerase IV (ParC-ParE) at a site
+      DISTINCT from the fluoroquinolone binding pocket. Where fluoroquinolones
+      stabilize the cleavage complex of GyrA at residues Ser83/Asp87 (the QRDR),
+      gepotidacin binds across the GyrA-GyrA dimer interface near the GyrA
+      DNA-bridge helix, preventing strand re-ligation by a different mechanism.
+      Result: gepotidacin retains activity against fluoroquinolone-resistant
+      strains carrying gyrA S83L/D87N mutations and parC S80I (pre-existing
+      target-mediated FQ resistance does not raise gepotidacin MIC). MIC50 vs
+      uropathogenic E. coli 4 ug/mL (including ESBL and FQ-R), N. gonorrhoeae
+      0.06 ug/mL (including ceftriaxone-R clinical isolates), S. aureus 1.
+      Mode of resistance is novel: GyrA D85 substitutions emerge under selection
+      and confer 8 to 16-fold MIC rise; cross-resistance to FQ remains absent.
+      PK/PD: fAUC/MIC around 10 for stasis (Bulik 2017); 1500 mg PO BID for
+      uncomplicated UTI. Phase 3 EAGLE-2/3 in cystitis showed non-inferiority
+      to nitrofurantoin. Tox: GI (diarrhea ~14 percent, nausea), modest QTc
+      prolongation (~6 ms), no FDA black-box concerns. First oral antibiotic
+      with novel-target mechanism approved in over 20 years; positions for
+      drug-resistant gonorrhea (ceftriaxone-R) and FQ-R UTI.
+
+  - name: "Isavuconazole"
+    body: |
+      Triazole antifungal binding fungal lanosterol-14-alpha-demethylase (CYP51A
+      in molds, ERG11 in yeasts), the Fe-heme enzyme that catalyzes the
+      demethylation step of ergosterol biosynthesis. Isavuconazole's chiral
+      backbone differs from voriconazole (the prior triazole standard) by the
+      addition of a benzothiazole-cyanopropan-2-yl side chain replacing the
+      pyrimidinyl-fluorophenyl arm; this group occupies an extended hydrophobic
+      pocket near the heme iron that is more accessible in Aspergillus and
+      Mucorales (Rhizopus, Mucor) CYP51 than in voriconazole's smaller binding
+      pocket. Result: isavuconazole MIC50 against R. arrhizus is 0.5 to 2 ug/mL
+      (voriconazole greater than 16 — voriconazole has NO mucor activity).
+      Aspergillus fumigatus MIC 1 to 2 (similar to voriconazole). Resistance
+      in A. fumigatus is via the TR34/L98H or TR46/Y121F/T289A tandem-repeat
+      promoter mutations that overexpress and remodel CYP51A — environmental
+      azole agriculture is the selection pressure. Pharmacology improvement:
+      water-soluble prodrug (isavuconazonium sulfate cleaved by plasma
+      esterase BChE), eliminating the SBECD (sulfobutyl-ether cyclodextrin)
+      vehicle that limits voriconazole IV in renal failure (CrCl less than 50);
+      isavuconazole IV is renally safe. PK/PD: AUC/MIC about 50 for static
+      effect; 200 mg IV/PO q8h x 6 doses load then daily. Tox: shortened QTc
+      (paradoxically, by about 4 ms), hepatic enzyme rise 5 percent, GI 7
+      percent, no visual disturbance (contrast voriconazole 30 percent
+      photopsia from C-19 retinal). First-line for invasive mucormycosis
+      and second-line for aspergillosis.
+
+  - name: "Fosmidomycin"
+    body: |
+      Phosphonohydroxamate inhibitor of 1-deoxy-D-xylulose-5-phosphate reductoisomerase
+      (DXR, IspC), the second enzyme of the non-mevalonate (MEP, methylerythritol
+      phosphate) isoprenoid biosynthesis pathway used by P. falciparum, M. tuberculosis,
+      and most gram-negative bacteria. The MEP pathway is absent in humans (we use
+      the mevalonate pathway via HMG-CoA reductase), making DXR a selectivity
+      target by host-pathogen pathway divergence. Fosmidomycin's structure is a
+      simple 3-carbon phosphonate-hydroxamic acid that mimics the substrate
+      DXP geometry — the phosphonate occupies the phosphate pocket and the
+      hydroxamic acid chelates the catalytic Mg2+ at the active site, displacing
+      the natural substrate. Ki around 30 nM against P. falciparum DXR. MIC vs
+      P. falciparum 100 to 300 nM in chloroquine-S and chloroquine-R strains.
+      In M. tuberculosis the MIC is greater than 100 ug/mL because Mtb's outer
+      cell-wall mycolic acid layer excludes the polar phosphonate; only when
+      combined with permeability adjuvants does activity emerge. Resistance in
+      P. falciparum: GlpT transporter mutations reduce uptake; rare DXR target
+      mutations raise Ki. PK/PD: short half-life (~2 h) drives twice-daily oral
+      dosing; combination with clindamycin (ribosome) was tested in malaria phase 2
+      with cure rates around 90 percent. Tox: GI intolerance is dose-limiting
+      because the polar phosphonate has poor absorption (10 to 25 percent oral
+      bioavailability). Fosmidomycin remains a tool compound and a starting
+      point for anti-malarial DXR drug discovery rather than a finished drug.
+
+  - name: "Bedaquiline"
+    body: |
+      Diarylquinoline binding the c-ring rotor of mycobacterial F1-F0 ATP synthase
+      (atpE gene), specifically a hydrophobic pocket that lies between the c-ring
+      and the a-subunit interface. Bedaquiline binds the c subunit's residue
+      Glu61 (M. tuberculosis numbering) via its hydroxyl-quinoline pharmacophore,
+      sterically blocking the rotation of the c-ring against the static
+      a-subunit. Without rotor rotation, ATP synthesis halts. Mtb is exquisitely
+      dependent on ATP synthase even in the dormant persister state because
+      stationary-phase mycobacteria use residual oxidative phosphorylation —
+      this is what makes bedaquiline kill non-replicating bacilli, the
+      persister property that shortens TB therapy duration. MIC50 against
+      drug-susceptible M. tuberculosis 0.03 ug/mL, MDR-TB 0.06, XDR-TB 0.06
+      (target is conserved). Mammalian mitochondrial ATP synthase has a
+      different c-subunit Glu (no Glu61 equivalent in correct geometry), giving
+      a 10,000-fold selectivity window. Resistance: atpE mutations Asp28Val,
+      Ile66Met emerge under selection; rare Rv0678 mutations derepress MmpS5-MmpL5
+      efflux pump (also confers clofazimine cross-resistance, important in
+      regimen design). Pharmacology: very long half-life (5.5 months for the
+      M2 metabolite), allowing the loading-dose-then-thrice-weekly regimen
+      that defines BPaL/BPaLM. Tox: dose-limiting QTc prolongation (15 to 20 ms
+      mean rise, additive with moxifloxacin and clofazimine — the BPaLM
+      combination), hepatic enzyme rise ~9 percent, FDA black-box for QT
+      monitoring. Now first-line for MDR-TB per WHO 2022 short-course regimen.
+
+  - name: "Pretomanid"
+    body: |
+      Bicyclic 4-nitroimidazole prodrug requiring activation by mycobacterial
+      Ddn (deazaflavin-dependent nitroreductase) to release reactive nitric
+      oxide (NO) and des-nitro-imidazole metabolites within the bacillus.
+      The NO inactivates cytochrome bd oxidase and disrupts mycolic-acid
+      biosynthesis (alpha-ketoglutarate dehydrogenase oxidative damage),
+      giving pretomanid bactericidal activity against BOTH replicating and
+      non-replicating M. tuberculosis under hypoxic granuloma conditions
+      (the persister-killing property valued in BPaL/BPaLM). MIC50 against
+      M. tuberculosis 0.03 to 0.25 ug/mL, including XDR strains; against
+      M. abscessus and M. avium MIC is greater than 16 (inactive — restricted
+      to M. tuberculosis-complex due to Ddn substrate specificity). Resistance
+      emerges via ddn loss-of-function mutations, fbiA/fbiB/fbiC mutations
+      (loss of F420 cofactor needed for Ddn function), and fgd1 mutations;
+      these confer simultaneous cross-resistance to delamanid (same prodrug
+      activation pathway), an important regimen-design constraint. PK/PD:
+      AUC/MIC about 70 for stasis; 200 mg PO daily with food (food increases
+      bioavailability 2-fold). Tox: hepatic enzyme rise ~12 percent, peripheral
+      neuropathy 7 percent (additive with linezolid in BPaL — the most
+      common dose-limiting AE), reproductive testicular toxicity in animals
+      (FDA category C). FDA approved 2019 for highly drug-resistant
+      pulmonary TB only as part of the BPaL regimen with bedaquiline and
+      linezolid; 6-month treatment is the new standard versus 18-24 months
+      historic for XDR-TB.
