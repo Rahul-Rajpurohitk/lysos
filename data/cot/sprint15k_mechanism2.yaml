@@ -1,0 +1,352 @@
+task: drug_mechanism_deep_dive
+prompt_label: "Drug"
+instructions: |
+  Instructions: A specific antimicrobial is named. Reason through (1) the molecular
+  target and the binding event at named residues, (2) the chemotype/scaffold and
+  what each functional group contributes, (3) the dominant resistance mechanism
+  and its named gene/enzyme, (4) the PK/PD index that predicts efficacy with
+  numeric target, (5) the dose-limiting toxicity and the mechanism behind it.
+
+entries:
+  - name: "Daptomycin"
+    body: |
+      Cyclic lipopeptide of 13 amino acids with an n-decanoyl (C10) fatty acid tail
+      attached to the N-terminal tryptophan. Ten of the residues form the macrocycle
+      via an ester bond between Thr4 and Kyn13 (kynurenine, an unusual non-canonical
+      amino acid critical for activity); three residues (Trp1, Asp2, Asn3) form a
+      tail extending from the ring. Mechanism: in the presence of Ca2+ (physiologic
+      ~1 mM extracellular), daptomycin's three acidic residues (Asp3, Asp7, Asp9)
+      coordinate Ca2+ ions, transitioning the molecule from a flexible random coil
+      to a kinked alpha-helical conformation that inserts the n-decanoyl tail into
+      bacterial membrane patches enriched in phosphatidylglycerol (PG). Multiple
+      Ca-daptomycin molecules then aggregate (oligomerize) at the membrane,
+      flipping Ca2+ ions across the bilayer and dissipating the membrane potential —
+      bactericidal kill follows without protein synthesis steps, killing
+      stationary-phase persisters that vancomycin cannot. Spectrum: gram-positive
+      only — gram-negatives have an outer membrane that the lipid tail cannot
+      breach (PG is shielded). MIC50: MRSA 0.25 to 0.5 ug/mL, VRE 1, S. agalactiae
+      0.06. Resistance: mprF lysinylates phosphatidylglycerol (creates
+      lysyl-phosphatidylglycerol with a positive charge), reducing membrane
+      negative-charge density and repelling the Ca-daptomycin complex; yycG/yycF
+      cell-wall thickening also raises MIC. PK/PD: AUC0-24/MIC about 666 for
+      1-log kill, Cmax/MIC about 60. Standard 6 mg/kg q24h hits target for
+      MIC less than or equal to 1; 8 to 12 mg/kg used for MRSA bacteremia
+      MIC creep. Tox: rhabdomyolysis (CK rise, dose-related — under 1 percent
+      at 6 mg/kg, 1 to 7 percent at 10 to 12 mg/kg; concurrent statin amplifies
+      risk); eosinophilic pneumonia (delayed week 2 to 4 immunologic, reversible
+      with discontinuation); peripheral neuropathy at high cumulative dose.
+      Pulmonary contraindication: surfactant inactivates daptomycin in alveolar
+      space (Silverman 2005), making it useless for pneumonia.
+
+  - name: "Linezolid"
+    body: |
+      Synthetic oxazolidinone (5(S)-acetamidomethyl-3-aryl-2-oxazolidinone scaffold).
+      Chemistry: central oxazolidinone ring, fluorinated phenyl at N3, and
+      morpholine at the para-position of phenyl (the D-ring). The 5(S) stereocenter
+      is required — the (R) enantiomer is inactive. Mechanism: binds the 50S
+      ribosomal A-site at A2451 of 23S rRNA in the peptidyl transferase center,
+      hydrogen-bonding with G2061, U2504, U2585, and C2452; this prevents
+      formation of the 70S initiation complex (specifically blocks the assembly
+      of fMet-tRNA into the P-site of the 70S ribosome — distinguishes linezolid
+      from chloramphenicol and macrolides which act after initiation). Spectrum:
+      universal gram-positive (all streptococci, enterococci, S. aureus including
+      MRSA and VRSA, Listeria, Corynebacterium, Nocardia, M. tuberculosis,
+      M. avium); inactive against gram-negatives (intrinsic AcrAB-TolC efflux).
+      MIC50: MRSA 1 to 2 ug/mL, VRE faecium 1, S. pneumoniae 1, M. tuberculosis
+      0.5 to 1. Resistance: cfr methyltransferase methylates A2503 of 23S rRNA
+      (transmissible plasmid, found in S. aureus and CoNS) — confers PhLOPSa
+      cross-resistance (phenicol, lincosamide, oxazolidinone, pleuromutilin,
+      streptogramin A); 23S rRNA G2576T point mutations require multiple
+      ribosomal alleles to be mutated and emerge slowly under prolonged
+      pressure (around 14 days at high copy number). PK/PD: AUC0-24/MIC
+      greater than 80 to 100 for stasis, greater than 200 for clinical cure;
+      600 mg PO/IV q12h achieves 200 to 300 (around target for MIC 1 to 2).
+      100 percent oral bioavailability. Tox: dose- and duration-dependent
+      mitochondrial protein synthesis inhibition — the ribosomal binding site
+      is structurally homologous to mitochondrial 28S rRNA, so prolonged
+      linezolid (greater than 14 days) inhibits mitochondrial protein synthesis,
+      causing thrombocytopenia (around 30 percent at 14 days), peripheral and
+      optic neuritis (greater than 28 days), lactic acidosis, neuropathy.
+      MAO-A inhibition raises serotonin syndrome risk with SSRIs (4-fold rise
+      in serotonin).
+
+  - name: "Rifampin"
+    body: |
+      Semi-synthetic rifamycin (parent natural product rifamycin SV from
+      Amycolatopsis mediterranei). Chemistry: ansa-bridged naphthoquinone with
+      a C3 aliphatic chain, C8 hydroxyl, C21/C23 hydroxyls coordinating water
+      molecules. The 4-methylpiperazine substitution at C3 distinguishes
+      rifampin from rifabutin and rifapentine. Mechanism: binds the
+      bacterial DNA-dependent RNA polymerase (DDRP) beta-subunit (rpoB) at
+      a specific channel near the catalytic Mg2+ that lies between the
+      DNA template and the nascent RNA strand. Rifampin physically blocks
+      RNA chain extension once the nascent RNA reaches 2 to 3 nucleotides,
+      preventing transcription elongation. Selectivity: human RNA polymerase
+      II/III have different beta-subunit architecture, do not bind rifampin.
+      Spectrum: highly active against M. tuberculosis (MIC 0.06 ug/mL),
+      M. leprae, all staphylococci including MRSA (MIC 0.008 to 0.06),
+      streptococci, neisseria, Legionella, and intracellular pathogens
+      (Brucella, Bartonella). Outer-membrane diffusion limits gram-negative
+      activity in many strains. Resistance: rpoB point mutations (typically
+      Ser531Leu, His526Tyr, Asp516Val in M. tuberculosis numbering — the
+      "Rifampin Resistance Determining Region" RRDR of 81 bp) emerge at
+      frequency around 10^-7 to 10^-8 per replication. Single-step
+      resistance is the reason rifampin is NEVER used as monotherapy for
+      active infection (only for prophylaxis or single-dose treatment of
+      asymptomatic colonization like meningococcal contact prophylaxis).
+      PK/PD: AUC/MIC about 65 for stasis. Standard 600 mg PO daily
+      (or 10 mg/kg) achieves AUC of 50 to 100 mg.h/L, hitting target.
+      100 percent oral bioavailability when fasted (food reduces by 30
+      percent). Tox: orange-red discoloration of body fluids (urine, tears,
+      sweat, contact lens staining — cosmetic, counsel patient); hepatic
+      enzyme rise (around 14 percent), severe hepatitis 1 percent;
+      flu-like syndrome with intermittent dosing; thrombocytopenia, hemolytic
+      anemia, AKI (rare). CRITICAL: potent CYP3A4/2C9/2C19 inducer —
+      reduces warfarin INR (re-titrate), oral contraceptive failure
+      (contraception backup needed), HIV protease inhibitor levels (HAART
+      failure), tacrolimus and cyclosporine reduction in transplant
+      (rejection risk). The drug interaction profile is the practical
+      limit on rifampin use.
+
+  - name: "Trimethoprim"
+    body: |
+      Synthetic 2,4-diaminopyrimidine, structural analog of dihydrofolate.
+      Chemistry: 2,4-diaminopyrimidine ring (the substrate-mimicking head)
+      linked via a methylene bridge to a 3,4,5-trimethoxyphenyl ring (the
+      hydrophobic anchor). The 2,4-diamino group hydrogen-bonds with bacterial
+      DHFR active-site residues (Glu30, Asp27 in E. coli numbering),
+      mimicking the hydrogen-bond pattern of dihydrofolate's pteridine ring.
+      Mechanism: competitively inhibits bacterial dihydrofolate reductase
+      (DHFR), the enzyme that reduces dihydrofolate to tetrahydrofolate
+      using NADPH. Tetrahydrofolate is the universal carrier of
+      one-carbon units for thymidine, purine, methionine, and serine
+      synthesis; blocking DHFR halts thymidine production and stops DNA
+      replication. Selectivity: bacterial DHFR has different active-site
+      geometry than mammalian DHFR — trimethoprim has 60,000-fold higher
+      affinity for bacterial DHFR than human DHFR. Single-agent action is
+      bacteriostatic; combined with sulfamethoxazole (which blocks the
+      preceding DHPS step) becomes bactericidal via sequential pathway
+      blockade. Spectrum: broad — most Enterobacterales, S. aureus
+      (community MRSA), Stenotrophomonas, Burkholderia, Listeria, PCP,
+      Toxoplasma, Nocardia. Resistance: chromosomal DHFR mutations
+      (rarely clinically significant), or acquired dfrA17, dfrA1, dfrB
+      gene cassettes encoding plasmid-borne DHFR variants with reduced
+      TMP affinity (Ki 1000-fold higher), often in class 1 integrons
+      alongside sul1 (sulfonamide R), aac(6prime)-Ib-cr, and qnr. PK/PD:
+      AUC/MIC about 80 for combined TMP-SMX activity. Standard dose 160/800
+      mg PO BID (DS tab); 5 to 20 mg/kg/day TMP component IV for severe.
+      Tox: hyperkalemia (TMP blocks ENaC sodium channel in distal tubule,
+      same mechanism as amiloride), bone marrow suppression (folate-pathway
+      collateral on host hematopoiesis — give leucovorin if cytopenia),
+      hepatic enzyme rise, sulfa hypersensitivity (SJS/TEN at HLA-B*15:02
+      and B*58:01), nephrolithiasis (sulfamethoxazole crystallization).
+      Combination of TMP + sulfa is one of the most-used antibacterials
+      globally because of broad spectrum, oral availability, low cost.
+
+  - name: "Metronidazole"
+    body: |
+      Nitroimidazole prodrug requiring intracellular reduction. Chemistry:
+      2-methyl-5-nitroimidazole-1-ethanol — small polar molecule with
+      excellent tissue and CSF penetration. The 5-nitro group is the
+      pharmacophore. Mechanism: anaerobic bacteria (and some protozoa)
+      have low-redox-potential ferredoxin or pyruvate-ferredoxin
+      oxidoreductase (PFOR) that donates electrons to the 5-nitro group,
+      reducing it to a nitroso radical anion, then a hydroxylamine, then
+      reactive intermediates that covalently bind to bacterial DNA. The
+      reduced metronidazole forms DNA strand breaks and adducts,
+      triggering bactericidal kill. Aerobic bacteria and host cells
+      cannot reduce nitroimidazoles efficiently (their redox potential is
+      too high), giving anaerobic-selective toxicity. Spectrum: anaerobic
+      gram-negatives (Bacteroides fragilis, Prevotella, Fusobacterium,
+      Porphyromonas), anaerobic gram-positives (Clostridium including
+      C. difficile and C. perfringens, Peptostreptococcus); inactive
+      against aerobic bacteria; protozoa (Giardia, Trichomonas, Entamoeba
+      histolytica); microaerophilic Helicobacter pylori. MIC50: B. fragilis
+      0.5 to 4, C. difficile 0.5 to 2, Giardia 1, T. vaginalis 0.5.
+      Resistance: nimA-J genes (nim operon) encode nitroimidazole reductase
+      that converts 5-nitro to 5-amino — inactive form, prevents activation.
+      C. difficile metronidazole resistance is rising (now ~5 to 15 percent
+      in some surveillance), driving the IDSA-SHEA 2021 downgrade of
+      metronidazole from first-line to alternative-only for non-severe CDI.
+      PK/PD: AUC/MIC about 70. 500 mg PO/IV q8h; oral bioavailability
+      around 100 percent. Tox: metallic taste (universal), GI upset,
+      peripheral neuropathy at cumulative doses greater than 30 g (limits
+      total course length), disulfiram-like reaction with alcohol (avoid
+      ethanol during therapy and 48 hours after), seizures at high IV
+      doses or in elderly, optic neuritis (rare), pancreatitis (rare).
+      Carcinogenicity in rodents from high-dose chronic exposure (clinical
+      relevance debated; FDA Pregnancy Category B but counsel during
+      first-trimester use).
+
+  - name: "Amphotericin B"
+    body: |
+      Polyene macrolide of 38-membered ring with seven conjugated double bonds
+      (the heptaene chromophore), an amino-glycoside-like mycosamine sugar at
+      C19, and a C13 carboxylic acid. Mechanism: amphotericin inserts into
+      ergosterol-rich fungal membranes, with eight molecules forming a
+      transmembrane "barrel" pore lined by the polar hydroxylated face of each
+      molecule and surrounded by ergosterol. The pore allows leak of K+, Mg2+,
+      ATP, and small molecules out of the fungal cell, leading to depolarization
+      and cell death. Selectivity: ergosterol is the main fungal sterol but
+      cholesterol (the human sterol) also binds amphotericin with about
+      10-fold lower affinity — this cross-reactivity drives mammalian
+      cell toxicity, especially in renal tubular cells and red blood cells.
+      Lipid formulations (liposomal AmphoB, AmBisome; AmphoB lipid complex,
+      Abelcet; AmphoB cholesteryl sulfate complex, Amphotec) reduce mammalian
+      affinity by sequestering AmphoB in lipid carriers that release drug
+      preferentially at fungal infection sites with elevated lipase activity,
+      cutting nephrotoxicity from 25 to 30 percent (deoxycholate AmphoB) to
+      5 to 10 percent (liposomal). Spectrum: nearly universal antifungal —
+      Candida (most species), Cryptococcus, Aspergillus, Mucorales (Rhizopus,
+      Mucor), endemic fungi (Histoplasma, Blastomyces, Coccidioides), some
+      protozoa (Leishmania donovani — visceral leishmaniasis treatment).
+      MIC: Candida albicans 0.25 to 1 ug/mL, Aspergillus 1 to 2, Cryptococcus
+      0.25 to 1. Resistance: rare; some Candida lusitaniae and C. terreus
+      have intrinsic resistance via altered ergosterol biosynthesis (ERG3
+      pathway changes producing alternative sterols that AmphoB does not
+      bind well). PK/PD: AUC0-24/MIC about 10 for fungistatic activity.
+      Liposomal AmphoB 3 to 5 mg/kg IV q24h; Cmax 30 to 50 ug/mL. Tox:
+      infusion-reaction (rigors, fever, hypotension — premedicate with
+      acetaminophen, diphenhydramine, hydrocortisone for severe);
+      nephrotoxicity (renal vasoconstriction + tubular injury), hypokalemia
+      and hypomagnesemia (renal wasting), normocytic anemia (erythropoietin
+      suppression and direct red-cell membrane toxicity), hepatic enzyme
+      rise. Liposomal forms are preferred for prolonged therapy, but cost
+      is 5 to 10-fold higher.
+
+  - name: "Caspofungin"
+    body: |
+      Echinocandin lipopeptide (cyclic hexapeptide with a fatty acyl side chain).
+      Chemistry: 5,6-dihydroxy-ornithine, dihydroxy-homotyrosine, 4-hydroxy-
+      proline, methyl-proline, and a long fatty-acyl side chain (palmitoyl at
+      caspofungin); semi-synthetic from natural pneumocandin B0. Mechanism:
+      noncompetitive inhibitor of 1,3-beta-D-glucan synthase, an enzyme complex
+      composed of catalytic Fks1/Fks2 subunits and regulatory Rho1 GTPase
+      subunit. Beta-1,3-glucan is the major fungal cell-wall polysaccharide;
+      blocking its synthesis weakens the cell wall, leading to osmotic lysis.
+      Selectivity: glucan synthase is fungal-specific (humans have no glucan
+      cell wall) — exquisite selectivity. Spectrum: fungicidal against
+      Candida (all species including azole-R glabrata and krusei, except
+      C. parapsilosis and C. guilliermondii where MIC is elevated due to
+      a natural FKS1 amino acid difference at codon 660 region); fungistatic
+      against Aspergillus (no full kill but enough activity for prophylaxis
+      or salvage; not first-line for invasive aspergillosis). Inactive:
+      Cryptococcus (no beta-1,3-glucan-synthase target affinity), Mucorales,
+      Fusarium, Scedosporium. MIC50: C. albicans 0.06, C. glabrata 0.06,
+      C. parapsilosis 0.5 to 1, A. fumigatus 0.06 (MEC, minimum effective
+      concentration). Resistance: FKS1 hot-spot 1 mutations (S629/S645
+      in C. albicans, S645 in C. krusei, F659 of FKS2 in C. glabrata) and
+      hot-spot 2 (R1377/R1378) raise MIC 4 to 16-fold; cross-resistance
+      among echinocandins. C. glabrata is the species most likely to develop
+      FKS mutations under prolonged echinocandin exposure (8 to 12 percent
+      prevalence in tertiary centers). PK/PD: AUC/MIC about 250 for stasis.
+      70 mg IV load on day 1 then 50 mg q24h; no dose adjustment for renal
+      failure. Hepatic adjustment: 50 mg load then 35 mg q24h for Child-Pugh B.
+      Tox: well-tolerated — hepatic enzyme rise (5 to 10 percent), histamine
+      release at infusion (slow rate), thrombophlebitis at IV site, mild
+      GI. No CYP3A4 metabolism (no major drug interactions with most agents);
+      cyclosporine raises caspofungin AUC by 35 percent (transient).
+
+  - name: "Mupirocin"
+    body: |
+      Pseudomonic acid A — natural product from Pseudomonas fluorescens.
+      Chemistry: 9-hydroxy-nonanoic acid epoxide ester linked to monic acid
+      (a hydroxylated polyketide). The unique 4,5-epoxy acid feature gives
+      mupirocin its mechanism. Mechanism: binds bacterial isoleucyl-tRNA
+      synthetase (IleRS) at the active site, mimicking the natural substrate
+      isoleucine-AMP intermediate; blocks isoleucine attachment to tRNA-Ile,
+      stopping protein synthesis. Selectivity: bacterial IleRS has different
+      active-site geometry than human IleRS — mupirocin has 1000-fold
+      higher affinity for bacterial enzyme. Spectrum: gram-positive
+      (S. aureus including MRSA, S. epidermidis, streptococci) and some
+      gram-negatives (Hemophilus, Neisseria); inactive against Pseudomonas
+      (intrinsic resistance), Acinetobacter, anaerobes. MIC50: MRSA 0.25
+      ug/mL, MSSA 0.06 to 0.25, S. pyogenes 0.06. Resistance: ileS gene
+      mutations cause low-level resistance (MIC 8 to 256); high-level
+      resistance via mupA gene (encoding a second IleRS variant on
+      transmissible plasmid, MIC greater than 1024) emerges with prolonged
+      decolonization use. Pharmacology: TOPICAL only — mupirocin is rapidly
+      hydrolyzed in serum (the epoxide-ester is unstable), so systemic
+      exposure is minimal. 2 percent ointment for nasal MRSA decolonization
+      (BID x 5 days) or skin (TID x 7 days). Indication: nasal MRSA
+      eradication pre-cardiac surgery (Bode 2010 NEJM showed reduced
+      surgical-site MRSA), CA-MRSA decolonization for recurrent SSTI,
+      impetigo. Tox: minimal — local irritation, pruritus, occasional
+      contact dermatitis. NOT used for systemic infection (no systemic
+      activity). Resistance is the practical concern: recurrent or
+      prolonged decolonization use selects mupA-positive S. aureus,
+      reducing efficacy in subsequent decolonization rounds. Stewardship:
+      reserve for documented MRSA carrier or specific surgical prophylaxis;
+      avoid routine prophylactic use in asymptomatic patients.
+
+  - name: "Fosfomycin"
+    body: |
+      Phosphonic acid epoxide — small molecule (138 Da) with a unique
+      mechanism. Chemistry: (1R,2S)-1,2-epoxypropylphosphonic acid; the
+      epoxide is the reactive electrophile, the phosphonate mimics
+      phosphoenolpyruvate (PEP). Mechanism: covalently inhibits MurA
+      (UDP-N-acetylglucosamine enolpyruvyl transferase), the first
+      committed enzyme in peptidoglycan biosynthesis. MurA catalyzes
+      transfer of enolpyruvate from PEP to UDP-N-acetylglucosamine; the
+      epoxide of fosfomycin alkylates the active-site Cys115 of MurA,
+      irreversibly inactivating it. Without UDP-N-acetylmuramic acid
+      (the immediate product of MurA), peptidoglycan cannot be made,
+      and the cell wall cannot grow. Selectivity: MurA is bacterial-specific
+      (humans lack peptidoglycan biosynthesis). Spectrum: broad gram-negative
+      (E. coli, Klebsiella, Enterobacter, Citrobacter, Proteus, Salmonella,
+      Shigella, Enterococcus, S. aureus including MRSA, S. saprophyticus,
+      VRE, and some Pseudomonas); poor activity against anaerobes and
+      atypicals. MIC50: E. coli 1 to 2 ug/mL, MRSA 4 to 8, KPC-Klebsiella 2 to 8.
+      Resistance: glpT (glycerol-3-phosphate transporter) loss-of-function
+      mutations reduce drug uptake; uhpT (hexose-phosphate transporter)
+      mutations similarly; murA point mutations rare; FosA and FosB
+      thiol-transferases (chromosomal in some species, plasmid-borne in
+      others) covalently modify the epoxide and inactivate the drug
+      (Klebsiella has chromosomal fosA which is why some K. pneumoniae
+      resists fosfomycin). PK/PD: AUC/MIC about 23. Oral fosfomycin
+      trometamol 3 g single-dose for uncomplicated cystitis — concentrates
+      in urine to greater than 100 ug/mL for 48 hours. IV fosfomycin
+      6 to 8 g q8h (used in some countries for systemic infection;
+      not approved IV in US). Tox: GI upset (diarrhea), headache, vaginitis;
+      sodium load with IV use (each dose contains 14 mEq Na). Indication:
+      single-dose oral cystitis (preserved as alternative when local
+      E. coli ciprofloxacin and TMP-SMX resistance exceed thresholds);
+      salvage IV for MDR Enterobacterales (off-label US). Stewardship:
+      single-dose treatment is microbiome-sparing compared to 3- to 7-day
+      cephalosporin or amoxicillin-clavulanate.
+
+  - name: "Nitrofurantoin"
+    body: |
+      Synthetic 5-nitrofuran — small molecule (238 Da) — prodrug requiring
+      intracellular reduction. Chemistry: 5-nitrofuran-2-yl-methylenehydantoin;
+      the 5-nitrofuran is the pharmacophore (analogous to 5-nitroimidazoles
+      in mechanism). Mechanism: bacterial nitroreductases (NfsA, NfsB, FrxA
+      analogous enzymes) reduce the 5-nitro group to reactive intermediates
+      (nitroso, hydroxylamine, then highly reactive species) that covalently
+      bind ribosomal proteins, DNA, RNA, and metabolic enzymes — multiple
+      simultaneous targets prevent single-step resistance. The reduction
+      is OXYGEN-INSENSITIVE (unlike metronidazole which requires anaerobic
+      reduction), so nitrofurantoin works against aerobic bacteria. Selectivity:
+      mammalian cells reduce nitrofurantoin much less efficiently than
+      bacteria, providing an antibacterial-selective window. Spectrum:
+      gram-positive (S. saprophyticus, Enterococcus including some VRE,
+      MSSA partially, Group B streptococcus), gram-negative (E. coli,
+      Klebsiella, Citrobacter, Enterobacter — variable), urinary pathogens.
+      Inactive against Proteus, Providencia, Serratia (intrinsic), Pseudomonas,
+      Acinetobacter, anaerobes, atypicals. MIC50: E. coli 4 to 16 ug/mL,
+      S. saprophyticus 16. Resistance: nfsA/nfsB loss-of-function mutations
+      reduce activation (rare clinical relevance — nitrofurantoin resistance
+      remains around 1 to 3 percent in E. coli surveillance). PK/PD:
+      urinary AUC/MIC drives effect; serum levels are too low for systemic
+      infection (peak 2 ug/mL), but urinary concentration reaches 50 to 250
+      ug/mL — restricted to lower urinary tract infection. 100 mg PO BID
+      x 5 days for uncomplicated cystitis. Tox: GI upset (nausea, take
+      with food), pulmonary hypersensitivity (acute pneumonitis or chronic
+      pulmonary fibrosis with prolonged use, monitor for cough/dyspnea over
+      months); peripheral neuropathy in elderly with renal impairment
+      (CrCl less than 30 contraindicated — drug accumulates with reduced
+      kidney clearance and causes neurotoxicity); hemolytic anemia in G6PD
+      deficiency. Stewardship: first-line uncomplicated cystitis (preserves
+      narrow-spectrum, avoids fluoroquinolone collateral); AVOID for
+      pyelonephritis (insufficient renal-tissue concentration), prostatitis
+      (poor prostate penetration), or any non-urinary indication.

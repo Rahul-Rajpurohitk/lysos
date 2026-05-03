@@ -1,0 +1,360 @@
+task: resistance_mechanism_explanation
+prompt_label: "Resistance mechanism"
+instructions: |
+  Instructions: A specific resistance mechanism (named gene/enzyme/mutation) is presented.
+  Reason through (1) the molecular event — what the gene product does to the drug or
+  target, (2) the pathogen distribution and how the mechanism is disseminated,
+  (3) the MIC shift it produces and which drugs are affected,
+  (4) which drugs it does NOT affect (the rescue option), (5) the diagnostic test
+  and clinical/epidemiologic implication.
+
+entries:
+  - name: "CTX-M-15 extended-spectrum beta-lactamase"
+    body: |
+      Molecular event: CTX-M-15 (cefotaximase-15) is a class A Ambler ESBL with
+      active-site Ser70 acylating beta-lactams; the catalytic motif Ser70-Lys73-
+      Ser130-Glu166 is the canonical class A serine machinery. CTX-M-15 differs
+      from CTX-M-14 by substitutions D240G and one near the omega loop, which
+      together expand activity against ceftazidime in addition to cefotaxime
+      (parent CTX-M enzymes preferentially hydrolyze cefotaxime over ceftazidime;
+      CTX-M-15 is potent vs both). Hydrolyzes most penicillins, all extended-
+      spectrum cephalosporins (ceftriaxone, cefotaxime, ceftazidime, cefepime),
+      and aztreonam; weakly hydrolyzes carbapenems (clinically resistant
+      essentially zero — carbapenems remain effective). Inhibitable by clavulanate,
+      sulbactam, tazobactam in vitro, but the inhibitor concentrations needed
+      may exceed clinical levels in some strains co-expressing efflux or
+      porin loss. Distribution: CTX-M-15 is the most globally disseminated ESBL
+      in 2024 surveillance; sits on conjugative IncF or IncL/M plasmids
+      carrying additional resistance (qnrA/B/S, aac(6prime)-Ib-cr, dfrA, sul1).
+      First identified in K. pneumoniae from India (1990s); now epidemic in
+      E. coli, K. pneumoniae, Enterobacter, especially community-acquired ESBL-
+      E. coli urosepsis (more than 30 percent of ESBL E. coli globally). MIC
+      shift: ceftriaxone from 0.06 to greater than 64; ceftazidime greater than
+      32; cefepime greater than 16 (despite cefepime's "stable" reputation —
+      CTX-M-15 hydrolyzes it at clinical concentrations); aztreonam greater
+      than 32; piperacillin-tazobactam variable, often greater than 64. Drugs
+      NOT affected: carbapenems (meropenem 0.06 to 0.5 unless OXA-48 or KPC
+      co-exists), ceftolozane-tazobactam (avibactam-class inhibition restores
+      it for ESBL), ceftazidime-avibactam (similar), tigecycline, polymyxin,
+      aminoglycosides (assuming no co-resistance), nitrofurantoin (urinary).
+      Diagnostics: ESBL phenotypic confirmatory test (clavulanate-augmentation
+      reduces ceftazidime/cefotaxime MIC by greater than or equal to 3-fold
+      twin-disk test, CLSI); molecular blaCTX-M PCR; rapid PCR panels (Verigene,
+      BioFire BCID2). Implication: ESBL E. coli/Klebsiella bacteremia treated
+      with carbapenem first-line per MERINO trial (Harris 2018 JAMA: meropenem
+      superior to piperacillin-tazobactam for E. coli ESBL bacteremia; pip-tazo
+      30-day mortality 12 vs mero 4 percent); rising community ESBL drives
+      empirical carbapenem use in patients with prior ESBL, recent hospitalization,
+      or known colonization.
+
+  - name: "KPC-31 ceftazidime-avibactam escape mutation"
+    body: |
+      Molecular event: KPC (Klebsiella pneumoniae carbapenemase) is a class A
+      serine carbapenemase that hydrolyzes carbapenems. Avibactam restores
+      ceftazidime activity by covalently inhibiting KPC's active-site Ser70.
+      Under prolonged ceftazidime-avibactam exposure (typically weeks of
+      treatment), point mutations in KPC emerge that disrupt avibactam binding
+      while preserving (or even enhancing) ceftazidime hydrolysis. The dominant
+      mutation is D179Y in the omega loop of KPC, which alters the catalytic
+      Ser70-substrate orientation and reduces avibactam acylation while
+      maintaining ceftazidime catalysis. Multiple variants (KPC-31 = D179Y,
+      KPC-50, KPC-39, KPC-44) emerge from KPC-2 or KPC-3 parent alleles.
+      Importantly, KPC-31 also LOSES carbapenem-hydrolytic activity — so a
+      KPC-31-positive isolate is RESISTANT to ceftazidime-avibactam but
+      SUSCEPTIBLE to meropenem and meropenem-vaborbactam. This is a clinically
+      counterintuitive resistance profile. Distribution: emergent on a
+      conjugative plasmid, first reported in surveillance studies of patients
+      treated with ceftazidime-avibactam for KPC-CRE bacteremia (Shields 2017).
+      Clonal expansion within hospitals during outbreaks. Found primarily in
+      K. pneumoniae but also E. coli, E. cloacae. MIC shift: ceftazidime-
+      avibactam from 1 (susceptible) to 16 to 32 (resistant); meropenem from
+      greater than 64 (resistant in parent KPC-2/3) to 0.5 to 4 (susceptible
+      in KPC-31); meropenem-vaborbactam similarly susceptible. Drugs NOT affected
+      and rescued: meropenem-vaborbactam restores activity; meropenem alone in
+      susceptible KPC-31 isolates; cefiderocol; aztreonam-avibactam; polymyxin;
+      tigecycline; plazomicin (unless rmt also present). Diagnostics: blaKPC
+      sequencing (next-generation sequencing of clinical isolates increasingly
+      routine in surveillance labs) detects D179Y; phenotypic ceftazidime-
+      avibactam MIC rise should trigger sequencing. Implication: when ceftazidime-
+      avibactam therapy fails after initial response, consider KPC-31
+      emergence and switch to meropenem-vaborbactam or cefiderocol; the
+      "see-saw effect" of mero-vab vs ceftaz-avi gives complementary
+      armamentarium for KPC-CRE.
+
+  - name: "MexAB-OprM efflux pump in P. aeruginosa"
+    body: |
+      Molecular event: MexAB-OprM is a tripartite resistance-nodulation-cell
+      division (RND) family efflux pump consisting of MexB (inner-membrane
+      transporter), MexA (membrane-fusion protein), and OprM (outer-membrane
+      channel). The pump uses proton-motive force to extrude substrate from the
+      cytoplasm AND periplasm directly to the extracellular space, bypassing
+      the periplasmic step. It is constitutively expressed at moderate levels
+      and inducibly upregulated by mexR and nalB/C/D regulator mutations.
+      Substrate range is broad: beta-lactams (especially the C3-pyridinium
+      4G cephalosporins like cefepime), fluoroquinolones (ciprofloxacin,
+      levofloxacin), tetracyclines, chloramphenicol, trimethoprim, and the
+      anti-Pseudomonal cephalosporin ceftazidime. Key biological insight:
+      MexAB-OprM raises MIC by 4 to 8-fold at baseline; with regulator mutation
+      (overexpression), MIC rises 16 to 64-fold. Combined with porin loss
+      (oprD), efflux gives clinically resistant phenotype against most
+      beta-lactams. Distribution: chromosomal in nearly all P. aeruginosa;
+      MexXY-OprM is a related pump that also extrudes aminoglycosides.
+      Pseudomonas additionally has MexCD-OprJ (induced by cell envelope
+      stress), MexEF-OprN (induced by oxidative stress, controlled by mexT),
+      and several other RND pumps — collectively giving Pseudomonas its
+      reputation for intrinsic multidrug resistance. MIC shift: ceftazidime
+      from 1 to 8; cefepime from 1 to 4; meropenem (less susceptible to
+      MexAB-OprM, more dependent on OprD porin) from 0.5 to 2 to 4;
+      ciprofloxacin from 0.06 to 0.5 to 1; with regulator mutation MICs
+      double or quadruple again. Drugs NOT affected: polymyxin (membrane target,
+      not effluxed efficiently); cefiderocol (siderophore Trojan-horse uptake
+      bypasses many efflux mechanisms); ceftolozane-tazobactam (engineered
+      cephalosporin with reduced efflux susceptibility); tigecycline (substrate
+      of efflux but at lower affinity). Diagnostics: clinical labs do NOT
+      routinely test for mexAB or other efflux mutations; phenotypic MIC
+      profiling shows the multi-drug-resistance pattern. Implication: empirical
+      anti-Pseudomonal coverage in critically ill patients with P. aeruginosa
+      infection should account for the pump baseline (use beta-lactam at high
+      end of dosing range, consider continuous infusion for fT greater than
+      MIC, combine with aminoglycoside for severe disease); switch to
+      ceftolozane-tazobactam or cefiderocol if MexAB overexpression suspected.
+
+  - name: "AAC(6prime)-Ib-cr — bifunctional aminoglycoside and ciprofloxacin acetyltransferase"
+    body: |
+      Molecular event: AAC(6prime)-Ib (aminoglycoside acetyltransferase 6prime-Ib)
+      acetylates the 6prime-amino group of aminoglycosides (kanamycin, amikacin,
+      tobramycin, with reduced activity on gentamicin), inactivating them.
+      The "-cr" variant has two amino acid substitutions (Trp102Arg and
+      Asp179Tyr) that EXPAND its substrate specificity to include
+      fluoroquinolones with an unsubstituted piperazinyl secondary amine —
+      ciprofloxacin and norfloxacin (NOT levofloxacin or moxifloxacin which
+      have substituted piperazines). The bifunctional enzyme acetylates the
+      ciprofloxacin amine, reducing antibacterial potency by 4 to 8-fold.
+      The "cr" variant alone does not confer clinically resistant FQ MIC
+      (rises from 0.015 to 0.12, often still under CLSI breakpoint of less
+      than or equal to 0.25), but it acts ADDITIVELY with chromosomal gyrA/parC
+      mutations and qnr genes; the combined effect produces clinical FQ
+      failure at "intermediate" MIC. Distribution: aac(6prime)-Ib-cr sits on
+      multi-resistance plasmids alongside blaCTX-M-15, qnrA/B/S, dfrA — the
+      classic "ESBL-CRE-FQ-R" plasmid signature in E. coli and K. pneumoniae.
+      Globally distributed; prevalence ~50 percent in CTX-M-15 producers in
+      some regions (Park 2006, Strahilevitz 2009). MIC shift: ciprofloxacin
+      from 0.015 (susceptible) to 0.12 (low-level R, still phenotypically
+      "S" by CLSI); when combined with gyrA S83L plus parC S80I, MIC rises
+      to 4 to 16 (clearly resistant); kanamycin and amikacin MIC similarly
+      shift from 2 to 8. Drugs NOT affected: levofloxacin, moxifloxacin
+      (these have N-methyl-piperazine or constrained pyrrolidine that cannot
+      be acetylated by aac(6prime)-Ib-cr); gentamicin (substrate but with
+      reduced acetylation efficiency); plazomicin (engineered to escape
+      AAC(6prime) at the C6prime hydroxyethyl); cephalosporins, carbapenems.
+      Diagnostics: aac(6prime)-Ib-cr PCR; phenotypic MIC for both AGs and FQs
+      (the discordance between expected and observed FQ MIC should trigger
+      suspicion). Implication: rising aac(6prime)-Ib-cr prevalence in
+      community E. coli is one driver of empirical FQ failure even when MIC
+      reports "susceptible"; supports empirical move away from ciprofloxacin
+      to levofloxacin (less affected) or to alternative class for cystitis
+      and pyelonephritis when prior CTX-M-15 colonization documented.
+
+  - name: "Polymyxin/colistin chromosomal pmrAB resistance"
+    body: |
+      Molecular event: pmrA and pmrB encode a two-component regulatory system in
+      gram-negative bacteria that controls lipid-A modification. PmrA is the
+      response regulator and PmrB is the membrane-bound histidine kinase that
+      senses environmental Mg2+ and Fe3+ stress. Activation of pmrB
+      (via gain-of-function mutations or low Mg2+ environment) phosphorylates
+      pmrA, which then activates transcription of arnBCADTEF operon and
+      pmrCAB operon, leading to addition of 4-amino-4-deoxy-L-arabinose
+      (L-Ara4N) and phosphoethanolamine (PEtN) to the lipid-A 4prime-phosphate
+      and 1-phosphate, neutralizing the negative charges that polymyxins
+      target electrostatically. Polymyxins (positively charged 2,4-diaminobutyric
+      acid residues of the cyclic decapeptide) bind LPS via electrostatic
+      interaction with negatively-charged lipid-A phosphates; modification by
+      L-Ara4N and PEtN reduces affinity by 16 to 64-fold, conferring
+      clinically resistant MIC. Distinguished from plasmid-borne mcr-1 (lower
+      level resistance, transmissible) — pmrAB is chromosomal high-level
+      resistance, often emergent under polymyxin treatment pressure. Hetero-
+      resistance phenomenon: a single isolate may have a population that is
+      pmrAB-mutated as a subpopulation (1 in 10^4 to 10^6 cells); under
+      polymyxin treatment, the resistant subpopulation expands clonally, leading
+      to apparent treatment failure at "susceptible" MIC. Distribution: chromosomal
+      in K. pneumoniae, A. baumannii, P. aeruginosa, Enterobacter cloacae, and
+      Salmonella; emerges under polymyxin selection pressure during ICU
+      treatment. MIC shift: colistin and polymyxin-B from 0.5 (S) to 16 to 64
+      (R); cross-resistance to mcr-1 not absolute (pmrAB raises MIC further
+      than mcr alone). Drugs NOT affected: tigecycline, meropenem (unless
+      carbapenemase), aminoglycosides (without rmt), fosfomycin, ceftaz-avi.
+      Diagnostics: colistin broth microdilution MIC (NOT disk diffusion —
+      colistin is too large for reliable disk migration); pmrAB sequencing;
+      population analysis profile-AUC (PAP-AUC) detects hetero-resistance.
+      Implication: emergent polymyxin resistance during therapy mandates
+      switch to alternative (cefiderocol, ceftaz-avi if KPC, aztreonam-avibactam
+      if MBL, plazomicin). Treatment combination therapy (polymyxin +
+      meropenem) was historically used to suppress hetero-resistance subpop;
+      now largely supplanted by newer beta-lactam combinations.
+
+  - name: "PBP2 modifications in penicillin-resistant S. pneumoniae (PRSP)"
+    body: |
+      Molecular event: S. pneumoniae has six PBPs (1a, 1b, 2a, 2b, 2x, 3) that
+      catalyze peptidoglycan transpeptidation. Penicillin and other beta-lactams
+      acylate the active-site Ser of these PBPs, halting cell-wall synthesis.
+      Penicillin-resistant S. pneumoniae (PRSP) acquires resistance through
+      mosaic PBP genes — particularly pbp2x, pbp2b, and pbp1a — assembled by
+      horizontal genetic transfer from intrinsically resistant Streptococcus
+      species (S. mitis, S. oralis) via natural transformation. The mosaic
+      PBPs have multiple amino acid substitutions in the active-site region
+      (T338A in PBP2x, T550A in PBP2b, T371A in PBP1a are among the dominant
+      changes), reducing penicillin acylation rate by 100 to 1000-fold. PRSP
+      isolates may have low-level (penicillin MIC 0.12 to 1, "intermediate")
+      or high-level (MIC greater than 2, "resistant") changes depending on
+      number and identity of PBP modifications. Importantly, resistance is
+      relative — high-dose penicillin or amoxicillin can overcome low-level
+      resistance via T greater than MIC dosing, but cannot overcome high-level
+      resistance. Distribution: PRSP emerged in 1980s, peaked at ~30 percent
+      in some US regions; decreased after PCV13 vaccination (Spain ST23F-1
+      and Taiwan ST6F-1 lineage strains were dominant pre-vaccine). Currently
+      ~10 to 15 percent of S. pneumoniae are penicillin-non-susceptible. MIC
+      shift: penicillin from 0.015 (S) to 0.12 to 4 (R); ceftriaxone from
+      0.015 to 1 to 4 (clinically relevant in meningitis where breakpoint is
+      stricter); amoxicillin similarly. Drugs NOT affected: vancomycin (D-Ala-
+      D-Ala unaffected by PBP changes), linezolid (50S A-site), levofloxacin
+      and moxifloxacin (gyrA/parC are independent), ceftaroline (allosteric
+      PBP2a binding mode, MIC50 0.06 even in PRSP), doxycycline. Diagnostics:
+      penicillin MIC by broth microdilution (CLSI breakpoints are different
+      for non-meningeal, meningeal, and oral routes). Implication: empirical
+      regimen for invasive pneumococcal disease (bacteremia, pneumonia,
+      meningitis) requires high-dose ceftriaxone (2 g IV q12h for meningitis)
+      plus vancomycin until PRSP excluded; pneumococcal conjugate vaccine
+      (PCV13, PCV15, PCV20) reduces serotype-driven PRSP burden.
+
+  - name: "Cfr 23S rRNA methyltransferase — PhLOPSa cross-resistance"
+    body: |
+      Molecular event: cfr (chloramphenicol-florfenicol resistance) encodes a
+      methyltransferase that uses S-adenosylmethionine (SAM) as cofactor to
+      methylate position C8 of A2503 of 23S rRNA in the bacterial 50S
+      ribosomal subunit. A2503 is at the peptidyl transferase center adjacent
+      to the macrolide and oxazolidinone binding sites; methylation creates
+      steric block that reduces drug binding for FIVE classes of antibiotics
+      simultaneously: (P) phenicols (chloramphenicol, florfenicol), (h)
+      lincosamides (clindamycin), (O) oxazolidinones (linezolid, tedizolid,
+      contezolid), (P) pleuromutilins (lefamulin), (S) streptogramin A
+      (dalfopristin), and (a) 16-membered macrolides — the PhLOPSa phenotype.
+      Distribution: cfr was first identified in S. sciuri and S. epidermidis
+      from livestock cohorts (florfenicol selection pressure in veterinary
+      medicine); now described in human clinical S. aureus including MRSA
+      and CoNS, occasionally in enterococci. Sits on conjugative plasmids
+      (pSCFS6, pCSA34) often in linezolid-resistance outbreaks. MIC shift:
+      linezolid from 1 (S) to 8 to 16 (R); chloramphenicol from 4 to greater
+      than 64; clindamycin from 0.06 to 8 to 32; tedizolid from 0.5 to 2 to 4
+      (less affected than linezolid because tedizolid's pyridinyl-pyrimidinyl
+      D-ring picks up additional contacts that partially compensate); lefamulin
+      modestly affected. Drugs NOT affected: vancomycin, daptomycin, tigecycline,
+      ceftaroline, fluoroquinolones (different targets entirely), TMP-SMX
+      (folate). Diagnostics: cfr PCR; phenotypic broth microdilution
+      linezolid MIC; in linezolid-treatment-failure scenarios, request cfr
+      genotype. Implication: linezolid is a critical anti-MRSA drug — emergence
+      of cfr-positive MRSA (especially in CONS and rarely in MRSA outbreaks)
+      threatens this last-line option. Tedizolid retains partial activity
+      and is preferred in the cfr-positive context. Stewardship: limit
+      prolonged linezolid courses (less than 14 days where possible) and
+      surveillance cultures in linezolid treatment-failure scenarios drive
+      detection.
+
+  - name: "Acquired tigecycline resistance via tetX FAD-monooxygenase"
+    body: |
+      Molecular event: tetX encodes a flavin-dependent monooxygenase (FAD as
+      cofactor, NADPH as electron source) that catalyzes oxidative
+      hydroxylation of tetracyclines at the C11a position. The 11a-OH
+      tetracycline derivative undergoes further degradation, losing
+      antibacterial activity. tetX was originally described in Bacteroides
+      anaerobes (where it acted on tetracycline only), but recent variants
+      tetX3, tetX4, tetX5 (described in Chinese livestock cohorts since
+      2019) have expanded substrate specificity to include tigecycline AND
+      eravacycline. The expansion is achieved by amino acid substitutions
+      around the substrate-binding pocket that accommodate the bulky C9
+      glycylamido side chain of tigecycline. Distribution: chromosomal in
+      Bacteroides; plasmid-borne tetX3/tetX4 emerging globally on conjugative
+      IncQ and IncF plasmids in E. coli, K. pneumoniae, Acinetobacter from
+      livestock and food-animal populations; recently reported in human
+      clinical isolates from China and elsewhere. The agricultural-to-clinical
+      jump mirrors mcr-1 dynamics. MIC shift: tigecycline from 0.5 (S) to
+      8 to 16 (R); eravacycline from 0.25 to 4 to 8; minocycline and
+      doxycycline also affected; tetracycline maximally. Drugs NOT affected:
+      omadacycline (the C9 aminomethyl is small enough that tetX may not
+      access well — variable, isolate-specific); polymyxin, cefiderocol,
+      meropenem (assuming no carbapenemase), aminoglycosides (without rmt).
+      Diagnostics: tetX/tetX3/tetX4 PCR; phenotypic tigecycline MIC. Tetra-
+      cycline-class MIC routinely tested but the tetX-positive phenotype
+      shows resistance to ALL tetracyclines simultaneously. Implication:
+      emerging tetX3/tetX4 threatens tigecycline as a salvage agent for
+      CRE and ESBL-CRE; surveillance for tetX-positive CRE necessary;
+      maintain alternative class options (cefiderocol, ceftaz-avi if KPC,
+      aztreonam-avibactam if MBL).
+
+  - name: "Mcr-1 plasmid-mediated colistin resistance"
+    body: |
+      (Note: distinct from chromosomal pmrAB-mediated; described separately
+      because mcr-1 is the plasmid-borne, transmissible, lower-level resistance
+      that emerged from livestock and is the one driving global concern.)
+      Molecular event: mcr-1 encodes a phosphoethanolamine (PEtN) transferase
+      that catalyzes the addition of PEtN to the lipid-A 4prime-phosphate of
+      LPS. The PEtN modification neutralizes one of the two negative charges
+      on lipid-A, reducing electrostatic affinity for polymyxin's positively-
+      charged 2,4-diaminobutyric-acid residues. The mechanism is biochemically
+      similar to chromosomal pmrCAB (which encodes a PEtN transferase under
+      pmrA regulation), but mcr-1 is constitutively expressed and on a mobile
+      genetic element. Distribution: mcr-1 first described in E. coli SHP45
+      from a Chinese pig (Liu 2016 Lancet Infect Dis) on an IncI2 plasmid
+      flanked by IS-element families; mcr-2 through mcr-10 are subsequent
+      variants on different plasmid backbones. Globally disseminated through
+      conjugative spread, with high prevalence in agricultural E. coli (Asia,
+      Europe), spreading to human clinical isolates including E. coli, K.
+      pneumoniae, Salmonella, occasional P. aeruginosa. MIC shift: colistin
+      and polymyxin-B from 0.25 (S) to 4 to 16 (sometimes still under 4
+      ug/mL CLSI breakpoint, leading to "intermediate" or borderline-S
+      reports that clinically fail). Drugs NOT affected: tigecycline (30S
+      target), meropenem (assuming no carbapenemase), cefiderocol, ceftaz-avi
+      (assuming no MBL), aminoglycosides (without rmt), aztreonam-avibactam,
+      fosfomycin, ceftolozane-tazobactam (assuming no MBL or
+      ceftolozane-resistance via PBP3 mutations). Diagnostics: mcr-1 PCR;
+      colistin broth microdilution MIC (NOT disk diffusion — colistin is
+      too large for reliable migration). Implication: surveillance for
+      mcr-1 emergence is critical because polymyxins are last-line for
+      CRE; agricultural use of colistin (banned in China 2017, EU 2017,
+      restricted globally per WHO) is the selection pressure that drove
+      mcr-1 emergence — One Health framing connecting agricultural and
+      clinical antimicrobial resistance.
+
+  - name: "MmpS5-MmpL5 efflux in M. tuberculosis"
+    body: |
+      Molecular event: MmpS5 (mycobacterial membrane protein small 5) and MmpL5
+      (mycobacterial membrane protein large 5) form a two-component RND-family
+      efflux pump in M. tuberculosis. The pump is normally repressed by
+      Rv0678, a TetR-family transcriptional regulator. Mutations or insertions
+      in Rv0678 (loss-of-function) derepress mmpS5-mmpL5 transcription,
+      overexpressing the pump and increasing efflux of bedaquiline AND
+      clofazimine SIMULTANEOUSLY (cross-resistance phenotype). This is the
+      classic example of pre-existing low-level resistance creating a clinical
+      problem because of unsuspected cross-class effect. Bedaquiline binds
+      atpE c-ring of ATP synthase; clofazimine binds NADH dehydrogenase / has
+      multiple targets including phenazine-mediated reactive oxygen species.
+      The pump physically extrudes both drugs, raising their internal
+      concentrations only at high external concentrations. Importantly,
+      Rv0678 mutations emerge as PRE-existing low-frequency mutants in
+      treatment-naive M. tuberculosis populations (rate ~10^-8) and selected
+      under bedaquiline or clofazimine exposure. Distribution: chromosomal in
+      M. tuberculosis; rising with rollout of BPaL and BPaLM regimens for
+      MDR-TB. WHO surveillance reports emergent Rv0678 mutations in 2 to 8
+      percent of new MDR-TB diagnoses depending on cohort. MIC shift:
+      bedaquiline from 0.06 (S) to 0.25 to 1 (low-level resistance, often
+      under treatment-fail breakpoint of 0.25); clofazimine from 0.5 to 2 to 8;
+      bedaquiline-clofazimine cross-resistance is the practical concern.
+      Drugs NOT affected: pretomanid (Ddn-mediated activation pathway,
+      independent), linezolid (50S A-site, independent), moxifloxacin
+      (gyrA target, independent), older second-line drugs (ethionamide, PAS).
+      Diagnostics: Rv0678 sequencing on M. tuberculosis isolates with
+      treatment failure or relapse; phenotypic bedaquiline MIC; whole-genome
+      sequencing increasingly standard for MDR-TB workup. Implication:
+      emergent bedaquiline resistance during BPaL/BPaLM is a worrying
+      development; combination regimens minimize resistance emergence by
+      simultaneous multi-target attack; surveillance for Rv0678 mutations
+      essential during global rollout of new TB regimens.
