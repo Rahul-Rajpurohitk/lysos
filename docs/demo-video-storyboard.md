@@ -96,7 +96,7 @@
 > ```
 
 **Voiceover:**
-> "Two Gemma-family models coresident on the same GPU: Gemma 4 31B for generation, EmbeddingGemma 300m for retrieval and novelty scoring. Three training stages: chemistry foundation, AMR specialization, and reinforcement learning with verifiable rewards. The peak memory during RL — policy plus reference plus reward predictor — exceeds 150 gigabytes. An H100 cannot fit this. The MI300X 192 GB is the prerequisite."
+> "Gemma 4 31B for generation runs on the MI300X, paired with Gemini Embedding 2 (gemini-embedding-001) for retrieval and novelty scoring via Google's API. Three training stages: chemistry foundation, AMR specialization, and reinforcement learning with verifiable rewards. The peak memory during RL — policy plus reference plus reward predictor — exceeds 150 gigabytes. An H100 cannot fit this. The MI300X 192 GB is the prerequisite."
 
 ---
 
@@ -132,7 +132,7 @@
 - Top candidates list streams in (one card every ~100ms)
 
 **Voiceover:**
-> "Click. The model generates fifty distinct candidate molecules in under thirty seconds. Each one immediately scored on six dimensions: predicted MIC against MRSA, drug-likeness, synthesizability, hemolytic safety, novelty by Tanimoto fingerprint, novelty by EmbeddingGemma cosine."
+> "Click. The model generates fifty distinct candidate molecules in under thirty seconds. Each one immediately scored on six dimensions: predicted MIC against MRSA, drug-likeness, synthesizability, hemolytic safety, novelty by Tanimoto fingerprint, novelty by Gemini Embedding 2 cosine."
 
 **Beat 5 (2:50 – 3:15) — drilling into a candidate:**
 - Click the top candidate's "similar" button

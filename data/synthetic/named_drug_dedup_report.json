@@ -1,0 +1,156 @@
+{
+  "threshold": 0.85,
+  "n_rows": 388,
+  "n_pairs_above_threshold": 15,
+  "top_pairs": [
+    {
+      "cosine": 0.9214571714401245,
+      "i": 310,
+      "j": 357,
+      "task_i": "drug_pathogen_reasoning",
+      "task_j": "candidate_ranking",
+      "title_i": "Oral vancomycin plus IV metronidazole for fulminant Clostridioides difficile with ileus",
+      "title_j": "Severe Clostridioides difficile with ileus \u2014 rank fidaxomicin vs oral vancomycin vs combination"
+    },
+    {
+      "cosine": 0.8814530372619629,
+      "i": 1,
+      "j": 109,
+      "task_i": "drug_mechanism_deep_dive",
+      "task_j": "drug_combination_synergy",
+      "title_i": "SULBACTAM as the active \u03b2-lactam (binding PBPs of Acinetobacter) + DURLOBACTAM as a NEW \u03b2-lactamase inhibitor that uniqu",
+      "title_j": "SULBACTAM-DURLOBACTAM for CRAB"
+    },
+    {
+      "cosine": 0.8785415887832642,
+      "i": 73,
+      "j": 109,
+      "task_i": "drug_pathogen_reasoning",
+      "task_j": "drug_combination_synergy",
+      "title_i": "Walk through why this 2023-approved combination is the FIRST drug specifically labeled for CRAB pneumonia.",
+      "title_j": "SULBACTAM-DURLOBACTAM for CRAB"
+    },
+    {
+      "cosine": 0.8772537112236023,
+      "i": 171,
+      "j": 211,
+      "task_i": "structure_activity_comparison",
+      "task_j": "counterfactual_design",
+      "title_i": "Amoxicillin vs ampicillin \u2014 para-hydroxyl on the phenyl ring and oral absorption",
+      "title_j": "Remove the para-hydroxyl from amoxicillin"
+    },
+    {
+      "cosine": 0.8744863271713257,
+      "i": 350,
+      "j": 381,
+      "task_i": "candidate_ranking",
+      "task_j": "candidate_ranking",
+      "title_i": "CRAB ventilator-associated pneumonia \u2014 rank sulbactam-durlobactam vs cefiderocol vs polymyxin combo",
+      "title_j": "MDR Acinetobacter baumannii bloodstream infection \u2014 rank cefiderocol vs sulbactam-durlobactam vs polymyxin combo"
+    },
+    {
+      "cosine": 0.8708337545394897,
+      "i": 192,
+      "j": 334,
+      "task_i": "drug_mechanism_deep_dive",
+      "task_j": "structural_strategy_reasoning",
+      "title_i": "Sulbactam-durlobactam",
+      "title_j": "Structural arc against carbapenem-resistant Acinetobacter baumannii \u2014 sulbactam plus DBO"
+    },
+    {
+      "cosine": 0.8631738424301147,
+      "i": 262,
+      "j": 345,
+      "task_i": "cross_pathogen_spectrum",
+      "task_j": "reward_profile_analysis",
+      "title_i": "Ceftaroline \u2014 anti-MRSA cephalosporin without enterococcal or Pseudomonas activity",
+      "title_j": "Ceftaroline scoring profile against MRSA"
+    },
+    {
+      "cosine": 0.8603770732879639,
+      "i": 109,
+      "j": 381,
+      "task_i": "drug_combination_synergy",
+      "task_j": "candidate_ranking",
+      "title_i": "SULBACTAM-DURLOBACTAM for CRAB",
+      "title_j": "MDR Acinetobacter baumannii bloodstream infection \u2014 rank cefiderocol vs sulbactam-durlobactam vs polymyxin combo"
+    },
+    {
+      "cosine": 0.8582819700241089,
+      "i": 196,
+      "j": 333,
+      "task_i": "drug_mechanism_deep_dive",
+      "task_j": "structural_strategy_reasoning",
+      "title_i": "Bedaquiline",
+      "title_j": "Structural arc against M. tuberculosis non-replicating persisters \u2014 ATP synthase rotor and Ddn-activated nitroimidazole"
+    },
+    {
+      "cosine": 0.8568731546401978,
+      "i": 1,
+      "j": 73,
+      "task_i": "drug_mechanism_deep_dive",
+      "task_j": "drug_pathogen_reasoning",
+      "title_i": "SULBACTAM as the active \u03b2-lactam (binding PBPs of Acinetobacter) + DURLOBACTAM as a NEW \u03b2-lactamase inhibitor that uniqu",
+      "title_j": "Walk through why this 2023-approved combination is the FIRST drug specifically labeled for CRAB pneumonia."
+    },
+    {
+      "cosine": 0.8565484881401062,
+      "i": 246,
+      "j": 306,
+      "task_i": "resistance_mechanism_explanation",
+      "task_j": "resistance_mechanism_explanation",
+      "title_i": "mcr-1 plasmid-mediated colistin resistance",
+      "title_j": "Mcr-1 plasmid-mediated colistin resistance"
+    },
+    {
+      "cosine": 0.8563607931137085,
+      "i": 194,
+      "j": 224,
+      "task_i": "drug_mechanism_deep_dive",
+      "task_j": "structure_activity_comparison",
+      "title_i": "Isavuconazole",
+      "title_j": "Fluconazole vs voriconazole \u2014 triazole heterocycle and CYP51 binding"
+    },
+    {
+      "cosine": 0.8553500175476074,
+      "i": 173,
+      "j": 212,
+      "task_i": "structure_activity_comparison",
+      "task_j": "counterfactual_design",
+      "title_i": "Tigecycline vs minocycline \u2014 C9 glycylamido side chain and Tet-pump escape",
+      "title_j": "Remove the C9 t-butylglycylamido from tigecycline"
+    },
+    {
+      "cosine": 0.8552364110946655,
+      "i": 224,
+      "j": 321,
+      "task_i": "structure_activity_comparison",
+      "task_j": "counterfactual_design",
+      "title_i": "Fluconazole vs voriconazole \u2014 triazole heterocycle and CYP51 binding",
+      "title_j": "Remove the triazole N4 nitrogen from fluconazole"
+    },
+    {
+      "cosine": 0.8517706394195557,
+      "i": 91,
+      "j": 153,
+      "task_i": "pk_pd_reasoning",
+      "task_j": "pk_pd_reasoning",
+      "title_i": "Compare polymyxin B (intact drug) and colistin (CMS prodrug) pharmacokinetics \u2014 what drives the choice between them?",
+      "title_j": "Polymyxin B vs colistin (CMS) \u2014 why their PK profiles diverge in critical illness"
+    }
+  ],
+  "task_pair_counts": {
+    "counterfactual_design \u2194 structure_activity_comparison": 3,
+    "drug_mechanism_deep_dive \u2194 structural_strategy_reasoning": 2,
+    "candidate_ranking \u2194 drug_pathogen_reasoning": 1,
+    "drug_combination_synergy \u2194 drug_mechanism_deep_dive": 1,
+    "drug_combination_synergy \u2194 drug_pathogen_reasoning": 1,
+    "candidate_ranking \u2194 candidate_ranking": 1,
+    "cross_pathogen_spectrum \u2194 reward_profile_analysis": 1,
+    "candidate_ranking \u2194 drug_combination_synergy": 1,
+    "drug_mechanism_deep_dive \u2194 drug_pathogen_reasoning": 1,
+    "resistance_mechanism_explanation \u2194 resistance_mechanism_explanation": 1,
+    "drug_mechanism_deep_dive \u2194 structure_activity_comparison": 1,
+    "pk_pd_reasoning \u2194 pk_pd_reasoning": 1
+  }
+}

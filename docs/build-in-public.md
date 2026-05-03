@@ -61,7 +61,7 @@ Image: real wandb screenshot (loss curve)
 
 ## Day 3 — RL training live, mid-run
 
-> Stage 3 GRPO with verifiable rewards now running on the MI300X. Six-component composite — validity, drug-likeness, synthesizability, hemolysis safety, predicted MIC, novelty (Tanimoto + EmbeddingGemma cosine).
+> Stage 3 GRPO with verifiable rewards now running on the MI300X. Six-component composite — validity, drug-likeness, synthesizability, hemolysis safety, predicted MIC, novelty (Tanimoto + Gemini Embedding 2 cosine).
 >
 > Every component logged separately so we catch reward-hacking. Validity and predicted-MIC both trending up. No collapse.
 

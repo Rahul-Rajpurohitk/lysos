@@ -16,7 +16,7 @@
 - [x] **Known-antibiotics RAG index** — `data/processed/known_antibiotics_index.parquet` (20,489 rows from ChEMBL+DBAASP+DRAMP)
 - [x] Verifier (`make verify` 24/24) + 13 unit tests (12 pass, 1 skip-no-rdkit) + Makefile shipped
 - [x] **Workspace verified end-to-end** — FastAPI boots, all 6 routes register, frontend builds clean (1573 modules, 160KB JS), real screenshot captured
-- [x] **EmbeddingGemma 300m integration — all 5 phases shipped** (novelty reward + RAG + dedup + similar-drugs UI + index)
+- [x] **Embedding stack shipped — Gemini Embedding 2 (gemini-embedding-001, 3072d Matryoshka)** with all 5 integration phases (novelty reward + RAG + dedup + similar-drugs UI + 20,489-row known-antibiotics index) (novelty reward + RAG + dedup + similar-drugs UI + index)
 - [x] **Pitch deck (10 slides, Marp-PDF-ready)** — `docs/pitch-deck.md` with frontmatter
 - [x] **Demo video storyboard** — `docs/demo-video-storyboard.md` (5-min, 8 sections, beat-by-beat)
 - [x] **Visual assets (5 SVG + 6 PNG)** — cover, thumbnail, architecture, data-flow, reward-curves, ROCm-SMI, workspace screenshot
@@ -46,7 +46,7 @@
 ### Optional polish (cheap if I have time)
 
 - [ ] Run wider ChEMBL fetch (8K/pathogen, +EC50/GI50/Inhibition types) — yields ~20-50% more rows per pathogen
-- [ ] Re-run dedup on the 222,606-row Stage 2 with EmbeddingGemma to drop near-duplicates
+- [x] Dedup on the named-drug elite reasoning slice via `scripts/dedup_named_drug_with_embeddings.py` — caught 1 cross-sprint mcr-1 duplicate, removed; report saved to `data/synthetic/named_drug_dedup_report.json`
 - [ ] Find new working PubChem AIDs (most curated retired) — eutils search returns ~30 candidates per pathogen
 - [ ] Mirror APD3 from a GitHub fork (current site URLs all 404)
 - [ ] Render `docs/pitch-deck.md` to PDF via Marp (one `npm i` away)

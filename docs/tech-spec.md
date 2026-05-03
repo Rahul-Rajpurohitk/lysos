@@ -61,7 +61,7 @@ shows the MI300X 192 GB memory budget bar).
 │  │  Two Gemma-family models, coresident         │ │
 │  │  ─────────────────────────────────────       │ │
 │  │  • Gemma 4 31B-it     — generator (62 GB)    │ │
-│  │  • EmbeddingGemma 300m — RAG + novelty (1 GB)│ │
+│  │  • Gemini Embedding 2 — RAG + novelty (API)  │ │
 │  │  Input:  target pathogen + modality + RAG ex │ │
 │  │  Output: N candidate SMILES / peptides       │ │
 │  └──────────────────┬───────────────────────────┘ │
@@ -74,7 +74,7 @@ shows the MI300X 192 GB memory budget bar).
 │  │  • SA score synthesizability     (rdkit)     │ │
 │  │  • hemolysis safety              (DBAASP-trained heuristic)
 │  │  • Tanimoto novelty              (Morgan FP)  │ │
-│  │  • semantic novelty              (EmbeddingGemma cosine vs 20,489-row index)
+│  │  • semantic novelty              (Gemini Embedding 2 cosine vs 20,489-row index)
 │  │  • validity                      (rdkit parse)│ │
 │  └──────────────────┬───────────────────────────┘ │
 │                     ▼                             │
@@ -134,7 +134,7 @@ Train the generator to produce molecules that score well on multiple objectives.
 |---|---|
 | Algorithm | GRPO (Group Relative Policy Optimization, DeepSeek-R1 style) — no value model needed |
 | Prompts (LIVE on HF Hub) | [`rahul24raj/lysos-rl-prompts`](https://huggingface.co/datasets/rahul24raj/lysos-rl-prompts) — 12,000 prompts (11,520 train + 480 valid) across 8 priority pathogens × 2 modalities |
-| Reward components (configs/stage3_rl_grpo.yaml) | • predicted MIC → 0.30 (ML XGBoost predictor, scaffold-CV MAE 0.62, R² 0.56, on disk at `data/processed/mic_predictor.joblib`; auto-dispatched by `src.eval.rewards.activity:predict_mic`)<br>• structural_alerts → 0.05 (PAINS + Brenk + NIH + Lipinski + Veber)<br>• drug_likeness QED → 0.15<br>• synthesizability SA → 0.10<br>• hemolysis_safety → 0.15<br>• novelty (Tanimoto Morgan FP) → 0.10<br>• embedding_novelty (EmbeddingGemma cosine vs 20,489-row index) → 0.10<br>• validity (rdkit parse) → 0.05 |
+| Reward components (configs/stage3_rl_grpo.yaml) | • predicted MIC → 0.30 (ML XGBoost predictor, scaffold-CV MAE 0.62, R² 0.56, on disk at `data/processed/mic_predictor.joblib`; auto-dispatched by `src.eval.rewards.activity:predict_mic`)<br>• structural_alerts → 0.05 (PAINS + Brenk + NIH + Lipinski + Veber)<br>• drug_likeness QED → 0.15<br>• synthesizability SA → 0.10<br>• hemolysis_safety → 0.15<br>• novelty (Tanimoto Morgan FP) → 0.10<br>• embedding_novelty (Gemini Embedding 2 cosine vs 20,489-row index) → 0.10<br>• validity (rdkit parse) → 0.05 |
 | Hardware | Small 1× MI300X — but RL holds policy + frozen reference + reward predictor + KV-cache + grads coresident (~152 GB peak) — this is THE MI300X-specific moment, busts H100 80 GB |
 | Time | 15-25 GPU-hours |
 | Cost | $30-50 |
@@ -340,7 +340,7 @@ Within $300 budget. Comfortable cushion.
 
 ---
 
-## 12.5 EmbeddingGemma 300m — retrieval + novelty layer (added 2026-05-01)
+## 12.5 Gemini Embedding 2 — retrieval + novelty layer (added 2026-05-01)
 
 We add `google/embeddinggemma-300m` (308M params, Gemma 3 architecture, Matryoshka 768→128 dims, 2K context, open weights) as a second model in the stack. Coexists with Gemma 4 31B on the same MI300X (~63 GB total).
 
@@ -381,7 +381,7 @@ Total integration cost: ~3.5 hours. Plan: `vault/plans/2026-05-01-embeddinggemma
 - [x] ~~Finalize Stage 3 reward function weights~~ → `configs/stage3_rl_grpo.yaml` (7 components, sum=1.0)
 - [x] ~~Stage 2 dataset built + pushed~~ → 222,606 examples on HF Hub
 - [x] ~~Workspace UI verified rendering end-to-end~~ → real screenshot in `docs/assets/workspace-screenshot.png`
-- [x] ~~EmbeddingGemma 300m integration~~ → all 5 phases shipped
+- [x] ~~Embedding stack integration~~ → Gemini Embedding 2 (gemini-embedding-001), 3072d Matryoshka, all 5 phases shipped (replaces EmbeddingGemma 300m which was the original plan)
 
 ### GPU-blocked (need MI300X — Sat May 2 expected)
 

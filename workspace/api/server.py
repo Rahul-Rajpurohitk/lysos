@@ -173,7 +173,7 @@ class DesignRequest(BaseModel):
     top_p: float = Field(0.95, ge=0.1, le=1.0)
     max_new_tokens: int = Field(256, ge=32, le=1024)
     return_top: int = Field(20, ge=1, le=200)
-    enable_rag: bool = Field(True, description="Use EmbeddingGemma to inject known antibiotics as in-context examples")
+    enable_rag: bool = Field(True, description="Use Gemini Embedding 2 to inject known antibiotics as in-context examples")
     rag_k: int = Field(3, ge=0, le=10, description="How many reference antibiotics to inject")
 
 
@@ -338,7 +338,7 @@ async def design_stream(req: DesignRequest):
 @app.post("/api/similar")
 async def find_similar(req: SimilarRequest) -> list[dict]:
     """Return top-k known antibiotics most similar to the given SMILES,
-    using EmbeddingGemma 300m cosine similarity over our indexed corpus."""
+    using Gemini Embedding 2 (gemini-embedding-001) cosine similarity over our indexed corpus."""
     try:
         from src.inference.retrieval import get_retriever
         index_path = os.environ.get(

@@ -77,7 +77,7 @@ Live demo on Hugging Face Spaces (`lablab-ai-amd-developer-hackathon/lysos`):
 1. User selects a pathogen (e.g., MRSA).
 2. Lysos generates 50 candidate antibacterial molecules.
 3. Each candidate scored on: predicted MIC, drug-likeness, synthetic accessibility, hemolytic safety, novelty vs known antibiotics.
-4. "Find similar known drugs" button: EmbeddingGemma cosine search returns top-5 closest known antibiotics with similarity bars.
+4. "Find similar known drugs" button: Gemini Embedding 2 cosine search returns top-5 closest known antibiotics with similarity bars.
 
 Insert: `docs/assets/workspace-screenshot.png` (real screenshot of the local build — sidebar of 8 pathogens, MRSA selected, generation parameters, generate button).
 
@@ -90,7 +90,7 @@ Insert: `docs/assets/workspace-screenshot.png` (real screenshot of the local bui
 **Two-model coresident pipeline on a single MI300X.**
 
 - **Generator**: Gemma 4 31B-it (33B dense, multimodal, frontier April 2026).
-- **Embedder**: EmbeddingGemma 300m (Matryoshka 768→128 dims, Gemma 3 architecture).
+- **Embedder**: Gemini Embedding 2 (gemini-embedding-001, 3072d Matryoshka, MTEB top-1).
 - **Three-stage training**:
   1. Stage 1 — TxGemma-4 chemistry foundation (TDC ~50 tasks).
   2. Stage 2 — AMR specialization SFT on 222,606 real instruction-tuning examples (ChEMBL + DBAASP + DRAMP + DrugBank + CARD + PDB).
@@ -110,7 +110,7 @@ Insert: `docs/assets/architecture.svg` — full pipeline diagram with the MI300X
 - LoRA + QLoRA on Gemma 4 31B for parameter-efficient SFT.
 - Group Relative Policy Optimization (DeepSeek-R1 style) for RL training.
 - Multi-component composite reward — each component logged separately to wandb so we catch reward-hacking.
-- EmbeddingGemma 300m for semantic novelty (cosine over Matryoshka 768d) + RAG-augmented generation + training data dedup.
+- Gemini Embedding 2 for semantic novelty (cosine over 3072d Matryoshka) + RAG-augmented generation + training data dedup.
 - Real data from 6 working public sources: ChEMBL (REST), DBAASP (REST + N+1 detail), DRAMP (XLSX/FASTA), CARD (tarball), PDB (GraphQL), ZINC.
 
 All open-source, MIT-licensed, on a public GitHub.

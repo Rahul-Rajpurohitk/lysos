@@ -26,11 +26,11 @@ Stage 2 pro v2 dataset (364K train + elite reasoning slice).
 > **Built on Gemma 4 31B-it**, trained in three stages on a single AMD Instinct MI300X:
 > 1. **Stage 1 — TxGemma-4 chemistry foundation** (Therapeutics Data Commons, 28 ADMET/binding/tox tasks)
 > 2. **Stage 2 — AMR specialization SFT** on the new `lysos-amr-stage2-pro-v2` dataset: 364,432 train + 29,300 valid + 55 held-out test, 27 task types from 9 real public sources (ChEMBL, DBAASP, DRAMP, DrugBank, DrugCentral, NPAtlas, CARD, PDB, ZINC) plus a 333-entry **elite named-drug chain-of-thought slice** (14 reasoning task types, 25x oversampled to 5% of training compute)
-> 3. **Stage 3 — GRPO reinforcement learning** with 8 verifiable reward components: validity, structural alerts, predicted MIC (XGBoost ML predictor on Morgan fingerprints, scaffold-CV MAE 0.62, R² 0.56 — not a heuristic), QED drug-likeness, SA synthesizability, hemolysis safety, Tanimoto Morgan-FP novelty, EmbeddingGemma-300m semantic novelty
+> 3. **Stage 3 — GRPO reinforcement learning** with 8 verifiable reward components: validity, structural alerts, predicted MIC (XGBoost ML predictor on Morgan fingerprints, scaffold-CV MAE 0.62, R² 0.56 — not a heuristic), QED drug-likeness, SA synthesizability, hemolysis safety, Tanimoto Morgan-FP novelty, Gemini Embedding 2 semantic novelty
 >
 > **Why MI300X**: GRPO holds policy + reference + reward predictor coresident — peak ≈152 GB. An H100 80 GB has to shard. The MI300X 192 GB fits the entire training stack on a single card.
 >
-> **Two Gemma-family models on one GPU**: Gemma 4 31B for generation (62 GB FP16) + EmbeddingGemma 300m for RAG, novelty, and a "find similar drugs" UI feature (1 GB).
+> **Two Gemma-family models on one GPU**: Gemma 4 31B for generation (62 GB FP16) + Gemini Embedding 2 (gemini-embedding-001, 3072d Matryoshka) for RAG, novelty, and the "find similar drugs" UI feature.
 >
 > Apache-2.0 weights, public dataset on HF Hub, MIT-licensed code, reproducible Docker. <$240 per training run on AMD Developer Cloud.
 
@@ -42,10 +42,10 @@ Stage 2 pro v2 dataset (364K train + elite reasoning slice).
 
 > # Lysos — generative drug designer for antimicrobial resistance
 >
-> Built on Gemma 4 31B + EmbeddingGemma 300m, RL-tuned on AMD Instinct MI300X.
+> Built on Gemma 4 31B + Gemini Embedding 2, RL-tuned on AMD Instinct MI300X.
 >
 > ## What it does
-> Pick a target pathogen (MRSA, M. tuberculosis, ESBL+ E. coli, K. pneumoniae CRE, A. baumannii, P. aeruginosa, VRE, N. gonorrhoeae). Lysos generates 50 candidate antibacterial molecules in under 30 seconds, each scored on 8 dimensions: predicted MIC (XGBoost ML predictor — not a heuristic, scaffold-CV MAE 0.62), structural-alerts liability (PAINS+Brenk+NIH+Lipinski+Veber), drug-likeness (QED), synthesizability (SA score), hemolytic safety, structural novelty (Tanimoto Morgan FP), and semantic novelty (EmbeddingGemma cosine vs 20,489-row known-antibiotics index).
+> Pick a target pathogen (MRSA, M. tuberculosis, ESBL+ E. coli, K. pneumoniae CRE, A. baumannii, P. aeruginosa, VRE, N. gonorrhoeae). Lysos generates 50 candidate antibacterial molecules in under 30 seconds, each scored on 8 dimensions: predicted MIC (XGBoost ML predictor — not a heuristic, scaffold-CV MAE 0.62), structural-alerts liability (PAINS+Brenk+NIH+Lipinski+Veber), drug-likeness (QED), synthesizability (SA score), hemolytic safety, structural novelty (Tanimoto Morgan FP), and semantic novelty (Gemini Embedding 2 cosine vs 20,489-row known-antibiotics index).
 >
 > Click "find similar known drugs" on any candidate to see the top-5 closest known antibiotics by cosine similarity. Useful for novelty checks and mechanism-of-action guesses.
 >
