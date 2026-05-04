@@ -77,6 +77,10 @@ JSONL_FILES = [
     ("adverse_events",            ROOT / "data" / "synthetic" / "agentic_adverse_events.jsonl"),
     ("animal_translation",        ROOT / "data" / "synthetic" / "agentic_animal_translation.jsonl"),
     ("combo_therapy",             ROOT / "data" / "synthetic" / "agentic_combo_therapy.jsonl"),
+    # v6 — final 3 gaps: safety refusal, tool arg validation, held-out eval
+    ("safety_refusal",            ROOT / "data" / "synthetic" / "agentic_safety_refusal.jsonl"),
+    ("tool_arg_validation",       ROOT / "data" / "synthetic" / "agentic_tool_arg_validation.jsonl"),
+    ("held_out_eval",             ROOT / "data" / "synthetic" / "agentic_held_out_eval.jsonl"),
 ]
 
 def normalize_pro_v2_row(row: dict, split: str) -> dict | None:
@@ -109,11 +113,16 @@ def normalize_jsonl_row(row: dict, task_label: str, split: str) -> dict | None:
     msgs = row.get("messages")
     if not isinstance(msgs, list) or not msgs:
         return None
+    # If the row itself declares a split (e.g. held_out_eval rows are
+    # split='test'), honour it. Otherwise fall back to the caller-provided
+    # 95/5 random split.
+    row_split = row.get("split")
+    final_split = row_split if row_split in ("train", "valid", "test") else split
     return {
         "task": row.get("task") or task_label,
         "pathogen": row.get("pathogen"),
         "messages": msgs,
-        "split": split,
+        "split": final_split,
     }
 
 def validate_messages(msgs: list[dict]) -> bool:
@@ -135,6 +144,7 @@ def main():
     base = load_from_disk(str(PRO_V2))
     train_rows: list[dict] = []
     valid_rows: list[dict] = []
+    test_rows: list[dict] = []
 
     for row in base["train"]:
         n = normalize_pro_v2_row(row, "train")
@@ -153,7 +163,7 @@ def main():
             print(f"  SKIP {path} (missing)")
             continue
         with open(path) as f:
-            n_added_train, n_added_valid, n_dropped = 0, 0, 0
+            n_added_train, n_added_valid, n_added_test, n_dropped = 0, 0, 0, 0
             for line in f:
                 if not line.strip(): continue
                 try:
@@ -166,15 +176,21 @@ def main():
                 if not norm or not validate_messages(norm["messages"]):
                     n_dropped += 1
                     continue
-                if split == "train":
+                final = norm["split"]
+                if final == "train":
                     train_rows.append(norm); n_added_train += 1
-                else:
+                elif final == "valid":
                     valid_rows.append(norm); n_added_valid += 1
-            print(f"  {label:30s} +train {n_added_train:5d}  +valid {n_added_valid:4d}  dropped {n_dropped}")
+                elif final == "test":
+                    test_rows.append(norm); n_added_test += 1
+                else:
+                    n_dropped += 1
+            print(f"  {label:30s} +train {n_added_train:5d}  +valid {n_added_valid:4d}  +test {n_added_test:3d}  dropped {n_dropped}")
 
     # Shuffle within split for good batch mixing
     rng.shuffle(train_rows)
     rng.shuffle(valid_rows)
+    rng.shuffle(test_rows)
 
     # Cast messages.content to JSON string for storage portability — HF Datasets
     # has trouble with mixed-type lists across many rows
@@ -188,7 +204,10 @@ def main():
 
     train_ds = Dataset.from_list(serialize(train_rows))
     valid_ds = Dataset.from_list(serialize(valid_rows))
-    ds = DatasetDict({"train": train_ds, "valid": valid_ds})
+    splits = {"train": train_ds, "valid": valid_ds}
+    if test_rows:
+        splits["test"] = Dataset.from_list(serialize(test_rows))
+    ds = DatasetDict(splits)
 
     OUT_DIR.parent.mkdir(parents=True, exist_ok=True)
     if OUT_DIR.exists():
@@ -196,7 +215,8 @@ def main():
     print(f"Saving to {OUT_DIR} …")
     ds.save_to_disk(str(OUT_DIR))
 
-    print(f"\n✅ stage2-pro-v3:  train={len(train_ds):,}  valid={len(valid_ds):,}")
+    test_n = len(splits["test"]) if "test" in splits else 0
+    print(f"\n✅ stage2-pro-v3:  train={len(train_ds):,}  valid={len(valid_ds):,}  test={test_n:,}")
     # Task-type histogram (top 12)
     from collections import Counter
     by_task = Counter(r["task"] for r in train_rows)

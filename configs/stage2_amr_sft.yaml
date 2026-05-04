@@ -37,18 +37,21 @@ dataset:
   #   clean    → rahul24raj/lysos-amr-stage2-clean    (scaffold-split, no leak)
   #   reasoning → rahul24raj/lysos-amr-stage2-reasoning (just reasoning)
   #   pro      → rahul24raj/lysos-amr-stage2-pro      (clean + reasoning, no named-drug)
-  #   pro-v2   → rahul24raj/lysos-amr-stage2-pro-v2   (DEFAULT: pro + named-drug elite CoT)
+  #   pro-v2   → rahul24raj/lysos-amr-stage2-pro-v2   (pro + named-drug elite CoT)
+  #   pro-v3   → rahul24raj/lysos-amr-stage2-pro-v3   (DEFAULT: pro-v2 + 32 agentic gaps + safety/refusal/tool-arg/held-out-eval)
   source: local
-  path: data/processed/amr-stage2-pro-v2
-  hub_id: rahul24raj/lysos-amr-stage2-pro-v2
+  path: data/processed/amr-stage2-pro-v3
+  hub_id: rahul24raj/lysos-amr-stage2-pro-v3
   split_train: train
   split_eval: valid
   text_field: messages
   response_template: "<start_of_turn>model\n"
   max_seq_length: 4096
   packing: true
-  # Held-out test slice for named-drug reasoning (independent eval, not loaded
-  # by trainer): data/processed/amr-stage2-pro-v2/test_named_drug.jsonl (49 rows)
+  # Held-out eval slices baked into the dataset:
+  #   • split=test (50 rows) — named-drug structural-mechanistic reasoning,
+  #     never trained on; loaded by `eval_held_out.py` for canary checks.
+  #   • independent named-drug-test JSONL: data/processed/amr-stage2-pro-v2/test_named_drug.jsonl (49 rows)
   # Multi-task mixing weights (sum = 1.0). Recalibrated 2026-05-03 after
   # named-drug-elite-CoT injection — total 27 task types in train.
   task_mix:

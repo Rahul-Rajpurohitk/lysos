@@ -26,8 +26,10 @@ model:
 # -----------------------------------------------------------------------------
 dataset:
   source: local
-  path: data/processed/amr-rl-prompts
-  hub_id: rahul24raj/lysos-rl-prompts
+  # v1 → 12,000 baseline prompts
+  # v2 → resistome-enriched + heavier negative/edit/red-team coverage (DEFAULT)
+  path: data/processed/amr-rl-prompts-v2
+  hub_id: rahul24raj/lysos-rl-prompts-v2
   split_train: train
   split_eval: valid
   prompt_field: prompt
