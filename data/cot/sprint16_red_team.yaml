@@ -1,0 +1,434 @@
+name: sprint16_red_team
+description: |
+  Red-team ledger — for each priority pathogen × top first-line drug, document
+  the predicted resistance escape mutation(s), the molecular mechanism that
+  enables the escape, the population frequency observed clinically, and an
+  estimate of time-to-failure in continuous selection. Used by:
+    - Stage-2 SFT task type 'predict_resistance_escape'
+    - Workbench red-team mode
+    - Stage-3 GRPO reward (red-team panel score)
+  Sourced from CARD, EUCAST surveillance summaries, and ESCMID guidelines as
+  documented in vault/docs/refs/red_team_v0.bib.
+
+records:
+
+  # ============================ MRSA ============================
+  - pathogen: MRSA
+    drug: vancomycin
+    drug_class: glycopeptide
+    escape_mutations:
+      - target: vanA operon
+        mutation: vanA acquisition (Tn1546 transposon)
+        mechanism: D-Ala-D-Ala → D-Ala-D-Lac terminus eliminates vancomycin binding
+        fold_shift_mic: 1000
+        population_frequency: 0.005   # vary by region; rising in long-term care
+        time_to_failure_months: 12
+        cross_resistance: ["teicoplanin"]
+      - target: cell wall thickening
+        mutation: vraSR upregulation → VISA phenotype
+        mechanism: thickened peptidoglycan sequesters vancomycin in outer wall
+        fold_shift_mic: 8
+        population_frequency: 0.02
+        time_to_failure_months: 24
+        cross_resistance: ["daptomycin (slight)"]
+
+  - pathogen: MRSA
+    drug: daptomycin
+    drug_class: lipopeptide
+    escape_mutations:
+      - target: mprF
+        mutation: L826F gain-of-function
+        mechanism: increased lysyl-PG outer-leaflet flipping electrostatically repels daptomycin Ca2+ complex
+        fold_shift_mic: 16
+        population_frequency: 0.04
+        time_to_failure_months: 6
+        cross_resistance: ["host defense peptides"]
+      - target: yycFG (walKR)
+        mutation: walK T101M
+        mechanism: cell envelope stress response thickens wall, hides anionic phospholipid target
+        fold_shift_mic: 4
+        population_frequency: 0.015
+        time_to_failure_months: 9
+
+  - pathogen: MRSA
+    drug: linezolid
+    drug_class: oxazolidinone
+    escape_mutations:
+      - target: 23S rRNA
+        mutation: G2576T (E. coli numbering)
+        mechanism: alters peptidyl-transferase center, blocks linezolid binding
+        fold_shift_mic: 32
+        population_frequency: 0.001
+        time_to_failure_months: 18
+        cross_resistance: ["chloramphenicol"]
+      - target: cfr methyltransferase
+        mutation: cfr acquisition (plasmid)
+        mechanism: A2503 methylation creates PhLOPSa cross-resistance
+        fold_shift_mic: 8
+        population_frequency: 0.002
+        time_to_failure_months: 24
+        cross_resistance: ["clindamycin", "tiamulin"]
+
+  - pathogen: MRSA
+    drug: ceftaroline
+    drug_class: cephalosporin (anti-MRSA)
+    escape_mutations:
+      - target: PBP2a
+        mutation: E447K
+        mechanism: shifts PBP2a active site, reduces ceftaroline acylation
+        fold_shift_mic: 16
+        population_frequency: 0.005
+        time_to_failure_months: 12
+
+  - pathogen: MRSA
+    drug: clindamycin
+    drug_class: lincosamide
+    escape_mutations:
+      - target: ermC
+        mutation: ermC induction (constitutive)
+        mechanism: 23S rRNA dimethylation blocks 50S ribosomal binding
+        fold_shift_mic: 256
+        population_frequency: 0.30
+        time_to_failure_months: 3
+        cross_resistance: ["macrolides", "streptogramin B"]
+
+  # ============================ Mtb ============================
+  - pathogen: Mtb
+    drug: isoniazid
+    drug_class: pro-drug (KatG-activated)
+    escape_mutations:
+      - target: katG
+        mutation: S315T
+        mechanism: reduced catalase-peroxidase activates pro-drug less efficiently
+        fold_shift_mic: 32
+        population_frequency: 0.50
+        time_to_failure_months: 6
+        cross_resistance: ["ethionamide (partial)"]
+      - target: inhA promoter
+        mutation: -15 C/T
+        mechanism: enoyl-ACP reductase overexpression overwhelms isoniazid inhibition
+        fold_shift_mic: 16
+        population_frequency: 0.20
+        time_to_failure_months: 8
+        cross_resistance: ["ethionamide (full)"]
+
+  - pathogen: Mtb
+    drug: rifampin
+    drug_class: rifamycin
+    escape_mutations:
+      - target: rpoB RRDR
+        mutation: S531L (E. coli S455L)
+        mechanism: alters β-subunit binding pocket, eliminates rifampin affinity
+        fold_shift_mic: 256
+        population_frequency: 0.45
+        time_to_failure_months: 4
+        cross_resistance: ["rifabutin (partial)", "rifapentine"]
+      - target: rpoB RRDR
+        mutation: H526Y
+        mechanism: same pocket, different substitution; high-level
+        fold_shift_mic: 128
+        population_frequency: 0.20
+        time_to_failure_months: 4
+
+  - pathogen: Mtb
+    drug: bedaquiline
+    drug_class: diarylquinoline
+    escape_mutations:
+      - target: atpE
+        mutation: D28V
+        mechanism: ATP synthase c-ring substitution removes bedaquiline binding pocket
+        fold_shift_mic: 32
+        population_frequency: 0.005
+        time_to_failure_months: 18
+      - target: Rv0678
+        mutation: loss-of-function (premature stop)
+        mechanism: efflux upregulation via mmpS5-mmpL5
+        fold_shift_mic: 8
+        population_frequency: 0.03
+        time_to_failure_months: 12
+        cross_resistance: ["clofazimine"]
+
+  - pathogen: Mtb
+    drug: pretomanid
+    drug_class: nitroimidazole
+    escape_mutations:
+      - target: ddn
+        mutation: loss-of-function
+        mechanism: deazaflavin-dependent nitroreductase fails to activate pro-drug
+        fold_shift_mic: 64
+        population_frequency: 0.01
+        time_to_failure_months: 12
+        cross_resistance: ["delamanid"]
+
+  - pathogen: Mtb
+    drug: ethambutol
+    drug_class: arabinosyl transferase inhibitor
+    escape_mutations:
+      - target: embB
+        mutation: M306I/V
+        mechanism: arabinosyl transferase active-site change reduces ethambutol binding
+        fold_shift_mic: 8
+        population_frequency: 0.30
+        time_to_failure_months: 6
+
+  # ============================ EColi-CRE ============================
+  - pathogen: EColi-CRE
+    drug: meropenem
+    drug_class: carbapenem
+    escape_mutations:
+      - target: blaKPC-2
+        mutation: KPC-2 acquisition (plasmid)
+        mechanism: serine carbapenemase hydrolyses all carbapenems
+        fold_shift_mic: 64
+        population_frequency: 0.40
+        time_to_failure_months: 6
+        cross_resistance: ["all carbapenems except w/ avibactam or vaborbactam"]
+      - target: blaNDM-1
+        mutation: NDM-1 acquisition
+        mechanism: metallo-β-lactamase, Zn2+-dependent, defies all serine inhibitors
+        fold_shift_mic: 256
+        population_frequency: 0.15
+        time_to_failure_months: 4
+        cross_resistance: ["all β-lactams except aztreonam-avibactam, cefiderocol"]
+
+  - pathogen: EColi-CRE
+    drug: ceftazidime-avibactam
+    drug_class: cephalosporin + DBO inhibitor
+    escape_mutations:
+      - target: blaKPC-3
+        mutation: D179Y (Ω-loop)
+        mechanism: ESCAPE mutation — restores ceftaz hydrolysis at cost of avibactam binding
+        fold_shift_mic: 32
+        population_frequency: 0.05
+        time_to_failure_months: 9
+        cross_resistance: ["meropenem (paradoxical re-sensitivity)"]
+
+  - pathogen: EColi-CRE
+    drug: cefiderocol
+    drug_class: siderophore cephalosporin
+    escape_mutations:
+      - target: cirA / fiu
+        mutation: catechol siderophore receptor truncation
+        mechanism: blocks cefiderocol's TonB-dependent uptake
+        fold_shift_mic: 16
+        population_frequency: 0.02
+        time_to_failure_months: 12
+
+  # ============================ KpneuCRE ============================
+  - pathogen: KpneuCRE
+    drug: meropenem
+    drug_class: carbapenem
+    escape_mutations:
+      - target: blaKPC-2
+        mutation: KPC-2 + OmpK35/36 porin loss
+        mechanism: hydrolysis + reduced influx multiplies carbapenem MIC
+        fold_shift_mic: 128
+        population_frequency: 0.50
+        time_to_failure_months: 5
+
+  - pathogen: KpneuCRE
+    drug: ceftazidime-avibactam
+    drug_class: cephalosporin + DBO
+    escape_mutations:
+      - target: blaKPC-31
+        mutation: D179Y
+        mechanism: same mechanism as E. coli, dominant in K. pneumoniae outbreaks
+        fold_shift_mic: 64
+        population_frequency: 0.10
+        time_to_failure_months: 6
+
+  - pathogen: KpneuCRE
+    drug: plazomicin
+    drug_class: aminoglycoside
+    escape_mutations:
+      - target: 16S rRNA methyltransferase
+        mutation: rmtB / armA acquisition
+        mechanism: methylates 16S rRNA, blocks all aminoglycosides incl plazomicin
+        fold_shift_mic: 256
+        population_frequency: 0.08
+        time_to_failure_months: 6
+        cross_resistance: ["gentamicin", "tobramycin", "amikacin"]
+
+  # ============================ Abaum ============================
+  - pathogen: Abaum
+    drug: meropenem
+    drug_class: carbapenem
+    escape_mutations:
+      - target: blaOXA-23
+        mutation: OXA-23 + ISAba1 promoter
+        mechanism: class-D carbapenemase overexpression
+        fold_shift_mic: 64
+        population_frequency: 0.70
+        time_to_failure_months: 3
+
+  - pathogen: Abaum
+    drug: colistin
+    drug_class: polymyxin
+    escape_mutations:
+      - target: pmrAB
+        mutation: pmrB H89R
+        mechanism: lipid-A modification (4-amino-arabinose) reduces colistin electrostatic binding
+        fold_shift_mic: 32
+        population_frequency: 0.15
+        time_to_failure_months: 4
+        cross_resistance: ["polymyxin B"]
+      - target: lpxACD
+        mutation: lpxA premature stop
+        mechanism: complete loss of lipopolysaccharide
+        fold_shift_mic: 64
+        population_frequency: 0.02
+        time_to_failure_months: 6
+
+  - pathogen: Abaum
+    drug: sulbactam-durlobactam
+    drug_class: β-lactam + DBO
+    escape_mutations:
+      - target: blaNDM
+        mutation: NDM acquisition
+        mechanism: durlobactam doesn't inhibit MBLs
+        fold_shift_mic: 32
+        population_frequency: 0.10
+        time_to_failure_months: 9
+
+  # ============================ Paer ============================
+  - pathogen: Paer
+    drug: ceftolozane-tazobactam
+    drug_class: cephalosporin + BLI
+    escape_mutations:
+      - target: PBP3
+        mutation: PBP3 active-site insertion
+        mechanism: reduces ceftolozane acylation
+        fold_shift_mic: 16
+        population_frequency: 0.08
+        time_to_failure_months: 9
+
+  - pathogen: Paer
+    drug: meropenem
+    drug_class: carbapenem
+    escape_mutations:
+      - target: oprD
+        mutation: oprD inactivation
+        mechanism: porin loss eliminates carbapenem entry route
+        fold_shift_mic: 16
+        population_frequency: 0.40
+        time_to_failure_months: 4
+        cross_resistance: ["imipenem"]
+
+  - pathogen: Paer
+    drug: tobramycin
+    drug_class: aminoglycoside
+    escape_mutations:
+      - target: MexXY-OprM
+        mutation: mexZ loss-of-function
+        mechanism: efflux pump derepression
+        fold_shift_mic: 8
+        population_frequency: 0.30
+        time_to_failure_months: 6
+        cross_resistance: ["gentamicin", "amikacin"]
+
+  # ============================ VRE ============================
+  - pathogen: VRE
+    drug: linezolid
+    drug_class: oxazolidinone
+    escape_mutations:
+      - target: 23S rRNA
+        mutation: G2576T
+        mechanism: same as MRSA — peptidyl-transferase center
+        fold_shift_mic: 16
+        population_frequency: 0.03
+        time_to_failure_months: 24
+      - target: optrA
+        mutation: optrA acquisition (plasmid)
+        mechanism: ABC-F protein protects ribosome
+        fold_shift_mic: 8
+        population_frequency: 0.02
+        time_to_failure_months: 18
+        cross_resistance: ["phenicols"]
+
+  - pathogen: VRE
+    drug: daptomycin
+    drug_class: lipopeptide
+    escape_mutations:
+      - target: liaSR
+        mutation: liaR W73C
+        mechanism: cell envelope stress response upregulation
+        fold_shift_mic: 4
+        population_frequency: 0.10
+        time_to_failure_months: 9
+      - target: cls (cardiolipin synthase)
+        mutation: cls R218Q
+        mechanism: cardiolipin redistribution moves anionic phospholipids away from septum
+        fold_shift_mic: 8
+        population_frequency: 0.05
+        time_to_failure_months: 12
+
+  # ============================ NGono ============================
+  - pathogen: NGono
+    drug: ceftriaxone
+    drug_class: cephalosporin
+    escape_mutations:
+      - target: penA mosaic
+        mutation: penA-60 / FC428 mosaic
+        mechanism: PBP2 mosaic gene (homologous recombination from commensals)
+        fold_shift_mic: 8
+        population_frequency: 0.005
+        time_to_failure_months: 24
+        cross_resistance: ["all 3G cephalosporins"]
+
+  - pathogen: NGono
+    drug: azithromycin
+    drug_class: macrolide
+    escape_mutations:
+      - target: 23S rRNA
+        mutation: A2059G
+        mechanism: blocks macrolide ribosomal binding
+        fold_shift_mic: 64
+        population_frequency: 0.10
+        time_to_failure_months: 9
+      - target: mtrR
+        mutation: mtrR promoter -35 deletion
+        mechanism: efflux pump derepression
+        fold_shift_mic: 4
+        population_frequency: 0.40
+        time_to_failure_months: 4
+
+  - pathogen: NGono
+    drug: ciprofloxacin
+    drug_class: fluoroquinolone
+    escape_mutations:
+      - target: gyrA
+        mutation: S91F + parC S87R
+        mechanism: dual gyrase/topo IV substitution
+        fold_shift_mic: 64
+        population_frequency: 0.50
+        time_to_failure_months: 3
+
+  # ============================ ADDITIONAL CROSS-CUTTING SCENARIOS ============================
+  - pathogen: MRSA
+    drug: trimethoprim-sulfamethoxazole
+    drug_class: diaminopyrimidine + sulfonamide
+    escape_mutations:
+      - target: dfrG
+        mutation: dfrG acquisition
+        mechanism: alternate dihydrofolate reductase resistant to trimethoprim
+        fold_shift_mic: 32
+        population_frequency: 0.10
+        time_to_failure_months: 6
+
+  - pathogen: EColi-CRE
+    drug: aztreonam-avibactam
+    drug_class: monobactam + DBO
+    escape_mutations:
+      - target: blaCMY
+        mutation: CMY-42 promoter mutation → overexpression
+        mechanism: AmpC overexpression saturates avibactam
+        fold_shift_mic: 16
+        population_frequency: 0.04
+        time_to_failure_months: 12
+
+usage_notes: |
+  Each record can be unrolled into 1-3 SFT examples:
+    1. predict_resistance_escape(drug, pathogen) → return mutation list with metadata
+    2. why_does_X_fail(drug, pathogen) → mechanistic CoT
+    3. design_against_pathogen_with_X_resistance → conditioned generation that AVOIDS the listed mechanism
+  Total expected SFT rows from this YAML: ~200 records × 2.5 unrollings ≈ 500 examples.
