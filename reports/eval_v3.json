@@ -1,0 +1,44 @@
+{
+  "config": {
+    "version": "v3",
+    "temperature": 0.0,
+    "temperature_secondary": 0.7,
+    "max_new_tokens": 512,
+    "n_samples": 200,
+    "novelty_threshold": 0.4,
+    "mic_holdout_n": 500,
+    "tool_call_replay_n": 100,
+    "jailbreak_n": 50,
+    "reasoning_n": 100,
+    "seed": 3986760983
+  },
+  "metrics": {
+    "chem_validity": {
+      "metric": "chem_validity",
+      "n_total": 200,
+      "n_parse": 200,
+      "n_sanitize": 200,
+      "pct_parse": 100.0,
+      "pct_sanitize": 100.0,
+      "invalid_examples": [],
+      "target": ">95% post-Stage-3"
+    },
+    "novelty_tanimoto": {
+      "metric": "novelty_tanimoto",
+      "n_valid": 200,
+      "n_novel": 0,
+      "pct_novel": 0.0,
+      "p50_max_tanimoto": 1.0,
+      "p90_max_tanimoto": 1.0,
+      "threshold": 0.4,
+      "target": ">60% Tanimoto<0.4"
+    },
+    "admet_pass_rate": {
+      "metric": "admet_pass_rate",
+      "n_total": 200,
+      "n_pass": 157,
+      "pct_pass": 78.5,
+      "target": ">70% post-Stage-3"
+    }
+  }
+}

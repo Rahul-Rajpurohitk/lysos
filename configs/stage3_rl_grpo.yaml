@@ -27,9 +27,11 @@ model:
 dataset:
   source: local
   # v1 → 12,000 baseline prompts
-  # v2 → resistome-enriched + heavier negative/edit/red-team coverage (DEFAULT)
-  path: data/processed/amr-rl-prompts-v2
-  hub_id: rahul24raj/lysos-rl-prompts-v2
+  # v2 → resistome-enriched + heavier negative/edit/red-team coverage
+  # v3 → DEFAULT: full Workbench-brief enrichment (resistome + structural target +
+  #              first-line therapy + lit snippet + constraint profile + novelty gate)
+  path: data/processed/amr-rl-prompts-v3
+  hub_id: rahul24raj/lysos-rl-prompts-v3
   split_train: train
   split_eval: valid
   prompt_field: prompt
@@ -61,47 +63,73 @@ rl:
 # Weights sum to 1.0
 # -----------------------------------------------------------------------------
 reward:
+  # 12-component reward stack (audit recommendation #31). Weights recalibrated
+  # so existing components retain ~70% of total signal; new components add
+  # diversity without crowding out the dominant MIC + drug-likeness signal.
   components:
     - name: validity
       weight: 0.05            # rdkit can parse → 1.0, else 0.0
       module: src.eval.rewards.validity:smiles_valid
     - name: structural_alerts
-      weight: 0.05            # graded chemistry-development liability:
-                              # PAINS + Brenk + NIH + Lipinski + Veber rules.
-                              # Penalizes Michael acceptors, reactive groups,
-                              # MW > 500 / logP > 5 / non-drug-like profiles.
+      weight: 0.05            # PAINS + Brenk + NIH + Lipinski + Veber rules
       module: src.eval.rewards.structural_alerts:structural_alerts_score
     - name: predicted_mic
-      weight: 0.30
-      # Dispatches automatically: ML XGBoost predictor (2048-bit Morgan FP +
-      # 8-pathogen one-hot, scaffold-CV MAE 0.62, R² 0.56) when the joblib
-      # bundle is present at data/processed/mic_predictor.joblib (default);
-      # falls back to a lipophilicity heuristic ONLY if bundle missing.
-      # Bundle on disk at session start (verified 2026-05-03).
+      weight: 0.20            # XGBoost MIC predictor (Morgan FP + 8-pathogen one-hot)
       module: src.eval.rewards.activity:predict_mic
       args:
         target_pathogen: MRSA
     - name: drug_likeness_qed
-      weight: 0.15
+      weight: 0.10
       module: src.eval.rewards.drug_likeness:qed_score
     - name: synthesizability
       weight: 0.10
       module: src.eval.rewards.synth:sa_score
     - name: hemolysis_safety
-      weight: 0.15
+      weight: 0.10
       module: src.eval.rewards.safety:hemolysis_inverse
     - name: novelty
-      weight: 0.10           # Tanimoto on ECFP4 fingerprints (bit-level overlap)
+      weight: 0.08           # Tanimoto on ECFP4 vs known-antibiotic-canonical
       module: src.eval.rewards.novelty:tanimoto_distance_to_known
       args:
-        reference_set: data/processed/known-antibiotics.smiles
+        reference_set: data/processed/known-antibiotics-canonical.parquet
         threshold: 0.6
     - name: embedding_novelty
-      weight: 0.10           # Gemini Embedding 2 cosine distance (semantic novelty)
+      weight: 0.07           # EmbeddingGemma 300m cosine distance (semantic novelty)
       module: src.eval.rewards.embedding_novelty:embedding_novelty
       args:
-        reference_set: data/processed/known-antibiotics.smiles
+        reference_set: data/processed/known-antibiotics-canonical.parquet
         threshold: 0.6
+    # NEW components (audit #31)
+    - name: boltz2_pose_conf
+      weight: 0.10           # 3D pose confidence from Boltz-2 (ipTM/pTM)
+                              # Reads pose-confidence cache populated by
+                              # scripts/run_boltz2_sweep.py (per pathogen target)
+      module: src.eval.rewards.boltz2_pose:pose_confidence
+      args:
+        cache_path: data/processed/boltz2_poses_cache.parquet
+        target_pathogen: MRSA
+        fallback: 0.5         # if cache miss, return mid-value (no signal, no penalty)
+    - name: spectrum_breadth
+      weight: 0.05            # predicted active across ≥3 priority pathogens
+      module: src.eval.rewards.spectrum:multi_pathogen_breadth
+      args:
+        pathogens: [MRSA, Mtb, EColi-CRE, KpneuCRE, Abaum, Paer, VRE, NGono]
+        active_threshold_log_mic: 0.7    # MIC < 5 µg/mL
+        min_pathogens_active: 3
+    - name: resistance_robustness
+      weight: 0.05            # predicted to evade ≥2 known resistance mechanisms
+                              # via predict_resistance_escape model heuristic
+      module: src.eval.rewards.resistance:robustness_score
+      args:
+        target_pathogen: MRSA
+        min_evaded_mechanisms: 2
+    - name: pareto_entry
+      weight: 0.05            # binary: enters frontier vs prior batch
+                              # Encourages exploration along Pareto front
+      module: src.eval.rewards.pareto:pareto_entry_bonus
+      args:
+        objectives: [predicted_mic, drug_likeness_qed, novelty, hemolysis_safety]
+        history_path: ./checkpoints/stage3-rl-grpo/pareto_history.json
 
   # If a reward component crashes, what to return for that sample
   on_error:

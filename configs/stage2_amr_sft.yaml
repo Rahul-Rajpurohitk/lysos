@@ -38,10 +38,11 @@ dataset:
   #   reasoning → rahul24raj/lysos-amr-stage2-reasoning (just reasoning)
   #   pro      → rahul24raj/lysos-amr-stage2-pro      (clean + reasoning, no named-drug)
   #   pro-v2   → rahul24raj/lysos-amr-stage2-pro-v2   (pro + named-drug elite CoT)
-  #   pro-v3   → rahul24raj/lysos-amr-stage2-pro-v3   (DEFAULT: pro-v2 + 32 agentic gaps + safety/refusal/tool-arg/held-out-eval)
+  #   pro-v3   → rahul24raj/lysos-amr-stage2-pro-v3   (pro-v2 + 32 agentic gaps + safety/refusal/tool-arg/held-out-eval)
+  #   pro-v4   → rahul24raj/lysos-amr-stage2-pro-v4   (DEFAULT: pro-v3 + tool-call-results + long-form-traces + pk-panel + decoys + activity-cliffs + smiles-augmentation + pathogen-primer + canonical-chemistry)
   source: local
-  path: data/processed/amr-stage2-pro-v3
-  hub_id: rahul24raj/lysos-amr-stage2-pro-v3
+  path: data/processed/amr-stage2-pro-v4
+  hub_id: rahul24raj/lysos-amr-stage2-pro-v4
   split_train: train
   split_eval: valid
   text_field: messages
