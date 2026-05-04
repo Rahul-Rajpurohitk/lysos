@@ -100,6 +100,28 @@ class WorkbenchState(BaseModel):
     # Each transition is appended to events for replay/branching
     events: list[dict] = Field(default_factory=list)
 
+    # User mid-loop interventions (consumed by Designer at next iteration).
+    # Each intervention is {"kind": "constraint"|"directive", "payload": ...}.
+    intervention_queue: list[dict] = Field(default_factory=list)
+
+    def push_intervention(self, kind: str, payload: Any) -> None:
+        """Queue a mid-loop user instruction to inject on next Designer turn."""
+        self.intervention_queue.append({"kind": kind, "payload": payload})
+        self.events.append({"type": "intervention_queued", "kind": kind})
+
+    def consume_interventions(self) -> list[dict]:
+        """Drain pending interventions; called by Designer at each iteration."""
+        items = list(self.intervention_queue)
+        self.intervention_queue.clear()
+        # Materialize constraint-kind interventions into proper Constraint
+        for item in items:
+            if item.get("kind") == "constraint":
+                try:
+                    self.constraints.append(Constraint(**item["payload"]))
+                except Exception:
+                    pass
+        return items
+
     def add_message(self, msg: AgentMessage) -> None:
         self.history.append(msg)
         self.events.append({

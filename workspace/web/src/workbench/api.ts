@@ -37,6 +37,48 @@ export async function startSession(id: string): Promise<{ status: string }> {
   return res.json()
 }
 
+export interface SessionListItem {
+  session_id: string
+  target_pathogen: Pathogen
+  mode: Mode
+  autonomy: Autonomy
+  iteration: number
+  max_iterations: number
+  n_candidates: number
+  n_pareto: number
+  last_composite: number
+  terminated: boolean
+  termination_reason: string | null
+}
+
+export async function listSessions(): Promise<{ total: number; sessions: SessionListItem[] }> {
+  const res = await fetch(`${API_BASE}/sessions`)
+  if (!res.ok) throw new Error(`listSessions ${res.status}`)
+  return res.json()
+}
+
+export type Intervention =
+  | { kind: 'constraint'; payload: Constraint }
+  | { kind: 'directive'; payload: string }
+
+export async function intervene(
+  sessionId: string, intervention: Intervention,
+): Promise<{ session_id: string; queued: boolean; queue_depth: number }> {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/intervene`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(intervention),
+  })
+  if (!res.ok) throw new Error(`intervene ${res.status}`)
+  return res.json()
+}
+
+export async function fetchNotebook(sessionId: string): Promise<unknown> {
+  const res = await fetch(`${API_BASE}/sessions/${sessionId}/notebook`)
+  if (!res.ok) throw new Error(`fetchNotebook ${res.status}`)
+  return res.json()
+}
+
 export async function listPathogens(): Promise<{ pathogens: PathogenInfo[] }> {
   const res = await fetch(`${API_BASE}/pathogens`)
   if (!res.ok) throw new Error(`listPathogens ${res.status}`)
@@ -69,7 +111,7 @@ export function streamEvents(
   const types: SSEEvent['type'][] = [
     'agent_message', 'tool_call_result', 'tool_call_start',
     'candidate_added', 'iteration_start', 'agent_idle',
-    'session_complete', 'error', 'ping',
+    'intervention', 'session_complete', 'error', 'ping',
   ]
   for (const t of types) {
     es.addEventListener(t, (e) => {

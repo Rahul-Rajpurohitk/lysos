@@ -226,9 +226,20 @@ class VLLMEndpoint(LLMEndpoint):
 # ---------------------------------------------------------------------------
 
 class MockEndpoint(LLMEndpoint):
+    """Deterministic mock LLM that exercises the full agent loop:
+
+    - Designer first turn → calls one grounding tool (find_similar_drugs or
+      check_resistance_genes), then turn 2 → emits a PROPOSAL.
+    - Critic → returns a parseable WEAKNESS/TRANSFORMATION block, escalating
+      to VERDICT: ACCEPT once composite is high enough.
+
+    No randomness — fully reproducible across test runs.
+    """
+
     def __init__(self, model: str = "mock-llm", **kwargs):
         super().__init__(model=model, **kwargs)
         self._counter = 0
+        self._designer_turn_in_iter = 0  # tracks tool-vs-proposal turn
 
     async def acomplete(
         self,
@@ -236,13 +247,25 @@ class MockEndpoint(LLMEndpoint):
         tools: Optional[list[dict]] = None,
         system: Optional[str] = None,
     ) -> dict:
-        self._counter += 1
-        is_critic = (system or "").startswith("You are the **Critic**")
+        sys_lower = (system or "").lower()
+        is_critic = "critic" in sys_lower and "designer" not in sys_lower
+        is_designer = "designer" in sys_lower or sys_lower.startswith("you are the **designer**")
 
         if is_critic:
-            # Critic always emits a parseable WEAKNESS/TRANSFORMATION block
+            self._counter += 1
             ops = ["add_hydroxyl", "add_fluorine", "add_methyl", "add_amine"]
             op = ops[self._counter % len(ops)]
+            # Once we have several iterations, Critic accepts so loop terminates
+            if self._counter >= 4:
+                return {
+                    "content": (
+                        "VERDICT: ACCEPT\n"
+                        "RATIONALE: [mock] Composite plateau reached and core "
+                        "scaffold satisfies constraints. Final answer."
+                    ),
+                    "tool_calls": [],
+                    "finish_reason": "end_turn",
+                }
             return {
                 "content": (
                     f"WEAKNESS: drug_likeness_qed (current=0.45, target=0.70)\n"
@@ -254,21 +277,64 @@ class MockEndpoint(LLMEndpoint):
                 "finish_reason": "end_turn",
             }
 
-        # Designer: optionally call a tool, then propose a SMILES
+        # Designer path
+        # Detect whether this is a fresh iteration (first user message) or a
+        # tool-result follow-up — by counting prior assistant turns in `messages`
+        n_assistant = sum(1 for m in messages if m.get("role") == "assistant")
+        last_msg = messages[-1] if messages else {}
+        last_user_block = last_msg.get("content") if last_msg.get("role") == "user" else None
+        already_used_tools = isinstance(last_user_block, list) and any(
+            (b.get("type") == "tool_result" if isinstance(b, dict) else False)
+            for b in last_user_block
+        )
+
+        # Turn 1 of an iteration → call a grounding tool first (only if tools
+        # are provided AND we haven't already received tool results).
+        if tools and n_assistant == 0 and not already_used_tools:
+            self._counter += 1
+            # Pick the first useful tool from what's offered
+            preferred = ["check_resistance_genes", "find_similar_drugs",
+                         "find_active_against_mdr", "predict_admet"]
+            chosen = None
+            for name in preferred:
+                for t in tools:
+                    if t.get("name") == name:
+                        chosen = t
+                        break
+                if chosen:
+                    break
+            if chosen is None:
+                chosen = tools[0]
+
+            args = _mock_args_for(chosen)
+            return {
+                "content": (
+                    f"[mock-designer turn 1] Grounding via {chosen['name']} "
+                    f"to anticipate resistance + nearest known drugs."
+                ),
+                "tool_calls": [{
+                    "id": f"toolu_mock_{self._counter}",
+                    "name": chosen["name"],
+                    "args": args,
+                }],
+                "finish_reason": "tool_use",
+            }
+
+        # Turn 2+: emit the SMILES PROPOSAL
         smiles_panel = [
-            "CC(=O)NCC1CN(c2ccc(N3CCOCC3)c(F)c2)C(=O)O1",  # linezolid
-            "CC1(C)SC2C(NC(=O)C(N)c3ccc(O)cc3)C(=O)N2C1C(=O)O",  # amoxicillin
-            "O=C(O)c1cn(C2CC2)c2cc(N3CCNCC3)c(F)cc2c1=O",  # ciprofloxacin
-            "CC1c2cccc(O)c2C(=O)C2=C(O)C3(O)C(=O)C(=C(N)O)C(=O)C(N(C)C)C3CC12O",  # doxy
+            "CC(=O)NC[C@H]1CN(c2ccc(N3CCOCC3)c(F)c2)C(=O)O1",       # linezolid
+            "CC1(C)S[C@@H]2[C@H](NC(=O)[C@@H](N)c3ccc(O)cc3)C(=O)N2[C@H]1C(=O)O",  # amoxicillin
+            "O=C(O)c1cn(C2CC2)c2cc(N3CCNCC3)c(F)cc2c1=O",            # ciprofloxacin
+            "CC1[C@@H]2CC(=C(N2C1=O)C(=O)O)S[C@H]3CN[C@@H](C3)C(=O)N(C)C",  # meropenem
         ]
         proposal = smiles_panel[(self._counter - 1) % len(smiles_panel)]
         return {
             "content": (
-                f"[mock-designer] Iteration {self._counter}.\n\n"
+                f"[mock-designer turn 2] Iteration {self._counter}.\n\n"
                 f"PROPOSAL: {proposal}\n"
-                f"RATIONALE: Mock proposal — drawn from a panel of validated antibiotic "
-                f"scaffolds for end-to-end UI demo. Real Designer (Gemma 4 31B-it) will "
-                f"propose novel structures Day 4."
+                f"RATIONALE: Mock proposal grounded in resistome briefing + "
+                f"nearest-neighbour scan. Real Designer (Gemma 4 31B-it) will "
+                f"emit novel chemistry on Day 4."
             ),
             "tool_calls": [],
             "finish_reason": "end_turn",

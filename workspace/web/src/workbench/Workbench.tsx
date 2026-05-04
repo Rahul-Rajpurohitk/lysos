@@ -26,6 +26,7 @@ import { MoAPanel } from './components/MoAPanel'
 import { FunctionalGroupPalette } from './components/FunctionalGroupPalette'
 import { ReplayScrubber } from './components/ReplayScrubber'
 import { ConstraintBar } from './components/ConstraintBar'
+import { InterveneBar } from './components/InterveneBar'
 import { SynthesisTree } from './components/SynthesisTree'
 import { KnowledgeGraph } from './components/KnowledgeGraph'
 import type { Constraint } from './types'
@@ -95,6 +96,23 @@ export default function Workbench() {
           case 'tool_call_result':
             addToolCall(ev.data as ToolCallRecord)
             break
+          case 'intervention': {
+            // Mirror the user's intervention as a chat message so it shows up
+            // alongside the multi-agent stream.
+            const d = ev.data as { kind: string; payload: unknown }
+            const content = d.kind === 'directive'
+              ? `📣 ${String(d.payload)}`
+              : `📣 new constraint: ${JSON.stringify(d.payload)}`
+            addMessage({
+              id: `intervention-${Date.now()}`,
+              role: 'user',
+              content,
+              tool_calls: [],
+              confidence: null,
+              created_at: new Date().toISOString(),
+            })
+            break
+          }
           case 'agent_idle':
           case 'session_complete':
             setStatus('terminated')
@@ -390,13 +408,17 @@ export default function Workbench() {
         </div>
       </div>
 
-      {/* Constraint bar + replay scrubber (above bottom drawers) */}
+      {/* Constraint bar + intervene bar (running) + replay scrubber */}
       <div className="bg-white border-t border-slate-200">
         <ConstraintBar
           constraints={constraints}
           onAdd={(c) => setConstraints((prev) => [...prev, c])}
           onRemove={(idx) => setConstraints((prev) => prev.filter((_, i) => i !== idx))}
           disabled={status === 'running'}
+        />
+        <InterveneBar
+          sessionId={sessionId}
+          running={status === 'running'}
         />
         <ReplayScrubber
           candidates={candidates}

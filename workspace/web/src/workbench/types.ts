@@ -61,6 +61,11 @@ export interface Constraint {
   value: unknown
 }
 
+export interface InterventionRecord {
+  kind: 'constraint' | 'directive'
+  payload: Constraint | string
+}
+
 export interface WorkbenchState {
   session_id: string
   target_pathogen: Pathogen
@@ -76,6 +81,7 @@ export interface WorkbenchState {
   max_iterations: number
   terminated: boolean
   termination_reason: string | null
+  intervention_queue: InterventionRecord[]
 }
 
 export type SSEEventType =
@@ -85,6 +91,7 @@ export type SSEEventType =
   | 'candidate_added'
   | 'iteration_start'
   | 'agent_idle'
+  | 'intervention'
   | 'session_complete'
   | 'error'
   | 'ping'

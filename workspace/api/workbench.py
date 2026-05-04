@@ -25,6 +25,7 @@ if str(_WORKSPACE) not in sys.path:
 from agents import WorkbenchState, get_llm  # noqa: E402
 from agents.graph import run_workbench_loop  # noqa: E402
 from agents.state import Constraint  # noqa: E402
+from api.notebook import export_session_notebook  # noqa: E402
 from tools import registry  # noqa: E402
 
 # Postgres persistence (no-op if LYSOS_DB_URL unset)
@@ -73,6 +74,16 @@ class StartSessionResponse(BaseModel):
     status: str
 
 
+class InterventionRequest(BaseModel):
+    """Mid-loop user injection.
+
+    kind="constraint" → payload must be {type, field, value} (matches Constraint).
+    kind="directive"  → payload is a free-text instruction the Designer reads.
+    """
+    kind: str  # "constraint" | "directive"
+    payload: Any
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -114,12 +125,85 @@ async def create_session(req: CreateSessionRequest) -> CreateSessionResponse:
     return CreateSessionResponse(session_id=sid)
 
 
+@router.get("/sessions")
+async def list_sessions() -> dict:
+    """List in-memory sessions (newest first) for the replay/resume picker."""
+    out = []
+    for sid, state in _sessions.items():
+        last_score = (
+            state.candidates[-1].scores.composite if state.candidates else 0.0
+        )
+        out.append({
+            "session_id": sid,
+            "target_pathogen": state.target_pathogen,
+            "mode": state.mode,
+            "autonomy": state.autonomy,
+            "iteration": state.iteration,
+            "max_iterations": state.max_iterations,
+            "n_candidates": len(state.candidates),
+            "n_pareto": len(state.pareto_frontier),
+            "last_composite": last_score,
+            "terminated": state.terminated,
+            "termination_reason": state.termination_reason,
+        })
+    out.sort(key=lambda r: (not r["terminated"], r["iteration"]), reverse=True)
+    return {"total": len(out), "sessions": out}
+
+
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str) -> dict:
     state = _sessions.get(session_id)
     if state is None:
         raise HTTPException(404, "session not found")
     return state.model_dump(mode="json")
+
+
+@router.post("/sessions/{session_id}/intervene")
+async def intervene(session_id: str, req: InterventionRequest) -> dict:
+    """Inject a constraint or directive mid-loop. Consumed by Designer
+    on its next iteration via state.consume_interventions().
+    """
+    state = _sessions.get(session_id)
+    if state is None:
+        raise HTTPException(404, "session not found")
+    if state.terminated:
+        raise HTTPException(409, "session already terminated")
+    if req.kind not in ("constraint", "directive"):
+        raise HTTPException(422, f"unknown kind: {req.kind!r}")
+
+    # Validate constraint payload shape early so we surface errors to UI
+    if req.kind == "constraint":
+        try:
+            Constraint(**req.payload)
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(422, f"invalid constraint payload: {exc}")
+
+    state.push_intervention(req.kind, req.payload)
+
+    # Mirror to SSE so the UI sees it appear in the chat panel immediately
+    queue = _get_or_create_queue(session_id)
+    await queue.put({
+        "type": "intervention",
+        "agent": "user",
+        "data": {"kind": req.kind, "payload": req.payload,
+                 "queue_depth": len(state.intervention_queue)},
+    })
+
+    return {
+        "session_id": session_id,
+        "queued": True,
+        "queue_depth": len(state.intervention_queue),
+    }
+
+
+@router.get("/sessions/{session_id}/notebook")
+async def export_notebook(session_id: str) -> dict:
+    """Return the session as a Jupyter notebook (nbformat v4)."""
+    state = _sessions.get(session_id)
+    if state is None:
+        raise HTTPException(404, "session not found")
+    nb = export_session_notebook(state.model_dump(mode="json"))
+    return nb
 
 
 @router.post("/sessions/{session_id}/start", response_model=StartSessionResponse)
