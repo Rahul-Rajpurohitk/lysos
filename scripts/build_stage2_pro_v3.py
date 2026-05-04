@@ -40,6 +40,7 @@ JSONL_FILES = [
     ("critic",                    ROOT / "data" / "synthetic" / "agentic_critic_traces.jsonl"),
     ("strategist",                ROOT / "data" / "synthetic" / "agentic_strategist_traces.jsonl"),
     ("designer_resistome_cond",   ROOT / "data" / "synthetic" / "agentic_resistome_conditioned.jsonl"),
+    ("red_team",                  ROOT / "data" / "synthetic" / "agentic_red_team.jsonl"),
 ]
 
 def normalize_pro_v2_row(row: dict, split: str) -> dict | None:
