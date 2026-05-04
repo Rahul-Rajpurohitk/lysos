@@ -21,6 +21,7 @@ import traceback
 from dataclasses import dataclass, field
 from typing import Any, Callable, get_type_hints, Optional
 
+from typing import Optional
 from pydantic import BaseModel, ValidationError
 
 log = logging.getLogger("workbench.tools")

@@ -1,2 +1,3 @@
-"""Sandbox tools — Pyodide-compatible Python execution."""
+"""Sandbox tools — Python execution + 3D scene rendering."""
 from . import execute_python
+from . import render_3d_scene

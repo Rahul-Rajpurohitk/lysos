@@ -20,6 +20,8 @@ import { LineageTree } from './components/LineageTree'
 import { ChatPanel } from './components/ChatPanel'
 import { ToolCallTimeline } from './components/ToolCallTimeline'
 import { CandidateList } from './components/CandidateList'
+import { MultiAgentColumns } from './components/MultiAgentColumns'
+import { ParetoExplorer } from './components/ParetoExplorer'
 
 const PATHOGEN_TARGET_PDB: Record<Pathogen, string> = {
   MRSA: '1VQQ',
@@ -45,6 +47,8 @@ export default function Workbench() {
   const [mode, setMode] = useState<Mode>('design')
   const [autonomy, setAutonomy] = useState<Autonomy>('copilot')
   const [maxIterations, setMaxIterations] = useState(4)
+  const [chatView, setChatView] = useState<'stream' | 'columns'>('stream')
+  const [rightTab, setRightTab] = useState<'radar' | 'pareto'>('radar')
 
   useEffect(() => {
     listPathogens().then((r) => setPathogens(r.pathogens)).catch((e) => {
@@ -203,16 +207,34 @@ export default function Workbench() {
 
       {/* Main 3-column layout */}
       <div className="flex-1 grid grid-cols-12 gap-2 p-2 min-h-0">
-        {/* LEFT — chat panel */}
-        <div className="col-span-3 bg-white border border-slate-200 rounded flex flex-col min-h-0">
-          <div className="px-3 py-2 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            Multi-agent conversation
+        {/* LEFT — chat panel (stream OR multi-agent columns) */}
+        <div className={`${chatView === 'columns' ? 'col-span-6' : 'col-span-3'} bg-white border border-slate-200 rounded flex flex-col min-h-0 transition-all`}>
+          <div className="px-3 py-2 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+            <span>{chatView === 'columns' ? 'Multi-agent debate' : 'Conversation'}</span>
+            <div className="flex gap-1">
+              <button
+                onClick={() => setChatView('stream')}
+                className={`px-2 py-0.5 text-[10px] rounded ${chatView === 'stream' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+              >
+                Stream
+              </button>
+              <button
+                onClick={() => setChatView('columns')}
+                className={`px-2 py-0.5 text-[10px] rounded ${chatView === 'columns' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+              >
+                Columns
+              </button>
+            </div>
           </div>
-          <ChatPanel messages={history} status={status} />
+          {chatView === 'stream' ? (
+            <ChatPanel messages={history} status={status} />
+          ) : (
+            <MultiAgentColumns messages={history} />
+          )}
         </div>
 
-        {/* CENTER — 3D + 2D viewer */}
-        <div className="col-span-6 flex flex-col gap-2 min-h-0">
+        {/* CENTER — 3D + 2D viewer (shrinks when columns view active) */}
+        <div className={`${chatView === 'columns' ? 'col-span-3' : 'col-span-6'} flex flex-col gap-2 min-h-0 transition-all`}>
           <div className="flex-1 bg-white border border-slate-200 rounded relative">
             <div className="absolute top-2 left-2 z-10 text-xs text-slate-500 bg-white/95 px-2 py-1 rounded">
               3D · {selectedCandidate ? selectedCandidate.smiles.slice(0, 36) : 'select a candidate'}
@@ -234,23 +256,48 @@ export default function Workbench() {
 
         {/* RIGHT — reward radar + candidate list */}
         <div className="col-span-3 flex flex-col gap-2 min-h-0">
-          <div className="bg-white border border-slate-200 rounded p-2">
-            <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-              Reward radar
+          <div className="bg-white border border-slate-200 rounded flex flex-col">
+            <div className="px-3 py-2 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                {rightTab === 'radar' ? 'Reward radar' : 'Pareto explorer'}
+              </span>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setRightTab('radar')}
+                  className={`px-2 py-0.5 text-[10px] rounded ${rightTab === 'radar' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                >
+                  Radar
+                </button>
+                <button
+                  onClick={() => setRightTab('pareto')}
+                  className={`px-2 py-0.5 text-[10px] rounded ${rightTab === 'pareto' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                >
+                  Pareto
+                </button>
+              </div>
             </div>
-            {selectedCandidate
-              ? <RewardRadar
-                  scores={selectedCandidate.scores}
-                  comparison={
-                    candidates.length >= 2
-                      ? candidates[candidates.length - 2].scores
-                      : undefined
-                  }
+            <div className="p-2 min-h-[300px]">
+              {rightTab === 'radar' ? (
+                selectedCandidate
+                  ? <RewardRadar
+                      scores={selectedCandidate.scores}
+                      comparison={
+                        candidates.length >= 2
+                          ? candidates[candidates.length - 2].scores
+                          : undefined
+                      }
+                    />
+                  : <div className="h-[300px] flex items-center justify-center text-slate-400 text-xs">
+                      Radar appears with candidate
+                    </div>
+              ) : (
+                <ParetoExplorer
+                  candidates={candidates}
+                  paretoIds={paretoFrontier}
+                  onSelect={setSelected}
                 />
-              : <div className="h-[300px] flex items-center justify-center text-slate-400 text-xs">
-                  Radar appears with candidate
-                </div>
-            }
+              )}
+            </div>
           </div>
 
           <div className="flex-1 bg-white border border-slate-200 rounded overflow-y-auto min-h-0">
