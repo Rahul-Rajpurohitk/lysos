@@ -22,6 +22,11 @@ import { ToolCallTimeline } from './components/ToolCallTimeline'
 import { CandidateList } from './components/CandidateList'
 import { MultiAgentColumns } from './components/MultiAgentColumns'
 import { ParetoExplorer } from './components/ParetoExplorer'
+import { MoAPanel } from './components/MoAPanel'
+import { FunctionalGroupPalette } from './components/FunctionalGroupPalette'
+import { ReplayScrubber } from './components/ReplayScrubber'
+import { ConstraintBar } from './components/ConstraintBar'
+import type { Constraint } from './types'
 
 const PATHOGEN_TARGET_PDB: Record<Pathogen, string> = {
   MRSA: '1VQQ',
@@ -49,6 +54,8 @@ export default function Workbench() {
   const [maxIterations, setMaxIterations] = useState(4)
   const [chatView, setChatView] = useState<'stream' | 'columns'>('stream')
   const [rightTab, setRightTab] = useState<'radar' | 'pareto'>('radar')
+  const [showMoA, setShowMoA] = useState(false)
+  const [constraints, setConstraints] = useState<Constraint[]>([])
 
   useEffect(() => {
     listPathogens().then((r) => setPathogens(r.pathogens)).catch((e) => {
@@ -71,6 +78,7 @@ export default function Workbench() {
         mode,
         autonomy,
         max_iterations: maxIterations,
+        constraints,
       })
       setSessionId(session_id)
 
@@ -246,11 +254,29 @@ export default function Workbench() {
             />
           </div>
 
-          <div className="bg-white border border-slate-200 rounded p-3 flex items-center justify-center min-h-[160px]">
-            {selectedCandidate
-              ? <Mol2D smiles={selectedCandidate.smiles} width={420} height={140} />
-              : <span className="text-slate-500 text-xs">2D structure appears here.</span>
-            }
+          <div className="bg-white border border-slate-200 rounded flex flex-col min-h-[200px]">
+            <div className="flex-1 flex items-center justify-center p-3">
+              {selectedCandidate
+                ? <Mol2D smiles={selectedCandidate.smiles} width={420} height={140} />
+                : <span className="text-slate-500 text-xs">2D structure appears here.</span>
+              }
+            </div>
+            {selectedCandidate && (
+              <FunctionalGroupPalette
+                smiles={selectedCandidate.smiles}
+                onTransform={(newSmi, op) => {
+                  console.log('Drag-edit:', op, '→', newSmi)
+                }}
+              />
+            )}
+            {selectedCandidate && (
+              <button
+                onClick={() => setShowMoA(true)}
+                className="px-3 py-1.5 border-t border-slate-200 text-xs text-emerald-700 hover:bg-emerald-50 flex items-center justify-center gap-1.5"
+              >
+                Show mechanism-of-action panel →
+              </button>
+            )}
           </div>
         </div>
 
@@ -336,10 +362,34 @@ export default function Workbench() {
         </div>
       </div>
 
+      {/* Constraint bar + replay scrubber (above bottom drawers) */}
+      <div className="bg-white border-t border-slate-200">
+        <ConstraintBar
+          constraints={constraints}
+          onAdd={(c) => setConstraints((prev) => [...prev, c])}
+          onRemove={(idx) => setConstraints((prev) => prev.filter((_, i) => i !== idx))}
+          disabled={status === 'running'}
+        />
+        <ReplayScrubber
+          candidates={candidates}
+          selectedId={selectedCandidateId ?? selectedCandidate?.id ?? null}
+          onSelect={setSelected}
+        />
+      </div>
+
       {errorMessage && (
         <div className="bg-rose-50 border-t border-rose-200 px-4 py-2 text-rose-700 text-sm">
           ⚠ {errorMessage}
         </div>
+      )}
+
+      {/* MoA side panel (overlay) */}
+      {showMoA && selectedCandidate && (
+        <MoAPanel
+          smiles={selectedCandidate.smiles}
+          pathogen={target}
+          onClose={() => setShowMoA(false)}
+        />
       )}
     </div>
   )

@@ -179,9 +179,43 @@ make web-install web-build
 make api-dev
 ```
 
+## Lysos Workbench — agentic playground
+
+A live multi-agent environment where the trained Lysos model designs, evaluates,
+edits, and red-teams antibacterial candidates against drug-resistant pathogens.
+
+- **25 MCP-compatible tools** across 6 categories (5 AMR-specific — first set in
+  the Open Agent Skills standard for antimicrobial work).
+- **4-agent state machine** (Designer / Critic / Editor / Strategist) — visible
+  multi-agent debate, time-travel, branching.
+- **Build vs. break dual mode** — design new candidates OR red-team existing
+  drugs for predicted resistance escape.
+- **3-pane UI** — Mol* + 3Dmol.js + RDKit-JS canvas + Recharts radar +
+  Pareto explorer + lineage tree + tool-call timeline + drag-edit functional
+  group palette + replay scrubber + constraint bar + MoA side panel.
+- **Light-theme React 19 + Vite + Tailwind**, 2,392 modules, ~178 KB gzipped.
+- **Postgres + pgvector(3072)** persistence (sessions / candidates / agent_events
+  / tool_calls). Lazy-connect — no-op if Postgres unavailable.
+- **Docker Compose** boots Postgres + Redis + API + Web in one command.
+
+```bash
+cd workspace && docker compose up
+# UI:  http://localhost:5173/workbench
+# API: http://localhost:7860/workbench/skills
+```
+
+LLM backend selectable via `LYSOS_LLM_BACKEND` env:
+- `claude` (Anthropic Claude Sonnet 4.7 — default pre-Day-4 placeholder)
+- `vllm` (Gemma 4 31B-it on AMD MI300X via vLLM ROCm — Day-4 swap)
+- `mock` (deterministic, for tests)
+
+See [`docs/workbench-spec.md`](docs/workbench-spec.md) for the full 20-section
+spec (market research, architecture, tool registry, build phases).
+
 ## Documents
 
-- `docs/tech-spec.md` — locked technical specification (architecture, training stages, reward stack)
+- `docs/workbench-spec.md` — Lysos Workbench full spec (38 KB, 20 sections)
+- `docs/tech-spec.md` — locked technical specification (training pipeline)
 - `docs/data-pipeline.md` — end-to-end data flow (sources → loaders → processed → HF Hub)
 - `docs/pitch-deck.md` — 10-slide submission deck (problem, solution, demo, architecture, business, ask)
 - `docs/demo-video-storyboard.md` — beat-by-beat 5-min MP4 plan with on-screen + voiceover

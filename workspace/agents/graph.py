@@ -350,6 +350,83 @@ async def run_strategist_decide(
 # Top-level runner
 # ---------------------------------------------------------------------------
 
+async def run_red_team_loop(
+    state: WorkbenchState,
+    emit: EventCallback,
+    seed_smiles: Optional[str] = None,
+) -> WorkbenchState:
+    """Red-team workflow: instead of designing new candidates, predict the
+    most likely resistance-escape mutations against an EXISTING drug or
+    candidate. Run for each known approved drug + the most recent candidate.
+    """
+    reg = _registry()
+
+    # Pull resistome if not loaded
+    if state.resistome_summary is None:
+        await run_strategist_init(state, get_llm("mock"), emit)
+
+    # Build the panel of drugs to red-team
+    panel: list[dict] = []
+    if seed_smiles:
+        panel.append({"name": "user-supplied", "smiles": seed_smiles})
+
+    # Pull active known drugs for the pathogen
+    active_tool = reg.get("find_active_against_mdr")
+    if active_tool:
+        rec = active_tool.call({"pathogens": [state.target_pathogen],
+                                "status_filter": "approved"})
+        for d in (rec.get("result") or {}).get("drugs", [])[:5]:
+            panel.append({"name": d["name"], "smiles": ""})  # name-only red-team
+
+    state.add_message(AgentMessage(
+        role="strategist",
+        content=(
+            f"Red-team mode active for {state.target_pathogen}. "
+            f"Analyzing {len(panel)} drug(s) for predicted escape mutations."
+        ),
+    ))
+    await emit({"type": "agent_message", "agent": "strategist",
+                "data": state.history[-1].model_dump(mode="json")})
+
+    escape_tool = reg.get("predict_resistance_escape")
+    for entry in panel:
+        if not entry["smiles"]:
+            # No SMILES, skip predictive escape for name-only entries
+            continue
+        rec = escape_tool.call({"smiles": entry["smiles"],
+                                "pathogen": state.target_pathogen})
+        tcr = ToolCallRecord(
+            tool="predict_resistance_escape",
+            args={"smiles": entry["smiles"], "pathogen": state.target_pathogen},
+            result=rec.get("result"), error=rec.get("error"),
+            duration_ms=rec.get("duration_ms", 0), agent="critic",
+        )
+        state.tool_calls.append(tcr)
+        await emit({"type": "tool_call_result", "agent": "critic",
+                    "data": tcr.model_dump(mode="json")})
+
+        result = rec.get("result") or {}
+        verdict = result.get("red_team_verdict", "unknown")
+        muts = result.get("escape_mutations", [])
+        msg = (
+            f"Red-team report for {entry['name']}: verdict {verdict}. "
+            f"{len(muts)} escape pathway(s) identified. "
+            + (f"Top: {muts[0]['target']} {muts[0]['mutation']} "
+               f"({muts[0]['predicted_fold_shift']}x MIC shift)" if muts else "")
+        )
+        state.add_message(AgentMessage(role="critic", content=msg))
+        await emit({"type": "agent_message", "agent": "critic",
+                    "data": state.history[-1].model_dump(mode="json")})
+
+    state.terminated = True
+    state.termination_reason = "Red-team analysis complete"
+    await emit({"type": "agent_idle", "data": {
+        "final_candidate_id": None,
+        "reason": "red-team-complete",
+    }})
+    return state
+
+
 async def run_workbench_loop(
     state: WorkbenchState,
     emit: EventCallback,
@@ -358,6 +435,11 @@ async def run_workbench_loop(
     """Drive the full Designer → Critic → Editor loop until termination."""
     llm = llm or get_llm()
 
+    # Branch on mode
+    if state.mode == "red_team":
+        return await run_red_team_loop(state, emit)
+
+    # Design mode (default): full multi-agent loop
     # Phase 1: Strategist initializes — loads resistome
     if state.resistome_summary is None:
         await run_strategist_init(state, llm, emit)
