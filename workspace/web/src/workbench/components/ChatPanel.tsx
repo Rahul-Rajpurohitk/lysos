@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowDown, Send, Megaphone, Loader2, Filter, ListTree } from 'lucide-react'
 import clsx from 'clsx'
-import type { AgentMessage, AgentRole, ToolCallRecord } from '../types'
+import type { AgentMessage, AgentRole, Candidate, ToolCallRecord } from '../types'
 import { MessageBubble } from './MessageBubble'
 import { ToolCallCard } from './ToolCallCard'
 import { AgentBadge, ROLE_META } from './AgentBadge'
@@ -20,6 +20,7 @@ import { AgentBadge, ROLE_META } from './AgentBadge'
 interface ChatPanelProps {
   messages: AgentMessage[]
   toolCalls: ToolCallRecord[]
+  candidates: Candidate[]
   status: 'idle' | 'running' | 'terminated' | 'error'
   iteration: number
   maxIterations: number
@@ -33,7 +34,7 @@ const ALL_ROLES: AgentRole[] = ['designer', 'critic', 'editor', 'strategist', 'u
 
 export function ChatPanel(props: ChatPanelProps) {
   const {
-    messages, toolCalls, status, iteration, maxIterations,
+    messages, toolCalls, candidates, status, iteration, maxIterations,
     onSelectSmiles, onSendDirective,
   } = props
 
@@ -131,14 +132,14 @@ export function ChatPanel(props: ChatPanelProps) {
         </div>
       </div>
 
-      {/* Iteration meter */}
-      {(iteration > 0 || status === 'running') && (
-        <div className="px-3 py-1.5 border-b border-slate-200/70 bg-white">
+      {/* Iteration meter + composite trajectory sparkline */}
+      {(iteration > 0 || status === 'running' || candidates.length > 0) && (
+        <div className="px-3 py-1.5 border-b border-slate-200/70 bg-white space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">
               Iteration
             </span>
-            <span className="text-[11px] font-mono text-slate-700 font-semibold">
+            <span className="text-[11px] font-mono text-slate-700 font-semibold tabular-nums">
               {iteration}/{maxIterations}
             </span>
             <div className="flex-1 h-1 rounded-full bg-slate-100 overflow-hidden">
@@ -163,6 +164,11 @@ export function ChatPanel(props: ChatPanelProps) {
               <span className="text-[10px] font-semibold text-rose-700">error</span>
             )}
           </div>
+
+          {/* Composite trajectory — bar per candidate + last delta */}
+          {candidates.length > 0 && (
+            <CompositeStrip candidates={candidates} />
+          )}
         </div>
       )}
 
@@ -177,7 +183,17 @@ export function ChatPanel(props: ChatPanelProps) {
         ) : (
           timeline.map((entry, i) => {
             if (entry.kind === 'iter') {
-              return <IterationDivider key={`it-${i}`} n={entry.n} />
+              // Find this iteration's candidate (1-indexed iteration → 0-indexed slot)
+              const cand = candidates[entry.n - 1]
+              const prev = entry.n >= 2 ? candidates[entry.n - 2] : undefined
+              return (
+                <IterationDivider
+                  key={`it-${i}`}
+                  n={entry.n}
+                  candidate={cand}
+                  prevCandidate={prev}
+                />
+              )
             }
             return (
               <div key={entry.message.id} className="animate-fade-in">
@@ -278,14 +294,107 @@ function EmptyState() {
 }
 
 // ---------------------------------------------------------------------------
-// Iteration divider
+// Composite trajectory strip — sparkline of composites across iterations.
+// Visual proof that each iteration is improving the candidate.
 // ---------------------------------------------------------------------------
-function IterationDivider({ n }: { n: number }) {
+function CompositeStrip({ candidates }: { candidates: Candidate[] }) {
+  const cs = candidates.map((c) => c.scores.composite)
+  const last = cs[cs.length - 1] ?? 0
+  const prev = cs.length >= 2 ? cs[cs.length - 2] : null
+  const delta = prev != null ? last - prev : null
+  const bestSoFar = cs.length ? Math.max(...cs) : 0
+  const hitGoal = bestSoFar >= 0.80
+
+  // Bar heights: scale 0..1 → 4..16 px
+  const barH = (v: number) => 4 + Math.max(0, Math.min(1, v)) * 12
+
   return (
-    <div className="flex items-center gap-2 my-2 text-[10px] uppercase tracking-widest text-slate-400 font-semibold">
-      <div className="flex-1 h-px bg-slate-200" />
-      <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">iter {n}</span>
-      <div className="flex-1 h-px bg-slate-200" />
+    <div className="flex items-end gap-2 pt-0.5">
+      <span className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold pb-0.5">
+        Composite
+      </span>
+      <div className="flex items-end gap-0.5">
+        {cs.map((v, i) => {
+          const isLast = i === cs.length - 1
+          const isBest = v === bestSoFar
+          return (
+            <div
+              key={i}
+              className={clsx(
+                'w-1.5 rounded-sm transition-all',
+                isLast ? 'bg-emerald-500'
+                  : isBest ? 'bg-emerald-400'
+                  : 'bg-slate-300',
+              )}
+              style={{ height: `${barH(v)}px` }}
+              title={`#${i + 1}: ${v.toFixed(3)}`}
+            />
+          )
+        })}
+      </div>
+      <span className="text-[11px] font-mono text-slate-700 font-semibold tabular-nums pb-0">
+        {last.toFixed(3)}
+      </span>
+      {delta != null && (
+        <span className={clsx(
+          'text-[10px] font-mono tabular-nums pb-0',
+          delta > 0.005 ? 'text-emerald-700'
+            : delta < -0.005 ? 'text-rose-700'
+            : 'text-slate-400',
+        )}>
+          {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(3)}
+        </span>
+      )}
+      {hitGoal && (
+        <span className="ml-auto text-[10px] font-bold text-emerald-700 pb-0">
+          ★ goal reached
+        </span>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Iteration divider — now a richer card with composite + Δ from prior iter
+// ---------------------------------------------------------------------------
+function IterationDivider({ n, candidate, prevCandidate }: {
+  n: number
+  candidate?: Candidate
+  prevCandidate?: Candidate
+}) {
+  const composite = candidate?.scores.composite
+  const delta = (composite != null && prevCandidate)
+    ? composite - prevCandidate.scores.composite
+    : null
+
+  return (
+    <div className="my-3 flex items-center gap-2">
+      <div className="flex-1 h-px bg-gradient-to-r from-transparent via-slate-200 to-slate-200" />
+      <div className="inline-flex items-center gap-2 px-2.5 h-6 rounded-full bg-white border border-slate-200 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
+        <span className="text-[9.5px] uppercase tracking-[0.16em] font-bold text-slate-400">
+          Iter
+        </span>
+        <span className="text-[11px] font-mono tabular-nums font-bold text-slate-900">{n}</span>
+        {composite != null && (
+          <>
+            <span className="text-slate-200">·</span>
+            <span className="text-[10.5px] font-mono tabular-nums text-slate-700">
+              composite <span className="font-semibold">{composite.toFixed(3)}</span>
+            </span>
+          </>
+        )}
+        {delta != null && (
+          <span className={clsx(
+            'text-[10px] font-mono tabular-nums font-semibold',
+            delta > 0.005 ? 'text-emerald-700'
+              : delta < -0.005 ? 'text-rose-700'
+              : 'text-slate-400',
+          )}>
+            {delta >= 0 ? '▲' : '▼'} {Math.abs(delta).toFixed(3)}
+          </span>
+        )}
+      </div>
+      <div className="flex-1 h-px bg-gradient-to-r from-slate-200 via-slate-200 to-transparent" />
     </div>
   )
 }

@@ -315,6 +315,7 @@ export default function Workbench() {
                 <ChatPanel
                   messages={history}
                   toolCalls={toolCalls}
+                  candidates={candidates}
                   status={status}
                   iteration={iteration}
                   maxIterations={storeMaxIters}
@@ -377,36 +378,31 @@ export default function Workbench() {
             )}
           </Card>
 
-          <Card accent="violet" className="flex flex-col" style={{ minHeight: 220 }}>
-            <CardHeader>
-              <span>2D structure</span>
-              {selectedCandidate && (
+          {/* 2D structure card only renders once a candidate exists.
+              No more empty 250px slab on entry. */}
+          {selectedCandidate && (
+            <Card accent="violet" className="flex flex-col" style={{ minHeight: 220 }}>
+              <CardHeader>
+                <span>2D structure</span>
                 <span className="ml-2 text-[10px] font-mono text-slate-400 truncate flex-1">
                   {selectedCandidate.smiles}
                 </span>
-              )}
-              {selectedCandidate && (
                 <button
                   onClick={() => setShowMoA(true)}
                   className="ml-auto text-[10px] text-emerald-700 hover:bg-emerald-50 px-1.5 py-0.5 rounded inline-flex items-center gap-1"
                 >
                   <Brain className="h-3 w-3" /> Mechanism
                 </button>
-              )}
-            </CardHeader>
-            <div className="flex-1 flex items-center justify-center p-2 min-h-[140px]">
-              {selectedCandidate
-                ? <Mol2D smiles={selectedCandidate.smiles} width={460} height={140} />
-                : <span className="text-slate-300 text-xs">2D structure appears here</span>
-              }
-            </div>
-            {selectedCandidate && (
+              </CardHeader>
+              <div className="flex-1 flex items-center justify-center p-2 min-h-[140px]">
+                <Mol2D smiles={selectedCandidate.smiles} width={460} height={140} />
+              </div>
               <FunctionalGroupPalette
                 smiles={selectedCandidate.smiles}
                 onTransform={(newSmi, op) => console.log('Drag-edit:', op, '→', newSmi)}
               />
-            )}
-          </Card>
+            </Card>
+          )}
         </section>
 
         {/* Collapsed-right rail */}
