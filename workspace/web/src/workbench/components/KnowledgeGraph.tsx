@@ -105,8 +105,8 @@ export function KnowledgeGraph({ pathogen }: KnowledgeGraphProps) {
   }
 
   return (
-    <div className="overflow-auto p-2">
-      <svg width={620} height={420} className="block">
+    <div className="p-2 w-full">
+      <svg viewBox="0 0 620 420" preserveAspectRatio="xMidYMid meet" className="block w-full h-auto max-h-[480px]">
         {/* Edges */}
         {edges.map((e) => {
           const from = nodes.find((n) => n.id === e.from)

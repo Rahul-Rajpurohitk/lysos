@@ -100,8 +100,13 @@ export function LineageTree({ candidates, selectedId, paretoIds, onSelect }: Lin
   }
 
   return (
-    <div className="overflow-x-auto">
-      <svg width={width} height={height} className="block">
+    <div className="w-full p-2">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="block w-full h-auto"
+        style={{ maxHeight: 320 }}
+      >
         {edges.map((e) => (
           <path
             key={e.id}

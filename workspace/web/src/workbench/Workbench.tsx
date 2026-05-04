@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   Beaker, Play, Loader2, RefreshCw, Download, ChevronRight, Brain,
   Activity, Layers, Target, Trophy, Sparkles,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen,
 } from 'lucide-react'
 import { OnboardingHero } from './components/OnboardingHero'
 import {
@@ -74,6 +75,31 @@ export default function Workbench() {
   const [rightTab, setRightTab] = useState<RightTab>('radar')
   const [showMoA, setShowMoA] = useState(false)
   const [constraints, setConstraints] = useState<Constraint[]>([])
+  // Collapsible side panels — both default to OPEN once a session exists,
+  // both COLLAPSED on first paint so the hero gets the full center width.
+  const [leftCollapsed, setLeftCollapsed] = useState<boolean>(true)
+  const [rightCollapsed, setRightCollapsed] = useState<boolean>(true)
+  // Auto-expand once first message arrives
+  useEffect(() => {
+    if (history.length > 0) { setLeftCollapsed(false); setRightCollapsed(false) }
+  }, [history.length])
+
+  // Global ⌘↵ / Ctrl+Enter to launch a session
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        const target = e.target as HTMLElement | null
+        const tag = target?.tagName
+        // Don't intercept inside the chat composer / textarea
+        if (tag === 'TEXTAREA') return
+        e.preventDefault()
+        if (status !== 'running') void handleStart()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, target, mode, autonomy, maxIters, constraints])
 
   useEffect(() => { setMaxIterations(maxIters) }, [maxIters, setMaxIterations])
   useEffect(() => {
@@ -259,8 +285,12 @@ export default function Workbench() {
 
       {/* ============ Main grid ============ */}
       <div className="flex-1 grid grid-cols-12 gap-2 p-2 min-h-0">
-        {/* LEFT — chat */}
-        <section className={clsxColCount(chatView === 'columns')}>
+        {/* LEFT — chat (collapsible) */}
+        <section className={[
+          leftCollapsed ? 'col-span-[0]' : (chatView === 'columns' ? 'col-span-6' : 'col-span-4'),
+          'flex flex-col min-h-0 transition-all',
+          leftCollapsed && 'hidden',
+        ].filter(Boolean).join(' ')}>
           <Card accent="emerald" className="flex flex-col min-h-0 h-full">
             <CardHeader>
               <span>{chatView === 'columns' ? 'Multi-agent debate' : 'Conversation'}</span>
@@ -269,6 +299,13 @@ export default function Workbench() {
                 onChange={(v) => setChatView(v as 'stream' | 'columns')}
                 options={[{ id: 'stream', label: 'Stream' }, { id: 'columns', label: 'Columns' }]}
               />
+              <button
+                onClick={() => setLeftCollapsed(true)}
+                title="Collapse conversation"
+                className="ml-1 h-6 w-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center"
+              >
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
             </CardHeader>
             <div className="flex-1 min-h-0 flex flex-col">
               {chatView === 'stream' ? (
@@ -291,8 +328,30 @@ export default function Workbench() {
           </Card>
         </section>
 
+        {/* Collapsed-left rail */}
+        {leftCollapsed && (
+          <button
+            onClick={() => setLeftCollapsed(false)}
+            title="Open conversation"
+            className="col-span-[0] w-7 flex flex-col items-center gap-1 rounded-lg bg-white/70 border border-slate-200/70 hover:border-emerald-300 hover:bg-white py-2 transition-colors group"
+            style={{ width: 28 }}
+          >
+            <PanelLeftOpen className="h-3.5 w-3.5 text-slate-500 group-hover:text-emerald-700" />
+            <span className="[writing-mode:vertical-rl] text-[10px] uppercase tracking-[0.18em] font-bold text-slate-500 group-hover:text-emerald-700">
+              Conversation · {history.length}
+            </span>
+          </button>
+        )}
+
         {/* CENTER — visuals */}
-        <section className={chatView === 'columns' ? 'col-span-3 flex flex-col gap-2 min-h-0' : 'col-span-5 flex flex-col gap-2 min-h-0'}>
+        <section className={[
+          (chatView === 'columns' && !leftCollapsed) ? 'col-span-3'
+            : leftCollapsed && rightCollapsed ? 'col-span-12'
+            : leftCollapsed ? 'col-span-9'
+            : rightCollapsed ? 'col-span-8'
+            : 'col-span-5',
+          'flex flex-col gap-2 min-h-0 transition-all',
+        ].join(' ')}>
           <Card accent="sky" className="flex-1 relative min-h-0">
             <div className="absolute top-2 left-2 z-10 flex items-center gap-2 bg-white/95 px-2 py-1 rounded-md text-[10px] font-mono text-slate-600 shadow-sm border border-slate-200/60">
               <span className="section-eyebrow">3D</span>
@@ -354,8 +413,26 @@ export default function Workbench() {
           </Card>
         </section>
 
+        {/* Collapsed-right rail */}
+        {rightCollapsed && (
+          <button
+            onClick={() => setRightCollapsed(false)}
+            title="Open analytics dock"
+            className="w-7 flex flex-col items-center gap-1 rounded-lg bg-white/70 border border-slate-200/70 hover:border-amber-300 hover:bg-white py-2 transition-colors group"
+            style={{ width: 28 }}
+          >
+            <PanelRightOpen className="h-3.5 w-3.5 text-slate-500 group-hover:text-amber-700" />
+            <span className="[writing-mode:vertical-rl] text-[10px] uppercase tracking-[0.18em] font-bold text-slate-500 group-hover:text-amber-700">
+              Analytics · {candidates.length}
+            </span>
+          </button>
+        )}
+
         {/* RIGHT — combo dock */}
-        <section className="col-span-3 flex flex-col gap-2 min-h-0">
+        <section className={[
+          rightCollapsed ? 'hidden' : 'col-span-3',
+          'flex flex-col gap-2 min-h-0 transition-all',
+        ].join(' ')}>
           <Card accent="amber" className="flex flex-col" style={{ height: '52%' }}>
             <CardHeader>
               <span className="capitalize">{rightTab}</span>
@@ -375,6 +452,13 @@ export default function Workbench() {
                   </button>
                 ))}
               </div>
+              <button
+                onClick={() => setRightCollapsed(true)}
+                title="Collapse analytics dock"
+                className="ml-1 h-6 w-6 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center"
+              >
+                <PanelRightClose className="h-3.5 w-3.5" />
+              </button>
             </CardHeader>
             <div className="flex-1 overflow-auto p-2 min-h-0">
               {rightTab === 'radar' && (
@@ -465,13 +549,6 @@ export default function Workbench() {
 // ---------------------------------------------------------------------------
 // UI primitives — kept inline so this file is the single source of truth.
 // ---------------------------------------------------------------------------
-function clsxColCount(columnsView: boolean): string {
-  return [
-    columnsView ? 'col-span-6' : 'col-span-4',
-    'flex flex-col min-h-0 transition-all',
-  ].join(' ')
-}
-
 interface CardProps {
   className?: string
   style?: React.CSSProperties

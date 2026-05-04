@@ -196,6 +196,10 @@ export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps
     return () => { cancelled = true }
   }, [smiles, pdbId, pathogen, proteinStyle, ligandStyle, showSurface, spinning])
 
+  // Hide the toolbar entirely while the hero/empty state is showing —
+  // otherwise the floating buttons clip the title.
+  const hasContent = Boolean(smiles)
+
   return (
     <div className={className ?? 'w-full h-full relative'}>
       <div
@@ -204,7 +208,8 @@ export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps
         style={{ background: '#fafbfc' }}
       />
 
-      {/* Top toolbar */}
+      {/* Top toolbar — only when a ligand is loaded so it never overlaps onboarding */}
+      {hasContent && (
       <div className="absolute top-2 right-2 z-10 flex items-center gap-1 bg-white/95 backdrop-blur border border-slate-200 rounded-md p-0.5 shadow-sm">
         <ToolbarSelect
           icon={<Layers className="h-3 w-3" />}
@@ -248,6 +253,7 @@ export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps
           label="Recenter"
         />
       </div>
+      )}
 
       {/* Energy / metadata readout (bottom-left) */}
       {meta && (
@@ -313,36 +319,39 @@ export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps
 // ---------------------------------------------------------------------------
 // Style helpers
 // ---------------------------------------------------------------------------
+// IMPORTANT: select by model index, NOT by hetflag.
+// SDF-loaded atoms don't have hetflag set, so a hetflag=false selector
+// for the protein silently catches the ligand carbons too — which is
+// what produced the brown / spectrum-coloured ligand atoms before.
 function applyProteinStyle(viewer: any, style: ProteinStyle) {
-  // Protein = all models EXCEPT the last (which is the ligand SDF)
-  // Use selection by hetflag=false
-  viewer.setStyle({ hetflag: false }, {})
+  const sel = { model: 0 }   // first model is always the PDB
+  viewer.setStyle(sel, {})
   if (style === 'none') return
   if (style === 'cartoon') {
-    viewer.setStyle({ hetflag: false }, { cartoon: { color: 'spectrum' } })
+    viewer.setStyle(sel, { cartoon: { color: 'spectrum' } })
   } else if (style === 'cartoon-transparent') {
-    viewer.setStyle({ hetflag: false }, { cartoon: { color: 'spectrum', opacity: 0.55 } })
+    viewer.setStyle(sel, { cartoon: { color: 'spectrum', opacity: 0.55 } })
   } else if (style === 'surface') {
-    viewer.setStyle({ hetflag: false }, { cartoon: { color: 'spectrum', opacity: 0.2 } })
+    viewer.setStyle(sel, { cartoon: { color: 'spectrum', opacity: 0.2 } })
     viewer.addSurface(window.$3Dmol.SurfaceType.VDW, {
       opacity: 0.55, color: '#cbd5e1',
-    }, { hetflag: false })
+    }, sel)
   }
 }
 
 function applyLigandStyle(viewer: any, style: LigandStyle) {
-  // Ligand = the last model (SDF we added)
+  // Ligand = the LAST model added (the SDF we just embedded).
   const sel = { model: -1 }
   viewer.setStyle(sel, {})
   if (style === 'ball-stick') {
     viewer.setStyle(sel, {
-      stick: { radius: 0.18, colorscheme: 'Jmol' },
-      sphere: { radius: 0.32, colorscheme: 'Jmol' },
+      stick: { radius: 0.20, colorscheme: 'Jmol' },
+      sphere: { radius: 0.34, colorscheme: 'Jmol' },
     })
   } else if (style === 'spacefill') {
     viewer.setStyle(sel, { sphere: { colorscheme: 'Jmol' } })
   } else if (style === 'stick') {
-    viewer.setStyle(sel, { stick: { radius: 0.22, colorscheme: 'Jmol' } })
+    viewer.setStyle(sel, { stick: { radius: 0.24, colorscheme: 'Jmol' } })
   } else if (style === 'wireframe') {
     viewer.setStyle(sel, { line: { linewidth: 2, colorscheme: 'Jmol' } })
   }

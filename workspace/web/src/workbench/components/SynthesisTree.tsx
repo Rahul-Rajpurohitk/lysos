@@ -97,8 +97,73 @@ export function SynthesisTree({ smiles }: SynthesisTreeProps) {
         {route.interpretation}
       </div>
 
+      {/* Mini retrosynthesis tree */}
+      <RouteTree steps={route.estimated_steps} />
+
       <div className="text-[10px] text-slate-400">
-        v0 SA-heuristic; AiZynthFinder retrosynthesis tree on Day 1.
+        v0 SA-heuristic + step-count tree; AiZynthFinder full retrosynthesis on Day 1.
+      </div>
+    </div>
+  )
+}
+
+function RouteTree({ steps }: { steps: number }) {
+  const n = Math.max(1, Math.min(8, steps))
+  // Simple linear retrosynthesis: target ← intermediate_n ← ... ← intermediate_1 ← starting_material
+  const W = 320, H = 90
+  const padX = 16
+  const stepX = (W - padX * 2) / (n + 1)
+  const y = H / 2
+
+  const points = [] as Array<{ x: number; y: number; label: string; kind: 'target' | 'inter' | 'start' }>
+  // Target on the left, building blocks on the right (retro convention)
+  points.push({ x: padX, y, label: 'target', kind: 'target' })
+  for (let i = 1; i <= n; i++) {
+    points.push({ x: padX + stepX * i, y, label: `i${i}`, kind: 'inter' })
+  }
+  points.push({ x: padX + stepX * (n + 1), y, label: 'SM', kind: 'start' })
+
+  return (
+    <div className="bg-white border border-slate-200 rounded p-1.5">
+      <div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold mb-1 px-1">
+        retrosynthesis · {n} step{n !== 1 ? 's' : ''}
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className="w-full h-auto">
+        {/* Edges */}
+        {points.slice(0, -1).map((p, i) => {
+          const q = points[i + 1]
+          return (
+            <g key={`e${i}`}>
+              <line x1={p.x + 10} y1={p.y} x2={q.x - 10} y2={q.y} stroke="#94a3b8" strokeWidth={1.4} />
+              {/* Arrow head */}
+              <polygon
+                points={`${q.x - 10},${q.y - 3} ${q.x - 10},${q.y + 3} ${q.x - 4},${q.y}`}
+                fill="#94a3b8"
+              />
+              <text x={(p.x + q.x) / 2} y={p.y - 7} textAnchor="middle" fontSize={8} fill="#64748b">
+                rxn{i + 1}
+              </text>
+            </g>
+          )
+        })}
+        {/* Nodes */}
+        {points.map((p) => {
+          const fill = p.kind === 'target' ? '#10b981' : p.kind === 'start' ? '#f59e0b' : '#cbd5e1'
+          const stroke = p.kind === 'target' ? '#059669' : p.kind === 'start' ? '#d97706' : '#94a3b8'
+          const text = p.kind === 'target' ? '#fff' : p.kind === 'start' ? '#78350f' : '#475569'
+          return (
+            <g key={p.label} transform={`translate(${p.x}, ${p.y})`}>
+              <circle r={9} fill={fill} stroke={stroke} strokeWidth={1.5} />
+              <text textAnchor="middle" dy={3} fontSize={8} fill={text} fontWeight={600}>
+                {p.label}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+      <div className="flex justify-between text-[8px] uppercase tracking-wider text-slate-400 px-1">
+        <span>target</span>
+        <span>building blocks →</span>
       </div>
     </div>
   )
