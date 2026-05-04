@@ -41,6 +41,12 @@ JSONL_FILES = [
     ("strategist",                ROOT / "data" / "synthetic" / "agentic_strategist_traces.jsonl"),
     ("designer_resistome_cond",   ROOT / "data" / "synthetic" / "agentic_resistome_conditioned.jsonl"),
     ("red_team",                  ROOT / "data" / "synthetic" / "agentic_red_team.jsonl"),
+    # v2 — gaps A-E
+    ("full_loop",                 ROOT / "data" / "synthetic" / "agentic_full_loop.jsonl"),
+    ("tool_error_recovery",       ROOT / "data" / "synthetic" / "agentic_tool_error_recovery.jsonl"),
+    ("negative_example",          ROOT / "data" / "synthetic" / "agentic_negative_examples.jsonl"),
+    ("constraint_compliance",     ROOT / "data" / "synthetic" / "agentic_constraint_compliance.jsonl"),
+    ("intervention_reading",      ROOT / "data" / "synthetic" / "agentic_intervention_reading.jsonl"),
 ]
 
 def normalize_pro_v2_row(row: dict, split: str) -> dict | None:
