@@ -159,6 +159,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Workbench v2 — agentic playground (multi-agent state machine + 25 tools)
+try:
+    from .workbench import router as workbench_router
+    app.include_router(workbench_router)
+except Exception as exc:  # noqa: BLE001
+    log.warning("Workbench router not loaded: %s", exc)
+
 
 # ----------------------------------------------------------------------------
 # Schemas
