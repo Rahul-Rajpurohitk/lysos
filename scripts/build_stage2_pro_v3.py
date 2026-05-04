@@ -60,6 +60,23 @@ JSONL_FILES = [
     ("trajectory_pattern",        ROOT / "data" / "synthetic" / "agentic_trajectory_pattern.jsonl"),
     ("loop_recovery",             ROOT / "data" / "synthetic" / "agentic_loop_recovery.jsonl"),
     ("scaffold_hop_explicit",     ROOT / "data" / "synthetic" / "agentic_scaffold_hop_explicit.jsonl"),
+    # v5 — all 16 remaining gaps
+    ("self_correction",           ROOT / "data" / "synthetic" / "agentic_self_correction.jsonl"),
+    ("confidence",                ROOT / "data" / "synthetic" / "agentic_confidence.jsonl"),
+    ("counterfactual",            ROOT / "data" / "synthetic" / "agentic_counterfactual.jsonl"),
+    ("failure_postmortem",        ROOT / "data" / "synthetic" / "agentic_failure_postmortem.jsonl"),
+    ("prior_art",                 ROOT / "data" / "synthetic" / "agentic_prior_art.jsonl"),
+    ("multi_pathogen",            ROOT / "data" / "synthetic" / "agentic_multi_pathogen.jsonl"),
+    ("cross_resistance",          ROOT / "data" / "synthetic" / "agentic_cross_resistance.jsonl"),
+    ("pkpd",                      ROOT / "data" / "synthetic" / "agentic_pkpd.jsonl"),
+    ("stewardship",               ROOT / "data" / "synthetic" / "agentic_stewardship.jsonl"),
+    ("time_budget",               ROOT / "data" / "synthetic" / "agentic_time_budget.jsonl"),
+    ("disambiguation",            ROOT / "data" / "synthetic" / "agentic_disambiguation.jsonl"),
+    ("manufacturing",             ROOT / "data" / "synthetic" / "agentic_manufacturing.jsonl"),
+    ("clinical_population",       ROOT / "data" / "synthetic" / "agentic_clinical_population.jsonl"),
+    ("adverse_events",            ROOT / "data" / "synthetic" / "agentic_adverse_events.jsonl"),
+    ("animal_translation",        ROOT / "data" / "synthetic" / "agentic_animal_translation.jsonl"),
+    ("combo_therapy",             ROOT / "data" / "synthetic" / "agentic_combo_therapy.jsonl"),
 ]
 
 def normalize_pro_v2_row(row: dict, split: str) -> dict | None:
