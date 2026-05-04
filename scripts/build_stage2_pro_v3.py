@@ -47,6 +47,19 @@ JSONL_FILES = [
     ("negative_example",          ROOT / "data" / "synthetic" / "agentic_negative_examples.jsonl"),
     ("constraint_compliance",     ROOT / "data" / "synthetic" / "agentic_constraint_compliance.jsonl"),
     ("intervention_reading",      ROOT / "data" / "synthetic" / "agentic_intervention_reading.jsonl"),
+    # v3 — distribution rebalancers
+    ("editor_explicit",           ROOT / "data" / "synthetic" / "agentic_editor_explicit.jsonl"),
+    ("validity_critique",         ROOT / "data" / "synthetic" / "agentic_validity_critique.jsonl"),
+    ("strat_branch_terminate",    ROOT / "data" / "synthetic" / "agentic_strategist_branch_terminate.jsonl"),
+    ("tool_coverage_backfill",    ROOT / "data" / "synthetic" / "agentic_tool_coverage_backfill.jsonl"),
+    ("long_conversation",         ROOT / "data" / "synthetic" / "agentic_long_conversation.jsonl"),
+    # v4 — depth rounds
+    ("class_priors",              ROOT / "data" / "synthetic" / "agentic_class_priors.jsonl"),
+    ("mechanism_cot",             ROOT / "data" / "synthetic" / "agentic_mechanism_cot.jsonl"),
+    ("pareto_selection",          ROOT / "data" / "synthetic" / "agentic_pareto_selection.jsonl"),
+    ("trajectory_pattern",        ROOT / "data" / "synthetic" / "agentic_trajectory_pattern.jsonl"),
+    ("loop_recovery",             ROOT / "data" / "synthetic" / "agentic_loop_recovery.jsonl"),
+    ("scaffold_hop_explicit",     ROOT / "data" / "synthetic" / "agentic_scaffold_hop_explicit.jsonl"),
 ]
 
 def normalize_pro_v2_row(row: dict, split: str) -> dict | None:
