@@ -12,6 +12,7 @@ interface WorkbenchStore {
   paretoFrontier: string[]
   selectedCandidateId: string | null
   iteration: number
+  maxIterations: number
   status: 'idle' | 'running' | 'terminated' | 'error'
   errorMessage: string | null
 
@@ -20,6 +21,8 @@ interface WorkbenchStore {
   addCandidate: (c: Candidate) => void
   addMessage: (m: AgentMessage) => void
   addToolCall: (t: ToolCallRecord) => void
+  setIteration: (n: number) => void
+  setMaxIterations: (n: number) => void
   setStatus: (s: WorkbenchStore['status']) => void
   setError: (msg: string | null) => void
   setSelected: (id: string | null) => void
@@ -35,6 +38,7 @@ export const useWorkbench = create<WorkbenchStore>((set) => ({
   paretoFrontier: [],
   selectedCandidateId: null,
   iteration: 0,
+  maxIterations: 4,
   status: 'idle',
   errorMessage: null,
 
@@ -46,13 +50,17 @@ export const useWorkbench = create<WorkbenchStore>((set) => ({
     toolCalls: state.tool_calls,
     paretoFrontier: state.pareto_frontier,
     iteration: state.iteration,
+    maxIterations: state.max_iterations,
   }),
   addCandidate: (c) => set((s) => ({
     candidates: [...s.candidates, c],
     selectedCandidateId: c.id,
+    paretoFrontier: computePareto([...s.candidates, c]),
   })),
   addMessage: (m) => set((s) => ({ history: [...s.history, m] })),
   addToolCall: (t) => set((s) => ({ toolCalls: [...s.toolCalls, t] })),
+  setIteration: (iteration) => set({ iteration }),
+  setMaxIterations: (maxIterations) => set({ maxIterations }),
   setStatus: (status) => set({ status }),
   setError: (errorMessage) => set({ errorMessage }),
   setSelected: (id) => set({ selectedCandidateId: id }),
@@ -63,3 +71,22 @@ export const useWorkbench = create<WorkbenchStore>((set) => ({
     iteration: 0, status: 'idle', errorMessage: null,
   }),
 }))
+
+// Recompute the Pareto frontier locally over (composite, novelty) so the UI
+// reflects backend Pareto updates without needing an extra event channel.
+function computePareto(cs: Candidate[]): string[] {
+  const front: string[] = []
+  for (const c of cs) {
+    let dominated = false
+    for (const o of cs) {
+      if (o.id === c.id) continue
+      const oc = o.scores.composite, cc = c.scores.composite
+      const on = o.scores.novelty,   cn = c.scores.novelty
+      if (oc >= cc && on >= cn && (oc > cc || on > cn)) {
+        dominated = true; break
+      }
+    }
+    if (!dominated) front.push(c.id)
+  }
+  return front
+}
