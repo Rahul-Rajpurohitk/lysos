@@ -296,6 +296,7 @@ export default function Workbench() {
             <MolViewer
               smiles={selectedCandidate?.smiles}
               pdbId={PATHOGEN_TARGET_PDB[target]}
+              pathogen={target}
               className="w-full h-full"
             />
           </Card>
