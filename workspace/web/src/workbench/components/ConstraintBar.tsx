@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Plus, X } from 'lucide-react'
 import type { Constraint } from '../types'
+import { ConstraintFromPaper } from './ConstraintFromPaper'
 
 interface ConstraintBarProps {
   constraints: Constraint[]
@@ -61,6 +62,8 @@ export function ConstraintBar({ constraints, onAdd, onRemove, disabled }: Constr
         <Plus className="w-3 h-3" />
         Add
       </button>
+
+      {!disabled && <ConstraintFromPaper onAdd={onAdd} />}
 
       {showMenu && (
         <div className="absolute top-full left-0 mt-1 z-30 bg-white border border-slate-200 rounded shadow-lg p-2 grid grid-cols-2 gap-1">
