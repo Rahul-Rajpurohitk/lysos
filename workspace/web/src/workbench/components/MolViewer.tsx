@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  RotateCcw, RefreshCw, Eye, EyeOff, Atom, Sparkles, Layers,
+  RotateCcw, RefreshCw, Eye, EyeOff, Atom, Sparkles, Layers, Loader2,
 } from 'lucide-react'
 import type { Pathogen } from '../types'
 
@@ -26,6 +26,9 @@ interface MolViewerProps {
   pdbId?: string
   pathogen?: Pathogen
   className?: string
+  // Called when the user edits the molecule via atom-click → swap-element
+  // or add-methyl. Receives the new canonical SMILES.
+  onMoleculeEdit?: (newSmiles: string, op: string) => void
 }
 
 declare global {
@@ -51,7 +54,7 @@ const ELEMENT_COLORS: Record<string, string> = {
   P: '#f97316', I: '#7c3aed',
 }
 
-export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps) {
+export function MolViewer({ smiles, pdbId, pathogen, className, onMoleculeEdit }: MolViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerRef = useRef<any>(null)
   const ligandModelRef = useRef<any>(null)
@@ -63,6 +66,11 @@ export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps
   const [hoverAtom, setHoverAtom] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  // Click-edit popover state — atom index + screen-space coords
+  const [editPopover, setEditPopover] = useState<{
+    atomIdx: number; x: number; y: number
+  } | null>(null)
+  const [editing, setEditing] = useState(false)
 
   // Load 3Dmol.js once, render whenever inputs change
   useEffect(() => {
@@ -156,6 +164,9 @@ export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps
 
           applyLigandStyle(viewer, ligandStyle)
           attachAtomHover(viewer, setHoverAtom)
+          attachAtomClick(viewer, m, (atomIdx, x, y) => {
+            setEditPopover({ atomIdx, x, y })
+          })
         } else {
           setMeta(null)
         }
@@ -174,10 +185,30 @@ export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps
         }
 
         // -------- camera --------
-        if (smiles && pocketCenter) {
-          viewer.zoomTo({ model: -1 })
-        } else if (smiles) {
-          viewer.zoomTo({ model: -1 })
+        // Zoom tight on the LIGAND model using the stored model reference.
+        // Plain {model:-1} sometimes frames the whole scene; targeting the
+        // ligand by atom-array gets a clean tight bbox.
+        if (ligandModelRef.current) {
+          const ligAtoms = ligandModelRef.current.selectedAtoms({})
+          if (ligAtoms.length) {
+            // Compute centroid + bbox manually to control zoom factor
+            let minx = +Infinity, miny = +Infinity, minz = +Infinity
+            let maxx = -Infinity, maxy = -Infinity, maxz = -Infinity
+            for (const a of ligAtoms) {
+              if (a.x < minx) minx = a.x; if (a.x > maxx) maxx = a.x
+              if (a.y < miny) miny = a.y; if (a.y > maxy) maxy = a.y
+              if (a.z < minz) minz = a.z; if (a.z > maxz) maxz = a.z
+            }
+            viewer.center({
+              x: (minx + maxx) / 2, y: (miny + maxy) / 2, z: (minz + maxz) / 2,
+            }, 0)
+            // Use atom selection for zoomTo so 3Dmol fits the ligand box
+            viewer.zoomTo({ serial: ligAtoms.map((a: any) => a.serial) })
+            // Pull camera in slightly so the ligand fills more of the view
+            viewer.zoom(1.4, 200)
+          } else {
+            viewer.zoomTo()
+          }
         } else {
           viewer.zoomTo()
         }
@@ -253,6 +284,42 @@ export function MolViewer({ smiles, pdbId, pathogen, className }: MolViewerProps
           label="Recenter"
         />
       </div>
+      )}
+
+      {/* Atom-click edit popover */}
+      {editPopover && smiles && (
+        <AtomEditPopover
+          atomIdx={editPopover.atomIdx}
+          x={editPopover.x}
+          y={editPopover.y}
+          containerRef={containerRef}
+          editing={editing}
+          onClose={() => setEditPopover(null)}
+          onApply={async (op, payload) => {
+            if (!smiles) return
+            setEditing(true)
+            try {
+              const r = await fetch('/workbench/molecule/edit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  smiles, op, atom_index: editPopover.atomIdx, ...payload,
+                }),
+              })
+              const data = await r.json()
+              if (!r.ok) {
+                setError(data?.detail ?? `edit failed`)
+                return
+              }
+              setEditPopover(null)
+              onMoleculeEdit?.(data.smiles, op)
+            } catch (e) {
+              setError(String(e))
+            } finally {
+              setEditing(false)
+            }
+          }}
+        />
       )}
 
       {/* Energy / metadata readout (bottom-left) */}
@@ -357,6 +424,21 @@ function applyLigandStyle(viewer: any, style: LigandStyle) {
   }
 }
 
+function attachAtomClick(
+  _viewer: any,
+  ligandModel: any,
+  onPick: (atomIdx: number, x: number, y: number) => void,
+) {
+  // 3Dmol clickable: per-atom callback. We compute the SDF-local atom index
+  // from the atom's `index` field (set by 3Dmol when reading SDF).
+  ligandModel.setClickable({}, true, function (atom: any, _viewer: any, event: any) {
+    const idx = atom.index ?? atom.serial ?? 0
+    const x = event?.clientX ?? event?.x ?? 0
+    const y = event?.clientY ?? event?.y ?? 0
+    onPick(idx, x, y)
+  })
+}
+
 function attachAtomHover(viewer: any, set: (s: string | null) => void) {
   viewer.setHoverable(
     { model: -1 },
@@ -432,3 +514,87 @@ function ToolbarBtn(props: { onClick: () => void; icon: React.ReactNode; label: 
 }
 
 function Sep() { return <span className="h-3 w-px bg-slate-200 mx-0.5" /> }
+
+// ---------------------------------------------------------------------------
+// AtomEditPopover — appears at click position; lets the user swap the atom's
+// element OR add a methyl substituent. Backend sanitises chemistry.
+// ---------------------------------------------------------------------------
+const SWAP_ELEMENTS = [
+  { sym: 'C',  bg: '#414754', text: '#fff' },
+  { sym: 'N',  bg: '#3b82f6', text: '#fff' },
+  { sym: 'O',  bg: '#ef4444', text: '#fff' },
+  { sym: 'F',  bg: '#10b981', text: '#fff' },
+  { sym: 'S',  bg: '#facc15', text: '#000' },
+  { sym: 'Cl', bg: '#22c55e', text: '#fff' },
+  { sym: 'Br', bg: '#a855f7', text: '#fff' },
+]
+
+interface AtomEditPopoverProps {
+  atomIdx: number
+  x: number
+  y: number
+  containerRef: React.RefObject<HTMLDivElement>
+  editing: boolean
+  onClose: () => void
+  onApply: (op: 'swap_element' | 'add_methyl_at', payload?: Record<string, unknown>) => void
+}
+
+function AtomEditPopover(props: AtomEditPopoverProps) {
+  const { atomIdx, x, y, containerRef, editing, onClose, onApply } = props
+  // Translate page-space click coords into local coords inside the container
+  const rect = containerRef.current?.getBoundingClientRect()
+  const left = Math.max(8, Math.min((rect?.width ?? 800) - 240, x - (rect?.left ?? 0) - 120))
+  const top = Math.max(8, Math.min((rect?.height ?? 600) - 140, y - (rect?.top ?? 0) - 12))
+
+  return (
+    <>
+      {/* Click-out catcher */}
+      <div className="absolute inset-0 z-20" onClick={onClose} />
+      <div
+        className="absolute z-30 bg-white border border-slate-200 rounded-lg shadow-2xl p-2.5 min-w-[240px]"
+        style={{ left, top }}
+      >
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">
+            Edit atom #{atomIdx}
+          </span>
+          {editing && <Loader2 className="h-3 w-3 text-slate-400 animate-spin" />}
+          <button
+            onClick={onClose}
+            className="ml-auto text-slate-400 hover:text-slate-700 text-[10px]"
+          >
+            close
+          </button>
+        </div>
+        <div className="text-[10px] text-slate-500 mb-1.5">Swap to element</div>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {SWAP_ELEMENTS.map((el) => (
+            <button
+              key={el.sym}
+              disabled={editing}
+              onClick={() => onApply('swap_element', { new_element: el.sym })}
+              title={`Replace this atom with ${el.sym}`}
+              className="h-7 min-w-[28px] px-1.5 rounded font-mono font-bold text-[11px] hover:scale-110 transition-transform shadow-sm disabled:opacity-50"
+              style={{ background: el.bg, color: el.text }}
+            >
+              {el.sym}
+            </button>
+          ))}
+        </div>
+        <div className="border-t border-slate-100 pt-2">
+          <button
+            disabled={editing}
+            onClick={() => onApply('add_methyl_at')}
+            className="w-full inline-flex items-center justify-center gap-1.5 h-7 rounded bg-slate-100 hover:bg-slate-200 text-[11px] font-semibold text-slate-700 disabled:opacity-50"
+          >
+            <Sparkles className="h-3 w-3" /> Add methyl (–CH₃)
+          </button>
+        </div>
+        <div className="text-[9.5px] text-slate-400 mt-1.5 text-center">
+          Backend validates valence + sanitises with RDKit.
+        </div>
+      </div>
+    </>
+  )
+}
+

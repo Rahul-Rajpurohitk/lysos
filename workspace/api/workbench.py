@@ -11,7 +11,7 @@ import logging
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -410,6 +410,73 @@ async def molecule_3d(req: Mol3DRequest) -> dict:
         "mw": round(mw, 2),
         "logp": round(logp, 2),
         "element_counts": el_counts,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Atom-level molecule editing — click-to-swap an atom's element / break a
+# bond / add a substituent. Returns the new canonical SMILES + a fresh 3D.
+# This is what makes the 3D viewer a real "playground" not a static render.
+# ---------------------------------------------------------------------------
+
+class AtomEditRequest(BaseModel):
+    smiles: str
+    op: Literal["swap_element", "break_bond", "add_methyl_at"]
+    atom_index: Optional[int] = None    # for swap_element / add_methyl_at
+    bond_index: Optional[int] = None    # for break_bond
+    new_element: Optional[str] = None   # for swap_element: C, N, O, F, S, Cl, Br
+
+
+@router.post("/molecule/edit")
+async def molecule_edit(req: AtomEditRequest) -> dict:
+    """Edit a molecule at the atom/bond level. Used by the 3D viewer to
+    let the user actually mutate the candidate via clicks."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+
+    mol = Chem.MolFromSmiles(req.smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {req.smiles}")
+    rw = Chem.RWMol(mol)
+
+    if req.op == "swap_element":
+        if req.atom_index is None or req.new_element is None:
+            raise HTTPException(422, "swap_element needs atom_index + new_element")
+        if req.atom_index < 0 or req.atom_index >= rw.GetNumAtoms():
+            raise HTTPException(422, f"atom_index out of range")
+        ELEMENTS = {"C": 6, "N": 7, "O": 8, "F": 9, "S": 16, "Cl": 17, "Br": 35, "P": 15}
+        if req.new_element not in ELEMENTS:
+            raise HTTPException(422, f"unsupported element: {req.new_element}")
+        rw.GetAtomWithIdx(req.atom_index).SetAtomicNum(ELEMENTS[req.new_element])
+    elif req.op == "break_bond":
+        if req.bond_index is None:
+            raise HTTPException(422, "break_bond needs bond_index")
+        if req.bond_index < 0 or req.bond_index >= rw.GetNumBonds():
+            raise HTTPException(422, f"bond_index out of range")
+        b = rw.GetBondWithIdx(req.bond_index)
+        rw.RemoveBond(b.GetBeginAtomIdx(), b.GetEndAtomIdx())
+    elif req.op == "add_methyl_at":
+        if req.atom_index is None:
+            raise HTTPException(422, "add_methyl_at needs atom_index")
+        c = rw.AddAtom(Chem.Atom(6))
+        rw.AddBond(req.atom_index, c, Chem.BondType.SINGLE)
+    else:
+        raise HTTPException(422, f"unknown op: {req.op}")
+
+    # Sanitize — return error if violates valence
+    try:
+        Chem.SanitizeMol(rw)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, f"chemistry violation: {exc}")
+
+    new_smiles = Chem.MolToSmiles(rw, canonical=True)
+    return {
+        "smiles": new_smiles,
+        "n_atoms": rw.GetNumAtoms(),
+        "n_bonds": rw.GetNumBonds(),
     }
 
 

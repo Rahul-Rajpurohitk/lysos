@@ -365,6 +365,49 @@ export default function Workbench() {
               pdbId={PATHOGEN_TARGET_PDB[target]}
               pathogen={target}
               className="w-full h-full"
+              onMoleculeEdit={async (newSmiles, op) => {
+                // Add the user-edited derivative as a new candidate so the
+                // 3D viewer + 2D + reward stack all refresh on it.
+                const parent = selectedCandidate
+                if (!parent) return
+                // Re-score via score_molecule + find_similar_drugs
+                try {
+                  const score = await fetch(`/workbench/tools/score_molecule`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ smiles: newSmiles, target_pathogen: target }),
+                  }).then(r => r.ok ? r.json() : null)
+                  const result = score?.result ?? {}
+                  const components = result.components ?? []
+                  const composite = result.composite ?? 0
+                  const scoreMap: Record<string, number> = {}
+                  for (const c of components) scoreMap[c.name] = c.value
+                  const newCand: Candidate = {
+                    id: `local-edit-${Date.now()}`,
+                    smiles: newSmiles,
+                    parent_id: parent.id,
+                    pathogen: target,
+                    affinity_kcal_mol: null,
+                    similar_to: [],
+                    notes: [`drag-edit · ${op}`],
+                    created_at: new Date().toISOString(),
+                    scores: {
+                      validity: scoreMap.validity ?? 1,
+                      structural_alerts: scoreMap.structural_alerts ?? 0,
+                      predicted_mic: scoreMap.predicted_mic ?? 0,
+                      drug_likeness_qed: scoreMap.drug_likeness_qed ?? 0,
+                      synthesizability: scoreMap.synthesizability ?? 0,
+                      hemolysis_safety: scoreMap.hemolysis_safety ?? 0,
+                      novelty: scoreMap.novelty ?? 0,
+                      embedding_novelty: scoreMap.embedding_novelty ?? 0,
+                      composite,
+                    },
+                  }
+                  addCandidate(newCand)
+                } catch (e) {
+                  console.error('edit re-score failed', e)
+                }
+              }}
             />
             {!selectedCandidate && (
               <OnboardingHero
