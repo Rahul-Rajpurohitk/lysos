@@ -7,7 +7,9 @@ import "./styles.css";
 
 function Shell() {
   return (
-    <BrowserRouter>
+    <BrowserRouter
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <Routes>
         {/* Default route: legacy Designer at /, Workbench at /workbench */}
         <Route path="/" element={<App />} />

@@ -283,14 +283,17 @@ export default function Workbench() {
         </div>
       )}
 
-      {/* ============ Main grid ============ */}
-      <div className="flex-1 grid grid-cols-12 gap-2 p-2 min-h-0">
-        {/* LEFT — chat (collapsible) */}
+      {/* ============ Main row — flex so collapsed rails stay 28px wide
+            and the center always claims whatever's left ============ */}
+      <div className="flex-1 flex gap-2 p-2 min-h-0">
+        {/* LEFT — chat */}
+        {!leftCollapsed && (
         <section className={[
-          leftCollapsed ? 'col-span-[0]' : (chatView === 'columns' ? 'col-span-6' : 'col-span-4'),
+          chatView === 'columns'
+            ? 'flex-none w-[44%] min-w-[420px]'
+            : 'flex-none w-[26%] min-w-[300px] max-w-[440px]',
           'flex flex-col min-h-0 transition-all',
-          leftCollapsed && 'hidden',
-        ].filter(Boolean).join(' ')}>
+        ].join(' ')}>
           <Card accent="emerald" className="flex flex-col min-h-0 h-full">
             <CardHeader>
               <span>{chatView === 'columns' ? 'Multi-agent debate' : 'Conversation'}</span>
@@ -327,14 +330,14 @@ export default function Workbench() {
             </div>
           </Card>
         </section>
+        )}
 
         {/* Collapsed-left rail */}
         {leftCollapsed && (
           <button
             onClick={() => setLeftCollapsed(false)}
             title="Open conversation"
-            className="col-span-[0] w-7 flex flex-col items-center gap-1 rounded-lg bg-white/70 border border-slate-200/70 hover:border-emerald-300 hover:bg-white py-2 transition-colors group"
-            style={{ width: 28 }}
+            className="flex-none w-7 flex flex-col items-center gap-1 rounded-lg bg-white/70 border border-slate-200/70 hover:border-emerald-300 hover:bg-white py-2 transition-colors group"
           >
             <PanelLeftOpen className="h-3.5 w-3.5 text-slate-500 group-hover:text-emerald-700" />
             <span className="[writing-mode:vertical-rl] text-[10px] uppercase tracking-[0.18em] font-bold text-slate-500 group-hover:text-emerald-700">
@@ -343,15 +346,8 @@ export default function Workbench() {
           </button>
         )}
 
-        {/* CENTER — visuals */}
-        <section className={[
-          (chatView === 'columns' && !leftCollapsed) ? 'col-span-3'
-            : leftCollapsed && rightCollapsed ? 'col-span-12'
-            : leftCollapsed ? 'col-span-9'
-            : rightCollapsed ? 'col-span-8'
-            : 'col-span-5',
-          'flex flex-col gap-2 min-h-0 transition-all',
-        ].join(' ')}>
+        {/* CENTER — visuals (always grabs remaining space) */}
+        <section className="flex-1 min-w-0 flex flex-col gap-2 min-h-0 transition-all">
           <Card accent="sky" className="flex-1 relative min-h-0">
             <div className="absolute top-2 left-2 z-10 flex items-center gap-2 bg-white/95 px-2 py-1 rounded-md text-[10px] font-mono text-slate-600 shadow-sm border border-slate-200/60">
               <span className="section-eyebrow">3D</span>
@@ -418,8 +414,7 @@ export default function Workbench() {
           <button
             onClick={() => setRightCollapsed(false)}
             title="Open analytics dock"
-            className="w-7 flex flex-col items-center gap-1 rounded-lg bg-white/70 border border-slate-200/70 hover:border-amber-300 hover:bg-white py-2 transition-colors group"
-            style={{ width: 28 }}
+            className="flex-none w-7 flex flex-col items-center gap-1 rounded-lg bg-white/70 border border-slate-200/70 hover:border-amber-300 hover:bg-white py-2 transition-colors group"
           >
             <PanelRightOpen className="h-3.5 w-3.5 text-slate-500 group-hover:text-amber-700" />
             <span className="[writing-mode:vertical-rl] text-[10px] uppercase tracking-[0.18em] font-bold text-slate-500 group-hover:text-amber-700">
@@ -429,10 +424,8 @@ export default function Workbench() {
         )}
 
         {/* RIGHT — combo dock */}
-        <section className={[
-          rightCollapsed ? 'hidden' : 'col-span-3',
-          'flex flex-col gap-2 min-h-0 transition-all',
-        ].join(' ')}>
+        {!rightCollapsed && (
+        <section className="flex-none w-[24%] min-w-[300px] max-w-[420px] flex flex-col gap-2 min-h-0 transition-all">
           <Card accent="amber" className="flex flex-col" style={{ height: '52%' }}>
             <CardHeader>
               <span className="capitalize">{rightTab}</span>
@@ -512,6 +505,7 @@ export default function Workbench() {
             </div>
           </Card>
         </section>
+        )}
       </div>
 
       {/* ============ Bottom dock — slim ============ */}
