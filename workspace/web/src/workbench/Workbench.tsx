@@ -14,7 +14,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Beaker, Play, Loader2, RefreshCw, Download, ChevronRight, Brain,
+  Activity, Layers, Target, Trophy, Sparkles,
 } from 'lucide-react'
+import { OnboardingHero } from './components/OnboardingHero'
 import {
   createSession, startSession, streamEvents, listPathogens, intervene,
 } from './api'
@@ -158,19 +160,24 @@ export default function Workbench() {
   const composite = selectedCandidate?.scores.composite ?? 0
 
   return (
-    <div className="h-screen flex flex-col bg-slate-100/60 text-slate-900 antialiased font-sans">
+    <div className="h-screen flex flex-col workbench-bg text-slate-900 antialiased font-sans">
       {/* ============ Header ============ */}
-      <header className="flex items-center gap-3 px-4 h-12 border-b border-slate-200/80 bg-white/80 backdrop-blur shrink-0">
+      <header className="flex items-center gap-3 px-4 h-12 border-b border-slate-200/70 bg-white/85 backdrop-blur-md shrink-0 shadow-[0_1px_0_rgba(15,23,42,0.04)]">
         <div className="flex items-center gap-2 mr-2">
-          <div className="h-7 w-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-sm">
-            <Beaker className="h-4 w-4" strokeWidth={2.25} />
+          <div className="h-8 w-8 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-white flex items-center justify-center shadow-[0_2px_0_rgba(5,150,105,0.4),0_4px_12px_-4px_rgba(5,150,105,0.5)]">
+            <Beaker className="h-4 w-4" strokeWidth={2.5} />
           </div>
           <div className="leading-tight">
-            <div className="text-[13px] font-bold tracking-tight text-slate-900">Lysos</div>
-            <div className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold">
-              Workbench v0.2
+            <div className="text-[14px] font-bold tracking-tight text-slate-900">Lysos</div>
+            <div className="section-eyebrow">
+              Workbench · v0.2
             </div>
           </div>
+          {status === 'running' && (
+            <span className="inline-flex items-center gap-1.5 ml-2 px-2 h-6 rounded-full bg-emerald-50 ring-1 ring-emerald-200/80 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
+              <span className="live-dot" /> Live
+            </span>
+          )}
         </div>
 
         <Selector
@@ -214,7 +221,7 @@ export default function Workbench() {
           <button
             onClick={handleStart}
             disabled={status === 'running'}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 disabled:text-slate-500 text-white px-3.5 h-8 rounded-md font-semibold text-[12px] flex items-center gap-1.5 transition-colors shadow-sm"
+            className="bg-gradient-to-b from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 disabled:from-slate-300 disabled:to-slate-400 disabled:text-slate-500 text-white px-3.5 h-8 rounded-lg font-semibold text-[12px] flex items-center gap-1.5 transition-all shadow-[0_1px_0_rgba(5,150,105,0.4),0_4px_12px_-4px_rgba(5,150,105,0.5)] disabled:shadow-none"
           >
             {status === 'running'
               ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -232,16 +239,20 @@ export default function Workbench() {
 
       {/* ============ Pathogen ribbon ============ */}
       {targetInfo && (
-        <div className="px-4 h-8 border-b border-slate-200/70 bg-white/40 flex items-center gap-3 text-[11px] shrink-0">
-          <span className="font-semibold text-slate-800">{targetInfo.code}</span>
-          <span className="text-slate-500">{targetInfo.name}</span>
-          <Divider />
-          <Stat label="resistance" value={String(targetInfo.resistome_count)} />
-          <Stat label="first-line" value={String(targetInfo.first_line_count)} />
-          <Stat label="best" value={composite > 0 ? composite.toFixed(3) : '—'} accent={composite >= 0.8 ? 'text-emerald-700' : 'text-slate-700'} />
-          <Stat label="pareto" value={String(paretoFrontier.length)} />
-          <span className="ml-auto text-slate-400 font-mono text-[10px]">
-            session · {sessionId ?? '—'}
+        <div className="px-4 h-10 border-b border-slate-200/70 bg-white/30 backdrop-blur flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2">
+            <Target className="h-3.5 w-3.5 text-slate-400" />
+            <span className="text-[12px] font-bold text-slate-900 tracking-tight">{targetInfo.code}</span>
+            <span className="text-[11px] text-slate-500">{targetInfo.name}</span>
+          </div>
+          <span className="h-4 w-px bg-slate-200 mx-1" />
+          <RibbonStat icon={<Layers className="h-3 w-3" />} label="resistance" value={String(targetInfo.resistome_count)} tone="rose" />
+          <RibbonStat icon={<Activity className="h-3 w-3" />} label="first-line" value={String(targetInfo.first_line_count)} tone="sky" />
+          <RibbonStat icon={<Trophy className="h-3 w-3" />} label="best" value={composite > 0 ? composite.toFixed(3) : '—'}
+            tone={composite >= 0.8 ? 'emerald' : 'slate'} />
+          <RibbonStat icon={<Sparkles className="h-3 w-3" />} label="pareto" value={String(paretoFrontier.length)} tone="violet" />
+          <span className="ml-auto text-slate-400 font-mono text-[10px] truncate max-w-[280px]">
+            {sessionId ? <>session · <span className="text-slate-600">{sessionId.slice(0, 8)}</span></> : 'no session'}
           </span>
         </div>
       )}
@@ -250,7 +261,7 @@ export default function Workbench() {
       <div className="flex-1 grid grid-cols-12 gap-2 p-2 min-h-0">
         {/* LEFT — chat */}
         <section className={clsxColCount(chatView === 'columns')}>
-          <Card className="flex flex-col min-h-0">
+          <Card accent="emerald" className="flex flex-col min-h-0 h-full">
             <CardHeader>
               <span>{chatView === 'columns' ? 'Multi-agent debate' : 'Conversation'}</span>
               <Toggle
@@ -282,10 +293,10 @@ export default function Workbench() {
 
         {/* CENTER — visuals */}
         <section className={chatView === 'columns' ? 'col-span-3 flex flex-col gap-2 min-h-0' : 'col-span-5 flex flex-col gap-2 min-h-0'}>
-          <Card className="flex-1 relative min-h-0">
+          <Card accent="sky" className="flex-1 relative min-h-0">
             <div className="absolute top-2 left-2 z-10 flex items-center gap-2 bg-white/95 px-2 py-1 rounded-md text-[10px] font-mono text-slate-600 shadow-sm border border-slate-200/60">
-              <span className="text-slate-400">3D</span>
-              <span className="font-semibold">{PATHOGEN_TARGET_PDB[target]}</span>
+              <span className="section-eyebrow">3D</span>
+              <span className="font-semibold text-slate-700">{PATHOGEN_TARGET_PDB[target]}</span>
               {selectedCandidate && (
                 <>
                   <ChevronRight className="h-3 w-3 text-slate-300" />
@@ -299,9 +310,19 @@ export default function Workbench() {
               pathogen={target}
               className="w-full h-full"
             />
+            {!selectedCandidate && (
+              <OnboardingHero
+                pathogenName={targetInfo?.name}
+                pathogenCode={targetInfo?.code}
+                resistomeCount={targetInfo?.resistome_count}
+                firstLineCount={targetInfo?.first_line_count}
+                onStart={handleStart}
+                running={status === 'running'}
+              />
+            )}
           </Card>
 
-          <Card className="flex flex-col" style={{ minHeight: 220 }}>
+          <Card accent="violet" className="flex flex-col" style={{ minHeight: 220 }}>
             <CardHeader>
               <span>2D structure</span>
               {selectedCandidate && (
@@ -335,7 +356,7 @@ export default function Workbench() {
 
         {/* RIGHT — combo dock */}
         <section className="col-span-3 flex flex-col gap-2 min-h-0">
-          <Card className="flex flex-col" style={{ height: '52%' }}>
+          <Card accent="amber" className="flex flex-col" style={{ height: '52%' }}>
             <CardHeader>
               <span className="capitalize">{rightTab}</span>
               <div className="ml-auto flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-md">
@@ -392,10 +413,10 @@ export default function Workbench() {
             </div>
           </Card>
 
-          <Card className="flex-1 flex flex-col min-h-0">
+          <Card accent="rose" className="flex-1 flex flex-col min-h-0">
             <CardHeader>
               <span>Candidates</span>
-              <span className="text-[10px] font-mono text-slate-400">{candidates.length} · {paretoFrontier.length} pareto</span>
+              <span className="ml-auto text-[10px] font-mono text-slate-400 tabular-nums">{candidates.length} · {paretoFrontier.length} pareto</span>
             </CardHeader>
             <div className="flex-1 overflow-auto min-h-0">
               <CandidateList
@@ -454,12 +475,14 @@ function clsxColCount(columnsView: boolean): string {
 interface CardProps {
   className?: string
   style?: React.CSSProperties
+  accent?: 'emerald' | 'violet' | 'sky' | 'rose' | 'amber'
   children: React.ReactNode
 }
-function Card({ className, style, children }: CardProps) {
+function Card({ className, style, accent, children }: CardProps) {
+  const accentClass = accent ? `lcard-accent-${accent}` : ''
   return (
     <div
-      className={['bg-white border border-slate-200/80 rounded-lg shadow-[0_1px_0_rgba(15,23,42,0.04)] overflow-hidden', className].filter(Boolean).join(' ')}
+      className={['lcard', accentClass, className].filter(Boolean).join(' ')}
       style={style}
     >
       {children}
@@ -469,7 +492,7 @@ function Card({ className, style, children }: CardProps) {
 
 function CardHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2 px-3 h-9 border-b border-slate-200/80 bg-slate-50/50 text-[11px] font-semibold uppercase tracking-wider text-slate-500 shrink-0">
+    <div className="lcard-header">
       {children}
     </div>
   )
@@ -542,23 +565,40 @@ function Toggle<T extends string>(props: {
   )
 }
 
-function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+const RIBBON_TONES: Record<string, { ring: string; bg: string; text: string; icon: string }> = {
+  emerald: { ring: 'ring-emerald-200/70', bg: 'bg-emerald-50', text: 'text-emerald-800', icon: 'text-emerald-600' },
+  rose:    { ring: 'ring-rose-200/70',    bg: 'bg-rose-50',    text: 'text-rose-800',    icon: 'text-rose-600'    },
+  sky:     { ring: 'ring-sky-200/70',     bg: 'bg-sky-50',     text: 'text-sky-800',     icon: 'text-sky-600'     },
+  violet:  { ring: 'ring-violet-200/70',  bg: 'bg-violet-50',  text: 'text-violet-800',  icon: 'text-violet-600'  },
+  slate:   { ring: 'ring-slate-200/70',   bg: 'bg-white/70',   text: 'text-slate-700',   icon: 'text-slate-400'   },
+}
+
+function RibbonStat(props: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  tone?: keyof typeof RIBBON_TONES
+}) {
+  const t = RIBBON_TONES[props.tone ?? 'slate']
   return (
-    <span className="inline-flex items-baseline gap-1">
-      <span className="text-[9px] uppercase tracking-widest text-slate-400 font-semibold">{label}</span>
-      <span className={['font-mono font-semibold', accent ?? 'text-slate-700'].join(' ')}>{value}</span>
+    <span className={['inline-flex items-center gap-1.5 px-2 h-7 rounded-md ring-1 font-mono tabular-nums',
+      t.ring, t.bg, t.text].join(' ')}>
+      <span className={t.icon}>{props.icon}</span>
+      <span className="text-[9px] uppercase tracking-[0.14em] font-bold text-slate-400">{props.label}</span>
+      <span className="text-[12px] font-semibold">{props.value}</span>
     </span>
   )
 }
 
-function Divider() {
-  return <span className="text-slate-200">·</span>
-}
-
 function EmptyHint({ label }: { label: string }) {
   return (
-    <div className="h-full flex items-center justify-center text-slate-300 text-[11px] text-center px-4">
-      {label}
+    <div className="h-full flex flex-col items-center justify-center text-center px-4 py-6 gap-2">
+      <div className="h-8 w-8 rounded-full bg-slate-100 ring-1 ring-slate-200 flex items-center justify-center">
+        <Sparkles className="h-4 w-4 text-slate-300" />
+      </div>
+      <div className="text-[11px] text-slate-400 leading-relaxed max-w-[220px]">
+        {label}
+      </div>
     </div>
   )
 }

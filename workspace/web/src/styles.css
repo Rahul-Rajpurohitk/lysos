@@ -4,76 +4,128 @@
 
 :root {
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-  color-scheme: dark;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss01";
+  font-variant-numeric: tabular-nums;
+  color-scheme: light;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(
-      ellipse at top left,
-      rgba(0, 230, 185, 0.06) 0%,
-      transparent 50%
-    ),
-    radial-gradient(
-      ellipse at bottom right,
-      rgba(255, 122, 26, 0.04) 0%,
-      transparent 50%
-    ),
-    #05060a;
+  background: #f6f7f9;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* The /workbench page paints its own background; legacy / page keeps dark. */
+.workbench-bg {
+  background:
+    radial-gradient(1200px 600px at 90% -10%, rgba(16, 185, 129, 0.06), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(139, 92, 246, 0.05), transparent 65%),
+    linear-gradient(180deg, #f7f8fa 0%, #f1f3f6 100%);
 }
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+
+/* Custom scrollbar — subtle for light theme */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: #262b3a;
-  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.10);
+  border-radius: 8px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #3a4154;
+::-webkit-scrollbar-thumb:hover { background: rgba(15, 23, 42, 0.20); }
+
+/* Selection colour */
+::selection { background: rgba(16, 185, 129, 0.18); color: #0f172a; }
+
+/* Animations */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+@keyframes float-y {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); opacity: 0.6; }
+  70%  { transform: scale(1.15); opacity: 0; }
+  100% { transform: scale(1.15); opacity: 0; }
 }
 
-/* Component utilities */
 @layer components {
-  .card {
-    @apply rounded-xl bg-ink-800/60 backdrop-blur border border-ink-600/40 p-4 shadow-lg;
+  /* ------------------------------ Card system ------------------------------ */
+  .lcard {
+    @apply bg-white border border-slate-200/70 rounded-xl
+           shadow-[0_1px_0_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.10)]
+           overflow-hidden;
+  }
+  .lcard-hover {
+    @apply hover:border-slate-300/80 hover:shadow-[0_1px_0_rgba(15,23,42,0.04),0_12px_30px_-14px_rgba(15,23,42,0.18)]
+           transition-all;
+  }
+  .lcard-header {
+    @apply flex items-center gap-2 px-3 h-9
+           border-b border-slate-200/70 bg-gradient-to-b from-white to-slate-50/60
+           text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500
+           shrink-0;
+  }
+  .lcard-accent-emerald { @apply border-t-2 border-t-emerald-400/70; }
+  .lcard-accent-violet  { @apply border-t-2 border-t-violet-400/70; }
+  .lcard-accent-sky     { @apply border-t-2 border-t-sky-400/70; }
+  .lcard-accent-rose    { @apply border-t-2 border-t-rose-400/70; }
+  .lcard-accent-amber   { @apply border-t-2 border-t-amber-400/70; }
+
+  /* ------------------------------ Stat tile -------------------------------- */
+  .stat-tile {
+    @apply inline-flex items-baseline gap-1.5 px-2 h-7 rounded-md
+           bg-white/70 ring-1 ring-slate-200/70
+           text-slate-700 font-mono tabular-nums;
+  }
+  .stat-tile-accent {
+    @apply bg-emerald-50/80 ring-emerald-200/70 text-emerald-800;
   }
 
-  .card-hover {
-    @apply hover:border-accent-500/40 hover:bg-ink-700/60 transition-colors;
+  /* ------------------------------ KBD --------------------------------------- */
+  .kbd {
+    @apply inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1
+           rounded border border-slate-200 bg-white
+           text-[10px] font-mono text-slate-600 shadow-[0_1px_0_rgba(15,23,42,0.06)];
   }
 
-  .btn-primary {
-    @apply px-4 py-2 rounded-lg bg-accent-500 text-ink-950 font-medium
-           hover:bg-accent-400 active:bg-accent-600
-           disabled:opacity-50 disabled:cursor-not-allowed transition-colors;
+  /* ------------------------------ Pulsing dot ------------------------------ */
+  .live-dot { @apply relative inline-flex h-2 w-2; }
+  .live-dot::before {
+    content: '';
+    @apply absolute inset-0 rounded-full bg-emerald-500;
+    animation: pulse-ring 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  .live-dot::after {
+    content: '';
+    @apply relative inline-flex h-2 w-2 rounded-full bg-emerald-500;
   }
 
-  .btn-ghost {
-    @apply px-3 py-1.5 rounded-lg bg-transparent text-slate-300
-           hover:bg-ink-700 hover:text-slate-100 transition-colors;
+  /* ------------------------------ Shimmer skeleton -------------------------- */
+  .shimmer {
+    background: linear-gradient(110deg,
+      rgba(241, 245, 249, 1) 8%,
+      rgba(226, 232, 240, 1) 18%,
+      rgba(241, 245, 249, 1) 33%);
+    background-size: 200% 100%;
+    animation: shimmer 1.6s linear infinite;
   }
 
-  .pill {
-    @apply px-2 py-0.5 rounded-md text-xs font-medium;
+  /* ------------------------------ Pill / chip ------------------------------ */
+  .chip {
+    @apply inline-flex items-center gap-1 px-1.5 h-5 rounded
+           text-[10px] font-mono tabular-nums;
   }
+  .chip-slate   { @apply chip bg-slate-100 text-slate-600 ring-1 ring-slate-200/80; }
+  .chip-emerald { @apply chip bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200/80; }
+  .chip-rose    { @apply chip bg-rose-50 text-rose-700 ring-1 ring-rose-200/80; }
+  .chip-violet  { @apply chip bg-violet-50 text-violet-700 ring-1 ring-violet-200/80; }
+  .chip-sky     { @apply chip bg-sky-50 text-sky-700 ring-1 ring-sky-200/80; }
+  .chip-amber   { @apply chip bg-amber-50 text-amber-700 ring-1 ring-amber-200/80; }
 
-  .pill-critical {
-    @apply pill bg-bad-500/15 text-bad-400 border border-bad-500/20;
-  }
-
-  .pill-high {
-    @apply pill bg-warn-500/15 text-warn-400 border border-warn-500/20;
-  }
-
-  .pill-good {
-    @apply pill bg-good-500/15 text-good-400 border border-good-500/20;
+  /* ------------------------------ Section title ---------------------------- */
+  .section-eyebrow {
+    @apply text-[10px] uppercase tracking-[0.18em] font-bold text-slate-400;
   }
 }
