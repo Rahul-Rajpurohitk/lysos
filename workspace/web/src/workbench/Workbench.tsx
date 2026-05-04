@@ -5,7 +5,7 @@
 //   Bottom:  lineage tree + tool-call timeline + constraint bar
 
 import { useEffect, useMemo, useState } from 'react'
-import { Beaker, Play, Loader2, RefreshCw } from 'lucide-react'
+import { Beaker, Play, Loader2, RefreshCw, Download } from 'lucide-react'
 import {
   createSession, startSession, streamEvents, listPathogens,
 } from './api'
@@ -26,6 +26,8 @@ import { MoAPanel } from './components/MoAPanel'
 import { FunctionalGroupPalette } from './components/FunctionalGroupPalette'
 import { ReplayScrubber } from './components/ReplayScrubber'
 import { ConstraintBar } from './components/ConstraintBar'
+import { SynthesisTree } from './components/SynthesisTree'
+import { KnowledgeGraph } from './components/KnowledgeGraph'
 import type { Constraint } from './types'
 
 const PATHOGEN_TARGET_PDB: Record<Pathogen, string> = {
@@ -53,7 +55,7 @@ export default function Workbench() {
   const [autonomy, setAutonomy] = useState<Autonomy>('copilot')
   const [maxIterations, setMaxIterations] = useState(4)
   const [chatView, setChatView] = useState<'stream' | 'columns'>('stream')
-  const [rightTab, setRightTab] = useState<'radar' | 'pareto'>('radar')
+  const [rightTab, setRightTab] = useState<'radar' | 'pareto' | 'synth' | 'graph'>('radar')
   const [showMoA, setShowMoA] = useState(false)
   const [constraints, setConstraints] = useState<Constraint[]>([])
 
@@ -192,6 +194,28 @@ export default function Workbench() {
           </button>
 
           <button
+            onClick={async () => {
+              if (!sessionId) return
+              const r = await fetch(`/workbench/sessions/${sessionId}/notebook`)
+              if (!r.ok) return
+              const nb = await r.json()
+              const blob = new Blob([JSON.stringify(nb, null, 2)],
+                { type: 'application/x-ipynb+json' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url
+              a.download = `lysos-${sessionId.slice(0, 8)}.ipynb`
+              a.click()
+              URL.revokeObjectURL(url)
+            }}
+            disabled={!sessionId}
+            className="bg-slate-200 hover:bg-slate-300 disabled:bg-slate-100 disabled:text-slate-400 text-slate-700 px-3 py-1.5 rounded text-sm flex items-center gap-1 transition-colors"
+            title="Export session as Jupyter notebook"
+          >
+            <Download className="w-3.5 h-3.5" />
+          </button>
+
+          <button
             onClick={reset}
             className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1.5 rounded text-sm flex items-center gap-1 transition-colors"
             title="Reset"
@@ -288,22 +312,19 @@ export default function Workbench() {
                 {rightTab === 'radar' ? 'Reward radar' : 'Pareto explorer'}
               </span>
               <div className="flex gap-1">
-                <button
-                  onClick={() => setRightTab('radar')}
-                  className={`px-2 py-0.5 text-[10px] rounded ${rightTab === 'radar' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
-                >
-                  Radar
-                </button>
-                <button
-                  onClick={() => setRightTab('pareto')}
-                  className={`px-2 py-0.5 text-[10px] rounded ${rightTab === 'pareto' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
-                >
-                  Pareto
-                </button>
+                {(['radar', 'pareto', 'synth', 'graph'] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setRightTab(t)}
+                    className={`px-2 py-0.5 text-[10px] rounded ${rightTab === t ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+                  >
+                    {t === 'radar' ? 'Radar' : t === 'pareto' ? 'Pareto' : t === 'synth' ? 'Synth' : 'Graph'}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="p-2 min-h-[300px]">
-              {rightTab === 'radar' ? (
+              {rightTab === 'radar' && (
                 selectedCandidate
                   ? <RewardRadar
                       scores={selectedCandidate.scores}
@@ -316,12 +337,19 @@ export default function Workbench() {
                   : <div className="h-[300px] flex items-center justify-center text-slate-400 text-xs">
                       Radar appears with candidate
                     </div>
-              ) : (
+              )}
+              {rightTab === 'pareto' && (
                 <ParetoExplorer
                   candidates={candidates}
                   paretoIds={paretoFrontier}
                   onSelect={setSelected}
                 />
+              )}
+              {rightTab === 'synth' && (
+                <SynthesisTree smiles={selectedCandidate?.smiles ?? null} />
+              )}
+              {rightTab === 'graph' && (
+                <KnowledgeGraph pathogen={target} />
               )}
             </div>
           </div>
