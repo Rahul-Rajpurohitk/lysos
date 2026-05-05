@@ -24,5 +24,13 @@ Usage:
 """
 
 from .gemini import GeminiEmbedder
+from .pharma_lookup import lookup as lookup_pharma
+from .pharma_lookup import lookup_many as lookup_pharma_many
+from .pharma_lookup import format_card as format_pharma_card
 
-__all__ = ["GeminiEmbedder"]
+__all__ = [
+    "GeminiEmbedder",
+    "lookup_pharma",
+    "lookup_pharma_many",
+    "format_pharma_card",
+]

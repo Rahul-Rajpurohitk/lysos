@@ -411,13 +411,25 @@ listing what was filtered.
 ### 5.8 Gemini Pro auxiliary scripts (not on the GPU pipeline)
 
 Three Gemini 2.5 Pro scripts that run before/after training on the laptop
-or VM. Each has a documented dollar cost; total ~$3.75 of the prepaid $10.
+or VM. Total ~$5 of the prepaid $10 budget.
 
 | Script                                          | When           | Cost  | What it produces |
 |-------------------------------------------------|----------------|-------|------------------|
 | `scripts/run_gemini_comparator.py`              | post-Stage-3   | ~$1.25 | `reports/gemini_25_pro_baseline.jsonl` — Gemini 2.5 Pro zero-shot responses on the 200-prompt eval set. Fed into the leaderboard for direct head-to-head with Lysos-RL. |
-| `scripts/enrich_named_drugs_with_gemini.py`     | anytime        | ~$1.50 | `artifacts/embeddings/named-drugs-gemini-enrichment.parquet` — mechanism / spectrum / indication / resistance_escape JSON for top ~40 named antibiotics. Plug into the embedding template as a higher-fidelity layer for the most clinically-relevant references. |
+| `scripts/enrich_named_drugs_with_gemini.py`     | anytime        | ~$2.50 | `artifacts/embeddings/named-drugs-gemini-enrichment.parquet` — mechanism / spectrum / indication / resistance_escape JSON for **218 top named antibiotics** (Wave 1 core 107 + Wave 2 broader-class 80 + Wave 3 combos/comparators 31). Powers `src.embeddings.pharma_lookup` for downstream Stage-2 SFT prompt enrichment, RAG re-ranking, and combo-reasoning data. |
 | `scripts/llm_as_judge_eval.py`                  | post-Stage-3   | ~$1.00 | `reports/lysos_rl_judge_scores.jsonl` — qualitative scores (reasoning_quality / citation_grounding / mechanism_plausibility / safety_awareness, each 0-10) for 50 held-out responses. Goes into the methods paper alongside the verifiable reward metrics. |
+
+#### 5.8.1 gemini-2.5-pro thinking-budget gotcha
+
+`gemini-2.5-pro` is a *thinking* model: `maxOutputTokens` is the combined
+budget for thinking + visible output. For pharmacology prompts the
+thinking phase consumes ~700-1000 tokens. Setting `maxOutputTokens=600`
+results in `finishReason=MAX_TOKENS`, empty `content.parts`, and
+`thoughtsTokenCount` ~= the budget. Always set ≥ 2000; we default to
+4000 with `responseMimeType=application/json` so the API returns clean
+JSON (no markdown fence stripping). Cost = (input × $1.25/M) +
+((output + thinking) × $10/M). Resume mode (`--skip-existing`) and
+incremental save (`--save-every 20`) protect API spend across restarts.
 
 ### 5.9 Tokenizer alignment guard
 
