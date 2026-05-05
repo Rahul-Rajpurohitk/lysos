@@ -93,10 +93,18 @@ def embedding_novelty(
     Returns list aligned with `samples`. Invalid samples → 0.0.
     """
     if not _ensure_loaded(reference_set):
-        # Fail CLOSED: return neutral 0.5 instead of fail-open 1.0
-        # Fail-open would flood the policy with max novelty reward and the
-        # model would learn to ignore the (unrelated) Tanimoto novelty signal.
-        return [0.5] * len(samples)
+        # NO FALLBACK. The user's policy is "no useless fallback that degrades
+        # quality". If the embedder + reference set aren't loaded, the
+        # component is unable to produce a real signal. Raise loudly so the
+        # training run is killed and the operator either:
+        #   (a) sets GEMINI_API_KEY + verifies reference set, OR
+        #   (b) sets weight=0 in configs/stage3_rl_grpo.yaml to disable
+        # Either way, NO silent contamination of the composite reward.
+        raise RuntimeError(
+            "embedding_novelty cannot produce real signal. Set GEMINI_API_KEY + "
+            "ensure reference_set exists, OR set weight=0 in stage3_rl_grpo.yaml "
+            "to disable this component. NO fallbacks per project policy."
+        )
 
     queries: list[str] = []
     valid_idx: list[int] = []

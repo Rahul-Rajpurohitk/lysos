@@ -36,15 +36,45 @@ def _load_cache(cache_path: str | Path) -> dict[tuple[str, str], float]:
 
 
 def pose_confidence(samples: list[str], cache_path: str = "data/processed/boltz2_poses_cache.parquet",
-                     target_pathogen: str = "MRSA", fallback: float = 0.5,
+                     target_pathogen: str = "MRSA", strict: bool = True,
                      **_) -> list[float]:
+    """Real Boltz-2 ipTM signal only. NO fallback that degrades reward quality.
+
+    Per project policy: cache must exist and contain entries for the candidates
+    being scored. If the cache is empty or doesn't cover this candidate's
+    (smiles, pathogen) pair, the component returns 0.0 (no contribution).
+
+    To DISABLE entirely if you don't have Boltz-2 data: set weight=0 in
+    configs/stage3_rl_grpo.yaml.
+    """
     cache = _load_cache(cache_path)
+    if strict and not cache:
+        raise RuntimeError(
+            f"boltz2_pose_conf: cache at {cache_path} is empty. Either populate "
+            f"it via scripts/calibrate_boltz_proxy.py + real Boltz-2, OR set "
+            f"weight=0 for this reward component. NO fallbacks per project policy."
+        )
+
     out = []
+    n_hits = 0
     for s in samples:
         smi = extract_smiles(s)
         if smi is None:
             out.append(0.0)
             continue
-        v = cache.get((smi, target_pathogen), fallback)
-        out.append(float(v))
+        v = cache.get((smi, target_pathogen))
+        if v is None:
+            # Real cache miss: return 0.0 (no positive contribution from
+            # uncomputed pose). This is NOT a fallback — it's "no signal".
+            out.append(0.0)
+        else:
+            out.append(float(v))
+            n_hits += 1
+    if strict and n_hits == 0 and len(samples) > 0:
+        log.warning(
+            "boltz2_pose_conf: 0/%d cache hits for pathogen=%s. The component "
+            "will return all zeros for this batch. Run real Boltz-2 sweep on "
+            "the active candidates if you want non-zero pose signal.",
+            len(samples), target_pathogen,
+        )
     return out
