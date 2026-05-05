@@ -81,8 +81,8 @@ def parse_args() -> argparse.Namespace:
                         "These tasks rely on hash dedup (pass 1) only.")
     p.add_argument("--push-to-hub", type=str, default=None)
     p.add_argument("--seed", type=int, default=42)
-    p.add_argument("--model", type=str, default="gemini-embedding-001",
-                   help="Embedder. Default gemini-embedding-001 (3072d, "
+    p.add_argument("--model", type=str, default="gemini-embedding-2",
+                   help="Embedder. Default gemini-embedding-2 (3072d, "
                         "$0.025/1M tokens, requires GEMINI_API_KEY). "
                         "We DO NOT use degraded open fallbacks like "
                         "all-MiniLM — those collapse templated prompts (99%% "
@@ -249,8 +249,8 @@ def main() -> int:
 
     model = None
     if args.mode in ("embed", "both"):
-        if args.model == "gemini-embedding-001":
-            log.info("Using gemini-embedding-001 via Google AI Studio API ...")
+        if args.model == "gemini-embedding-2":
+            log.info("Using gemini-embedding-2 via Google AI Studio API ...")
             try:
                 from src.embeddings import GeminiEmbedder
                 model = GeminiEmbedder(output_dim=args.output_dim, qps=15.0)

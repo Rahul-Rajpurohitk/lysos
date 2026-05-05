@@ -226,7 +226,7 @@ def main() -> int:
             log.error("--embed needs GEMINI_API_KEY env var")
             return 2
         from src.embeddings import GeminiEmbedder
-        log.info("Embedding %d entries via gemini-embedding-001 "
+        log.info("Embedding %d entries via gemini-embedding-2 "
                  "(output_dim=%d) — est cost ~$%.2f ...",
                  len(df), args.output_dim, 0.025e-6 * len(df) * 80)
         emb = GeminiEmbedder(output_dim=args.output_dim, qps=15.0)

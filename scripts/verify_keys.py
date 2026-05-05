@@ -63,7 +63,7 @@ def _http(url: str, headers: dict, body: bytes | None = None,
 def check_gemini(key: str) -> tuple[bool, str]:
     code, body = _http(
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        "gemini-embedding-001:embedContent",
+        "gemini-embedding-2:embedContent",
         headers={"Content-Type": "application/json", "X-goog-api-key": key},
         body=json.dumps({
             "content": {"parts": [{"text": "CCO"}]},

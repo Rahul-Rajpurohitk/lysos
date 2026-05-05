@@ -6,7 +6,7 @@ Used by:
     antibiotics as in-context examples)
 
 Indexes a corpus of (smiles, name, indication) tuples and returns
-nearest-neighbor matches by cosine similarity in gemini-embedding-001's
+nearest-neighbor matches by cosine similarity in gemini-embedding-2's
 3072-dim Matryoshka space.
 
 Required env: GEMINI_API_KEY (or GOOGLE_API_KEY).
@@ -82,7 +82,7 @@ class AntibioticRetriever:
             raise ValueError(f"No documents loaded from {self.index_source}")
 
         texts = [d.as_document_text() for d in self._docs]
-        log.info("  embedding %d documents with gemini-embedding-001...", len(texts))
+        log.info("  embedding %d documents with gemini-embedding-2...", len(texts))
         self._embeddings = self._embedder.embed_batch(
             texts, task_type="RETRIEVAL_DOCUMENT", normalize=True,
         )

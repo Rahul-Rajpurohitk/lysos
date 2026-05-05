@@ -1,4 +1,4 @@
-"""Embedding stack — Gemini Embedding 2 (gemini-embedding-001).
+"""Embedding stack — Gemini Embedding 2 (gemini-embedding-2).
 
 Used for:
   - Building the RAG / novelty index over known antibiotics (offline, one-time)

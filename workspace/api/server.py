@@ -384,7 +384,7 @@ async def design_stream(req: DesignRequest):
 @app.post("/api/similar")
 async def find_similar(req: SimilarRequest) -> list[dict]:
     """Return top-k known antibiotics most similar to the given SMILES,
-    using Gemini Embedding 2 (gemini-embedding-001) cosine similarity over our indexed corpus."""
+    using Gemini Embedding 2 (gemini-embedding-2) cosine similarity over our indexed corpus."""
     try:
         smi = _hardening.sanitize_smiles(req.smiles)
     except ValueError as exc:

@@ -103,7 +103,7 @@ def main() -> int:
 
     smiles_list = df["smiles"].tolist()
     n = len(smiles_list)
-    print(f"[INFO] Embedding {n} SMILES via Gemini Embedding 2 (gemini-embedding-001)")
+    print(f"[INFO] Embedding {n} SMILES via Gemini Embedding 2 (gemini-embedding-2)")
     print(f"[INFO] Batch size: {args.batch_size}, dim: 3072 (Matryoshka)")
     print(f"[INFO] qps: {args.qps}  threads: {args.threads}")
 
@@ -141,7 +141,7 @@ def main() -> int:
     out_df.attrs = {
         "source_path": str(args.source),
         "source_sha256_16": src_hash,
-        "model": "gemini-embedding-001",
+        "model": "gemini-embedding-2",
         "dim": 3072,
         "task_type": "RETRIEVAL_DOCUMENT",
         "normalized": True,

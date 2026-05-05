@@ -1,4 +1,4 @@
-"""Gemini Embedding 2 wrapper — gemini-embedding-001.
+"""Gemini Embedding 2 wrapper — gemini-embedding-2.
 
 Drop-in replacement for sentence-transformers `SentenceTransformer.encode`
 that calls Google's Gemini Embedding API. 3072-d Matryoshka, multimodal-ready,
@@ -6,7 +6,7 @@ $0.025/1M tokens.
 
 Configuration:
   - Set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) env var.
-  - Defaults to gemini-embedding-001, 3072d output.
+  - Defaults to gemini-embedding-2, 3072d output.
   - Optional Matryoshka downsampling via `output_dim` (768/1536/3072).
 
 Task types (per Google docs):
@@ -46,7 +46,7 @@ import requests
 log = logging.getLogger("gemini_embed")
 
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta"
-MODEL_NAME = "gemini-embedding-001"
+MODEL_NAME = "gemini-embedding-2"
 # Per Google docs the API caps at 100 strings per :batchEmbedContents call
 BATCH_LIMIT = 100
 # Free tier rate cap is 1500 RPM — we throttle below

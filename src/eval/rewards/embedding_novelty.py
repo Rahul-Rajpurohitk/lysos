@@ -1,4 +1,4 @@
-"""Reward: semantic novelty via Gemini Embedding 2 (gemini-embedding-001).
+"""Reward: semantic novelty via Gemini Embedding 2 (gemini-embedding-2).
 
 Complements Tanimoto-on-ECFP4 (`novelty.py`) — Tanimoto catches direct
 fingerprint overlap; embedding distance catches paraphrase-level similarity
@@ -69,7 +69,7 @@ def _ensure_loaded(reference_set: str) -> bool:
             ]
         ref_smiles = [s.split()[0] for s in ref_smiles]  # support "SMILES name"
         log.info(
-            "Embedding %d reference antibiotics with gemini-embedding-001 "
+            "Embedding %d reference antibiotics with gemini-embedding-2 "
             "(this is a one-time ~$0.05 call)...", len(ref_smiles),
         )
         _REF_EMBS = _EMBEDDER.embed_batch(
