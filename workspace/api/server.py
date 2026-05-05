@@ -115,6 +115,29 @@ PATHOGEN_BY_SHORT = {p["short"]: p for p in PATHOGENS}
 _GENERATOR = None  # type: Optional[Any]
 
 
+# Tiny LRU for /api/score so the same (smiles, target) doesn't recompute
+# the full reward stack on every refresh. Capped at 256 entries (~1MB).
+from collections import OrderedDict as _OD
+_SCORE_CACHE: "_OD[tuple[str, str], dict]" = _OD()
+_SCORE_CACHE_MAX = 256
+
+
+def _score_cache_get(smiles: str, target: str) -> Optional[dict]:
+    key = (smiles, target)
+    if key in _SCORE_CACHE:
+        _SCORE_CACHE.move_to_end(key)
+        return _SCORE_CACHE[key]
+    return None
+
+
+def _score_cache_put(smiles: str, target: str, payload: dict) -> None:
+    key = (smiles, target)
+    _SCORE_CACHE[key] = payload
+    _SCORE_CACHE.move_to_end(key)
+    while len(_SCORE_CACHE) > _SCORE_CACHE_MAX:
+        _SCORE_CACHE.popitem(last=False)
+
+
 def _get_generator():
     """Lazy-import + cache the generator. Heavy init happens once."""
     global _GENERATOR
@@ -151,13 +174,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # demo space; tighten in prod
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Production hardening (rate limits, request-id logs, sanitizer, /api/ready).
+# Idempotent — safe to call before or after route inclusion.
+from . import hardening as _hardening
+_hardening.apply_hardening(app)
 
 # Workbench v2 — agentic playground (multi-agent state machine + 25 tools)
 try:
@@ -244,20 +264,31 @@ async def design(req: DesignRequest) -> DesignResponse:
     if pathogen is None:
         raise HTTPException(404, f"unknown pathogen: {req.target}")
 
-    gen = _get_generator()
+    # Cold-start lock: serialize the first request so the 60GB model load
+    # doesn't get triggered twice in parallel by concurrent first hits.
+    gen = await _hardening.with_model_lock(_get_generator)
+
+    # Bound the wall time so a stuck generation can't pin a worker forever.
     t0 = time.perf_counter()
-    candidates = await asyncio.to_thread(
-        gen.design,
-        target=req.target,
-        n=req.n,
-        modality=req.modality,
-        temperature=req.temperature,
-        top_p=req.top_p,
-        max_new_tokens=req.max_new_tokens,
-        score=True,
-        enable_rag=req.enable_rag,
-        rag_k=req.rag_k,
-    )
+    timeout_s = float(os.environ.get("LYSOS_DESIGN_TIMEOUT_S", "300"))
+    try:
+        candidates = await asyncio.wait_for(
+            asyncio.to_thread(
+                gen.design,
+                target=req.target,
+                n=req.n,
+                modality=req.modality,
+                temperature=req.temperature,
+                top_p=req.top_p,
+                max_new_tokens=req.max_new_tokens,
+                score=True,
+                enable_rag=req.enable_rag,
+                rag_k=req.rag_k,
+            ),
+            timeout=timeout_s,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(504, f"design timed out after {timeout_s:.0f}s")
     elapsed = time.perf_counter() - t0
 
     candidates.sort(key=lambda c: (c.combined or -1.0), reverse=True)
@@ -347,18 +378,23 @@ async def find_similar(req: SimilarRequest) -> list[dict]:
     """Return top-k known antibiotics most similar to the given SMILES,
     using Gemini Embedding 2 (gemini-embedding-001) cosine similarity over our indexed corpus."""
     try:
+        smi = _hardening.sanitize_smiles(req.smiles)
+    except ValueError as exc:
+        raise HTTPException(400, f"invalid smiles: {exc}") from exc
+    try:
         from src.inference.retrieval import get_retriever
         index_path = os.environ.get(
             "LYSOS_RAG_INDEX",
             "data/processed/known-antibiotics.smiles",
         )
         retr = get_retriever(index_path)
-        hits = await asyncio.to_thread(retr.retrieve, req.smiles, k=req.k)
+        hits = await asyncio.to_thread(retr.retrieve, smi, k=req.k)
         return hits
     except FileNotFoundError as exc:
-        raise HTTPException(503, f"retrieval index not built: {exc}") from exc
+        raise HTTPException(503, "retrieval index not built") from exc
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(500, f"retrieval failed: {exc}") from exc
+        log.exception("retrieval failed")
+        raise HTTPException(500, "retrieval failed") from exc
 
 
 @app.get("/api/score")
@@ -368,6 +404,10 @@ async def score_smiles(smiles: str = Query(..., min_length=1, max_length=500),
     pathogen = PATHOGEN_BY_SHORT.get(target)
     if pathogen is None:
         raise HTTPException(404, f"unknown pathogen: {target}")
+    try:
+        smiles = _hardening.sanitize_smiles(smiles)
+    except ValueError as exc:
+        raise HTTPException(400, f"invalid smiles: {exc}") from exc
 
     from src.eval.rewards.activity import predict_mic
     from src.eval.rewards.drug_likeness import qed_score
@@ -375,6 +415,10 @@ async def score_smiles(smiles: str = Query(..., min_length=1, max_length=500),
     from src.eval.rewards.safety import hemolysis_inverse
     from src.eval.rewards.synth import sa_score
     from src.eval.rewards.validity import smiles_valid
+
+    cached = _score_cache_get(smiles, target)
+    if cached is not None:
+        return cached
 
     raws = [f"SMILES: {smiles}"]
     weights = {
@@ -406,13 +450,15 @@ async def score_smiles(smiles: str = Query(..., min_length=1, max_length=500),
     }
     combined = sum(weights[k] * v for k, v in scores.items())
 
-    return {
+    payload = {
         "smiles": smiles,
         "target": target,
         "pathogen": pathogen,
         "scores": scores,
         "combined": combined,
     }
+    _score_cache_put(smiles, target, payload)
+    return payload
 
 
 # ----------------------------------------------------------------------------
