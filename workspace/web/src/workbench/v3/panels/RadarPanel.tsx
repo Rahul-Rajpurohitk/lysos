@@ -38,37 +38,37 @@ export function RadarPanel({ current, best, weights }: RadarPanelProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ height: 240, background: "var(--lys-surface)", borderRadius: 12, padding: 8 }}>
+      <div style={{ height: 240, background: "var(--lys-surface)", borderRadius: 12, padding: 8, border: "1px solid var(--lys-border)" }}>
         <ResponsiveContainer>
           <RadarChart data={data} outerRadius="78%">
-            <PolarGrid stroke="rgba(255,255,255,0.08)" />
-            <PolarAngleAxis dataKey="axis" tick={{ fill: "#8b949e", fontSize: 11 }} />
+            <PolarGrid stroke="rgba(15,23,42,0.08)" />
+            <PolarAngleAxis dataKey="axis" tick={{ fill: "#475569", fontSize: 11 }} />
             <PolarRadiusAxis
               domain={[0, 1]}
               tick={false}
               axisLine={false}
-              stroke="rgba(255,255,255,0.05)"
+              stroke="rgba(15,23,42,0.05)"
             />
             <Radar
               name="current"
               dataKey="current"
-              stroke="#34d399"
-              fill="#34d399"
-              fillOpacity={0.35}
+              stroke="#10b981"
+              fill="#10b981"
+              fillOpacity={0.32}
               strokeWidth={2}
             />
             {best && (
               <Radar
                 name="best"
                 dataKey="best"
-                stroke="#a78bfa"
-                fill="#a78bfa"
-                fillOpacity={0.15}
+                stroke="#8b5cf6"
+                fill="#8b5cf6"
+                fillOpacity={0.12}
                 strokeDasharray="4 4"
               />
             )}
             <Legend
-              wrapperStyle={{ fontSize: 11, color: "#8b949e" }}
+              wrapperStyle={{ fontSize: 11, color: "#475569" }}
               iconSize={8}
             />
           </RadarChart>

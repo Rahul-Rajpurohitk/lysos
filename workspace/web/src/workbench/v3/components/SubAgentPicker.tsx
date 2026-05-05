@@ -85,7 +85,7 @@ export function SubAgentPicker({ active, onToggle }: SubAgentPickerProps) {
                     padding: 8,
                     border: 0,
                     borderRadius: 6,
-                    background: on ? "rgba(52, 211, 153, 0.08)" : "transparent",
+                    background: on ? "var(--lys-accent-soft)" : "transparent",
                     cursor: "pointer",
                     textAlign: "left",
                     fontFamily: "inherit",
@@ -93,12 +93,12 @@ export function SubAgentPicker({ active, onToggle }: SubAgentPickerProps) {
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.background = on
-                      ? "rgba(52, 211, 153, 0.12)"
+                      ? "#a7f3d0"
                       : "var(--lys-surface-2)";
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = on
-                      ? "rgba(52, 211, 153, 0.08)"
+                      ? "var(--lys-accent-soft)"
                       : "transparent";
                   }}
                 >
@@ -128,10 +128,11 @@ export function SubAgentPicker({ active, onToggle }: SubAgentPickerProps) {
                   {on && (
                     <span style={{
                       fontSize: 10,
-                      color: "var(--lys-accent)",
+                      color: "#047857",
                       fontFamily: "var(--lys-font-mono)",
                       flexShrink: 0,
                       alignSelf: "center",
+                      fontWeight: 600,
                     }}>active</span>
                   )}
                 </button>

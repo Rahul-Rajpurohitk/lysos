@@ -162,19 +162,19 @@ function formatTs(ts: number): string {
 }
 
 const AGENT_BG: Record<string, string> = {
-  designer: "rgba(52, 211, 153, 0.15)",
-  critic: "rgba(248, 113, 113, 0.15)",
-  editor: "rgba(96, 165, 250, 0.15)",
-  strategist: "rgba(167, 139, 250, 0.15)",
-  user: "rgba(251, 191, 36, 0.15)",
-  system: "rgba(255, 255, 255, 0.05)",
+  designer: "#d1fae5",
+  critic: "#fee2e2",
+  editor: "#dbeafe",
+  strategist: "#ede9fe",
+  user: "#fef3c7",
+  system: "rgba(15, 23, 42, 0.05)",
 };
 const AGENT_FG: Record<string, string> = {
-  designer: "#86efac",
-  critic: "#fca5a5",
-  editor: "#93c5fd",
-  strategist: "#c4b5fd",
-  user: "#fcd34d",
+  designer: "#047857",
+  critic: "#b91c1c",
+  editor: "#1d4ed8",
+  strategist: "#6d28d9",
+  user: "#92400e",
   system: "var(--lys-text-dim)",
 };
 

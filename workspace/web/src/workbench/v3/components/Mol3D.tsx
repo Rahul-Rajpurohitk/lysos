@@ -45,7 +45,7 @@ export function Mol3D({ apiBase, smiles, pathogen }: Mol3DProps) {
       try {
         const NGL = await import("ngl");
         stage = new NGL.Stage(stageRef.current!, {
-          backgroundColor: "#161b22",
+          backgroundColor: "#ffffff",
           quality: "medium",
         });
         stageObj.current = stage;

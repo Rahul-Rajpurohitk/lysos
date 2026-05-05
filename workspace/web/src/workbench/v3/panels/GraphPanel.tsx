@@ -24,9 +24,9 @@ interface GraphPanelProps {
 }
 
 const COLORS: Record<Node["kind"], string> = {
-  pathogen: "#fbbf24",
-  resistance_gene: "#f87171",
-  drug_class: "#34d399",
+  pathogen: "#f59e0b",
+  resistance_gene: "#ef4444",
+  drug_class: "#10b981",
 };
 
 const RADIUS: Record<Node["kind"], number> = {
@@ -105,7 +105,7 @@ export function GraphPanel({ apiBase, pathogen }: GraphPanelProps) {
                 y1={a.y}
                 x2={b.x}
                 y2={b.y}
-                stroke={isHl ? "#34d399" : "rgba(255,255,255,0.16)"}
+                stroke={isHl ? "#10b981" : "rgba(15,23,42,0.16)"}
                 strokeWidth={isHl ? 2 : 1}
               />
             );
@@ -125,9 +125,9 @@ export function GraphPanel({ apiBase, pathogen }: GraphPanelProps) {
                   cy={n.y}
                   r={r}
                   fill={COLORS[n.kind]}
-                  stroke={isHl ? "white" : "rgba(255,255,255,0.25)"}
-                  strokeWidth={isHl ? 2 : 1.5}
-                  fillOpacity={isHl ? 1 : 0.85}
+                  stroke={isHl ? "#0f172a" : "white"}
+                  strokeWidth={isHl ? 2 : 2}
+                  fillOpacity={isHl ? 1 : 0.9}
                 />
                 <text
                   x={n.x}

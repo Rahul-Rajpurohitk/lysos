@@ -41,7 +41,7 @@ export function MechanismPanel(p: MechanismPanelProps) {
     <div style={{
       position: "absolute",
       inset: 0,
-      background: "rgba(13, 17, 23, 0.92)",
+      background: "rgba(255, 255, 255, 0.96)",
       backdropFilter: "blur(8px)",
       zIndex: 50,
       padding: 16,
@@ -104,9 +104,9 @@ export function MechanismPanel(p: MechanismPanelProps) {
                     padding: "2px 8px",
                     fontSize: 11,
                     fontFamily: "var(--lys-font-mono)",
-                    background: "rgba(52, 211, 153, 0.12)",
-                    color: "#86efac",
-                    border: "1px solid rgba(52, 211, 153, 0.25)",
+                    background: "var(--lys-accent-soft)",
+                    color: "#047857",
+                    border: "1px solid rgba(16, 185, 129, 0.25)",
                     borderRadius: 12,
                   }}>{g}</span>
                 ))}

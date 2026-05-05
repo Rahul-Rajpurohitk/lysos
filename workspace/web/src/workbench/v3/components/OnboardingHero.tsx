@@ -73,7 +73,7 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
       display: "flex",
       flexDirection: "column",
       gap: 32,
-      background: "radial-gradient(ellipse at top, rgba(52, 211, 153, 0.05), transparent 50%)",
+      background: "radial-gradient(ellipse at top, rgba(16, 185, 129, 0.08), transparent 60%)",
     }}>
       {/* Hero */}
       <motion.div
@@ -87,11 +87,11 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
           alignItems: "center",
           gap: 6,
           padding: "4px 12px",
-          background: "rgba(52, 211, 153, 0.12)",
-          border: "1px solid rgba(52, 211, 153, 0.3)",
+          background: "var(--lys-accent-soft)",
+          border: "1px solid rgba(16, 185, 129, 0.3)",
           borderRadius: 999,
           fontSize: 11,
-          color: "var(--lys-accent)",
+          color: "#047857",
           fontFamily: "var(--lys-font-mono)",
           letterSpacing: "0.1em",
           textTransform: "uppercase",
@@ -168,7 +168,8 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
             }}
             whileHover={{
               y: -2,
-              borderColor: "rgba(52, 211, 153, 0.4)",
+              borderColor: "rgba(16, 185, 129, 0.45)",
+              boxShadow: "var(--lys-shadow-md)",
             }}
           >
             <div style={{

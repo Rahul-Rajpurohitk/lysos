@@ -71,57 +71,58 @@ export function ParetoPanel({ candidates }: ParetoPanelProps) {
         </span>
       </div>
 
-      <div style={{ height: 240, background: "var(--lys-surface)", borderRadius: 12, padding: 8 }}>
+      <div style={{ height: 240, background: "var(--lys-surface)", borderRadius: 12, padding: 8, border: "1px solid var(--lys-border)" }}>
         <ResponsiveContainer>
           <ScatterChart margin={{ top: 8, right: 12, bottom: 24, left: 0 }}>
-            <CartesianGrid stroke="rgba(255,255,255,0.06)" />
+            <CartesianGrid stroke="rgba(15,23,42,0.08)" />
             <XAxis
               type="number"
               dataKey="x"
               domain={[0, 1]}
-              tick={{ fill: "#8b949e", fontSize: 10 }}
-              label={{ value: xLabel, position: "insideBottom", offset: -8, fill: "#8b949e", fontSize: 11 }}
-              stroke="#30363d"
+              tick={{ fill: "#475569", fontSize: 10 }}
+              label={{ value: xLabel, position: "insideBottom", offset: -8, fill: "#475569", fontSize: 11 }}
+              stroke="rgba(15,23,42,0.16)"
             />
             <YAxis
               type="number"
               dataKey="y"
               domain={[0, 1]}
-              tick={{ fill: "#8b949e", fontSize: 10 }}
-              label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 12, fill: "#8b949e", fontSize: 11 }}
-              stroke="#30363d"
+              tick={{ fill: "#475569", fontSize: 10 }}
+              label={{ value: yLabel, angle: -90, position: "insideLeft", offset: 12, fill: "#475569", fontSize: 11 }}
+              stroke="rgba(15,23,42,0.16)"
             />
             <ZAxis range={[40, 120]} dataKey="composite" />
             <Tooltip
-              cursor={{ stroke: "#34d399", strokeOpacity: 0.3 }}
+              cursor={{ stroke: "#10b981", strokeOpacity: 0.3 }}
               content={({ active, payload }) => {
                 if (!active || !payload || payload.length === 0) return null;
                 const p: any = payload[0].payload;
                 return (
                   <div style={{
-                    background: "#161b22",
-                    border: "1px solid rgba(255,255,255,0.16)",
+                    background: "#ffffff",
+                    border: "1px solid rgba(15,23,42,0.16)",
                     borderRadius: 6,
                     padding: 8,
                     fontSize: 11,
                     fontFamily: "var(--lys-font-mono)",
+                    boxShadow: "var(--lys-shadow-md)",
                   }}>
-                    <div style={{ color: p.isPareto ? "#34d399" : "#8b949e" }}>
+                    <div style={{ color: p.isPareto ? "#10b981" : "#94a3b8", fontWeight: 600 }}>
                       {p.isPareto ? "★ Pareto" : "dominated"}
                     </div>
-                    <div>{xLabel}: {p.x.toFixed(3)}</div>
-                    <div>{yLabel}: {p.y.toFixed(3)}</div>
-                    <div>composite: {p.composite.toFixed(3)}</div>
-                    <div style={{ marginTop: 4, color: "#e6edf3", fontSize: 10, maxWidth: 220, wordBreak: "break-all" }}>
+                    <div style={{ color: "#0f172a" }}>{xLabel}: {p.x.toFixed(3)}</div>
+                    <div style={{ color: "#0f172a" }}>{yLabel}: {p.y.toFixed(3)}</div>
+                    <div style={{ color: "#0f172a" }}>composite: {p.composite.toFixed(3)}</div>
+                    <div style={{ marginTop: 4, color: "#475569", fontSize: 10, maxWidth: 220, wordBreak: "break-all" }}>
                       {p.smiles}
                     </div>
                   </div>
                 );
               }}
             />
-            <Scatter data={data} fill="#34d399">
+            <Scatter data={data} fill="#10b981">
               {data.map((d, i) => (
-                <Cell key={i} fill={d.isPareto ? "#34d399" : "#475569"} />
+                <Cell key={i} fill={d.isPareto ? "#10b981" : "#cbd5e1"} />
               ))}
             </Scatter>
           </ScatterChart>

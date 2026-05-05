@@ -116,14 +116,14 @@ export function LineagePanel({ edits, candidates }: LineagePanelProps) {
               y1={e.from.y}
               x2={e.to.x - NODE_R}
               y2={e.to.y}
-              stroke="rgba(255,255,255,0.18)"
+              stroke="rgba(15,23,42,0.16)"
               strokeWidth={1.5}
             />
             {e.label && (
               <text
                 x={(e.from.x + e.to.x) / 2}
                 y={(e.from.y + e.to.y) / 2 - 4}
-                fill="#8b949e"
+                fill="#475569"
                 fontSize={10}
                 textAnchor="middle"
                 fontFamily="var(--lys-font-mono)"
@@ -140,7 +140,7 @@ export function LineagePanel({ edits, candidates }: LineagePanelProps) {
               cy={n.y}
               r={NODE_R}
               fill={compositeColor(n.composite)}
-              stroke="rgba(255,255,255,0.25)"
+              stroke="white"
               strokeWidth={2}
             />
             <text
@@ -157,7 +157,7 @@ export function LineagePanel({ edits, candidates }: LineagePanelProps) {
             <text
               x={n.x}
               y={n.y + NODE_R + 14}
-              fill="#8b949e"
+              fill="#475569"
               fontSize={9}
               textAnchor="middle"
               fontFamily="var(--lys-font-mono)"

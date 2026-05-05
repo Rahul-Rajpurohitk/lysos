@@ -420,13 +420,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       marginLeft: 8,
                       padding: "2px 8px",
                       fontSize: 10,
-                      background: "rgba(167, 139, 250, 0.15)",
-                      color: "#c4b5fd",
-                      border: "1px solid rgba(167, 139, 250, 0.35)",
+                      background: "#ede9fe",
+                      color: "#6d28d9",
+                      border: "1px solid #c4b5fd",
                       borderRadius: 999,
                       fontFamily: "var(--lys-font-mono)",
                       letterSpacing: "0.05em",
                       textTransform: "uppercase",
+                      fontWeight: 600,
                     }}>
                       replay {replayIdx}/{replayEvents.length}
                     </span>
@@ -552,15 +553,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       onClick={() => setMechanismOpen(true)}
                       disabled={!currentSmiles}
                       style={{
-                        background: "transparent",
-                        border: "1px solid rgba(52, 211, 153, 0.3)",
-                        color: "var(--lys-accent)",
-                        padding: "2px 8px",
+                        background: currentSmiles ? "var(--lys-accent-soft)" : "transparent",
+                        border: "1px solid rgba(16, 185, 129, 0.45)",
+                        color: "#047857",
+                        padding: "3px 10px",
                         borderRadius: 999,
                         fontSize: 11,
                         cursor: currentSmiles ? "pointer" : "not-allowed",
                         opacity: currentSmiles ? 1 : 0.4,
                         fontFamily: "inherit",
+                        fontWeight: 500,
                       }}
                     >
                       🧠 Mechanism
