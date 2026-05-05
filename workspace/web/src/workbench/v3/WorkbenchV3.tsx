@@ -10,6 +10,7 @@ import { DragEditChips } from "./components/DragEditChips";
 import { TabStrip } from "./components/TabStrip";
 import { Mol2D } from "./components/Mol2D";
 import { Mol3D } from "./components/Mol3D";
+import { MechanismPanel } from "./components/MechanismPanel";
 import { RadarPanel } from "./panels/RadarPanel";
 import { ParetoPanel } from "./panels/ParetoPanel";
 import { SynthPanel } from "./panels/SynthPanel";
@@ -91,6 +92,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [chatMode, setChatMode] = useState<"Stream" | "Columns">("Stream");
   const [activeTab, setActiveTab] = useState<RightTab>("Radar");
+  const [mechanismOpen, setMechanismOpen] = useState(false);
   const [currentIter, setCurrentIter] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
@@ -449,6 +451,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   display: "flex",
                   flexDirection: "column",
                   background: "var(--lys-bg)",
+                  position: "relative",
                 }}>
                   <div style={{
                     padding: "8px 12px",
@@ -457,10 +460,37 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     letterSpacing: "0.1em",
                     textTransform: "uppercase",
                     borderBottom: "1px solid var(--lys-border)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                   }}>
-                    2D structure · drag chips onto atoms
+                    <span>2D structure · drag chips onto atoms</span>
+                    <button
+                      onClick={() => setMechanismOpen(true)}
+                      disabled={!currentSmiles}
+                      style={{
+                        background: "transparent",
+                        border: "1px solid rgba(52, 211, 153, 0.3)",
+                        color: "var(--lys-accent)",
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        fontSize: 11,
+                        cursor: currentSmiles ? "pointer" : "not-allowed",
+                        opacity: currentSmiles ? 1 : 0.4,
+                        fontFamily: "inherit",
+                      }}
+                    >
+                      🧠 Mechanism
+                    </button>
                   </div>
                   <Mol2D apiBase={apiBase} smiles={currentSmiles} />
+                  <MechanismPanel
+                    apiBase={apiBase}
+                    smiles={currentSmiles}
+                    target={selectedPathogen}
+                    open={mechanismOpen}
+                    onClose={() => setMechanismOpen(false)}
+                  />
                   <DragEditChips
                     apiBase={apiBase}
                     currentSmiles={currentSmiles}

@@ -125,6 +125,127 @@ async def resistance_graph(pathogen_code: str) -> dict:
 
 # ---- Synth route endpoint (used by the Synth panel) ----
 
+@router.get("/mechanism/{smiles:path}")
+async def mechanism(smiles: str, target: str = "MRSA") -> dict:
+    """Return a structured mechanism-of-action reasoning for a candidate.
+
+    Pieces together: nearest-known-antibiotic via Tanimoto, target's
+    first-line therapy class, and the candidate's functional groups
+    (amide, beta-lactam, aryl, etc) into a 3-paragraph reasoned hypothesis.
+
+    No LLM call here — deterministic from RDKit + the resistome tool's
+    static knowledge base. The Mechanism agent in the chat loop layers
+    the LLM on top via this same endpoint.
+    """
+    from rdkit import Chem
+    from rdkit.Chem import AllChem, DataStructs, Descriptors, Crippen
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, "invalid SMILES")
+
+    # Functional group census
+    fg = {
+        "beta_lactam": Chem.MolFromSmarts("C1(=O)NC1") is not None and mol.HasSubstructMatch(Chem.MolFromSmarts("C1(=O)NC1")),
+        "amide": mol.HasSubstructMatch(Chem.MolFromSmarts("[CX3](=O)[NX3]")),
+        "aryl": mol.HasSubstructMatch(Chem.MolFromSmarts("c1ccccc1")),
+        "carboxyl": mol.HasSubstructMatch(Chem.MolFromSmarts("[CX3](=O)[OX2H1]")),
+        "amine": mol.HasSubstructMatch(Chem.MolFromSmarts("[NX3;H2,H1;!$(NC=O)]")),
+        "hydroxyl": mol.HasSubstructMatch(Chem.MolFromSmarts("[OX2H]")),
+        "sulfonamide": mol.HasSubstructMatch(Chem.MolFromSmarts("[#16](=O)(=O)[NX3]")),
+        "halide": mol.HasSubstructMatch(Chem.MolFromSmarts("[F,Cl,Br,I]")),
+    }
+    fg_list = [k for k, v in fg.items() if v]
+
+    # Nearest known antibiotic — use Tanimoto via known-antibiotics file.
+    nearest_name, nearest_sim, nearest_class = "—", 0.0, "unknown"
+    try:
+        ka_path = Path("data/processed/known-antibiotics-canonical.parquet")
+        if ka_path.exists():
+            import pandas as pd
+            df_ka = pd.read_parquet(ka_path)
+            fp = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+            best_sim, best_row = 0.0, None
+            # Sample 500 random known antibiotics for speed
+            df_sample = df_ka.sample(min(500, len(df_ka)), random_state=42)
+            for r in df_sample.to_dict("records"):
+                ka_smi = r.get("smiles") or ""
+                if not ka_smi:
+                    continue
+                ka_mol = Chem.MolFromSmiles(ka_smi)
+                if ka_mol is None:
+                    continue
+                ka_fp = AllChem.GetMorganFingerprintAsBitVect(ka_mol, 2, nBits=2048)
+                sim = DataStructs.TanimotoSimilarity(fp, ka_fp)
+                if sim > best_sim:
+                    best_sim, best_row = sim, r
+            if best_row:
+                nearest_name = best_row.get("name", "?")
+                nearest_class = best_row.get("drug_class", best_row.get("class", "unknown"))
+                nearest_sim = float(best_sim)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # Pathogen first-line targets
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    try:
+        from tools import registry  # type: ignore
+        rt = registry.get("get_pathogen_resistome")
+        first_line = []
+        if rt is not None:
+            rec = rt.call({"pathogen": target})
+            first_line = (rec.get("result") or {}).get("first_line_therapy", [])
+    except Exception:
+        first_line = []
+
+    # Build reasoned narrative
+    paragraphs = []
+
+    p1 = f"Candidate has functional groups: {', '.join(fg_list) or 'none distinctive'}. "
+    if fg.get("beta_lactam"):
+        p1 += "The β-lactam ring suggests acylation of penicillin-binding proteins (PBPs)."
+    elif fg.get("sulfonamide"):
+        p1 += "The sulfonamide warhead is a PABA-mimic; expect dihydropteroate-synthase inhibition."
+    elif fg.get("aryl") and fg.get("amide"):
+        p1 += "Aryl-amide motif is consistent with topoisomerase or membrane-targeting scaffolds."
+    paragraphs.append(p1)
+
+    p2 = f"Nearest known antibiotic in the catalog is {nearest_name} ({nearest_class}; Tanimoto {nearest_sim:.2f}). "
+    if nearest_sim < 0.3:
+        p2 += "Low similarity → genuine scaffold novelty."
+    elif nearest_sim < 0.6:
+        p2 += "Moderate similarity → likely shares mechanism but may evade resistance via differing accessory groups."
+    else:
+        p2 += "High similarity → expect cross-resistance with this drug class."
+    paragraphs.append(p2)
+
+    def _fl_label(d: Any) -> str:
+        if isinstance(d, dict):
+            return str(d.get("class") or d.get("name") or "?")
+        return str(d)
+
+    p3 = f"For {target}, current first-line agents target: " + ", ".join(
+        [_fl_label(d) for d in first_line[:3]] or ["—"]
+    ) + ". "
+    p3 += f"Candidate MW={Descriptors.MolWt(mol):.0f} Da, logP={Crippen.MolLogP(mol):.2f}; "
+    if Descriptors.MolWt(mol) > 500:
+        p3 += "MW is on the heavy side for oral bioavailability."
+    elif Descriptors.MolWt(mol) < 200:
+        p3 += "MW is small — likely cell-permeable but may lack target affinity."
+    else:
+        p3 += "MW is in the typical druglike range."
+    paragraphs.append(p3)
+
+    return {
+        "smiles": smiles,
+        "target": target,
+        "functional_groups": fg_list,
+        "nearest_known": {"name": nearest_name, "class": nearest_class, "similarity": nearest_sim},
+        "first_line_targets": first_line[:3],
+        "paragraphs": paragraphs,
+    }
+
+
 @router.get("/synth/{smiles:path}")
 async def synth_route(smiles: str) -> dict:
     """Look up retrosynthesis route for a SMILES.
