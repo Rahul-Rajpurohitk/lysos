@@ -50,9 +50,20 @@ def main():
             stats = finder.extract_statistics()
             n_routes = stats.get("number_of_routes", 0)
             top_score = stats.get("top_score", 0.0)
-            best_route = finder.routes[0] if finder.routes else None
-            n_steps = best_route.depth if best_route else 0
             n_buildup = stats.get("number_of_solved_routes", 0)
+            n_steps = 0
+            try:
+                if hasattr(finder, "routes") and len(finder.routes) > 0:
+                    best = finder.routes[0]
+                    if isinstance(best, dict):
+                        n_steps = int(best.get("max_transforms", best.get("depth", 0)) or 0)
+                    else:
+                        for attr in ("max_transforms", "depth", "n_steps"):
+                            val = getattr(best, attr, None)
+                            if val is not None:
+                                n_steps = int(val); break
+            except Exception:
+                n_steps = 0
             rows.append({
                 "smiles": smi,
                 "name": r.get("name"),
