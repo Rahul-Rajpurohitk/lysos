@@ -49,7 +49,18 @@ cd "$REPO_DIR"
 log "step 3/7 · install Python deps"
 python3 -m pip install --upgrade --quiet pip
 python3 -m pip install --quiet -e .
-python3 -m pip install --quiet sentence-transformers datasets pyarrow
+python3 -m pip install --quiet \
+    sentence-transformers \
+    datasets \
+    pyarrow \
+    xgboost \
+    joblib \
+    accelerate \
+    peft \
+    trl \
+    wandb \
+    "trl>=0.11" \
+    bitsandbytes 2>/dev/null || log "  (warn) bitsandbytes optional; pip may have skipped"
 
 # ---- 4. Pre-warm HF cache ----
 log "step 4/7 · pre-warming HF cache (Gemma 4 + EmbeddingGemma)"
@@ -82,17 +93,33 @@ log "step 5/7 · running smoke tests"
 python3 scripts/verify_loaders.py
 python3 scripts/smoke_test_rocm.py || log "  (warn) ROCm smoke test reported issues — review above"
 
-# ---- 6. Pull live datasets ----
+# ---- 6. Pull live datasets (pro-v12 + rl-prompts-v3 + tdc + reward caches) ----
 log "step 6/7 · pulling live HF datasets"
 python3 - <<'PY'
 from datasets import load_dataset
-print("  - rahul24raj/lysos-amr-stage2 ...")
-load_dataset("rahul24raj/lysos-amr-stage2")
+print("  - rahul24raj/lysos-amr-stage2-pro-v12 (Stage 2 SFT corpus, 380K rows) ...")
+load_dataset("rahul24raj/lysos-amr-stage2-pro-v12")
 print("    ✓")
-print("  - rahul24raj/lysos-rl-prompts ...")
-load_dataset("rahul24raj/lysos-rl-prompts")
+print("  - rahul24raj/lysos-rl-prompts-v3 (Stage 3 RL prompts, 12K) ...")
+load_dataset("rahul24raj/lysos-rl-prompts-v3")
+print("    ✓")
+print("  - rahul24raj/lysos-tdc-stage1 (Stage 1 TDC ADMET corpus, 151K rows) ...")
+load_dataset("rahul24raj/lysos-tdc-stage1")
 print("    ✓")
 PY
+
+log "step 6.5/7 · downloading reward caches (synth + boltz proxy)"
+mkdir -p data/processed
+# These are small (<10MB each); shipped via git-lfs from the repo
+ls data/processed/synth_calibration_cache.parquet 2>/dev/null \
+    && echo "  ✓ synth_calibration_cache present" \
+    || echo "  (warn) synth_calibration_cache missing — run scripts/calibrate_synth_cache.py"
+ls data/processed/boltz2_poses_cache.parquet 2>/dev/null \
+    && echo "  ✓ boltz2_poses_cache present" \
+    || echo "  (warn) boltz2_poses_cache missing — run scripts/calibrate_boltz_proxy.py"
+ls data/processed/aizynth_calibration_cache.parquet 2>/dev/null \
+    && echo "  ✓ aizynth_calibration_cache present" \
+    || echo "  (warn) aizynth cache missing — synthesizability reward will use SAscore fallback"
 
 # ---- 7. next steps ----
 log "step 7/7 · ready to train"

@@ -29,6 +29,7 @@ log = logging.getLogger(__name__)
 # to emit responses like "SMILES: CC1(C)..." or fenced code, so we extract.
 SMILES_PATTERNS = [
     re.compile(r"SMILES:\s*([^\s\n]+)"),
+    re.compile(r"PROPOSAL:\s*([^\s\n]+)"),
     re.compile(r"```(?:smiles|chem)?\s*\n?([^\n`]+)\n?```"),
     re.compile(r"<smiles>(.*?)</smiles>", re.DOTALL),
 ]

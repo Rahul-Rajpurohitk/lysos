@@ -1,0 +1,104 @@
+{
+  "stage": "2",
+  "n_pass": 16,
+  "n_fail": 8,
+  "results": [
+    {
+      "ok": false,
+      "msg": "  \u274c torch importable \u2014 pip install torch"
+    },
+    {
+      "ok": false,
+      "msg": "  \u274c Disk space check \u2014 list index out of range"
+    },
+    {
+      "ok": false,
+      "msg": "  \u274c torch installed \u2014 pip install"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 transformers \u2265 4.40 \u2014 5.7.0"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 datasets \u2265 2.0 \u2014 4.8.5"
+    },
+    {
+      "ok": false,
+      "msg": "  \u274c peft installed \u2014 pip install"
+    },
+    {
+      "ok": false,
+      "msg": "  \u274c trl installed \u2014 pip install"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 rdkit \u2265 2024 \u2014 2026.03.1"
+    },
+    {
+      "ok": false,
+      "msg": "  \u274c accelerate installed \u2014 pip install"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 xgboost \u2265 2.0 \u2014 3.2.0"
+    },
+    {
+      "ok": false,
+      "msg": "  \u274c wandb installed \u2014 pip install"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 huggingface_hub \u2265 0.20 \u2014 1.13.0"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 HF auth (rahul24raj) \u2014 scope=write"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 HF write scope \u2014 write"
+    },
+    {
+      "ok": false,
+      "msg": "  \u274c WANDB_API_KEY set (optional) \u2014 wandb logging will fail; export WANDB_API_KEY"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 rahul24raj/lysos-amr-stage2-pro-v12 \u2014 round-trip OK"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 rahul24raj/lysos-rl-prompts-v3 \u2014 round-trip OK"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 rahul24raj/lysos-tdc-stage1 \u2014 round-trip OK"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 config stage 2 parses"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 stage 2 push_strategy='checkpoint'"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 CompositeReward loads"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 reward fn executes on sample \u2014 composite=0.677"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 validity > 0 on PEN G \u2014 =1.000"
+    },
+    {
+      "ok": true,
+      "msg": "  \u2705 Loss masking 4/4"
+    }
+  ],
+  "timestamp": 1777961152.56539
+}

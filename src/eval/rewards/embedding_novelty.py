@@ -93,7 +93,10 @@ def embedding_novelty(
     Returns list aligned with `samples`. Invalid samples → 0.0.
     """
     if not _ensure_loaded(reference_set):
-        return [1.0] * len(samples)
+        # Fail CLOSED: return neutral 0.5 instead of fail-open 1.0
+        # Fail-open would flood the policy with max novelty reward and the
+        # model would learn to ignore the (unrelated) Tanimoto novelty signal.
+        return [0.5] * len(samples)
 
     queries: list[str] = []
     valid_idx: list[int] = []

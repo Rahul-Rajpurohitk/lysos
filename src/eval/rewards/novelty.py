@@ -37,17 +37,27 @@ def _load_reference_fingerprints(reference_path: str):
         return None
 
     fps = []
-    with open(p) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            # Allow "SMILES name" or just "SMILES"
-            smi = line.split()[0]
-            mol = Chem.MolFromSmiles(smi)
-            if mol is None:
-                continue
-            fps.append(AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048))
+    # Support both .parquet (canonical, post-cleanup) and .smiles (legacy text)
+    if p.suffix == ".parquet":
+        import pandas as pd
+        df = pd.read_parquet(p)
+        smiles_iter = (s for s in df["smiles"] if isinstance(s, str))
+    else:
+        # Legacy text file path; tolerate non-UTF8 bytes via errors=replace
+        def _smiles_from_text():
+            with open(p, encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    yield line.split()[0]
+        smiles_iter = _smiles_from_text()
+
+    for smi in smiles_iter:
+        mol = Chem.MolFromSmiles(smi)
+        if mol is None:
+            continue
+        fps.append(AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=2048))
     log.info("loaded %d reference antibiotic fingerprints from %s", len(fps), p)
     return fps
 

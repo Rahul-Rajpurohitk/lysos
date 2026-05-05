@@ -133,7 +133,8 @@ peft:
 hub:
   push_to_hub: true
   hub_model_id: rahul24raj/lysos-base
-  push_strategy: end
+  push_strategy: checkpoint     # push every save_steps interval (200) — survives VM crashes
+  private: true                  # private until eval-stable
 
 # -----------------------------------------------------------------------------
 # Wandb
