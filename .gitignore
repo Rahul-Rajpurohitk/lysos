@@ -118,3 +118,17 @@ uv.lock
 # HF Space deployment scratch (assembled by scripts/deploy_to_hf_space.py)
 .deploy/
 .venv-cli/
+
+# Local artifact mirror — heavy parquets, embeddings, predictors, adapters.
+# Owned locally + indexed in artifacts/MANIFEST.md (which IS tracked).
+# Re-create with: python3 scripts/save_artifacts_locally.py
+artifacts/embeddings/*.parquet
+artifacts/embeddings/*.json
+artifacts/caches/
+artifacts/predictors/
+artifacts/datasets/
+artifacts/adapters/
+artifacts/reports/
+artifacts/manifest.json
+!artifacts/MANIFEST.md
+!artifacts/.gitkeep
