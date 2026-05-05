@@ -22,7 +22,7 @@ project:
 model:
   base_id: google/gemma-4-31B-it
   dtype: bfloat16          # MI300X loves BF16
-  attn_impl: flash_attention_2   # via optimum-amd on ROCm
+  attn_impl: sdpa   # via optimum-amd on ROCm
   trust_remote_code: false
   use_cache: false         # disable during training to save memory
 

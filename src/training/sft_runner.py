@@ -192,6 +192,33 @@ def run_sft(args: argparse.Namespace) -> int:
         if eval_ds:
             eval_ds = eval_ds.select(range(min(8, len(eval_ds))))
 
+    # Our datasets store `messages` as a JSON-stringified list-of-dicts so
+    # they round-trip through Arrow cleanly. TRL 1.x expects either a
+    # native chat list-of-dicts OR a single `text` field. Render to text
+    # via the tokenizer chat template and pass that.
+    import json as _json
+    def _to_text(example):
+        msgs = example.get("messages")
+        if isinstance(msgs, str):
+            try:
+                msgs = _json.loads(msgs)
+            except Exception:
+                # Fallback: treat as plain text
+                return {"text": msgs}
+        if isinstance(msgs, list):
+            txt = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=False)
+        else:
+            txt = str(msgs or "")
+        return {"text": txt}
+
+    log.info("Pre-processing dataset: rendering chat-template to text field...")
+    train_ds = train_ds.map(_to_text, num_proc=4,
+                            remove_columns=[c for c in train_ds.column_names
+                                            if c not in ("task",)])
+    if eval_ds is not None:
+        eval_ds = eval_ds.map(_to_text, num_proc=4,
+                              remove_columns=[c for c in eval_ds.column_names
+                                              if c not in ("task",)])
     log.info("Train examples: %d", len(train_ds))
     log.info("Eval  examples: %d", len(eval_ds) if eval_ds else 0)
 
@@ -232,7 +259,7 @@ def run_sft(args: argparse.Namespace) -> int:
         hub_private_repo=cfg.hub.private,
         hub_strategy="checkpoint" if cfg.hub.get("push_strategy") == "checkpoint" else "end",
         packing=cfg.dataset.packing,
-        dataset_text_field=cfg.dataset.text_field,
+        dataset_text_field="text",  # we render to a text column above
     )
 
     # max_seq_length renamed to max_length in TRL 1.x

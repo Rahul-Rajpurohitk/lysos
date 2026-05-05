@@ -20,7 +20,7 @@ model:
   dtype: bfloat16
   trust_remote_code: false
   use_cache: false
-  attn_impl: flash_attention_2
+  attn_impl: sdpa
 
 # -----------------------------------------------------------------------------
 # Data — produced by scripts/mine_hard_negatives.py
