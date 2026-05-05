@@ -9,7 +9,7 @@ quality — every component runs at full capability or fails loudly.
 |---------|------------------|------|-------|
 | **HF write token** | Push datasets + models to Hub | FREE (already have) | huggingface.co/settings/tokens |
 | **AMD Dev Cloud credits** | $100 free + $200 budget | FREE + we pay overflow | amd.digitalocean.com |
-| **Gemma 4 access** | Base model for Stage 1 + 2 | FREE (gated, request via web) | huggingface.co/google/gemma-4-31b-it |
+| **Gemma 4 access** | Base model for Stage 1 + 2 | FREE (open as of 2026-05-05) | huggingface.co/google/gemma-4-31b-it |
 
 ## Recommended (quality differentiators — no fallback)
 
@@ -72,9 +72,10 @@ a live API call per key and exits non-zero if anything is missing.
    → On the AMD VM, run `setup_wandb_dashboard.py` after first training
      run lands so the workspace has live metric streams to attach panels to.
 
-4. **Gemma 4 access** (if not done already)
-   → https://huggingface.co/google/gemma-4-31b-it → "Request access"
-   → Approval takes 0-24h depending on Google's queue
+4. **Gemma 4 access** ✓ NOT REQUIRED (verified 2026-05-05)
+   → `google/gemma-4-31b-it` is UNGATED (gated=False on HF API).
+   → 8M+ downloads. Pulls immediately with the HF token we already have.
+   → No license click, no queue. Skip this step entirely.
 
 5. **OpenAI / Anthropic** (optional, for comparative bench)
    → platform.openai.com / console.anthropic.com
