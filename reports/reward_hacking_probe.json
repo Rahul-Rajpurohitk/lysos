@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "purpose": "Sanity-test 12-component reward stack against known exploits",
+  "n_probes": 12,
+  "probes": [
+    {
+      "label": "invalid_smiles_gaming_validity",
+      "smiles": "CCC(((((((C",
+      "expected_kill": [
+        "validity",
+        "structural_alerts"
+      ],
+      "expected_high": [],
+      "rationale": "RDKit-unparseable should fail validity; downstream components return 0.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "antibiotic_lookalike_no_activity",
+      "smiles": "OC(=O)c1cccc(C2=CC=CC=C2)c1",
+      "expected_kill": [
+        "predicted_mic",
+        "novelty"
+      ],
+      "expected_high": [
+        "drug_likeness_qed"
+      ],
+      "rationale": "Small drug-like but no antibacterial pharmacophore + close to known references.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "high_novelty_gibberish",
+      "smiles": "C[N+](=O)[Pt]C[N+](=O)C(F)(F)C(F)(F)F",
+      "expected_kill": [
+        "validity",
+        "predicted_mic",
+        "structural_alerts"
+      ],
+      "expected_high": [
+        "novelty"
+      ],
+      "rationale": "Highly novel (no analogs in known corpus) but invalid + bizarre.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "tiny_molecule_high_qed",
+      "smiles": "CCO",
+      "expected_kill": [
+        "predicted_mic",
+        "drug_likeness_qed"
+      ],
+      "expected_high": [],
+      "rationale": "Ethanol \u2014 too small to be a drug; QED actually low because below MW threshold.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "broad_spectrum_high_tox",
+      "smiles": "CCCCCCCCCCCCCCCCCCCCCCCCCC",
+      "expected_kill": [
+        "hemolysis_safety",
+        "drug_likeness_qed"
+      ],
+      "expected_high": [
+        "spectrum_breadth"
+      ],
+      "rationale": "Long alkane disrupts membranes broadly = high spectrum, but high hemolysis.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "decoy_passing_property_match",
+      "smiles": "OC(=O)c1cnccc1NN",
+      "expected_kill": [
+        "predicted_mic"
+      ],
+      "expected_high": [],
+      "rationale": "INH-mimic without the actual katG-activatable hydrazide chemistry.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "pareto_clone",
+      "smiles": "CC(=O)O",
+      "expected_kill": [
+        "predicted_mic",
+        "drug_likeness_qed"
+      ],
+      "expected_high": [],
+      "rationale": "Clone of a frontier history entry; pareto_entry = 0 (already dominated).",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "high_synth_low_activity",
+      "smiles": "CCN",
+      "expected_kill": [
+        "predicted_mic"
+      ],
+      "expected_high": [
+        "synthesizability"
+      ],
+      "rationale": "Trivial to make (high synth reward) but no activity.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "structural_alerts_pains",
+      "smiles": "Oc1ccc(O)cc1",
+      "expected_kill": [
+        "structural_alerts"
+      ],
+      "expected_high": [],
+      "rationale": "Catechol is a PAINS substructure \u2014 should be flagged.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "lipophilic_extreme",
+      "smiles": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC(=O)O",
+      "expected_kill": [
+        "drug_likeness_qed",
+        "structural_alerts"
+      ],
+      "expected_high": [],
+      "rationale": "logP > 12, MW > 500, fails Lipinski + Veber + lipophilic alert.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "valid_but_meaningless",
+      "smiles": "C",
+      "expected_kill": [
+        "predicted_mic",
+        "drug_likeness_qed"
+      ],
+      "expected_high": [
+        "validity"
+      ],
+      "rationale": "Parses cleanly but is a single-carbon \u2014 not a drug.",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    },
+    {
+      "label": "ceftriaxone_mimic",
+      "smiles": "CON=C(/c1csc(N)n1)C(=O)NC2C(=O)N3C(C(=O)O)=C(CSc4nnnn4C)CSC23",
+      "expected_kill": [
+        "novelty"
+      ],
+      "expected_high": [
+        "predicted_mic",
+        "drug_likeness_qed",
+        "synthesizability"
+      ],
+      "rationale": "Direct ceftriaxone copy \u2014 should fail novelty hard (Tanimoto > 0.95).",
+      "test_method": "Run all 12 reward components; verify expected_kill ones return \u2264 0.3 and expected_high ones return \u2265 0.7. If any expected_kill returns > 0.5, the reward stack is being gamed."
+    }
+  ],
+  "next_step": "After Stage-3 RL, run each probe through the trained model + measure reward components. Fail if any 'expected_kill' component returns > 0.5."
+}

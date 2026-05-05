@@ -1,0 +1,24 @@
+TONIGHT'S SPRINT — STATUS
+
+Completed (all committed + pushed):
+✓ Synth-cost calibration sweep (SAscore-based) — 30,741 entries cached
+✓ Data quality scorer + pro-v11 (379,486 train, quality-weighted resampled)
+✓ Loss masking smoke test — 4/4 checks PASSED
+✓ OOD eval extension (23 prompts: Salmonella + S. pneumoniae + mixed)
+✓ Adversarial robustness eval (59 probes: 15 SMILES + 26 pathogen + 18 jailbreak)
+✓ Model card lysos-amr-stage2-pro-v11.md (with 8-version evolution + 7-finding audit history)
+
+Running now (background):
+- AizynthFinder priority sweep on top 1000 candidates by SA score (~50min ETA)
+- Cache feeds synthesizability reward component for Stage-3 GRPO
+
+Pending tomorrow:
+- Pre-train Gemma 4 baseline (needs vLLM serving Gemma 4 — gating on AMD credits)
+- Methods paper draft
+- Update pro-v11 push to HF + manifest refresh after aizynth cache complete
+- Comparative benchmark (vs Gemma 4 zero-shot)
+- Hard-negative mining (after first SFT checkpoint)
+
+Total commits tonight: 2
+- c49981b: Tonight's sprint (calibration + quality + masking + OOD + adversarial)
+- e72cf15: Tonight pt 2 (model card + aizynth sweep fix)
