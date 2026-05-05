@@ -63,6 +63,22 @@ class CostCallback(_TrainerCallback):
     def on_step_end(self, args: Any, state: Any, control: Any, **kw):
         if self.start_time is None:
             return
+
+        # Operator killswitch: if /tmp/lysos_stop exists, stop cleanly at
+        # the next step boundary. Pair with scripts/killswitch.py.
+        if os.path.exists("/tmp/lysos_stop"):
+            log.error("[CostCallback] /tmp/lysos_stop present — operator "
+                      "requested stop. Stopping training.")
+            control.should_training_stop = True
+            try:
+                import wandb
+                if wandb.run is not None:
+                    wandb.log({"cost/operator_stop": 1.0},
+                              step=state.global_step, commit=False)
+            except Exception:
+                pass
+            return
+
         elapsed_h = (time.time() - self.start_time) / 3600
         spent = elapsed_h * self.rate_per_hour
         # Project total — assume linear extrapolation if we know max_steps

@@ -20,6 +20,12 @@ TS="$(date +%Y%m%d_%H%M%S)"
 log() { printf "\033[1;36m[lysos-pipeline]\033[0m %s\n" "$*"; }
 fail() { printf "\033[1;31m[lysos-pipeline] FAIL\033[0m %s\n" "$*" >&2; exit 1; }
 
+# Drop our PID for the killswitch.
+echo $$ > /tmp/lysos_train.pid
+trap 'rm -f /tmp/lysos_train.pid /tmp/lysos_stop' EXIT
+# Clear any leftover stop flag from a previous run.
+rm -f /tmp/lysos_stop
+
 # Activate venv
 if [ -f "/tmp/lysos_venv/bin/activate" ]; then
     source /tmp/lysos_venv/bin/activate
