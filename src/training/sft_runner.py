@@ -193,6 +193,16 @@ def run_sft(args: argparse.Namespace) -> int:
         data_collator=collator,
     )
 
+    # Cost protection — emits cost/* metrics to wandb + hard-stops over budget.
+    try:
+        from src.training.cost_callback import from_env as cost_from_env
+        cb = cost_from_env()
+        trainer.add_callback(cb)
+        log.info("CostCallback armed: budget=$%.2f rate=$%.2f/h",
+                 cb.budget_usd, cb.rate_per_hour)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("CostCallback not attached: %s", exc)
+
     log.info("=" * 60)
     log.info("Starting SFT: %s", cfg.run_name)
     log.info("=" * 60)

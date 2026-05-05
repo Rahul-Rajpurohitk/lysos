@@ -49,20 +49,35 @@ export ANTHROPIC_API_KEY=sk-ant-...
 
 ## Get them now (5 min total)
 
-1. **GEMINI_API_KEY** (most important to address fallback)
-   → https://aistudio.google.com/apikey → "Create API key"
-   → Copy, save to `.env` and Space secrets
+Run `python3 scripts/verify_keys.py` from the repo root after each — it does
+a live API call per key and exits non-zero if anything is missing.
 
-2. **WANDB_API_KEY**
-   → https://wandb.ai/authorize → copy
+1. **GEMINI_API_KEY** ✓ DONE (2026-05-04, project=Lysos, 3072-d embed live)
+   → If lost: https://aistudio.google.com/apikey → "Create API key"
+   → Copy, save to `.env` (already in `.gitignore`)
 
-3. **Gemma 4 access** (if not done already)
+2. **HF_TOKEN** ✓ DONE (rahul24raj, write scope, Pro, lablab org)
+   → Cached at `~/.cache/huggingface/token`; verifier reads it automatically.
+   → If you ever need a fresh one: huggingface.co/settings/tokens → New token (write)
+
+3. **WANDB_API_KEY** ⏳ PENDING (recommended)
+   → https://wandb.ai/authorize → sign in with GitHub (free tier is fine)
+   → Page shows a 40-char API key — copy
+   → Either:
+     a) `wandb login <KEY>` (writes to `~/.netrc`, persists across runs), OR
+     b) paste into `.env` line `WANDB_API_KEY=...`
+   → Verify: `python3 scripts/verify_keys.py` should now show OK on WANDB
+   → After login, run `python3 scripts/setup_wandb_dashboard.py` to create
+     the Lysos workspace with reward decomposition + cost panels.
+
+4. **Gemma 4 access** (if not done already)
    → https://huggingface.co/google/gemma-4-31b-it → "Request access"
    → Approval takes 0-24h depending on Google's queue
 
-4. **OpenAI / Anthropic** (optional, for comparative bench)
+5. **OpenAI / Anthropic** (optional, for comparative bench)
    → platform.openai.com / console.anthropic.com
    → ~$10 each pre-paid is plenty for ~200-prompt benchmark
+   → ANTHROPIC_API_KEY is already set in your shell env.
 
 ## Why no fallbacks
 

@@ -25,13 +25,18 @@ if [ -f "/tmp/lysos_venv/bin/activate" ]; then
     source /tmp/lysos_venv/bin/activate
 fi
 
+# Cost-callback budget defaults (override at the call site if you want)
+export LYSOS_BUDGET_USD="${LYSOS_BUDGET_USD:-300}"
+export LYSOS_HARD_STOP_ON_BUDGET="${LYSOS_HARD_STOP_ON_BUDGET:-1}"
+
 # Preflight before any stage
-log "running preflight check"
+log "running preflight check (budget=\$$LYSOS_BUDGET_USD hard_stop=$LYSOS_HARD_STOP_ON_BUDGET)"
 python3 scripts/preflight_check.py --stage "$STAGE" || fail "preflight failed; fix above + retry"
 
 # ---- Stage 1: TxGemma-4 ----
 if [ "$STAGE" = "stage1" ] || [ "$STAGE" = "all" ]; then
     log "=== STAGE 1: TxGemma-4 base SFT (8x MI300X, ~6h) ==="
+    export LYSOS_GPU_CLASS=mi300x_large_8gpu
     python3 scripts/checkpoint_resilience.py --stage 1 --max_retries 3 --allow_hub_recovery \
         2>&1 | tee "$LOG_DIR/stage1_$TS.log" \
         || fail "Stage 1 failed after retries"
@@ -54,6 +59,7 @@ fi
 # ---- Stage 2: Lysos AMR-spec ----
 if [ "$STAGE" = "stage2" ] || [ "$STAGE" = "all" ]; then
     log "=== STAGE 2: Lysos AMR-spec SFT (1x MI300X, ~12h) ==="
+    export LYSOS_GPU_CLASS=mi300x_small_1gpu
     python3 scripts/checkpoint_resilience.py --stage 2 --max_retries 3 --allow_hub_recovery \
         2>&1 | tee "$LOG_DIR/stage2_$TS.log" \
         || fail "Stage 2 failed after retries"
@@ -63,6 +69,7 @@ fi
 # ---- Stage 3: GRPO RL ----
 if [ "$STAGE" = "stage3" ] || [ "$STAGE" = "all" ]; then
     log "=== STAGE 3: GRPO RL with 12-component reward (1x MI300X, ~10h) ==="
+    export LYSOS_GPU_CLASS=mi300x_small_1gpu
     python3 scripts/checkpoint_resilience.py --stage 3 --max_retries 3 --allow_hub_recovery \
         2>&1 | tee "$LOG_DIR/stage3_$TS.log" \
         || fail "Stage 3 failed after retries"

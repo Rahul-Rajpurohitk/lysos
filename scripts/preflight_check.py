@@ -124,21 +124,38 @@ def check_auth() -> list[tuple[bool, str]]:
     banner("[C] Authentication")
     results = []
 
-    # HF write token
+    # Delegate live key validation to verify_keys.py (single source of truth).
+    sys.path.insert(0, str(ROOT / "scripts"))
     try:
-        from huggingface_hub import whoami
-        info = whoami()
-        scope = info.get("auth", {}).get("accessToken", {}).get("role", "?")
-        results.append(check(f"HF auth ({info['name']})", True, f"scope={scope}"))
-        results.append(check("HF write scope", scope == "write", scope))
+        import verify_keys as vk
+        vk._load_dotenv(ROOT / ".env")
+        vk._load_hf_cache_token()
     except Exception as e:
-        results.append(check("HF auth", False, str(e)[:80]))
+        results.append(check("verify_keys importable", False, str(e)[:80]))
+        return results
 
-    # Wandb (optional but recommended)
-    if os.environ.get("WANDB_API_KEY"):
-        results.append(check("WANDB_API_KEY set", True))
+    hf = os.environ.get("HF_TOKEN", "").strip()
+    if hf:
+        ok, det = vk.check_hf(hf)
+        results.append(check("HF auth (write)", ok, det))
     else:
-        results.append(check("WANDB_API_KEY set (optional)", False, "wandb logging will fail; export WANDB_API_KEY"))
+        results.append(check("HF auth (write)", False, "HF_TOKEN not in env / cache"))
+
+    gem = os.environ.get("GEMINI_API_KEY", "").strip()
+    if gem:
+        ok, det = vk.check_gemini(gem)
+        results.append(check("Gemini Embedding 2 live", ok, det))
+    else:
+        results.append(check("GEMINI_API_KEY", False,
+                              "embedding_novelty will RAISE; export key or weight=0"))
+
+    wandb_key = os.environ.get("WANDB_API_KEY", "").strip()
+    if wandb_key:
+        ok, det = vk.check_wandb(wandb_key)
+        results.append(check("WANDB live", ok, det))
+    else:
+        results.append(check("WANDB_API_KEY (recommended)", False,
+                              "no live training dashboard"))
 
     return results
 

@@ -62,6 +62,15 @@ python3 -m pip install --quiet \
     "trl>=0.11" \
     bitsandbytes 2>/dev/null || log "  (warn) bitsandbytes optional; pip may have skipped"
 
+# ---- 3.5. Live key validation (BEFORE downloading 60GB of model weights) ----
+log "step 3.5/7 · verifying API keys (HF + Gemini + WANDB)"
+python3 scripts/verify_keys.py
+case $? in
+    0) log "  ✓ all keys live" ;;
+    2) log "  (warn) recommended keys missing — training runs degraded" ;;
+    *) fail "REQUIRED key missing/invalid. Fix .env or export, then re-run." ;;
+esac
+
 # ---- 4. Pre-warm HF cache ----
 log "step 4/7 · pre-warming HF cache (Gemma 4 + EmbeddingGemma)"
 if [ -z "${HF_TOKEN:-}" ]; then
