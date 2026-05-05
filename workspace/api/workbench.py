@@ -216,8 +216,14 @@ async def start_session(session_id: str) -> StartSessionResponse:
 
     queue = _get_or_create_queue(session_id)
 
+    # Persistent trace — JSONL of every event for replay + debugging.
+    from .tracing import Tracer
+    _tracer = Tracer(session_id=session_id, emit_fn=lambda ev: queue.put(ev))
+
     async def emit(ev: dict) -> None:
-        await queue.put(ev)
+        # Always go through the tracer so every event lands in
+        # reports/traces/<session_id>.jsonl + has correlation IDs.
+        await _tracer.emit(ev)
         # Persist relevant events
         if EventRepo is not None:
             try:

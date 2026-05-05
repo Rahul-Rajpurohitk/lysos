@@ -186,6 +186,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Workbench router not loaded: %s", exc)
 
+# Chemistry sandbox — agent-driven molecular edits with reward delta
+try:
+    from .sandbox import router as sandbox_router
+    app.include_router(sandbox_router)
+    log.info("Chemistry sandbox routes loaded")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Sandbox router not loaded: %s", exc)
+
 
 # ----------------------------------------------------------------------------
 # Schemas
