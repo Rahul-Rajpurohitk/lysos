@@ -135,6 +135,7 @@ class AntibioticRetriever:
         *,
         k: int = 5,
         as_query: bool = True,
+        enrich_pharma: bool = False,
     ) -> list[dict[str, Any]]:
         """Return top-k nearest documents to the query string.
 
@@ -143,6 +144,11 @@ class AntibioticRetriever:
             k: how many to return
             as_query: if True (default), use query task type for asymmetric
                       retrieval; if False, use SEMANTIC_SIMILARITY (symmetric).
+            enrich_pharma: if True, attach Gemini-2.5-Pro pharmacology cards
+                      (mechanism / spectrum / indications / resistance_escape)
+                      to any hit whose `name` matches the named-drug enrichment
+                      parquet. Adds ~100 tokens/hit when fed into the LLM
+                      prompt. No effect on hits without enrichment data.
         """
         self._load()
         task_type = "RETRIEVAL_QUERY" if as_query else "SEMANTIC_SIMILARITY"
@@ -156,12 +162,26 @@ class AntibioticRetriever:
         out = []
         for i in top_idx:
             doc = self._docs[int(i)]
-            out.append({
+            hit: dict[str, Any] = {
                 "smiles": doc.smiles,
                 "name": doc.name,
                 "indication": doc.indication,
                 "similarity": float(sims[int(i)]),
-            })
+            }
+            out.append(hit)
+
+        if enrich_pharma:
+            try:
+                from src.embeddings.pharma_lookup import lookup as _pharma_lookup
+            except ImportError:
+                _pharma_lookup = None
+            if _pharma_lookup is not None:
+                for hit in out:
+                    card = _pharma_lookup(hit.get("name", ""))
+                    if card:
+                        hit["mechanism"] = card["mechanism"]
+                        hit["spectrum"] = card["spectrum"]
+                        hit["resistance_escape"] = card["resistance_escape"]
         return out
 
     def index_size(self) -> int:
