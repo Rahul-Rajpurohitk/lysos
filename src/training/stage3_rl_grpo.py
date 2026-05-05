@@ -123,12 +123,23 @@ def main() -> int:
         torch_dtype=dtype,
         device_map="auto",
         trust_remote_code=cfg.model.trust_remote_code,
-        use_cache=False,
     )
     if cfg.model.attn_impl == "flash_attention_2":
         model_kwargs["attn_implementation"] = "flash_attention_2"
+    elif cfg.model.attn_impl in ("sdpa", "eager"):
+        model_kwargs["attn_implementation"] = cfg.model.attn_impl
 
-    policy = AutoModelForCausalLM.from_pretrained(cfg.model.base_id, **model_kwargs)
+    try:
+        policy = AutoModelForCausalLM.from_pretrained(cfg.model.base_id, **model_kwargs)
+    except (ValueError, KeyError) as exc:
+        log.warning("AutoModelForCausalLM failed (%s); trying AutoModel", exc)
+        from transformers import AutoModel
+        policy = AutoModel.from_pretrained(cfg.model.base_id, **model_kwargs)
+    if hasattr(policy, "config"):
+        try:
+            policy.config.use_cache = False
+        except Exception:
+            pass
 
     existing = cfg.peft.get("load_existing_adapter") if hasattr(cfg.peft, "get") else None
     if existing:
@@ -137,7 +148,7 @@ def main() -> int:
         policy = policy.merge_and_unload()
 
     if cfg.peft.enabled:
-        lora_cfg = LoraConfig(
+        lora_kwargs = dict(
             r=cfg.peft.r,
             lora_alpha=cfg.peft.alpha,
             lora_dropout=cfg.peft.dropout,
@@ -145,6 +156,10 @@ def main() -> int:
             task_type=cfg.peft.task_type,
             target_modules=list(cfg.peft.target_modules),
         )
+        if hasattr(policy, "vision_tower") or any("vision_tower" in n for n, _ in policy.named_modules()):
+            lora_kwargs["exclude_modules"] = r".*(vision_tower|embed_vision|audio).*"
+            log.info("Multimodal model detected: exclude_modules set on vision/audio paths")
+        lora_cfg = LoraConfig(**lora_kwargs)
         policy = get_peft_model(policy, lora_cfg)
         policy.print_trainable_parameters()
 
@@ -153,7 +168,17 @@ def main() -> int:
 
     log.info("Loading frozen reference: %s", cfg.model.reference_model_id)
     ref_kwargs = dict(model_kwargs)
-    reference = AutoModelForCausalLM.from_pretrained(cfg.model.reference_model_id, **ref_kwargs)
+    try:
+        reference = AutoModelForCausalLM.from_pretrained(cfg.model.reference_model_id, **ref_kwargs)
+    except (ValueError, KeyError) as exc:
+        log.warning("reference AutoModelForCausalLM failed (%s); trying AutoModel", exc)
+        from transformers import AutoModel
+        reference = AutoModel.from_pretrained(cfg.model.reference_model_id, **ref_kwargs)
+    if hasattr(reference, "config"):
+        try:
+            reference.config.use_cache = False
+        except Exception:
+            pass
     for p in reference.parameters():
         p.requires_grad_(False)
     reference.train(False)
