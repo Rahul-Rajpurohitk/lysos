@@ -45,10 +45,12 @@ dataset:
   #   pro-v7   → rahul24raj/lysos-amr-stage2-pro-v7   (pro-v5 + 5K chem + 6.5K systems teacher)
   #   pro-v8   → rahul24raj/lysos-amr-stage2-pro-v8   (pro-v5 + 43.5K teacher across 5 layers)
   #   pro-v9   → rahul24raj/lysos-amr-stage2-pro-v9   (pro-v5 + 60.65K teacher across 6 layers)
-  #   pro-v10  → rahul24raj/lysos-amr-stage2-pro-v10  (DEFAULT: pro-v5 + 78,150 teacher distillation across 7 layers — adds 17,500 eval-aligned: chem_validity training, novelty maximization, tool_arg precision, refusal robustness extended, reasoning faithfulness with citations, confidence expression, clinical guideline integration, drug repositioning, comparative analysis, stewardship reasoning)
+  #   pro-v10  → rahul24raj/lysos-amr-stage2-pro-v10  (pro-v5 + 78.15K teacher across 7 layers)
+  #   pro-v11  → rahul24raj/lysos-amr-stage2-pro-v11  (pro-v10 quality-weighted: top-quartile 2x oversampled, bottom-quartile 0.5x downsampled)
+  #   pro-v12  → rahul24raj/lysos-amr-stage2-pro-v12  (DEFAULT: pro-v11 + 1,437 counterfactual pairs (MMP-mined activity cliffs) + 8 time-aware eval rows held out as test)
   source: local
-  path: data/processed/amr-stage2-pro-v10
-  hub_id: rahul24raj/lysos-amr-stage2-pro-v10
+  path: data/processed/amr-stage2-pro-v12
+  hub_id: rahul24raj/lysos-amr-stage2-pro-v12
   split_train: train
   split_eval: valid
   text_field: messages
