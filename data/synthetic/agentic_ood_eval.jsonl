@@ -1,0 +1,23 @@
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "Design an antibacterial candidate against Salmonella enterica typhimurium.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "Predict MIC of ceftriaxone vs Salmonella enterica.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "What are the resistance mechanisms in Salmonella?", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "Recommend a treatment regimen for typhoid fever.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "Design a candidate that targets Salmonella outer membrane porins.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "Design an antibacterial candidate against drug-resistant Streptococcus pneumoniae.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "Predict MIC of azithromycin vs S. pneumoniae.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "What are the resistance mechanisms for macrolides in S. pneumoniae?", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "Recommend a treatment regimen for pediatric pneumococcal pneumonia.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "Design a candidate targeting PBP1a/2a/2b in S. pneumoniae.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella + Mtb", "prompt": "Compare resistance landscape: Salmonella vs Mtb.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus + MRSA", "prompt": "Why does daptomycin not work for Streptococcus pneumoniae but works for MRSA?", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella + EColi-CRE", "prompt": "Cross-species: do KPC-like enzymes appear in Salmonella?", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "Use propose_pocket_aware to design a Salmonella enterica binder.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "Use scaffold_hop to derive a S. pneumoniae candidate.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "Run predict_mic_pathogen against Salmonella for our top candidate.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "Run predict_mic_pathogen for S. pneumoniae.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "What MIC breakpoint applies for ceftriaxone in Salmonella per CLSI?", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "What's the EUCAST breakpoint for amoxicillin in pneumococcus?", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "Are there OOD considerations for designing antibiotic candidates against Salmonella?", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "List the recent surveillance data for ceftriaxone-R S. pneumoniae.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Salmonella enterica", "prompt": "Design an inhaled formulation for typhoid carriage.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
+{"task": "ood_eval", "pathogen": "Streptococcus pneumoniae", "prompt": "Design a peptide-based candidate.", "expected_behavior": "refuse-with-redirect OR low-confidence fallback"}
