@@ -75,6 +75,33 @@ def run_sft(args: argparse.Namespace) -> int:
         tok.pad_token = tok.eos_token
         log.info("pad_token unset; setting to eos_token (%r)", tok.eos_token)
 
+    # Tokenizer alignment guard — if loading from a previously trained adapter,
+    # confirm the tokenizer vocab size matches the base model's. A drift here
+    # silently breaks training (embedding indices off by N).
+    existing_for_check = (cfg.peft.get("load_existing_adapter")
+                          if hasattr(cfg.peft, "get") else None)
+    if existing_for_check:
+        try:
+            from pathlib import Path as _P
+            tok_dir = _P(existing_for_check)
+            if (tok_dir / "tokenizer_config.json").exists():
+                from transformers import AutoTokenizer as _AT
+                prior_tok = _AT.from_pretrained(str(tok_dir), use_fast=True)
+                if prior_tok.vocab_size != tok.vocab_size:
+                    raise RuntimeError(
+                        f"Tokenizer vocab drift! base={tok.vocab_size} "
+                        f"adapter={prior_tok.vocab_size}. Training with this "
+                        f"mismatch corrupts embeddings. Use `--override "
+                        f"model.base_id={existing_for_check}` so the same "
+                        f"tokenizer is used end-to-end."
+                    )
+                log.info("Tokenizer alignment OK: vocab=%d matches prior adapter at %s",
+                         tok.vocab_size, existing_for_check)
+        except RuntimeError:
+            raise  # bubble up the assertion
+        except Exception as exc:  # noqa: BLE001
+            log.warning("Could not verify tokenizer alignment: %s", exc)
+
     # Model
     log.info("Loading base model: %s (dtype=%s)", cfg.model.base_id, cfg.model.dtype)
     dtype = {"bfloat16": torch.bfloat16, "float16": torch.float16, "float32": torch.float32}[cfg.model.dtype]
@@ -214,10 +241,39 @@ def run_sft(args: argparse.Namespace) -> int:
     trainer.save_model(cfg.training.output_dir)
     tok.save_pretrained(cfg.training.output_dir)
 
+    # Persist a default GenerationConfig so inference matches what we trained with.
+    try:
+        from transformers import GenerationConfig
+        gen_cfg = GenerationConfig(
+            do_sample=True,
+            temperature=cfg.inference.get("temperature", 0.7) if hasattr(cfg, "inference") else 0.7,
+            top_p=cfg.inference.get("top_p", 0.95) if hasattr(cfg, "inference") else 0.95,
+            top_k=cfg.inference.get("top_k", 50) if hasattr(cfg, "inference") else 50,
+            max_new_tokens=cfg.inference.get("max_new_tokens", 512) if hasattr(cfg, "inference") else 512,
+            pad_token_id=tok.pad_token_id,
+            eos_token_id=tok.eos_token_id,
+        )
+        gen_cfg.save_pretrained(cfg.training.output_dir)
+        log.info("GenerationConfig saved to %s", cfg.training.output_dir)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("GenerationConfig save failed: %s", exc)
+
     if cfg.hub.push_to_hub:
-        log.info("Pushing final to HF Hub: %s (private=%s)",
-                 cfg.hub.hub_model_id, cfg.hub.private)
-        trainer.push_to_hub(commit_message=f"Training complete — {cfg.run_name}")
+        from src.training.hub_push import push_with_retry
+        ok = push_with_retry(
+            trainer,
+            repo_id=cfg.hub.hub_model_id,
+            commit_message=f"Training complete — {cfg.run_name}",
+            private=cfg.hub.private,
+            max_retries=4,
+            backoff_s=30.0,
+        )
+        if not ok:
+            log.error("Hub push exhausted retries; LOCAL CHECKPOINT PRESERVED at %s",
+                      cfg.training.output_dir)
+            log.error("Manual recovery: `huggingface-cli upload %s %s`",
+                      cfg.hub.hub_model_id, cfg.training.output_dir)
+            return 3
 
     log.info("SFT done.")
     return 0

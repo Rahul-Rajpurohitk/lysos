@@ -178,12 +178,66 @@ def main() -> int:
     log.info("Train prompts: %d", len(train_ds))
     log.info("Eval  prompts: %d", len(eval_ds) if eval_ds else 0)
 
+    # Survival counters — log how often we fall back so we can spot silent
+    # degradation (e.g. RDKit OOM on a specific scaffold class).
+    _rwd_state = {"crashes_total": 0, "fallback_total": 0, "calls": 0}
+
     def reward_callable(prompts: list[str], completions: list[str], **_: Any) -> list[float]:
-        combined, per_component = reward_fn(completions)
+        """Robust GRPO reward wrapper.
+
+        Per-sample isolation: if scoring one sample raises, only that sample
+        gets reward=0; the rest of the batch is unaffected. If the entire
+        composite fn crashes (rare, e.g. xgboost segfault), every sample in
+        the batch gets 0 and we count the crash but DON'T raise — losing one
+        step of an RL run is acceptable; killing a 10h training run is not.
+        """
+        _rwd_state["calls"] += 1
+        try:
+            combined, per_component = reward_fn(completions)
+        except Exception as exc:  # noqa: BLE001
+            _rwd_state["crashes_total"] += 1
+            log.error(
+                "[reward_callable] composite reward raised: %s -- "
+                "returning zeros for this batch (n=%d, crashes_total=%d).",
+                exc, len(completions), _rwd_state["crashes_total"],
+            )
+            try:
+                import wandb
+                if wandb.run is not None:
+                    wandb.log({"reward/crashes_total": _rwd_state["crashes_total"]},
+                              commit=False)
+            except Exception:
+                pass
+            return [0.0] * len(completions)
+
+        # Defensive: if composite returned a wrong length, pad/truncate.
+        if len(combined) != len(completions):
+            log.warning(
+                "[reward_callable] reward fn returned %d values for %d completions; padding zeros",
+                len(combined), len(completions),
+            )
+            n = len(completions)
+            combined = (list(combined) + [0.0] * n)[:n]
+
+        # Replace any NaN/Inf with 0 (RL gradient blow-up protection).
+        import math
+        n_bad = 0
+        for i, v in enumerate(combined):
+            if not math.isfinite(v):
+                combined[i] = 0.0
+                n_bad += 1
+        if n_bad:
+            _rwd_state["fallback_total"] += n_bad
+            log.warning("[reward_callable] %d non-finite rewards zeroed (total=%d)",
+                        n_bad, _rwd_state["fallback_total"])
+
         try:
             import wandb
             if wandb.run is not None:
-                avg = {f"reward/{name}": sum(vals) / len(vals) for name, vals in per_component.items()}
+                avg = {f"reward/{name}": sum(vals) / len(vals)
+                       for name, vals in per_component.items()}
+                avg["reward/non_finite_zeroed"] = _rwd_state["fallback_total"]
+                avg["reward/crashes_total"] = _rwd_state["crashes_total"]
                 wandb.log(avg, commit=False)
         except Exception:
             pass
@@ -256,9 +310,46 @@ def main() -> int:
     trainer.save_model(cfg.training.output_dir)
     tok.save_pretrained(cfg.training.output_dir)
 
+    # Persist GenerationConfig so the served Lysos-RL matches the
+    # generation distribution we trained against.
+    try:
+        from transformers import GenerationConfig
+        gen_cfg = GenerationConfig(
+            do_sample=True,
+            temperature=cfg.rl.temperature,
+            top_p=cfg.rl.top_p,
+            top_k=cfg.rl.top_k,
+            max_new_tokens=cfg.dataset.max_completion_length,
+            pad_token_id=tok.pad_token_id,
+            eos_token_id=tok.eos_token_id,
+        )
+        gen_cfg.save_pretrained(cfg.training.output_dir)
+        log.info("GenerationConfig saved (T=%.2f, top_p=%.2f, top_k=%d, max_new_tokens=%d)",
+                 cfg.rl.temperature, cfg.rl.top_p, cfg.rl.top_k,
+                 cfg.dataset.max_completion_length)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("GenerationConfig save failed: %s", exc)
+
+    # Persist final reward callable diagnostic counters
+    log.info("Reward callable stats: calls=%d crashes=%d non_finite_zeroed=%d",
+             _rwd_state["calls"], _rwd_state["crashes_total"], _rwd_state["fallback_total"])
+
     if cfg.hub.push_to_hub:
-        log.info("Pushing to HF Hub: %s (private=%s)", cfg.hub.hub_model_id, cfg.hub.private)
-        trainer.push_to_hub(commit_message=f"GRPO RL complete - {cfg.run_name}")
+        from src.training.hub_push import push_with_retry
+        ok = push_with_retry(
+            trainer,
+            repo_id=cfg.hub.hub_model_id,
+            commit_message=f"GRPO RL complete - {cfg.run_name}",
+            private=cfg.hub.private,
+            max_retries=4,
+            backoff_s=30.0,
+        )
+        if not ok:
+            log.error("Hub push exhausted; LOCAL CHECKPOINT PRESERVED at %s",
+                      cfg.training.output_dir)
+            log.error("Recover: huggingface-cli upload %s %s",
+                      cfg.hub.hub_model_id, cfg.training.output_dir)
+            return 3
 
     log.info("Stage 3 complete.")
     return 0
