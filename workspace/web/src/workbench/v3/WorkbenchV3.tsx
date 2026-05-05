@@ -11,6 +11,8 @@ import { TabStrip } from "./components/TabStrip";
 import { Mol2D } from "./components/Mol2D";
 import { Mol3D } from "./components/Mol3D";
 import { MechanismPanel } from "./components/MechanismPanel";
+import { OnboardingHero } from "./components/OnboardingHero";
+import { SubAgentPicker } from "./components/SubAgentPicker";
 import { RadarPanel } from "./panels/RadarPanel";
 import { ParetoPanel } from "./panels/ParetoPanel";
 import { SynthPanel } from "./panels/SynthPanel";
@@ -93,6 +95,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [chatMode, setChatMode] = useState<"Stream" | "Columns">("Stream");
   const [activeTab, setActiveTab] = useState<RightTab>("Radar");
   const [mechanismOpen, setMechanismOpen] = useState(false);
+  const [activeSubAgents, setActiveSubAgents] = useState<string[]>([]);
+  const showOnboarding = !sessionId && events.length === 0;
   const [currentIter, setCurrentIter] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
@@ -381,8 +385,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               </div>
 
               <div className="lys-chat__agent-row">
-                {Object.entries(AGENT_COLORS).map(([a, c]) => {
-                  const count = messages.filter((m) => m.agent === a).length;
+                {Object.entries(AGENT_COLORS).filter(([a]) => a !== "system").map(([a, c]) => {
+                  const count = messages.filter((m) => (m.agent ?? "").toLowerCase() === a).length;
                   return (
                     <button
                       key={a}
@@ -395,13 +399,28 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     </button>
                   );
                 })}
+                <SubAgentPicker
+                  active={activeSubAgents}
+                  onToggle={(id) =>
+                    setActiveSubAgents((cur) =>
+                      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+                    )
+                  }
+                />
               </div>
 
-              {chatMode === "Stream" ? (
+              {showOnboarding ? (
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <OnboardingHero
+                    apiBase={apiBase}
+                    onPickPathogen={(code) => setSelectedPathogen(code)}
+                  />
+                </div>
+              ) : chatMode === "Stream" ? (
                 <div className="lys-chat__messages" ref={messagesRef}>
                   {messages.length === 0 && (
                     <div style={{ color: "var(--lys-text-faint)", textAlign: "center", padding: 24 }}>
-                      no messages yet — pick a pathogen and click Start
+                      session ready — click Start to launch the agentic loop
                     </div>
                   )}
                   {messages.map((m, i) => (
