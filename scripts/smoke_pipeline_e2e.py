@@ -41,8 +41,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _make_tiny_dataset(out_dir: Path, n: int = 32) -> Path:
-    """Build a 32-row chat dataset compatible with SFTTrainer + DataCollator."""
-    from datasets import Dataset
+    """Build a 32-row chat DatasetDict (train+test) for SFTTrainer."""
+    from datasets import Dataset, DatasetDict
 
     rows = []
     for i in range(n):
@@ -50,18 +50,20 @@ def _make_tiny_dataset(out_dir: Path, n: int = 32) -> Path:
         response = f"### Response:\nQED ~ 0.{50 + (i % 30)}"
         rows.append({"text": f"{prompt}\n{response}"})
     ds = Dataset.from_list(rows)
-    ds.save_to_disk(str(out_dir))
+    dd = DatasetDict({"train": ds, "test": ds.select(range(min(8, n)))})
+    dd.save_to_disk(str(out_dir))
     return out_dir
 
 
 def _make_tiny_grpo_prompts(out_dir: Path, n: int = 8) -> Path:
-    from datasets import Dataset
+    from datasets import Dataset, DatasetDict
 
     rows = []
     for i in range(n):
         rows.append({"prompt": f"PROPOSAL: SMILES "})
     ds = Dataset.from_list(rows)
-    ds.save_to_disk(str(out_dir))
+    dd = DatasetDict({"train": ds, "test": ds.select(range(min(2, n)))})
+    dd.save_to_disk(str(out_dir))
     return out_dir
 
 
@@ -133,12 +135,11 @@ def _write_smoke_configs(work: Path, ds_sft: Path, ds_grpo: Path) -> dict:
     stage3["training"]["report_to"] = []
     stage3["rl"] = {"num_generations": 2, "temperature": 1.0, "top_p": 0.95,
                     "top_k": 0, "use_vllm": False}
-    # Smoke reward config: a single trivial component
+    # Smoke reward config: a single trivial component (module:fn format)
     stage3["reward"] = {
         "components": [{
             "name": "stub_validity",
-            "module": "src.eval.rewards.validity",
-            "fn": "smiles_valid",
+            "module": "src.eval.rewards.validity:smiles_valid",
             "weight": 1.0,
         }],
         "on_error": "zero",

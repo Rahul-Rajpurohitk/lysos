@@ -16,6 +16,12 @@ import os
 import time
 from typing import Any
 
+try:
+    from transformers import TrainerCallback as _TrainerCallback
+except ImportError:  # pragma: no cover — only happens at config-only load
+    class _TrainerCallback:  # type: ignore[no-redef]
+        """Fallback no-op base; real Trainer requires the real one."""
+
 log = logging.getLogger(__name__)
 
 # USD/hour rates on AMD Developer Cloud (verified 2026-04)
@@ -25,8 +31,12 @@ DEFAULT_RATES = {
 }
 
 
-class CostCallback:
-    """Lightweight TrainerCallback (not subclassed to keep transformers optional)."""
+class CostCallback(_TrainerCallback):
+    """TrainerCallback subclass for live cost tracking + budget hard-stop.
+
+    Subclasses TrainerCallback so the transformers callback dispatcher
+    finds default no-op handlers for every event we don't override.
+    """
 
     def __init__(
         self,
@@ -35,6 +45,7 @@ class CostCallback:
         rates: dict[str, float] | None = None,
         hard_stop: bool = True,
     ):
+        super().__init__()
         self.rates = rates or DEFAULT_RATES
         self.gpu_class = gpu_class
         self.rate_per_hour = self.rates.get(gpu_class, 3.0)

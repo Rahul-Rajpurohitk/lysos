@@ -243,7 +243,9 @@ def main() -> int:
             pass
         return combined
 
-    grpo_args = GRPOConfig(
+    # GRPOConfig kwargs — filtered against the running TRL's signature
+    # because field names drifted between TRL 0.x and 1.x.
+    grpo_kwargs = dict(
         output_dir=cfg.training.output_dir,
         num_train_epochs=cfg.training.num_train_epochs,
         per_device_train_batch_size=cfg.training.per_device_train_batch_size,
@@ -278,16 +280,38 @@ def main() -> int:
         beta=cfg.model.beta,
         use_vllm=cfg.rl.use_vllm,
     )
+    import inspect as _ins
+    grpo_param_names = set(_ins.signature(GRPOConfig).parameters.keys())
+    dropped = {k: v for k, v in grpo_kwargs.items() if k not in grpo_param_names}
+    if dropped:
+        log.info("Dropping GRPOConfig kwargs not supported by trl: %s", list(dropped))
+    grpo_kwargs = {k: v for k, v in grpo_kwargs.items() if k in grpo_param_names}
+    grpo_args = GRPOConfig(**grpo_kwargs)
 
-    trainer = GRPOTrainer(
+    grpo_init_params = set(_ins.signature(GRPOTrainer.__init__).parameters.keys())
+    trainer_kwargs = dict(
         model=policy,
-        ref_model=reference,
         reward_funcs=[reward_callable],
         args=grpo_args,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
-        tokenizer=tok,
     )
+    if "ref_model" in grpo_init_params:
+        trainer_kwargs["ref_model"] = reference
+    else:
+        # TRL 1.x: GRPOTrainer materializes its own reference from `beta`.
+        # Free the explicit reference model so we don't hold 2x memory.
+        log.info("TRL 1.x detected: dropping explicit ref_model (built internally)")
+        del reference
+    if "processing_class" in grpo_init_params:
+        trainer_kwargs["processing_class"] = tok
+    elif "tokenizer" in grpo_init_params:
+        trainer_kwargs["tokenizer"] = tok
+    dropped_t = {k: v for k, v in trainer_kwargs.items() if k not in grpo_init_params}
+    if dropped_t:
+        log.info("Dropping GRPOTrainer kwargs not supported by trl: %s", list(dropped_t))
+        trainer_kwargs = {k: v for k, v in trainer_kwargs.items() if k in grpo_init_params}
+    trainer = GRPOTrainer(**trainer_kwargs)
 
     # Cost protection — emits cost/* metrics + hard-stops over budget.
     try:

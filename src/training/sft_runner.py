@@ -55,8 +55,16 @@ def run_sft(args: argparse.Namespace) -> int:
     from datasets import load_dataset, load_from_disk
     from peft import LoraConfig, PeftModel, get_peft_model
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from trl import DataCollatorForCompletionOnlyLM, SFTConfig, SFTTrainer
-    log.info("Imports done in %.1fs", time.perf_counter() - t0)
+    from trl import SFTConfig, SFTTrainer
+    # DataCollatorForCompletionOnlyLM was removed in TRL 1.x; SFTConfig now
+    # carries `completion_only_loss=True` to do the same thing.
+    try:
+        from trl import DataCollatorForCompletionOnlyLM  # TRL <= 0.x
+        _USE_LEGACY_COLLATOR = True
+    except ImportError:
+        _USE_LEGACY_COLLATOR = False
+    log.info("Imports done in %.1fs (TRL legacy collator: %s)",
+             time.perf_counter() - t0, _USE_LEGACY_COLLATOR)
 
     torch.manual_seed(cfg.training.seed)
 
@@ -164,8 +172,8 @@ def run_sft(args: argparse.Namespace) -> int:
     log.info("Train examples: %d", len(train_ds))
     log.info("Eval  examples: %d", len(eval_ds) if eval_ds else 0)
 
-    # SFTTrainer
-    sft_args = SFTConfig(
+    # SFTTrainer args (TRL-version-aware)
+    common_sft_kwargs = dict(
         output_dir=cfg.training.output_dir,
         num_train_epochs=cfg.training.num_train_epochs,
         per_device_train_batch_size=cfg.training.per_device_train_batch_size,
@@ -200,25 +208,51 @@ def run_sft(args: argparse.Namespace) -> int:
         hub_model_id=cfg.hub.get("hub_model_id"),
         hub_private_repo=cfg.hub.private,
         hub_strategy="checkpoint" if cfg.hub.get("push_strategy") == "checkpoint" else "end",
-        max_seq_length=cfg.dataset.max_seq_length,
         packing=cfg.dataset.packing,
         dataset_text_field=cfg.dataset.text_field,
     )
 
-    response_template = cfg.dataset.response_template
-    collator = DataCollatorForCompletionOnlyLM(
-        response_template=response_template,
-        tokenizer=tok,
-    )
+    # max_seq_length renamed to max_length in TRL 1.x
+    import inspect as _ins
+    sft_param_names = set(_ins.signature(SFTConfig).parameters.keys())
+    if "max_seq_length" in sft_param_names:
+        common_sft_kwargs["max_seq_length"] = cfg.dataset.max_seq_length
+    else:
+        common_sft_kwargs["max_length"] = cfg.dataset.max_seq_length
+    if "completion_only_loss" in sft_param_names:
+        common_sft_kwargs["completion_only_loss"] = True
 
-    trainer = SFTTrainer(
+    # Filter kwargs that the running TRL doesn't know about (group_by_length
+    # etc were dropped in TRL 1.x). Log what's dropped so we don't lose
+    # behavior silently.
+    dropped = {k: v for k, v in common_sft_kwargs.items() if k not in sft_param_names}
+    if dropped:
+        log.info("Dropping SFTConfig kwargs not supported by trl: %s", list(dropped))
+    common_sft_kwargs = {k: v for k, v in common_sft_kwargs.items() if k in sft_param_names}
+    sft_args = SFTConfig(**common_sft_kwargs)
+
+    # Trainer construction differs in TRL 1.x: tokenizer -> processing_class,
+    # collator built internally when completion_only_loss=True.
+    sft_init_params = set(_ins.signature(SFTTrainer.__init__).parameters.keys())
+    trainer_kwargs = dict(
         model=model,
         args=sft_args,
         train_dataset=train_ds,
         eval_dataset=eval_ds,
-        tokenizer=tok,
-        data_collator=collator,
     )
+    if "processing_class" in sft_init_params:
+        trainer_kwargs["processing_class"] = tok
+    else:
+        trainer_kwargs["tokenizer"] = tok
+
+    if _USE_LEGACY_COLLATOR and "data_collator" in sft_init_params:
+        # Legacy explicit collator (TRL <=0.x)
+        response_template = cfg.dataset.response_template
+        trainer_kwargs["data_collator"] = DataCollatorForCompletionOnlyLM(
+            response_template=response_template, tokenizer=tok,
+        )
+
+    trainer = SFTTrainer(**trainer_kwargs)
 
     # Cost protection — emits cost/* metrics to wandb + hard-stops over budget.
     try:
