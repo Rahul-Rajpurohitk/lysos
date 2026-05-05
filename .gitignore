@@ -117,3 +117,4 @@ uv.lock
 
 # HF Space deployment scratch (assembled by scripts/deploy_to_hf_space.py)
 .deploy/
+.venv-cli/

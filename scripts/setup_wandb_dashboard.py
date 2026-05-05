@@ -1,17 +1,18 @@
-"""setup_wandb_dashboard.py — programmatic wandb workspace for Lysos training.
+"""setup_wandb_dashboard.py — wandb dashboard initialization for Lysos.
 
-Creates a reproducible dashboard in the `lysos` project with:
-  * Training core (loss, lr, grad_norm)
-  * GRPO-specific (KL, advantage, policy loss, reward) — Stage 3
-  * Reward decomposition (12 components) — Stage 3
-  * Eval callback metrics (mid-training composite reward, n_valid)
-  * Hardware (GPU util, GPU mem)
-  * Cost protection (alert when $250 spend projected)
+Two-mode behavior:
+  1. PRIMARY: Bootstrap the `lysos` project + register `define_metric` calls
+     for every metric our training emits, so wandb auto-organizes panels
+     into groups (train/, eval/, reward/, cost/, system/) the moment the
+     first real run starts. Free-tier compatible.
 
-Run AFTER `wandb login` so this user is the dashboard owner:
+  2. OPTIONAL: If wandb-workspaces SDK + paid-tier permissions allow,
+     also save a 6-section Workspace view with custom panel layouts.
+     Fails gracefully on free tier (the auto-organized default panels
+     are already excellent).
+
+Run AFTER `wandb login` so the user is the project owner:
     python scripts/setup_wandb_dashboard.py
-
-Idempotent — re-running updates the workspace in place.
 """
 from __future__ import annotations
 
@@ -145,23 +146,78 @@ def _default_entity() -> str:
 
 
 def main():
+    # Reuse verify_keys' fallbacks (env -> .env -> ~/.netrc) so the script
+    # works whether the user did `wandb login`, set the env var, or put it
+    # in .env.
+    try:
+        import verify_keys as vk
+        vk._load_dotenv(ROOT / ".env")
+        vk._load_wandb_netrc()
+    except Exception:
+        pass
+
     if not os.environ.get("WANDB_API_KEY"):
-        print("[X] WANDB_API_KEY not set in env.")
+        print("[X] WANDB_API_KEY not set in env / .env / ~/.netrc.")
         print("    Run `wandb login <key>` first, then re-run this script.")
         return 1
 
-    ws_obj = build_workspace()
-    if ws_obj is None:
+    # ---- PRIMARY: bootstrap project + register metric definitions ----
+    project = "lysos"
+    entity = os.environ.get("WANDB_ENTITY") or _default_entity()
+    try:
+        import wandb
+        api = wandb.Api()
+        try:
+            api.project(name=project, entity=entity)
+            print(f"[OK] Project {entity}/{project} exists.")
+        except Exception:
+            print(f"[..] Project {entity}/{project} not found; creating with metric defs...")
+        # Always emit a bootstrap run so define_metric calls register
+        run = wandb.init(
+            project=project, entity=entity, name="dashboard-bootstrap",
+            tags=["bootstrap", "metric-schema"], reinit=True,
+            config={"purpose": "register metric schema for auto-organized panels"},
+        )
+        # Define metric groups: wandb's default workspace will group by these
+        # patterns so reward/* lands in one section, cost/* another, etc.
+        wandb.define_metric("train/global_step")
+        wandb.define_metric("train/*", step_metric="train/global_step")
+        wandb.define_metric("eval/global_step")
+        wandb.define_metric("eval/*", step_metric="eval/global_step")
+        wandb.define_metric("reward/*", step_metric="train/global_step")
+        wandb.define_metric("cost/*", step_metric="train/global_step")
+        wandb.define_metric("grpo/*", step_metric="train/global_step")
+
+        # Log placeholder values so the metrics show up in autogen panels
+        for c in REWARD_COMPONENTS:
+            wandb.log({f"reward/{c}": 0.0})
+        wandb.log({
+            "train/loss": 0.0, "train/learning_rate": 0.0, "train/grad_norm": 0.0,
+            "eval/avg_composite": 0.0, "eval/n_valid": 0,
+            "cost/hours_elapsed": 0.0, "cost/per_hour": 0.0,
+            "cost/projected_total_usd": 0.0, "cost/budget_pct_used": 0.0,
+            "grpo/kl": 0.0, "grpo/policy_loss": 0.0, "grpo/advantage_mean": 0.0,
+        })
+        run.finish()
+        print(f"[OK] Bootstrap run finished; metric schema registered.")
+        print(f"     URL: https://wandb.ai/{entity}/{project}")
+    except Exception as e:  # noqa: BLE001
+        print(f"[!] Bootstrap failed: {e}")
         return 1
 
+    # ---- OPTIONAL: try to save a custom Workspace view ----
+    ws_obj = build_workspace(project=project, entity=entity)
+    if ws_obj is None:
+        print("    (wandb-workspaces SDK not installed; skipping custom view)")
+        return 0
+
     try:
-        url = ws_obj.save()
-        print(f"[OK] Workspace saved: {url}")
+        ws_obj.save()
+        print(f"[OK] Custom Workspace view saved.")
     except Exception as e:  # noqa: BLE001
-        print(f"[!] Save failed: {e}")
-        print("    The first wandb run from training will auto-create the project.")
-        print("    Re-run after the first run starts.")
-        return 1
+        # Free tier or older wandb server may not allow programmatic
+        # workspace creation. Auto-organized panels still work fine.
+        print(f"[!] Custom Workspace save not available ({type(e).__name__}); auto-organized panels are sufficient.")
 
     return 0
 
