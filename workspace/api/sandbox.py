@@ -246,6 +246,22 @@ async def mechanism(smiles: str, target: str = "MRSA") -> dict:
     }
 
 
+class ScoreRequest(BaseModel):
+    smiles: str = Field(..., min_length=1, max_length=500)
+    target: str = "MRSA"
+
+
+@router.post("/score")
+async def score_endpoint(req: ScoreRequest) -> dict:
+    """Real-time score for an ad-hoc SMILES — used by the chat composer when
+    a user pastes a SMILES, and by the radar panel for live re-rendering."""
+    return {
+        "smiles": req.smiles,
+        "target": req.target,
+        "scores": _score_smiles(req.smiles, req.target),
+    }
+
+
 @router.get("/synth/{smiles:path}")
 async def synth_route(smiles: str) -> dict:
     """Look up retrosynthesis route for a SMILES.

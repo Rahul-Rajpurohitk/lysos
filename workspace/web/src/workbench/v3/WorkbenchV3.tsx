@@ -108,6 +108,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
 
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const sseRef = useRef<EventSource | null>(null);
+  const replayTimer = useRef<number | null>(null);
+  const [replayEvents, setReplayEvents] = useState<TraceEvent[] | null>(null);
+  const [replayIdx, setReplayIdx] = useState(0);
 
   // Load pathogens
   useEffect(() => {
@@ -141,7 +144,43 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   }, [events.length]);
 
   // Cleanup SSE on unmount
-  useEffect(() => () => sseRef.current?.close(), []);
+  useEffect(() => () => {
+    sseRef.current?.close();
+    if (replayTimer.current) window.clearTimeout(replayTimer.current);
+  }, []);
+
+  // Replay tick — push next trace event into the events array on a timer
+  useEffect(() => {
+    if (!isPlaying || !replayEvents) return;
+    if (replayIdx >= replayEvents.length) {
+      setIsPlaying(false);
+      return;
+    }
+    const next = replayEvents[replayIdx];
+    const nextNext = replayEvents[replayIdx + 1];
+    const tickMs = nextNext
+      ? Math.max(50, Math.min(800, ((nextNext.ts - next.ts) * 1000) / speed))
+      : 200;
+    replayTimer.current = window.setTimeout(() => {
+      handleEvent(next);
+      setReplayIdx((i) => i + 1);
+    }, tickMs);
+    return () => {
+      if (replayTimer.current) window.clearTimeout(replayTimer.current);
+    };
+  }, [isPlaying, replayEvents, replayIdx, speed]);
+
+  async function loadReplay() {
+    if (!sessionId) return;
+    const r = await fetch(`${apiBase}/workbench/sandbox/trace/${sessionId}`);
+    if (!r.ok) return;
+    const d = await r.json();
+    setReplayEvents(d.events || []);
+    setReplayIdx(0);
+    setEvents([]);
+    setCurrentIter(0);
+    setIsPlaying(true);
+  }
 
   async function startSession() {
     setEvents([]);
@@ -353,7 +392,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         currentIter={currentIter}
         iterCompositeMap={iterCompositeMap}
         isPlaying={isPlaying}
-        onPlayPause={() => setIsPlaying((p) => !p)}
+        onPlayPause={() => {
+          if (!isPlaying && !replayEvents && !isRunning && sessionId) {
+            // No live run, no replay loaded yet — kick off replay from disk
+            loadReplay();
+          } else {
+            setIsPlaying((p) => !p);
+          }
+        }}
         onPrev={() => setCurrentIter((n) => Math.max(1, n - 1))}
         onNext={() => setCurrentIter((n) => Math.min(iters, n + 1))}
         onSeek={(n) => setCurrentIter(n)}
