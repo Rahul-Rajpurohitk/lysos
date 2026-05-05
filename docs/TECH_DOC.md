@@ -154,24 +154,33 @@ TxGemma recipe on a Gemma 4 base.
 - **Format**: chat with `<start_of_turn>user/model` markers.
 - **Built by**: `scripts/build_tdc_examples.py`
 
-### 3.2 Stage 2 corpus — `rahul24raj/lysos-amr-stage2-pro-v12`
+### 3.2 Stage 2 corpus — `rahul24raj/lysos-amr-stage2-pro-v13`
 
-The AMR specialization corpus. 12 versions, v12 is current default.
+The AMR specialization corpus. 13 versions, v13 is current default.
 
-- **Rows**: 380,000 train / 29,000 valid / 50 test (held-out named-drug)
+- **Rows (v13)**: 382,499 train / 23,104 valid / 58 test
 - **Sources**: ChEMBL antibiotic subset, DBAASP/APD3/DRAMP antimicrobial
   peptides, CARD resistance gene catalog, NPAtlas natural products,
-  DrugCentral drug index, manually-authored teacher distillation.
+  DrugCentral drug index, manually-authored teacher distillation, and
+  **Gemini 2.5 Pro pharma Q&A layer (218 named drugs × 4 axes ×
+  {concise, CoT})**.
 - **Teacher distillation**: 78,150 traces across 7 layers (chem, systems,
   architecture, raw-data, edge/clinical, targeted, eval-aligned). Authored
   by hand, no API spend (avoids policy filter on CW/CDC names — uses
   abstracted category tokens).
 - **Quality weighting**: top-quartile rows oversampled 2×, bottom-quartile
   downsampled 0.5× (pro-v11 → pro-v12).
-- **Counterfactual pairs**: 1,437 MMP-mined activity cliffs added in v12.
-- **27 task types in train**, 8 categories of held-out eval slices.
-- **Built by**: `scripts/build_stage2_pro_v8.py` … `pro_v12.py` +
-  `clean_chemistry_corpus.py` + `clean_pro_v4_to_v5.py`.
+- **Counterfactual pairs**: 1,437 MMP-mined activity cliffs in v12.
+- **Pharma Q&A layer**: 1,744 total rows (832 concise + 832 CoT split
+  95/5 train/valid). Source: `artifacts/embeddings/named-drugs-gemini-
+  enrichment.parquet` ($2.59 of Gemini 2.5 Pro spend, 218 drugs ×
+  {mechanism, spectrum, indications, resistance_escape}). CoT variant
+  wraps the Gemini thinking trace in `<reasoning>...</reasoning>`
+  before the concise answer.
+- **27 task types** in train + new `pharma_qa` task; 8 categories of
+  held-out eval slices.
+- **Built by**: `scripts/build_stage2_pro_v8.py` … `pro_v13.py` +
+  `build_pharma_qa_layer.py` + `clean_chemistry_corpus.py`.
 
 Version lineage:
 ```
@@ -184,7 +193,8 @@ pro-v8   + 43.5K teacher across 5 layers
 pro-v9   + 60.65K teacher across 6 layers
 pro-v10  + 78.15K teacher across 7 layers
 pro-v11  pro-v10 quality-weighted (top-quartile 2× over, bottom 0.5× under)
-pro-v12  pro-v11 + 1,437 counterfactual pairs + 8 time-aware test rows  ← DEFAULT
+pro-v12  pro-v11 + 1,437 counterfactual pairs + 8 time-aware test rows
+pro-v13  pro-v12 + 1,744 pharma_qa pairs (218 drugs × 4 axes × {concise,CoT})  ← DEFAULT
 ```
 
 ### 3.3 Stage 3 RL prompts — `rahul24raj/lysos-rl-prompts-v3`
@@ -324,7 +334,7 @@ Wrapped in `stage3_rl_grpo.py:reward_callable`:
 **Goal**: layer AMR domain knowledge on top of Stage 1.
 
 - Model: load `rahul24raj/txgemma-4-31b` adapter, merge into Gemma 4 base
-- Data: `lysos-amr-stage2-pro-v12` (380K train)
+- Data: `lysos-amr-stage2-pro-v13` (382K train, includes pharma_qa CoT layer)
 - LoRA: r=64, alpha=128, fresh adapter on merged base
 - Hardware: Small 1× MI300X
 - Time: ~12 hours

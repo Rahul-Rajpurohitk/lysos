@@ -47,10 +47,11 @@ dataset:
   #   pro-v9   → rahul24raj/lysos-amr-stage2-pro-v9   (pro-v5 + 60.65K teacher across 6 layers)
   #   pro-v10  → rahul24raj/lysos-amr-stage2-pro-v10  (pro-v5 + 78.15K teacher across 7 layers)
   #   pro-v11  → rahul24raj/lysos-amr-stage2-pro-v11  (pro-v10 quality-weighted: top-quartile 2x oversampled, bottom-quartile 0.5x downsampled)
-  #   pro-v12  → rahul24raj/lysos-amr-stage2-pro-v12  (DEFAULT: pro-v11 + 1,437 counterfactual pairs (MMP-mined activity cliffs) + 8 time-aware eval rows held out as test)
+  #   pro-v12  → rahul24raj/lysos-amr-stage2-pro-v12  (pro-v11 + 1,437 counterfactual pairs (MMP-mined activity cliffs) + 8 time-aware eval rows held out as test)
+  #   pro-v13  → rahul24raj/lysos-amr-stage2-pro-v13  (DEFAULT: pro-v12 + 1,744 pharma_qa pairs from $2.59 Gemini 2.5 Pro enrichment, 218 named drugs × {mechanism, spectrum, indications, resistance} × {concise, CoT-with-reasoning-trace})
   source: local
-  path: data/processed/amr-stage2-pro-v12
-  hub_id: rahul24raj/lysos-amr-stage2-pro-v12
+  path: data/processed/amr-stage2-pro-v13
+  hub_id: rahul24raj/lysos-amr-stage2-pro-v13
   split_train: train
   split_eval: valid
   text_field: messages
