@@ -129,9 +129,11 @@ def main() -> int:
         )
     except Exception as exc:  # noqa: BLE001
         print(f"[X] Embedding failed: {exc}")
-        print("    Likely rate-limited. Free Gemini tier = 100 RPM / 1000 RPD.")
-        print("    Retry tomorrow OR run on the AMD VM where we'll deploy")
-        print("    EmbeddingGemma-300m locally (no API limits).")
+        print("    Free Gemini tier = 100 RPM / 1000 RPD; paid tier = 1500 RPM.")
+        print("    The reference-side parquet at")
+        print("    artifacts/embeddings/known-antibiotics-gemini-2.parquet")
+        print("    already covers the 30,743-row catalog — re-running this script")
+        print("    is only needed if you regenerate the canonical reference set.")
         return 1
 
     elapsed = time.time() - t0

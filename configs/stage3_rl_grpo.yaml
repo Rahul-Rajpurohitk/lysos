@@ -97,7 +97,11 @@ reward:
         reference_set: data/processed/known-antibiotics-canonical.parquet
         threshold: 0.6
     - name: embedding_novelty
-      weight: 0.07           # EmbeddingGemma 300m cosine distance (semantic novelty)
+      weight: 0.07           # Gemini Embedding 2 cosine distance vs pre-computed
+                              # 30,743 reference vectors at
+                              # artifacts/embeddings/known-antibiotics-gemini-2.parquet
+                              # (RETRIEVAL_QUERY task type at runtime; document side
+                              # baked offline). Live-embed fallback if cache absent.
       module: src.eval.rewards.embedding_novelty:embedding_novelty
       args:
         reference_set: data/processed/known-antibiotics-canonical.parquet

@@ -13,7 +13,7 @@
 #   1. Verify ROCm / MI300X visible to userspace
 #   2. Clone or update the Lysos repo at ~/lysos
 #   3. Install Python deps (pyproject.toml editable + sentence-transformers)
-#   4. Pre-warm HF cache: Gemma 4 31B-it + EmbeddingGemma 300m
+#   4. Pre-warm HF cache: Gemma 4 31B-it (embedder = Gemini API, no model pull)
 #   5. Run smoke tests: verify_loaders + smoke_test_rocm
 #   6. Pull the live HF datasets to local data/processed/
 #   7. Print "next steps" with the exact training command
@@ -72,21 +72,19 @@ case $? in
 esac
 
 # ---- 4. Pre-warm HF cache ----
-log "step 4/7 · pre-warming HF cache (Gemma 4 + EmbeddingGemma)"
+log "step 4/7 · pre-warming HF cache (Gemma 4 31B; embedder = Gemini API)"
 if [ -z "${HF_TOKEN:-}" ]; then
     log "  (warn) HF_TOKEN not set — gated models will fail. Set with: export HF_TOKEN=hf_..."
+fi
+if [ -z "${GEMINI_API_KEY:-}" ] && [ -z "${GOOGLE_API_KEY:-}" ]; then
+    log "  (warn) GEMINI_API_KEY missing — embedding_novelty reward will live-embed against API."
+    log "        Pre-computed vectors at artifacts/embeddings/known-antibiotics-gemini-2.parquet"
+    log "        cover the 30,743-row reference index, so this is only needed if you regenerate."
 fi
 python3 - <<'PY'
 import os
 import logging
 logging.getLogger("transformers").setLevel(logging.WARNING)
-print("  - downloading google/embeddinggemma-300m ...")
-try:
-    from sentence_transformers import SentenceTransformer
-    SentenceTransformer("google/embeddinggemma-300m")
-    print("    ✓ EmbeddingGemma cached")
-except Exception as e:
-    print(f"    ✗ EmbeddingGemma failed: {e}")
 
 print("  - downloading google/gemma-4-31B-it (will take ~10 min on first pull) ...")
 try:
@@ -95,6 +93,14 @@ try:
     print("    ✓ Gemma 4 31B-it cached")
 except Exception as e:
     print(f"    ✗ Gemma 4 failed: {e}")
+
+# NOTE: We deliberately do NOT pre-warm an embedder model here.
+# Lysos uses Google's gemini-embedding-2 via API for the embedding stack
+# (3072-d Matryoshka). Reference vectors are pre-computed locally to
+# artifacts/embeddings/known-antibiotics-gemini-2.parquet (362.7 MB,
+# 30,743 rows) and copied to the VM along with the rest of the repo.
+# At runtime the embedding_novelty reward LOADS this parquet — no
+# model download, no API quota burn during training.
 PY
 
 # ---- 5. Smoke tests ----

@@ -222,7 +222,7 @@ class LysosGenerator:
         Args:
             enable_rag: if True, retrieve top-k known antibiotics matching
                         the target and inject them as in-context examples.
-                        Powered by EmbeddingGemma 300m.
+                        Powered by Gemini Embedding 2 (3072-d, RETRIEVAL_QUERY).
             rag_index: path to indexed antibiotic corpus (.smi or .csv)
             rag_k: how many references to inject (default 3)
         """
