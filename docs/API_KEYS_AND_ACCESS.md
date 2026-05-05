@@ -38,13 +38,17 @@ quality — every component runs at full capability or fails loudly.
 
 ```bash
 # On the AMD MI300X VM, before any training:
-export HF_TOKEN=hf_...                 # write scope
+export HF_TOKEN=hf_...                 # write scope (or `huggingface-cli login`)
 export GEMINI_API_KEY=AIza...          # for real embedding_novelty
-export WANDB_API_KEY=...               # for monitoring
+export WANDB_API_KEY=wandb_v1_...      # or `wandb login <KEY>` to write ~/.netrc
 
 # Optional (for comparative benchmark):
 export OPENAI_API_KEY=sk-...
 export ANTHROPIC_API_KEY=sk-ant-...
+
+# Then verify before launching:
+python3 scripts/verify_keys.py
+# Exit 0 = cleared. Exit 1 = REQUIRED missing. Exit 2 = recommended missing.
 ```
 
 ## Get them now (5 min total)
@@ -60,15 +64,13 @@ a live API call per key and exits non-zero if anything is missing.
    → Cached at `~/.cache/huggingface/token`; verifier reads it automatically.
    → If you ever need a fresh one: huggingface.co/settings/tokens → New token (write)
 
-3. **WANDB_API_KEY** ⏳ PENDING (recommended)
-   → https://wandb.ai/authorize → sign in with GitHub (free tier is fine)
-   → Page shows a 40-char API key — copy
-   → Either:
-     a) `wandb login <KEY>` (writes to `~/.netrc`, persists across runs), OR
-     b) paste into `.env` line `WANDB_API_KEY=...`
-   → Verify: `python3 scripts/verify_keys.py` should now show OK on WANDB
-   → After login, run `python3 scripts/setup_wandb_dashboard.py` to create
-     the Lysos workspace with reward decomposition + cost panels.
+3. **WANDB_API_KEY** ✓ DONE (2026-05-05, user=rahulrajpurohit005, entity=rahulrajpurohit005-lysos)
+   → Stored at `~/.netrc` (chmod 600) under `machine api.wandb.ai`.
+   → Verifier auto-detects via `_load_wandb_netrc()`; same fallback the
+     wandb library itself uses, so no duplication into `.env`.
+   → If lost: https://wandb.ai/authorize → regenerate → `wandb login <KEY>`
+   → On the AMD VM, run `setup_wandb_dashboard.py` after first training
+     run lands so the workspace has live metric streams to attach panels to.
 
 4. **Gemma 4 access** (if not done already)
    → https://huggingface.co/google/gemma-4-31b-it → "Request access"

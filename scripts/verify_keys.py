@@ -103,23 +103,30 @@ def check_hf(token: str) -> tuple[bool, str]:
 
 
 def check_wandb(key: str) -> tuple[bool, str]:
-    """wandb verifies via API key length + REST viewer query."""
-    if len(key) != 40:
-        return False, f"key length={len(key)} (expected 40)"
+    """wandb verifies via REST viewer query.
+
+    Accepts both formats:
+      - legacy 40-char hex
+      - v1 long-form (`wandb_v1_…`)
+    """
+    if not (len(key) == 40 or key.startswith("wandb_v1_")):
+        return False, f"unrecognized key format (len={len(key)})"
     code, body = _http(
         "https://api.wandb.ai/graphql",
         headers={
             "Authorization": f"Basic {_b64(b'api:' + key.encode())}",
             "Content-Type": "application/json",
         },
-        body=json.dumps({"query": "{viewer{username}}"}).encode("utf-8"),
+        body=json.dumps({"query": "{viewer{username entity}}"}).encode("utf-8"),
         method="POST",
     )
     if code != 200:
         return False, f"HTTP {code}: {body[:200]}"
     try:
-        u = json.loads(body)["data"]["viewer"]["username"]
-        return True, f"OK user={u}"
+        v = json.loads(body)["data"]["viewer"]
+        u = v.get("username") or "?"
+        e = v.get("entity") or u
+        return True, f"OK user={u} entity={e}"
     except Exception as e:  # noqa: BLE001
         return False, f"parse: {e}"
 
@@ -196,9 +203,34 @@ def _load_hf_cache_token() -> None:
                 pass
 
 
+def _load_wandb_netrc() -> None:
+    """Fallback: read WANDB key from ~/.netrc (where `wandb login` puts it)."""
+    if os.environ.get("WANDB_API_KEY"):
+        return
+    netrc = Path.home() / ".netrc"
+    if not netrc.exists():
+        return
+    try:
+        text = netrc.read_text()
+    except OSError:
+        return
+    # Simple parser: look for "machine api.wandb.ai" then "password <KEY>"
+    in_block = False
+    for line in text.splitlines():
+        s = line.strip()
+        if s.startswith("machine "):
+            in_block = "api.wandb.ai" in s
+        elif in_block and s.startswith("password "):
+            tok = s.split(None, 1)[1].strip()
+            if tok:
+                os.environ["WANDB_API_KEY"] = tok
+                return
+
+
 def run() -> int:
     _load_dotenv(Path(__file__).parent.parent / ".env")
     _load_hf_cache_token()
+    _load_wandb_netrc()
     rows: list[tuple[str, str, str, str]] = []  # (tier, key, status, detail)
 
     fail_required = False
