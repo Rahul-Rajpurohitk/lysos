@@ -94,6 +94,7 @@ def main() -> int:
     # Use the existing GeminiEmbedder — same one the embedding_novelty reward uses
     try:
         from src.embeddings import GeminiEmbedder
+        from src.embeddings.enrichment import build_document_text
     except ImportError as e:
         print(f"[X] Could not import GeminiEmbedder: {e}")
         return 1
@@ -101,9 +102,19 @@ def main() -> int:
     args.out.parent.mkdir(parents=True, exist_ok=True)
     embedder = GeminiEmbedder(qps=args.qps)
 
-    smiles_list = df["smiles"].tolist()
-    n = len(smiles_list)
-    print(f"[INFO] Embedding {n} SMILES via Gemini Embedding 2 (gemini-embedding-2)")
+    # Build enriched text per row — uses name + source + stereo + RDKit
+    # descriptors. ~150 tokens/row instead of bare ~7-token SMILES, which
+    # gives the embedder real semantic context inside the 8192-token
+    # window. SAME template used by embedding_novelty + retrieval +
+    # dedup so the cosine space stays consistent.
+    print(f"[INFO] Building enriched embedding text for {len(df)} rows...")
+    enriched_texts = [build_document_text(row) for _, row in df.iterrows()]
+    avg_tok = sum(len(t) for t in enriched_texts) / max(1, len(enriched_texts)) / 4
+    print(f"[INFO]   avg ~{avg_tok:.0f} tokens/row  (cap: 8192)")
+    print(f"[INFO]   sample text: {enriched_texts[0][:120]}...")
+
+    n = len(enriched_texts)
+    print(f"[INFO] Embedding {n} rows via Gemini Embedding 2 (gemini-embedding-2)")
     print(f"[INFO] Batch size: {args.batch_size}, dim: 3072 (Matryoshka)")
     print(f"[INFO] qps: {args.qps}  threads: {args.threads}")
 
@@ -111,7 +122,7 @@ def main() -> int:
     all_embs: list[list[float]] | None = None
     try:
         all_embs = embedder.embed_batch(
-            smiles_list,
+            enriched_texts,
             task_type="RETRIEVAL_DOCUMENT",
             normalize=True,
             threads=args.threads,

@@ -53,6 +53,25 @@ def _ensure_loaded(reference_set: str) -> bool:
             return False
 
     if _REF_EMBS is None or _REF_PATH != reference_set:
+        # PRIMARY PATH: load pre-computed Gemini Embedding 2 vectors from the
+        # parquet file produced by scripts/precompute_embeddings.py. This
+        # avoids re-embedding 30K reference antibiotics on every training
+        # start — Gemini API budget is reserved for query-side embeddings.
+        precomputed = Path("artifacts/embeddings/known-antibiotics-gemini-2.parquet")
+        if precomputed.exists():
+            try:
+                import pandas as pd
+                df = pd.read_parquet(precomputed)
+                _REF_EMBS = np.asarray(df["embedding"].tolist(), dtype=np.float32)
+                _REF_PATH = reference_set
+                log.info("  loaded %d pre-computed reference embeddings (dim=%d) from %s",
+                         len(_REF_EMBS), _REF_EMBS.shape[-1], precomputed)
+                return True
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Failed to load pre-computed embeddings: %s. "
+                            "Falling back to live embedding.", exc)
+
+        # FALLBACK: live-embed if no precomputed parquet exists.
         ref_path = Path(reference_set)
         if not ref_path.exists():
             log.warning(
@@ -60,20 +79,24 @@ def _ensure_loaded(reference_set: str) -> bool:
                 ref_path,
             )
             return False
-        # errors='replace' handles legacy reference files with non-UTF8 bytes
-        # (e.g. compound names with em-dash in comments).
         with open(ref_path, encoding="utf-8", errors="replace") as f:
             ref_smiles = [
                 line.strip() for line in f
                 if line.strip() and not line.startswith("#")
             ]
-        ref_smiles = [s.split()[0] for s in ref_smiles]  # support "SMILES name"
+        ref_smiles = [s.split()[0] for s in ref_smiles]
+        # Use the same enrichment template the precompute uses so query
+        # and document embeddings share semantic feature space.
+        from src.embeddings.enrichment import build_query_text
+        ref_texts = [build_query_text(s, name="reference", source="reference")
+                     for s in ref_smiles]
         log.info(
             "Embedding %d reference antibiotics with gemini-embedding-2 "
-            "(this is a one-time ~$0.05 call)...", len(ref_smiles),
+            "(NO precomputed cache — running live, ~$0.10 call)...",
+            len(ref_texts),
         )
         _REF_EMBS = _EMBEDDER.embed_batch(
-            ref_smiles, task_type="RETRIEVAL_DOCUMENT", normalize=True,
+            ref_texts, task_type="RETRIEVAL_DOCUMENT", normalize=True,
         )
         _REF_PATH = reference_set
         log.info(
@@ -108,12 +131,17 @@ def embedding_novelty(
             "to disable this component. NO fallbacks per project policy."
         )
 
+    # Build matching enriched query text per candidate so the asymmetric
+    # retrieval (RETRIEVAL_DOCUMENT vs RETRIEVAL_QUERY) operates over the
+    # same feature space as the precomputed reference embeddings.
+    from src.embeddings.enrichment import build_query_text
+
     queries: list[str] = []
     valid_idx: list[int] = []
     for i, sample in enumerate(samples):
         smi = extract_smiles(sample)
         if smi:
-            queries.append(smi)
+            queries.append(build_query_text(smi, name="candidate", source="generated"))
             valid_idx.append(i)
     if not valid_idx:
         return [0.0] * len(samples)

@@ -22,7 +22,7 @@ dataset:
   split_eval: valid
   text_field: messages         # JSON-encoded list of {role, content}
   response_template: "<start_of_turn>model\n"   # Gemma chat template
-  max_seq_length: 4096
+  max_seq_length: 8192
   packing: true                # pack multiple short examples — efficiency win
 
 # -----------------------------------------------------------------------------

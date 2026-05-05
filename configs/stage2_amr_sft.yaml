@@ -55,7 +55,7 @@ dataset:
   split_eval: valid
   text_field: messages
   response_template: "<start_of_turn>model\n"
-  max_seq_length: 4096
+  max_seq_length: 8192
   packing: true
   # Held-out eval slices baked into the dataset:
   #   • split=test (50 rows) — named-drug structural-mechanistic reasoning,

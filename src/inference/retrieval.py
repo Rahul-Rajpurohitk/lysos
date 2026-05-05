@@ -41,13 +41,20 @@ class IndexedDoc:
     raw: str = ""
 
     def as_document_text(self) -> str:
-        """Text used for indexing — combines all metadata for richer matching."""
-        parts = [f"SMILES: {self.smiles}"]
-        if self.name:
-            parts.append(f"Name: {self.name}")
+        """Text used for indexing — uses the SHARED enrichment template so
+        retrieval embeddings live in the same feature space as the reward
+        stack's reference embeddings.
+        """
+        from src.embeddings.enrichment import build_query_text
+        # Use build_query_text since it computes the structural fields
+        # via RDKit on demand (we may not have them stored on IndexedDoc).
+        text = build_query_text(self.smiles,
+                                 name=self.name or "indexed",
+                                 source="retrieval-index")
+        # Append indication if we have it (additional clinical context)
         if self.indication:
-            parts.append(f"Indication: {self.indication}")
-        return " | ".join(parts)
+            text += f" Indication: {self.indication}."
+        return text
 
 
 class AntibioticRetriever:

@@ -38,8 +38,8 @@ dataset:
   split_train: train
   split_eval: valid
   prompt_field: prompt
-  max_prompt_length: 1024
-  max_completion_length: 512
+  max_prompt_length: 2048
+  max_completion_length: 1024
 
 # -----------------------------------------------------------------------------
 # GRPO-specific config

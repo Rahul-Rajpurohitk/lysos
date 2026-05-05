@@ -29,8 +29,8 @@ dataset:
   source: local
   train_path: data/processed/lysos-hard-negatives-v1.parquet
   hub_id: rahul24raj/lysos-hard-negatives-v1
-  max_length: 2048
-  max_prompt_length: 768
+  max_length: 4096
+  max_prompt_length: 1024
 
 # -----------------------------------------------------------------------------
 # DPO hyperparams

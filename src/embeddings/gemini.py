@@ -75,7 +75,7 @@ class GeminiEmbedder:
         output_dim: Optional[int] = None,
         qps: float = DEFAULT_QPS,
         timeout: float = 30.0,
-        max_retries: int = 4,
+        max_retries: int = 8,
     ) -> None:
         self.api_key = (
             api_key
@@ -99,7 +99,7 @@ class GeminiEmbedder:
 
     def _post(self, path: str, body: dict) -> dict:
         url = f"{GEMINI_API_BASE}{path}?key={self.api_key}"
-        backoff = 1.0
+        backoff = 2.0
         for attempt in range(self.max_retries):
             # rate-limit
             elapsed = time.time() - self._last_call
@@ -110,15 +110,30 @@ class GeminiEmbedder:
 
             r = self.session.post(url, json=body, timeout=self.timeout)
             if r.status_code in (429, 503):
+                # Google encodes actual retryDelay inside JSON error body.
                 wait = float(r.headers.get("Retry-After", backoff))
-                log.warning("Gemini rate-limit %s — sleeping %.1fs (attempt %d)",
-                            r.status_code, wait, attempt + 1)
+                err_msg = ""
+                try:
+                    err = r.json()
+                    err_msg = err.get("error", {}).get("message", "")[:300]
+                    for d in err.get("error", {}).get("details", []) or []:
+                        rd = d.get("retryDelay")
+                        if isinstance(rd, str) and rd.endswith("s"):
+                            try:
+                                wait = max(wait, float(rd[:-1]) + 1.0)
+                            except ValueError:
+                                pass
+                except Exception:  # noqa: BLE001
+                    pass
+                log.warning("Gemini %s — sleep %.1fs (attempt %d/%d) %s",
+                            r.status_code, wait, attempt + 1,
+                            self.max_retries, err_msg)
                 time.sleep(wait)
-                backoff = min(backoff * 2, 60.0)
+                backoff = min(backoff * 2, 90.0)
                 continue
             if r.ok:
                 return r.json()
-            log.error("Gemini API %s: %s", r.status_code, r.text[:200])
+            log.error("Gemini API %s: %s", r.status_code, r.text[:300])
             r.raise_for_status()
         raise RuntimeError(f"Gemini API: max retries exhausted")
 
