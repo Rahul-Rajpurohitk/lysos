@@ -627,7 +627,10 @@ async def run_workbench_loop(
 
     while not state.terminated and state.iteration < state.max_iterations:
         state.iteration += 1
-        await emit({"type": "iteration_start", "data": {"i": state.iteration}})
+        # New event shape (consumed by v3 frontend) — also emit legacy `data`
+        # field so v2 keeps working during cutover.
+        await emit({"type": "iteration_start", "iteration": state.iteration,
+                    "data": {"i": state.iteration}})
 
         # Designer with full tool-use loop
         smiles = await run_designer(state, llm, emit)
@@ -668,6 +671,19 @@ async def run_workbench_loop(
 
         # Strategist decides — includes plateau detection
         decision = await run_strategist_decide(state, emit)
+        await emit({
+            "type": "iteration_end",
+            "iteration": state.iteration,
+            "decision": decision,
+            "composite": float(state.candidates[-1].scores.composite)
+                          if state.candidates else 0.0,
+            "n_candidates": len(state.candidates),
+        })
+        await emit({
+            "type": "state_change",
+            "decision": decision,
+            "reason": state.termination_reason or "iteration progressed",
+        })
         if decision == "TERMINATE":
             break
         # CONTINUE / BRANCH both go around again

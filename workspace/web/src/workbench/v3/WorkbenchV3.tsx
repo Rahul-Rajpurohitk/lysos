@@ -13,6 +13,7 @@ import { RadarPanel } from "./panels/RadarPanel";
 import { ParetoPanel } from "./panels/ParetoPanel";
 import { SynthPanel } from "./panels/SynthPanel";
 import { LineagePanel } from "./panels/LineagePanel";
+import { GraphPanel } from "./panels/GraphPanel";
 import type { Pathogen } from "./components/TopHeader";
 
 import "./v3.css";
@@ -502,7 +503,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   )}
                   {activeTab === "Pareto" && <ParetoPanel candidates={paretoRows} />}
                   {activeTab === "Synth" && <SynthPanel apiBase={apiBase} smiles={currentSmiles} />}
-                  {activeTab === "Graph" && <GraphPanelInline pathogen={selectedPathogen} apiBase={apiBase} />}
+                  {activeTab === "Graph" && <GraphPanel pathogen={selectedPathogen} apiBase={apiBase} />}
                   {activeTab === "Lineage" && (
                     <LineagePanel edits={molEdits} candidates={candEvents} />
                   )}
@@ -533,16 +534,3 @@ function priorityFor(code: string): "critical" | "high" {
   return ["VRE", "NGono"].includes(code) ? "high" : "critical";
 }
 
-function GraphPanelInline({ pathogen, apiBase }: { pathogen: string; apiBase: string }) {
-  return (
-    <div style={{ fontSize: 12, color: "var(--lys-text-dim)" }}>
-      <div style={{ marginBottom: 6 }}>
-        Resistance graph for <strong style={{ color: "var(--lys-accent)" }}>{pathogen}</strong>
-      </div>
-      <div style={{ fontFamily: "var(--lys-font-mono)", fontSize: 11, color: "var(--lys-text-faint)" }}>
-        Wired to {apiBase}/workbench/pathogen/{pathogen}/graph
-        — force-directed visualization renders on session start.
-      </div>
-    </div>
-  );
-}

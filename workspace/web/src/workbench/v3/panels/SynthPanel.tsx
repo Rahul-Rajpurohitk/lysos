@@ -30,7 +30,7 @@ export function SynthPanel({ apiBase, smiles }: SynthPanelProps) {
       return;
     }
     setLoading(true);
-    fetch(`${apiBase}/workbench/molecule/synth?smiles=${encodeURIComponent(smiles)}`)
+    fetch(`${apiBase}/workbench/sandbox/synth/${encodeURIComponent(smiles)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then(setRoute)
       .catch(() => setRoute(null))

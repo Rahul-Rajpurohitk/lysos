@@ -65,6 +65,106 @@ async def get_trace(session_id: str, since_ts: float = 0.0) -> dict:
     return {"session_id": session_id, "events": out, "n": len(out)}
 
 
+# ---- Resistance graph endpoint (used by the Graph panel) ----
+
+@router.get("/resistance-graph/{pathogen_code}")
+async def resistance_graph(pathogen_code: str) -> dict:
+    """Build the resistance-graph payload for the Graph panel.
+
+    Returns: {nodes: [{id,kind,label}], edges: [{src,dst,kind}]}
+      kinds: pathogen | resistance_gene | drug_class
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    try:
+        from tools import registry  # type: ignore
+    except Exception:
+        raise HTTPException(503, "tool registry not available")
+
+    rt = registry.get("get_pathogen_resistome")
+    if rt is None:
+        raise HTTPException(503, "resistome tool not loaded")
+    rec = rt.call({"pathogen": pathogen_code})
+    result = rec.get("result") or {}
+    if not result:
+        raise HTTPException(404, f"no resistome for {pathogen_code}")
+
+    nodes: list[dict] = []
+    edges: list[dict] = []
+    pid = f"path:{pathogen_code}"
+    nodes.append({"id": pid, "kind": "pathogen", "label": pathogen_code})
+
+    for entry in result.get("resistome", [])[:20]:
+        gene = entry.get("gene") or entry.get("name") or ""
+        if not gene:
+            continue
+        gid = f"gene:{gene}"
+        nodes.append({"id": gid, "kind": "resistance_gene", "label": gene})
+        edges.append({"src": pid, "dst": gid, "kind": "carries"})
+        for drug_class in entry.get("drug_classes_affected", [])[:3]:
+            cid = f"class:{drug_class}"
+            nodes.append({"id": cid, "kind": "drug_class", "label": drug_class})
+            edges.append({"src": gid, "dst": cid, "kind": "affects"})
+
+    # Dedupe nodes (drug classes may repeat across genes).
+    seen = set()
+    deduped_nodes: list[dict] = []
+    for n in nodes:
+        if n["id"] in seen:
+            continue
+        seen.add(n["id"])
+        deduped_nodes.append(n)
+
+    return {
+        "pathogen": pathogen_code,
+        "nodes": deduped_nodes,
+        "edges": edges,
+        "n_nodes": len(deduped_nodes),
+        "n_edges": len(edges),
+    }
+
+
+# ---- Synth route endpoint (used by the Synth panel) ----
+
+@router.get("/synth/{smiles:path}")
+async def synth_route(smiles: str) -> dict:
+    """Look up retrosynthesis route for a SMILES.
+
+    Strategy:
+      1. SAscore (always available — RDKit-only).
+      2. AiZynth cache hit if the SMILES is in the priority sweep.
+      3. Returns reaction ladder + cost/g + confidence.
+    """
+    from src.eval.rewards.synth import _load_aizynth_cache, _SA
+    from rdkit import Chem, RDLogger
+
+    RDLogger.DisableLog("rdApp.*")
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, "invalid smiles")
+
+    sa = float(_SA.calculateScore(mol)) if _SA is not None else 5.0
+    cache = _load_aizynth_cache()
+    hit = cache.get(smiles)
+
+    payload: dict[str, Any] = {
+        "smiles": smiles,
+        "sa_score": round(sa, 2),
+        "steps": 3,
+        "cost_per_g": int(50 + sa * 20),
+        "confidence": round(max(0.0, min(1.0, 1.0 - sa / 10)), 2),
+        "reactions": [],
+        "ai_score": 0.0,
+    }
+    if hit is not None:
+        score, depth, n_routes = hit
+        payload.update({
+            "ai_score": round(score, 3),
+            "steps": int(depth) if depth > 0 else payload["steps"],
+            "confidence": round(min(1.0, score * (n_routes / 5)), 2),
+        })
+    return payload
+
+
 # --------------------------------------------------------------------
 # Transform catalog — named SMARTS reactions, grouped by intent.
 # Mirrored to the frontend so the chip groups stay in sync.
