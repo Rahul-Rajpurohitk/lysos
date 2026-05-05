@@ -117,11 +117,24 @@ def run_sft(args: argparse.Namespace) -> int:
         torch_dtype=dtype,
         device_map="auto",
         trust_remote_code=cfg.model.trust_remote_code,
-        use_cache=cfg.model.use_cache,
     )
     if cfg.model.attn_impl == "flash_attention_2":
         model_kwargs["attn_implementation"] = "flash_attention_2"
-    model = AutoModelForCausalLM.from_pretrained(cfg.model.base_id, **model_kwargs)
+    # Try AutoModelForCausalLM first; for Gemma 4 (multimodal-wrapper) and
+    # similar conditional-generation models, fall back to AutoModel which
+    # picks the right class and we extract the text decoder.
+    try:
+        model = AutoModelForCausalLM.from_pretrained(cfg.model.base_id, **model_kwargs)
+    except (ValueError, KeyError) as exc:
+        log.warning("AutoModelForCausalLM failed (%s); trying AutoModel", exc)
+        from transformers import AutoModel
+        model = AutoModel.from_pretrained(cfg.model.base_id, **model_kwargs)
+    # Set use_cache *after* load (some wrappers reject use_cache in __init__)
+    if hasattr(model, "config"):
+        try:
+            model.config.use_cache = cfg.model.use_cache
+        except Exception:
+            pass
     log.info("Model loaded. dtype=%s, device_map applied.", model.dtype)
 
     if cfg.training.gradient_checkpointing:
