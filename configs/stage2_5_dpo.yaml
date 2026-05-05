@@ -1,0 +1,105 @@
+# Stage 2.5 — DPO alignment on hard-negative pairs.
+#
+# Inserts between Stage 2 (AMR SFT) and Stage 3 (GRPO RL). Trains the
+# model to prefer Pareto-balanced candidates over Pareto-trap candidates
+# along 10 known anti-correlated axis pairs. Reduces the time GRPO spends
+# fumbling toward Pareto balance.
+#
+# Targets: Small 1x MI300X for ~30-60 minutes on 10K pairs.
+
+_inherit: base.yaml
+
+run_name: stage2_5-dpo-lysos-base-dpo
+description: DPO alignment on hard-negative Pareto-trap pairs
+
+# -----------------------------------------------------------------------------
+# Model — load from Stage 2 checkpoint
+# -----------------------------------------------------------------------------
+model:
+  base_id: rahul24raj/lysos-base
+  dtype: bfloat16
+  trust_remote_code: false
+  use_cache: false
+  attn_impl: flash_attention_2
+
+# -----------------------------------------------------------------------------
+# Data — produced by scripts/mine_hard_negatives.py
+# -----------------------------------------------------------------------------
+dataset:
+  source: local
+  train_path: data/processed/lysos-hard-negatives-v1.parquet
+  hub_id: rahul24raj/lysos-hard-negatives-v1
+  max_length: 2048
+  max_prompt_length: 768
+
+# -----------------------------------------------------------------------------
+# DPO hyperparams
+# -----------------------------------------------------------------------------
+dpo:
+  beta: 0.1   # KL strength: higher = stay closer to Stage 2 ref;
+              # 0.1 is the TRL default and works well for chat preference data.
+
+# -----------------------------------------------------------------------------
+# PEFT — train a fresh LoRA over merged Stage 2
+# -----------------------------------------------------------------------------
+peft:
+  enabled: true
+  type: lora
+  r: 32                     # smaller than Stage 2 (64) — DPO is a refinement
+  alpha: 64
+  dropout: 0.05
+  bias: none
+  task_type: CAUSAL_LM
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+  load_existing_adapter: rahul24raj/lysos-base   # merge Stage 2 first
+
+# -----------------------------------------------------------------------------
+# Training
+# -----------------------------------------------------------------------------
+training:
+  output_dir: ./checkpoints/stage2_5-dpo
+  num_train_epochs: 1                     # one pass through 10K pairs is plenty
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 8          # effective batch 16
+  gradient_checkpointing: true
+  learning_rate: 5.0e-7                   # very gentle for preference learning
+  lr_scheduler_type: cosine
+  warmup_ratio: 0.1
+  weight_decay: 0.0
+  optim: adamw_torch
+  max_grad_norm: 1.0
+  bf16: true
+  logging_steps: 5
+  save_strategy: steps
+  save_steps: 100
+  save_total_limit: 3
+  max_steps: -1
+  report_to:
+    - wandb
+  seed: 42
+
+# -----------------------------------------------------------------------------
+# Hub
+# -----------------------------------------------------------------------------
+hub:
+  push_to_hub: true
+  hub_model_id: rahul24raj/lysos-base-dpo
+  push_strategy: checkpoint               # push every 100 steps so we don't lose work
+  private: true
+
+# -----------------------------------------------------------------------------
+# Wandb
+# -----------------------------------------------------------------------------
+wandb:
+  tags:
+    - amd-mi300x
+    - gemma-4
+    - lablab-2026
+    - stage2.5
+    - dpo
+    - hard-negatives
+    - amr

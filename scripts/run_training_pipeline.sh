@@ -66,6 +66,34 @@ if [ "$STAGE" = "stage2" ] || [ "$STAGE" = "all" ]; then
     log "Stage 2 complete. Checkpoint pushed to rahul24raj/lysos-base"
 fi
 
+# ---- Stage 2.5: DPO on hard-negative pairs (~30-60 min) ----
+if [ "$STAGE" = "stage2_5" ] || [ "$STAGE" = "all" ]; then
+    log "=== STAGE 2.5: DPO hard-negative alignment (1x MI300X, ~30-60min) ==="
+    export LYSOS_GPU_CLASS=mi300x_small_1gpu
+
+    # Mine hard negatives from rl_prompts using the freshly-trained Stage 2.
+    if [ ! -f data/processed/lysos-hard-negatives-v1.parquet ]; then
+        log "Mining hard-negative pairs (~30 min on Small 1x MI300X)"
+        python3 scripts/mine_hard_negatives.py \
+            --prompts rahul24raj/lysos-rl-prompts-v3 \
+            --candidates_per_prompt 20 \
+            --max_pairs_per_axis 2 \
+            --model_id rahul24raj/lysos-base \
+            --out data/processed/lysos-hard-negatives-v1.parquet \
+            2>&1 | tee "$LOG_DIR/mine_hn_$TS.log" \
+            || fail "Hard-negative mining failed"
+    else
+        log "  reusing existing data/processed/lysos-hard-negatives-v1.parquet"
+    fi
+
+    # Train DPO on the pairs.
+    python3 -m src.training.stage2_5_dpo \
+        --config configs/stage2_5_dpo.yaml \
+        2>&1 | tee "$LOG_DIR/stage2_5_$TS.log" \
+        || fail "Stage 2.5 DPO failed"
+    log "Stage 2.5 DPO complete. Adapter pushed to rahul24raj/lysos-base-dpo"
+fi
+
 # ---- Stage 3: GRPO RL ----
 if [ "$STAGE" = "stage3" ] || [ "$STAGE" = "all" ]; then
     log "=== STAGE 3: GRPO RL with 12-component reward (1x MI300X, ~10h) ==="

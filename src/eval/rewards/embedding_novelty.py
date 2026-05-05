@@ -60,7 +60,9 @@ def _ensure_loaded(reference_set: str) -> bool:
                 ref_path,
             )
             return False
-        with open(ref_path) as f:
+        # errors='replace' handles legacy reference files with non-UTF8 bytes
+        # (e.g. compound names with em-dash in comments).
+        with open(ref_path, encoding="utf-8", errors="replace") as f:
             ref_smiles = [
                 line.strip() for line in f
                 if line.strip() and not line.startswith("#")

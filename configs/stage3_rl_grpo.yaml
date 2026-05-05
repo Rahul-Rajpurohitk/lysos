@@ -14,12 +14,15 @@ run_name: stage3-rl-grpo-lysos-rl
 description: GRPO with multi-objective verifiable rewards on top of Stage 2
 
 # -----------------------------------------------------------------------------
-# Model — load Stage 2 checkpoint
+# Model — Stage 2.5 DPO output is the canonical entry point.
+# If 2.5 was skipped, override at CLI:
+#   --override model.base_id=rahul24raj/lysos-base \
+#   --override model.reference_model_id=rahul24raj/lysos-base
 # -----------------------------------------------------------------------------
 model:
-  base_id: rahul24raj/lysos-base
-  reference_model_id: rahul24raj/lysos-base    # frozen reference for KL
-  beta: 0.04                                    # KL coefficient
+  base_id: rahul24raj/lysos-base-dpo
+  reference_model_id: rahul24raj/lysos-base-dpo  # frozen reference for KL
+  beta: 0.04                                      # KL coefficient
 
 # -----------------------------------------------------------------------------
 # Data — prompts only (RL generates responses)
@@ -157,7 +160,7 @@ training:
 peft:
   r: 32                        # smaller LoRA on top of Stage 2 base
   alpha: 64
-  load_existing_adapter: rahul24raj/lysos-base
+  load_existing_adapter: rahul24raj/lysos-base-dpo  # use Stage 2.5 DPO adapter
 
 # -----------------------------------------------------------------------------
 # Hub
