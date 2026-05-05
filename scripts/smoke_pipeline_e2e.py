@@ -1,30 +1,33 @@
 """End-to-end smoke test for the full Lysos training pipeline.
 
-Runs Stage 1 -> Stage 2 -> Stage 3 on a TINY model (sshleifer/tiny-gpt2,
-~1MB) with TINY datasets (32 examples). Verifies the entire chain works
-on CPU before paying for AMD MI300X time:
+Runs Stage 1 -> Stage 2 -> Stage 2.5 (mine + DPO) -> Stage 3 on a TINY
+model (sshleifer/tiny-gpt2, ~1MB) with TINY datasets. Verifies the
+entire chain works on CPU before paying for AMD MI300X time:
 
-  * Stage 1 SFT: tiny chat data -> LoRA adapter A
-  * Stage 2 SFT: loads + merges A -> trains LoRA adapter B
-  * Stage 3 GRPO: loads + merges B -> trains GRPO adapter C
-                  + reward_callable wired to a stub reward function
+  * Stage 1   SFT: tiny chat data -> LoRA adapter A
+  * Stage 2   SFT: loads + merges A -> trains LoRA adapter B
+  * Stage 2.5: mines hard-negative pairs from stub generator, then DPO
+               trains LoRA adapter B' on top of B
+  * Stage 3   GRPO: loads + merges B' -> GRPO with reward callable
 
-Total runtime: ~5 min on CPU. Catches:
+Total runtime: ~30 sec on CPU. Catches:
   - Argparse / config wiring breaks
-  - Adapter chain breaks (Stage 2 can't load Stage 1 output)
+  - Adapter chain breaks (each stage must load the previous one)
   - Tokenizer alignment mismatches
   - Reward callable signature mismatches with TRL GRPOTrainer
+  - DPO dataset format vs DPOTrainer expectations
   - Hub push integration (skipped in smoke; can opt in via SMOKE_PUSH=1)
 
 Run:
     /tmp/lysos_venv/bin/python scripts/smoke_pipeline_e2e.py
 
 Exit codes:
-  0 = all 3 stages completed
+  0 = all stages completed
   1 = setup failure (deps missing)
   2 = stage 1 failed
   3 = stage 2 failed
   4 = stage 3 failed
+  5 = stage 2.5 (mining or DPO) failed
 """
 from __future__ import annotations
 
@@ -170,9 +173,22 @@ def _run_stage(label: str, cmd: list[str], work: Path) -> tuple[bool, str]:
     return proc.returncode == 0, tail
 
 
+def _load_yaml_or_json(path: Path) -> dict:
+    """Load a config file written as either yaml or json."""
+    text = path.read_text()
+    try:
+        import yaml
+        return yaml.safe_load(text)
+    except ImportError:
+        import json as _j
+        return _j.loads(text)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--keep", action="store_true", help="Don't clean tmp dir")
+    ap.add_argument("--skip-stage2-5", action="store_true",
+                    help="Skip the Stage 2.5 mining + DPO step")
     ap.add_argument("--skip-stage3", action="store_true",
                     help="Stage 3 needs TRL>=0.11; skip if not installed")
     args = ap.parse_args()
@@ -206,6 +222,70 @@ def main() -> int:
                                    "--config", str(cfgs["stage2"])], work)
     if not ok2:
         return 3
+
+    # Stage 2.5: mine hard-negatives via stub generator + DPO
+    if not args.skip_stage2_5:
+        # Build a tiny prompts dataset for the miner.
+        from datasets import Dataset, DatasetDict
+        prompts_dir = work / "ds_prompts"
+        Dataset.from_list([
+            {"prompt": f"design candidate for MRSA #{i}"} for i in range(8)
+        ]).to_dict()  # build then resave as DatasetDict
+        dd = DatasetDict({
+            "train": Dataset.from_list([
+                {"prompt": f"design candidate for MRSA #{i}"} for i in range(8)
+            ]),
+            "test": Dataset.from_list([
+                {"prompt": "design candidate for Mtb"}
+            ]),
+        })
+        dd.save_to_disk(str(prompts_dir))
+
+        pairs_out = work / "hn_pairs.parquet"
+        ok_mine, _ = _run_stage(
+            "stage2_5_mine",
+            [py, "scripts/mine_hard_negatives.py",
+             "--prompts", str(prompts_dir),
+             "--max_prompts", "6", "--candidates_per_prompt", "8",
+             "--use_stub_generator", "--out", str(pairs_out)],
+            work,
+        )
+        if not ok_mine:
+            return 5
+
+        # DPO config — reuse the schema from stage2 cfg + add dpo block
+        dpo_cfg_path = work / "stage2_5.yaml"
+        import json
+        # Inherit from stage2 cfg with overrides for DPO
+        dpo_cfg = json.loads(json.dumps(_load_yaml_or_json(cfgs["stage2"])))
+        dpo_cfg["run_name"] = "smoke_s2_5"
+        dpo_cfg["peft"]["load_existing_adapter"] = str(work / "stage2_out")
+        dpo_cfg["dataset"] = {
+            "source": "local",
+            "train_path": str(pairs_out),
+            "max_length": 64,
+            "max_prompt_length": 32,
+        }
+        dpo_cfg["dpo"] = {"beta": 0.1}
+        dpo_cfg["training"]["output_dir"] = str(work / "stage2_5_out")
+        dpo_cfg["training"]["max_steps"] = 1
+        dpo_cfg["training"]["report_to"] = []
+        try:
+            import yaml as _y
+            dpo_cfg_path.write_text(_y.safe_dump(dpo_cfg, sort_keys=False))
+        except ImportError:
+            dpo_cfg_path.write_text(json.dumps(dpo_cfg))
+
+        ok25, _ = _run_stage(
+            "stage2_5_dpo",
+            [py, "-m", "src.training.stage2_5_dpo",
+             "--config", str(dpo_cfg_path), "--smoke-test"],
+            work,
+        )
+        if not ok25:
+            return 5
+    else:
+        print("[stage2.5] skipped per --skip-stage2-5")
 
     if args.skip_stage3:
         print("[stage3] skipped per --skip-stage3")
