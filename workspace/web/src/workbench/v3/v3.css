@@ -1,0 +1,860 @@
+/* ----------------------------------------------------------------
+   Lysos Workbench v3 — design tokens + component styles.
+   See docs/agentic_ui_overhaul_brief.md §8 for the design system.
+---------------------------------------------------------------- */
+
+:root {
+  --lys-bg: #0d1117;
+  --lys-bg-2: #161b22;
+  --lys-surface: rgba(255, 255, 255, 0.04);
+  --lys-surface-2: rgba(255, 255, 255, 0.06);
+  --lys-border: rgba(255, 255, 255, 0.08);
+  --lys-border-strong: rgba(255, 255, 255, 0.16);
+  --lys-text: #e6edf3;
+  --lys-text-dim: #8b949e;
+  --lys-text-faint: #6e7681;
+  --lys-accent: #34d399;
+  --lys-accent-glow: rgba(52, 211, 153, 0.4);
+  --lys-radius: 12px;
+  --lys-radius-pill: 999px;
+  --lys-radius-chip: 8px;
+
+  --lys-agent-designer: #34d399;
+  --lys-agent-critic: #f87171;
+  --lys-agent-editor: #60a5fa;
+  --lys-agent-strategist: #a78bfa;
+  --lys-agent-user: #fbbf24;
+
+  --lys-font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, system-ui, sans-serif;
+  --lys-font-mono: "SF Mono", "JetBrains Mono", "Fira Code", monospace;
+
+  --lys-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --lys-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --lys-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+}
+
+/* ===== Header ===== */
+.lys-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 24px;
+  padding: 8px 16px;
+  background: var(--lys-bg);
+  border-bottom: 1px solid var(--lys-border);
+  font-family: var(--lys-font-body);
+  position: relative;
+  min-height: 56px;
+}
+.lys-header__brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lys-brandmark {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #16a34a 0%, #34d399 100%);
+  display: grid;
+  place-items: center;
+  color: white;
+  font-weight: 700;
+  font-size: 16px;
+  position: relative;
+}
+.lys-brandmark__glyph {
+  font-family: var(--lys-font-body);
+}
+.lys-header__brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+.lys-header__brand-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--lys-text);
+  letter-spacing: -0.02em;
+}
+.lys-header__brand-tag {
+  font-size: 11px;
+  color: var(--lys-text-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.lys-header__center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-self: center;
+}
+
+.lys-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lys-header__btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--lys-accent) 0%, #16a34a 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.4), 0 4px 14px rgba(52, 211, 153, 0.25);
+}
+.lys-header__btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.6), 0 6px 18px rgba(52, 211, 153, 0.4);
+}
+.lys-header__btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.lys-header__btn-primary--running {
+  background: linear-gradient(180deg, #475569 0%, #334155 100%);
+  box-shadow: none;
+}
+
+.lys-header__btn-ghost {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--lys-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lys-text-dim);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.lys-header__btn-ghost:hover {
+  border-color: var(--lys-border-strong);
+  color: var(--lys-text);
+}
+
+.lys-header__iters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--lys-border);
+  border-radius: 8px;
+}
+.lys-header__iters-label {
+  font-size: 11px;
+  color: var(--lys-text-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.lys-header__iters-input {
+  width: 32px;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: var(--lys-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ===== Pill selector ===== */
+.lys-pill-selector { position: relative; }
+.lys-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  width: 100%;
+  border: 1px solid var(--lys-border);
+  border-radius: 10px;
+  background: var(--lys-surface);
+  color: var(--lys-text);
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, background 0.15s;
+  justify-content: space-between;
+}
+.lys-pill:hover { border-color: var(--lys-border-strong); background: var(--lys-surface-2); }
+.lys-pill--wide { min-width: 320px; gap: 10px; }
+.lys-pill__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--lys-bg-2);
+  border: 1px solid var(--lys-border-strong);
+  border-radius: 10px;
+  box-shadow: var(--lys-shadow-lg);
+  max-height: 320px;
+  overflow-y: auto;
+}
+.lys-pill__menu--pathogens { min-width: 380px; }
+.lys-pill__item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--lys-text);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.lys-pill__item:hover { background: var(--lys-surface-2); }
+.lys-pill__item--active { background: var(--lys-surface-2); color: var(--lys-accent); }
+
+/* ===== Pathogen picker ===== */
+.lys-pathogen-picker { position: relative; }
+.lys-pathogen-picker__code {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--lys-accent);
+  font-family: var(--lys-font-mono);
+}
+.lys-pathogen-picker__name {
+  font-size: 13px;
+  color: var(--lys-text-dim);
+  flex: 1;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lys-pathogen-picker__row {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  font-family: inherit;
+  width: 100%;
+  transition: background 0.1s;
+}
+.lys-pathogen-picker__row:hover { background: var(--lys-surface-2); }
+.lys-pathogen-picker__row--active { background: var(--lys-surface-2); }
+.lys-pathogen-picker__row-code {
+  font-family: var(--lys-font-mono);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--lys-accent);
+}
+.lys-pathogen-picker__row-name {
+  font-size: 13px;
+  color: var(--lys-text);
+}
+.lys-pathogen-picker__row-tier {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.lys-pathogen-picker__row-tier--critical {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
+}
+.lys-pathogen-picker__row-tier--high {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fcd34d;
+}
+
+/* ===== Summary ribbon ===== */
+.lys-ribbon {
+  position: absolute;
+  bottom: 0;
+  left: 16px;
+  right: 16px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  border-top: 1px solid var(--lys-border);
+  padding-top: 4px;
+  transform: translateY(100%);
+}
+.lys-ribbon__pathogen {
+  font-family: var(--lys-font-mono);
+  font-weight: 600;
+  color: var(--lys-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.lys-ribbon__divider {
+  width: 1px;
+  height: 12px;
+  background: var(--lys-border-strong);
+}
+.lys-gauge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.lys-gauge__track {
+  width: 80px;
+  height: 4px;
+  background: var(--lys-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.lys-gauge__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f87171 0%, #fbbf24 50%, #34d399 100%);
+}
+.lys-gauge__num {
+  font-family: var(--lys-font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--lys-text);
+}
+.lys-ribbon__stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--lys-font-mono);
+}
+.lys-ribbon__stat-label {
+  color: var(--lys-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.lys-ribbon__stat-value {
+  font-weight: 600;
+}
+.lys-ribbon__agents {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lys-ribbon__agent-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.lys-ribbon__idle {
+  color: var(--lys-text-faint);
+  font-style: italic;
+}
+.lys-ribbon__session {
+  margin-left: auto;
+  font-family: var(--lys-font-mono);
+  color: var(--lys-text-faint);
+  font-size: 10px;
+  opacity: 0.5;
+  cursor: help;
+  transition: opacity 0.15s;
+}
+.lys-ribbon__session:hover { opacity: 1; }
+
+/* ===== Three-column layout ===== */
+.lys-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--lys-bg);
+  color: var(--lys-text);
+  font-family: var(--lys-font-body);
+  font-size: 14px;
+}
+.lys-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  margin-top: 24px; /* breathing room for the ribbon */
+}
+
+/* ===== Chat panel v3 ===== */
+.lys-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--lys-bg);
+  border-right: 1px solid var(--lys-border);
+  overflow: hidden;
+}
+.lys-chat__head {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--lys-border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+.lys-chat__title {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lys-text-faint);
+}
+.lys-chat__mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--lys-border);
+  border-radius: 8px;
+  overflow: hidden;
+  height: 28px;
+}
+.lys-chat__mode-toggle button {
+  background: transparent;
+  border: 0;
+  padding: 0 12px;
+  height: 100%;
+  color: var(--lys-text-dim);
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.lys-chat__mode-toggle button.active {
+  background: var(--lys-surface-2);
+  color: var(--lys-text);
+}
+.lys-chat__agent-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--lys-border);
+  overflow-x: auto;
+}
+.lys-agent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  border: 2px solid;
+  background: transparent;
+  color: var(--lys-text);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.lys-agent-chip:hover { background: rgba(255,255,255,0.04); }
+.lys-agent-chip__count {
+  font-size: 10px;
+  background: rgba(255,255,255,0.08);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: var(--lys-font-mono);
+}
+.lys-chat__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lys-chat__composer {
+  flex: 0 0 auto;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--lys-border);
+  background: var(--lys-bg);
+}
+
+/* ===== Message bubble v3 ===== */
+.lys-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--lys-surface);
+  border: 1px solid var(--lys-border);
+  border-radius: var(--lys-radius);
+  border-left-width: 3px;
+}
+.lys-msg__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.lys-msg__agent {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.lys-msg__time {
+  color: var(--lys-text-faint);
+  font-family: var(--lys-font-mono);
+}
+.lys-msg__body {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--lys-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.lys-msg__body code {
+  font-family: var(--lys-font-mono);
+  font-size: 13px;
+  background: rgba(255,255,255,0.05);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.lys-msg__thinking {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: rgba(167, 139, 250, 0.06);
+  border-left: 2px solid var(--lys-agent-strategist);
+  border-radius: 6px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--lys-text-dim);
+  cursor: pointer;
+}
+.lys-msg__thinking--collapsed {
+  max-height: 24px;
+  overflow: hidden;
+  position: relative;
+}
+.lys-msg__thinking--collapsed::after {
+  content: "…";
+  position: absolute;
+  right: 8px;
+  bottom: 0;
+  background: var(--lys-bg);
+  padding: 0 4px;
+}
+.lys-msg__footer {
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--lys-text-faint);
+  font-family: var(--lys-font-mono);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.lys-msg:hover .lys-msg__footer { opacity: 1; }
+
+/* ===== Composer ===== */
+.lys-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px;
+  background: var(--lys-surface);
+  border: 1px solid var(--lys-border);
+  border-radius: var(--lys-radius);
+  transition: border-color 0.15s;
+}
+.lys-composer:focus-within {
+  border-color: var(--lys-accent-glow);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.1);
+}
+.lys-composer__textarea {
+  flex: 1;
+  background: transparent;
+  color: var(--lys-text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  border: 0;
+  outline: 0;
+  padding: 8px 10px;
+  resize: none;
+  min-height: 40px;
+  max-height: 160px;
+}
+.lys-composer__textarea::placeholder { color: var(--lys-text-faint); }
+.lys-composer__push {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--lys-accent);
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.lys-composer__push:disabled { opacity: 0.4; cursor: not-allowed; }
+.lys-composer__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.lys-constraint-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+  font-size: 11px;
+  border: 1px solid rgba(96, 165, 250, 0.25);
+}
+.lys-constraint-chip__close {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+/* ===== Slash menu ===== */
+.lys-slash-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 16px;
+  right: 16px;
+  background: var(--lys-bg-2);
+  border: 1px solid var(--lys-border-strong);
+  border-radius: 10px;
+  padding: 6px;
+  box-shadow: var(--lys-shadow-lg);
+  z-index: 1000;
+}
+.lys-slash-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--lys-text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  width: 100%;
+  text-align: left;
+  transition: background 0.1s;
+}
+.lys-slash-menu__item:hover,
+.lys-slash-menu__item--active {
+  background: var(--lys-surface-2);
+}
+.lys-slash-menu__cmd {
+  font-family: var(--lys-font-mono);
+  color: var(--lys-accent);
+  font-weight: 600;
+  width: 110px;
+}
+.lys-slash-menu__desc {
+  color: var(--lys-text-dim);
+  font-size: 12px;
+}
+
+/* ===== Iteration progress strip ===== */
+.lys-iter-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--lys-bg-2);
+  border-bottom: 1px solid var(--lys-border);
+}
+.lys-iter-strip__bar {
+  flex: 1;
+  display: flex;
+  gap: 4px;
+}
+.lys-iter-segment {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--lys-border);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.lys-iter-segment--done { background: var(--lys-accent); }
+.lys-iter-segment--active {
+  background: linear-gradient(90deg, var(--lys-accent) 0%, transparent 100%);
+  background-size: 200% 100%;
+  animation: lys-shimmer 1.5s linear infinite;
+}
+@keyframes lys-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.lys-iter-strip__num {
+  font-size: 11px;
+  font-family: var(--lys-font-mono);
+  color: var(--lys-text-dim);
+  min-width: 40px;
+  text-align: right;
+}
+.lys-iter-strip__playback {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lys-iter-strip__playback button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1px solid var(--lys-border);
+  border-radius: 6px;
+  color: var(--lys-text-dim);
+  cursor: pointer;
+}
+.lys-iter-strip__playback button:hover {
+  color: var(--lys-text);
+  border-color: var(--lys-border-strong);
+}
+
+/* ===== Tool call card ===== */
+.lys-toolcall {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--lys-border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.lys-toolcall__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.lys-toolcall__name {
+  font-family: var(--lys-font-mono);
+  font-weight: 600;
+  color: var(--lys-text);
+}
+.lys-toolcall__agent {
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.lys-toolcall__dur {
+  color: var(--lys-text-faint);
+  font-family: var(--lys-font-mono);
+}
+.lys-toolcall__pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.lys-toolcall__pip--ok { background: var(--lys-accent); }
+.lys-toolcall__pip--err { background: #f87171; }
+.lys-toolcall__pip--running {
+  background: var(--lys-agent-strategist);
+  animation: lys-pulse 1.4s ease-in-out infinite;
+}
+@keyframes lys-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+.lys-toolcall__body {
+  margin-top: 6px;
+  font-family: var(--lys-font-mono);
+  color: var(--lys-text-dim);
+  white-space: pre-wrap;
+  font-size: 11px;
+}
+
+/* ===== Drag-edit chips ===== */
+.lys-chip-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--lys-border);
+}
+.lys-chip-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.lys-chip-group__label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lys-text-faint);
+  width: 60px;
+  flex: 0 0 60px;
+}
+.lys-chip-tx {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  border: 1px solid var(--lys-border);
+  background: var(--lys-surface);
+  font-family: var(--lys-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--lys-text);
+  cursor: grab;
+  transition: border-color 0.15s, background 0.15s;
+}
+.lys-chip-tx:hover {
+  border-color: var(--lys-accent-glow);
+  background: var(--lys-surface-2);
+}
+.lys-chip-tx[data-group="add"] { color: #86efac; }
+.lys-chip-tx[data-group="swap"] { color: #93c5fd; }
+.lys-chip-tx[data-group="remove"] { color: #fca5a5; }
+.lys-chip-tx[data-group="ring"] { color: #c4b5fd; }
+
+/* ===== Tab strip v3 ===== */
+.lys-tabs {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--lys-border);
+  padding: 0 12px;
+  height: 36px;
+  position: relative;
+}
+.lys-tabs__btn {
+  background: transparent;
+  border: 0;
+  padding: 0 14px;
+  height: 100%;
+  color: var(--lys-text-dim);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  position: relative;
+  transition: color 0.15s;
+}
+.lys-tabs__btn:hover { color: var(--lys-text); }
+.lys-tabs__btn--active { color: var(--lys-text); }
+.lys-tabs__indicator {
+  position: absolute;
+  bottom: -1px;
+  height: 2px;
+  background: var(--lys-accent);
+  transition: left 0.2s ease, width 0.2s ease;
+}
