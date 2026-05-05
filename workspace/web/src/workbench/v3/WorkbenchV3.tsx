@@ -9,6 +9,7 @@ import { MessageBubble } from "./components/MessageBubble";
 import { DragEditChips } from "./components/DragEditChips";
 import { TabStrip } from "./components/TabStrip";
 import { Mol2D } from "./components/Mol2D";
+import { Mol3D } from "./components/Mol3D";
 import { RadarPanel } from "./panels/RadarPanel";
 import { ParetoPanel } from "./panels/ParetoPanel";
 import { SynthPanel } from "./panels/SynthPanel";
@@ -436,22 +437,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
           <Allotment.Pane minSize={320} preferredSize={460}>
             <Allotment vertical defaultSizes={[60, 40]}>
               <Allotment.Pane minSize={180}>
-                <div style={{
-                  height: "100%",
-                  display: "grid",
-                  placeItems: "center",
-                  background: "var(--lys-bg-2)",
-                  color: "var(--lys-text-faint)",
-                  position: "relative",
-                  borderBottom: "1px solid var(--lys-border)",
-                }}>
-                  <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>3D · pocket view</div>
-                    <div style={{ fontFamily: "var(--lys-font-mono)", fontSize: 13, color: "var(--lys-text)" }}>
-                      {currentSmiles ?? "no candidate"}
-                    </div>
-                  </div>
-                </div>
+                <Mol3D
+                  apiBase={apiBase}
+                  smiles={currentSmiles}
+                  pathogen={selectedPathogen}
+                />
               </Allotment.Pane>
               <Allotment.Pane minSize={120}>
                 <div style={{

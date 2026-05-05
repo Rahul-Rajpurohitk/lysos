@@ -826,6 +826,32 @@
 .lys-chip-tx[data-group="remove"] { color: #fca5a5; }
 .lys-chip-tx[data-group="ring"] { color: #c4b5fd; }
 
+/* ===== 3D viewer header buttons ===== */
+.lys-3d-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--lys-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--lys-text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.lys-3d-btn:hover {
+  border-color: var(--lys-border-strong);
+  color: var(--lys-text);
+}
+.lys-3d-btn--active {
+  background: rgba(52, 211, 153, 0.12);
+  border-color: rgba(52, 211, 153, 0.5);
+  color: var(--lys-accent);
+}
+
 /* ===== Tab strip v3 ===== */
 .lys-tabs {
   display: flex;
