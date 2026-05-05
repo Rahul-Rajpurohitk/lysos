@@ -5,20 +5,18 @@ import "allotment/dist/style.css";
 import { TopHeader } from "./components/TopHeader";
 import { Composer } from "./components/Composer";
 import { IterationStrip } from "./components/IterationStrip";
-import { MessageBubble } from "./components/MessageBubble";
 import { DragEditChips } from "./components/DragEditChips";
 import { TabStrip } from "./components/TabStrip";
 import { Mol2D } from "./components/Mol2D";
 import { Mol3D } from "./components/Mol3D";
 import { MechanismPanel } from "./components/MechanismPanel";
 import { OnboardingHero } from "./components/OnboardingHero";
-import { SubAgentPicker } from "./components/SubAgentPicker";
+import { ChatPanel } from "./components/chat/ChatPanel";
 import { RadarPanel } from "./panels/RadarPanel";
 import { ParetoPanel } from "./panels/ParetoPanel";
 import { SynthPanel } from "./panels/SynthPanel";
 import { LineagePanel } from "./panels/LineagePanel";
 import { GraphPanel } from "./panels/GraphPanel";
-import { MultiAgentColumns } from "./components/MultiAgentColumns";
 import { CandidateList } from "./components/CandidateList";
 import type { Pathogen } from "./components/TopHeader";
 
@@ -67,15 +65,6 @@ interface Constraint {
   label: string;
 }
 
-const AGENT_COLORS: Record<string, string> = {
-  designer: "#34d399",
-  critic: "#f87171",
-  editor: "#60a5fa",
-  strategist: "#a78bfa",
-  user: "#fbbf24",
-  system: "#8b949e",
-};
-
 const RIGHT_TABS = ["Radar", "Pareto", "Synth", "Graph", "Lineage"] as const;
 type RightTab = (typeof RIGHT_TABS)[number];
 
@@ -96,7 +85,6 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [activeTab, setActiveTab] = useState<RightTab>("Radar");
   const [mechanismOpen, setMechanismOpen] = useState(false);
   const [activeSubAgents, setActiveSubAgents] = useState<string[]>([]);
-  const showOnboarding = !sessionId && events.length === 0;
   const [currentIter, setCurrentIter] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState<1 | 2 | 4>(1);
@@ -410,29 +398,18 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       <div className="lys-body">
         <Allotment defaultSizes={[38, 38, 24]}>
           {/* CHAT */}
-          <Allotment.Pane minSize={320} preferredSize={460}>
-            <div className="lys-chat">
-              <div className="lys-chat__head">
-                <span className="lys-chat__title">
-                  Conversation · {messages.length} msg
-                  {replayEvents != null && (
-                    <span style={{
-                      marginLeft: 8,
-                      padding: "2px 8px",
-                      fontSize: 10,
-                      background: "#ede9fe",
-                      color: "#6d28d9",
-                      border: "1px solid #c4b5fd",
-                      borderRadius: 999,
-                      fontFamily: "var(--lys-font-mono)",
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      fontWeight: 600,
-                    }}>
-                      replay {replayIdx}/{replayEvents.length}
-                    </span>
-                  )}
-                </span>
+          <Allotment.Pane minSize={340} preferredSize={480}>
+            <ChatPanel
+              events={events as any}
+              isRunning={isRunning}
+              totalMsgs={messages.length}
+              showOnboarding={
+                <OnboardingHero
+                  apiBase={apiBase}
+                  onPickPathogen={(code) => setSelectedPathogen(code)}
+                />
+              }
+              modeToggle={
                 <div className="lys-chat__mode-toggle">
                   <button
                     className={chatMode === "Stream" ? "active" : ""}
@@ -447,64 +424,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     Columns
                   </button>
                 </div>
-              </div>
-
-              <div className="lys-chat__agent-row">
-                {Object.entries(AGENT_COLORS).filter(([a]) => a !== "system").map(([a, c]) => {
-                  const count = messages.filter((m) => (m.agent ?? "").toLowerCase() === a).length;
-                  return (
-                    <button
-                      key={a}
-                      className="lys-agent-chip"
-                      style={{ borderColor: c, color: c }}
-                      title={`${a} — ${count} messages`}
-                    >
-                      {a}
-                      {count > 0 && <span className="lys-agent-chip__count">{count}</span>}
-                    </button>
-                  );
-                })}
-                <SubAgentPicker
-                  active={activeSubAgents}
-                  onToggle={(id) =>
-                    setActiveSubAgents((cur) =>
-                      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
-                    )
-                  }
-                />
-              </div>
-
-              {showOnboarding ? (
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                  <OnboardingHero
-                    apiBase={apiBase}
-                    onPickPathogen={(code) => setSelectedPathogen(code)}
-                  />
-                </div>
-              ) : chatMode === "Stream" ? (
-                <div className="lys-chat__messages" ref={messagesRef}>
-                  {messages.length === 0 && (
-                    <div style={{ color: "var(--lys-text-faint)", textAlign: "center", padding: 24 }}>
-                      session ready — click Start to launch the agentic loop
-                    </div>
-                  )}
-                  {messages.map((m, i) => (
-                    <MessageBubble
-                      key={i}
-                      agent={m.agent ?? m.type}
-                      agentColor={AGENT_COLORS[(m.agent ?? "system").toLowerCase()] ?? "#888"}
-                      ts={m.ts}
-                      content={contentFor(m)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div style={{ flex: 1, overflow: "hidden", padding: 8 }}>
-                  <MultiAgentColumns events={messages} />
-                </div>
-              )}
-
-              <div className="lys-chat__composer">
+              }
+              composer={
                 <Composer
                   isRunning={isRunning}
                   onSend={(t) => {
@@ -515,8 +436,44 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   constraints={constraints}
                   onRemoveConstraint={(id) => setConstraints((cs) => cs.filter((c) => c.id !== id))}
                 />
-              </div>
-            </div>
+              }
+              replayBadge={replayEvents != null ? (
+                <span style={{
+                  marginLeft: 8,
+                  padding: "2px 8px",
+                  fontSize: 10,
+                  background: "#ede9fe",
+                  color: "#6d28d9",
+                  border: "1px solid #c4b5fd",
+                  borderRadius: 999,
+                  fontFamily: "var(--lys-font-mono)",
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                  fontWeight: 600,
+                }}>
+                  replay {replayIdx}/{replayEvents.length}
+                </span>
+              ) : null}
+              onLoadSmiles={(smi) => {
+                // Inject as a candidate so the 3D + 2D viewers update.
+                setEvents((p) => [
+                  ...p,
+                  {
+                    type: "candidate_added",
+                    ts: Date.now() / 1000,
+                    smiles: smi,
+                    composite: 0,
+                    agent: "user",
+                  } as any,
+                ]);
+              }}
+              subAgents={activeSubAgents}
+              onToggleSubAgent={(id) =>
+                setActiveSubAgents((cur) =>
+                  cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+                )
+              }
+            />
           </Allotment.Pane>
 
           {/* 3D + 2D */}
@@ -665,17 +622,6 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
 }
 
 // --- Helper renderers (lightweight inlined panels) -------------------
-
-function contentFor(m: TraceEvent): string {
-  if (m.content) return m.content;
-  if (m.type === "tool_call_result") return `→ ${m.tool ?? "tool"}`;
-  if (m.type === "tool_call_error") return `✗ ${m.tool ?? "tool"} (error)`;
-  if (m.type === "candidate_added") return `★ added candidate ${m.smiles ?? ""}`;
-  if (m.type === "state_change") return `${m.decision} — ${m.reason ?? ""}`;
-  if (m.type === "intervention") return `(intervene)`;
-  if (m.type === "mol_edit") return `${m.parent} → ${m.candidate}`;
-  return JSON.stringify(m);
-}
 
 function priorityFor(code: string): "critical" | "high" {
   return ["VRE", "NGono"].includes(code) ? "high" : "critical";

@@ -1,11 +1,25 @@
-"""LLM endpoint abstraction — Claude (placeholder) → vLLM Gemma 4 31B (Day 4).
+"""LLM endpoint abstraction — Lysos-RL (Gemma 4 31B fine-tuned) is the
+production target. Other backends are dev-stubs.
 
-Three backends, picked by env:
-  - LYSOS_LLM_BACKEND=claude   (default, pre-Day-4)
-  - LYSOS_LLM_BACKEND=vllm     (post-Day-4, Gemma 4 31B-it on MI300X)
-  - LYSOS_LLM_BACKEND=mock     (no API calls, deterministic outputs for tests)
+Backends, picked by env LYSOS_LLM_BACKEND (default: lysos):
 
-All three speak the same JSON tool-calling protocol so swapping is a config flip.
+  - lysos    Our deployed Lysos-RL model (Gemma 4 31B-it + 4-stage SFT/
+             DPO/GRPO). Hits LYSOS_INFERENCE_URL — points at:
+               * HF Inference Endpoint, OR
+               * vLLM server on the AMD MI300X VM, OR
+               * /api/inference endpoint of an Ops-deployed instance.
+             OpenAI-compatible chat-completions protocol either way.
+
+  - vllm     Local vLLM (alias of lysos pointing at localhost:8000).
+             Used during VM training/eval before the Inference Endpoint
+             goes live.
+
+  - claude   Dev-only stub. Only useful when iterating on agent prompts
+             before the model is trained. NOT the deployment target.
+
+  - mock     Deterministic offline fallback. Auto-selected when the
+             chosen backend can't initialise (so the demo never breaks
+             end-to-end, even on a fresh laptop).
 """
 from __future__ import annotations
 
@@ -364,37 +378,89 @@ def _mock_args_for(tool: dict) -> dict:
 # Factory
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Lysos-RL — production deployment of our fine-tuned Gemma 4 31B-it.
+# ---------------------------------------------------------------------------
+
+class LysosEndpoint(VLLMEndpoint):
+    """Lysos-RL inference (Gemma 4 31B-it + 4-stage SFT/DPO/GRPO).
+
+    Hits an OpenAI-compatible chat-completions endpoint:
+      * `LYSOS_INFERENCE_URL` — production. Defaults to the HF Inference
+        Endpoint URL once published; until then, the vLLM server on the
+        AMD MI300X VM at ${VM_HOST}:8000.
+      * `LYSOS_INFERENCE_TOKEN` — bearer token (HF token for an HF
+        Endpoint, or "EMPTY" for vLLM with no auth).
+      * `LYSOS_MODEL_ID` — `rahul24raj/lysos-rl` after Stage 3 lands.
+        Pre-train, set to `google/gemma-4-31b-it` to test the loop
+        with the base model.
+
+    This is the path users hit in production.
+    """
+
+    def __init__(
+        self,
+        model: Optional[str] = None,
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        **kwargs,
+    ):
+        super().__init__(
+            model=model or os.environ.get("LYSOS_MODEL_ID", "rahul24raj/lysos-rl"),
+            base_url=base_url or os.environ.get(
+                "LYSOS_INFERENCE_URL", "http://localhost:8000/v1"
+            ),
+            api_key=api_key or os.environ.get("LYSOS_INFERENCE_TOKEN", "EMPTY"),
+            **kwargs,
+        )
+
+
 def get_llm(backend: Optional[str] = None) -> LLMEndpoint:
     """Pick backend by env LYSOS_LLM_BACKEND or explicit arg.
 
-    Critical SaaS-readiness behaviour: if the chosen backend can't
-    actually initialize (SDK missing, API key missing, vLLM server down),
-    we fall back to MockEndpoint so the demo flow always works
-    end-to-end. Operators see a one-time WARNING in the log.
+    Production default is `lysos` — our deployed Gemma 4 31B-it Lysos-RL
+    via OpenAI-compatible endpoint. Auto-falls-back to MockEndpoint when
+    the chosen backend can't initialize (SDK missing, server down) so
+    the demo flow never breaks end-to-end.
     """
-    backend = backend or os.environ.get("LYSOS_LLM_BACKEND", "claude")
+    backend = backend or os.environ.get("LYSOS_LLM_BACKEND", "lysos")
+
     if backend == "mock":
         return MockEndpoint()
-    if backend == "claude":
-        ep = ClaudeEndpoint(
-            model=os.environ.get("LYSOS_CLAUDE_MODEL", "claude-sonnet-4-5-20250929"),
-        )
-        if ep._client is None or not os.environ.get("ANTHROPIC_API_KEY"):
+
+    if backend == "lysos":
+        ep = LysosEndpoint()
+        if ep._client is None:
             log.warning(
-                "Claude backend not usable (SDK missing or ANTHROPIC_API_KEY "
-                "not set). Falling back to MockEndpoint so the demo still "
-                "completes end-to-end. Set ANTHROPIC_API_KEY + install "
-                "`anthropic` for real Designer output."
+                "Lysos endpoint not usable (openai SDK missing). Falling back "
+                "to MockEndpoint so the demo completes end-to-end. "
+                "`pip install openai` + set LYSOS_INFERENCE_URL to fix."
             )
             return MockEndpoint()
+        # Don't ping on init — vLLM may be cold-starting. The first acomplete
+        # call will surface any connectivity issue and fall through to mock.
         return ep
+
     if backend == "vllm":
         ep = VLLMEndpoint(
-            model=os.environ.get("LYSOS_VLLM_MODEL", "google/gemma-4-31B-it"),
+            model=os.environ.get("LYSOS_VLLM_MODEL", "google/gemma-4-31b-it"),
             base_url=os.environ.get("LYSOS_VLLM_URL", "http://localhost:8000/v1"),
         )
         if ep._client is None:
             log.warning("vLLM client not initialised — falling back to MockEndpoint.")
             return MockEndpoint()
         return ep
+
+    if backend == "claude":
+        # Dev-only stub for prompt iteration. NOT the deployment target.
+        ep = ClaudeEndpoint(
+            model=os.environ.get("LYSOS_CLAUDE_MODEL", "claude-sonnet-4-5-20250929"),
+        )
+        if ep._client is None or not os.environ.get("ANTHROPIC_API_KEY"):
+            log.warning(
+                "Claude dev-stub not usable. Falling back to MockEndpoint."
+            )
+            return MockEndpoint()
+        return ep
+
     raise ValueError(f"Unknown LLM backend: {backend}")
