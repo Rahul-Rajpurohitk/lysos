@@ -14,6 +14,8 @@ import { ParetoPanel } from "./panels/ParetoPanel";
 import { SynthPanel } from "./panels/SynthPanel";
 import { LineagePanel } from "./panels/LineagePanel";
 import { GraphPanel } from "./panels/GraphPanel";
+import { MultiAgentColumns } from "./components/MultiAgentColumns";
+import { CandidateList } from "./components/CandidateList";
 import type { Pathogen } from "./components/TopHeader";
 
 import "./v3.css";
@@ -392,22 +394,28 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 })}
               </div>
 
-              <div className="lys-chat__messages" ref={messagesRef}>
-                {messages.length === 0 && (
-                  <div style={{ color: "var(--lys-text-faint)", textAlign: "center", padding: 24 }}>
-                    no messages yet — pick a pathogen and click Start
-                  </div>
-                )}
-                {messages.map((m, i) => (
-                  <MessageBubble
-                    key={i}
-                    agent={m.agent ?? m.type}
-                    agentColor={AGENT_COLORS[(m.agent ?? "system").toLowerCase()] ?? "#888"}
-                    ts={m.ts}
-                    content={contentFor(m)}
-                  />
-                ))}
-              </div>
+              {chatMode === "Stream" ? (
+                <div className="lys-chat__messages" ref={messagesRef}>
+                  {messages.length === 0 && (
+                    <div style={{ color: "var(--lys-text-faint)", textAlign: "center", padding: 24 }}>
+                      no messages yet — pick a pathogen and click Start
+                    </div>
+                  )}
+                  {messages.map((m, i) => (
+                    <MessageBubble
+                      key={i}
+                      agent={m.agent ?? m.type}
+                      agentColor={AGENT_COLORS[(m.agent ?? "system").toLowerCase()] ?? "#888"}
+                      ts={m.ts}
+                      content={contentFor(m)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div style={{ flex: 1, overflow: "hidden", padding: 8 }}>
+                  <MultiAgentColumns events={messages} />
+                </div>
+              )}
 
               <div className="lys-chat__composer">
                 <Composer
@@ -509,6 +517,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   )}
                 </div>
               </div>
+              <CandidateList items={paretoRows} />
             </div>
           </Allotment.Pane>
         </Allotment>
