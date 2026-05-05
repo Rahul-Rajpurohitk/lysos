@@ -3,7 +3,7 @@ import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 
 import { TopHeader } from "./components/TopHeader";
-import { Composer } from "./components/Composer";
+import { TightComposer } from "./components/chat/TightComposer";
 import { IterationStrip } from "./components/IterationStrip";
 import { DragEditChips } from "./components/DragEditChips";
 import { TabStrip } from "./components/TabStrip";
@@ -426,17 +426,20 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 </div>
               }
               composer={
-                <Composer
+                <TightComposer
                   isRunning={isRunning}
-                  onSend={(t) => {
+                  onSend={(t: string) => {
                     setEvents((p) => [...p, { type: "agent_message", ts: Date.now() / 1000, agent: "user", content: t }]);
                     if (!isRunning) startSession();
                   }}
                   onIntervene={intervene}
                   constraints={constraints}
-                  onRemoveConstraint={(id) => setConstraints((cs) => cs.filter((c) => c.id !== id))}
+                  onRemoveConstraint={(id: string) => setConstraints((cs) => cs.filter((c) => c.id !== id))}
                 />
               }
+              composite={composite}
+              currentIter={currentIter}
+              totalIters={iters}
               replayBadge={replayEvents != null ? (
                 <span style={{
                   marginLeft: 8,

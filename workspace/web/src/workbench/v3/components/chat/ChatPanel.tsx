@@ -1,19 +1,34 @@
+/**
+ * ChatPanel — research timeline.
+ *
+ * Layout reasoning (vertical budget on a 500px panel):
+ *   header  32px   — Stream/Columns toggle, iter pill, composite pill
+ *   filter  32px   — agent filter strip
+ *   stream  flex 1 — messages
+ *   composer 56px  — input + chips
+ *
+ * Total chrome before first message: 64px (down from 124px in v0).
+ * That's +60px of message area on the same panel size.
+ */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
-import { ArrowDownCircle } from "lucide-react";
+import { ArrowDownCircle, Activity } from "lucide-react";
 
-import { AgentChipRow } from "./AgentChipRow";
-import { MessageCard, ChatMsg } from "./MessageCard";
+import { AgentFilterStrip } from "./AgentFilterStrip";
+import { MessageRow, ChatMsg } from "./MessageRow";
 import { IterationDivider } from "./IterationDivider";
 import { TypingIndicator } from "./TypingIndicator";
 
 interface ChatPanelProps {
-  events: ChatMsg[];                 // raw event stream — full
+  events: ChatMsg[];
   isRunning: boolean;
-  showOnboarding: React.ReactNode;    // hero shown when no session
-  composer: React.ReactNode;          // composer mounted at the bottom
-  modeToggle: React.ReactNode;        // stream/columns toggle
+  showOnboarding: React.ReactNode;
+  composer: React.ReactNode;
+  modeToggle: React.ReactNode;
   totalMsgs: number;
+  composite?: number | null;
+  currentIter?: number;
+  totalIters?: number;
   replayBadge?: React.ReactNode;
   onLoadSmiles: (smi: string) => void;
   subAgents: string[];
@@ -96,19 +111,57 @@ export function ChatPanel(p: ChatPanelProps) {
 
   return (
     <div className="lys-chat">
-      <div className="lys-chat__head">
-        <span className="lys-chat__title">
-          Conversation · {p.totalMsgs} msg
-          {p.replayBadge}
-        </span>
+      {/* Tight header: 32px tall, no "CONVERSATION · 0 MSG" filler.
+          Left: live iter + composite pill (the metric that matters).
+          Right: replay badge + Stream/Columns toggle. */}
+      <div style={{
+        height: 32,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "0 12px",
+        borderBottom: "1px solid var(--lys-border)",
+      }}>
+        {(p.currentIter && p.totalIters) ? (
+          <span style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "2px 8px",
+            background: "var(--lys-surface-2)",
+            borderRadius: 4,
+            fontSize: 10.5,
+            fontFamily: "var(--lys-font-mono)",
+            color: "var(--lys-text-dim)",
+          }}>
+            <Activity size={10} color={p.isRunning ? "var(--lys-accent)" : "var(--lys-text-faint)"} />
+            iter {p.currentIter}/{p.totalIters}
+            {p.composite != null && (
+              <>
+                <span style={{ color: "var(--lys-text-faint)" }}>·</span>
+                <span style={{ color: "var(--lys-text)", fontWeight: 600 }}>
+                  {p.composite.toFixed(3)}
+                </span>
+              </>
+            )}
+          </span>
+        ) : (
+          <span style={{ fontSize: 11, color: "var(--lys-text-faint)" }}>
+            session ready
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        {p.replayBadge}
         {p.modeToggle}
       </div>
 
-      <AgentChipRow
+      <AgentFilterStrip
         counts={agentCounts}
+        total={p.totalMsgs}
         active={filterAgent}
         onSelect={setFilterAgent}
-        activeSpeaking={speakingAgents}
+        speaking={speakingAgents}
         subAgents={p.subAgents}
         onToggleSubAgent={p.onToggleSubAgent}
       />
@@ -142,7 +195,7 @@ export function ChatPanel(p: ChatPanelProps) {
             );
           }
           return (
-            <MessageCard
+            <MessageRow
               key={`${row.msg.id ?? i}-${row.msg.ts}`}
               msg={row.msg}
               toolCalls={row.toolCalls}
