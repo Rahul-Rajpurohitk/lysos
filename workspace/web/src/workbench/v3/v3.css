@@ -794,6 +794,13 @@
   gap: 8px;
   padding: 8px 12px;
   border-top: 1px solid var(--lys-border);
+  background: var(--lys-bg);
+  /* Pin to the bottom of the 2D pane: never get squished out by the
+     viewer above. Allowed to scroll vertically if the pane is very
+     short and chip rows wrap. */
+  flex: 0 0 auto;
+  max-height: 220px;
+  overflow-y: auto;
 }
 .lys-chip-group {
   display: flex;

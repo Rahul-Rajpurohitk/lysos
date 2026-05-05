@@ -529,13 +529,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   pathogen={selectedPathogen}
                 />
               </Allotment.Pane>
-              <Allotment.Pane minSize={120}>
+              <Allotment.Pane minSize={260} preferredSize={300}>
                 <div style={{
                   height: "100%",
                   display: "flex",
                   flexDirection: "column",
                   background: "var(--lys-bg)",
                   position: "relative",
+                  overflow: "hidden",
                 }}>
                   <div style={{
                     padding: "8px 12px",

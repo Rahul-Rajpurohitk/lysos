@@ -365,17 +365,36 @@ def _mock_args_for(tool: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 def get_llm(backend: Optional[str] = None) -> LLMEndpoint:
-    """Pick backend by env LYSOS_LLM_BACKEND or explicit arg."""
+    """Pick backend by env LYSOS_LLM_BACKEND or explicit arg.
+
+    Critical SaaS-readiness behaviour: if the chosen backend can't
+    actually initialize (SDK missing, API key missing, vLLM server down),
+    we fall back to MockEndpoint so the demo flow always works
+    end-to-end. Operators see a one-time WARNING in the log.
+    """
     backend = backend or os.environ.get("LYSOS_LLM_BACKEND", "claude")
+    if backend == "mock":
+        return MockEndpoint()
     if backend == "claude":
-        return ClaudeEndpoint(
+        ep = ClaudeEndpoint(
             model=os.environ.get("LYSOS_CLAUDE_MODEL", "claude-sonnet-4-5-20250929"),
         )
+        if ep._client is None or not os.environ.get("ANTHROPIC_API_KEY"):
+            log.warning(
+                "Claude backend not usable (SDK missing or ANTHROPIC_API_KEY "
+                "not set). Falling back to MockEndpoint so the demo still "
+                "completes end-to-end. Set ANTHROPIC_API_KEY + install "
+                "`anthropic` for real Designer output."
+            )
+            return MockEndpoint()
+        return ep
     if backend == "vllm":
-        return VLLMEndpoint(
+        ep = VLLMEndpoint(
             model=os.environ.get("LYSOS_VLLM_MODEL", "google/gemma-4-31B-it"),
             base_url=os.environ.get("LYSOS_VLLM_URL", "http://localhost:8000/v1"),
         )
-    if backend == "mock":
-        return MockEndpoint()
+        if ep._client is None:
+            log.warning("vLLM client not initialised — falling back to MockEndpoint.")
+            return MockEndpoint()
+        return ep
     raise ValueError(f"Unknown LLM backend: {backend}")

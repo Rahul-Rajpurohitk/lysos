@@ -44,7 +44,7 @@ export function Mol2D({ apiBase, smiles }: Mol2DProps) {
     return (
       <div style={{
         padding: 24, textAlign: "center", color: "var(--lys-text-faint)", fontSize: 12,
-        flex: 1, display: "grid", placeItems: "center",
+        flex: 1, minHeight: 0, display: "grid", placeItems: "center",
       }}>
         no candidate yet
       </div>
@@ -52,17 +52,18 @@ export function Mol2D({ apiBase, smiles }: Mol2DProps) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0, overflow: "hidden" }}>
       {svg && (
         <div style={{
           flex: 1,
           minHeight: 0,
           background: "white",
-          margin: "0 12px",
+          margin: "8px 12px",
           borderRadius: 8,
           overflow: "hidden",
           display: "grid",
           placeItems: "center",
+          border: "1px solid var(--lys-border)",
         }}>
           <img
             src={svg}
