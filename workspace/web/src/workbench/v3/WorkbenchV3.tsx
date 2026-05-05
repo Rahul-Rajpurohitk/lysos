@@ -562,14 +562,46 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     pathogen={selectedPathogen}
                     onTransformResult={(payload) => {
                       if (payload?.ok) {
-                        setEvents((p) => [...p, {
-                          type: "mol_edit",
-                          ts: Date.now() / 1000,
-                          parent: payload.parent,
-                          candidate: payload.candidate,
-                          delta: payload.delta,
-                          agent: "editor",
-                        }]);
+                        const ts = Date.now() / 1000;
+                        // Emit both the mol_edit event (for the lineage
+                        // tree) and a score event (so the radar updates).
+                        setEvents((p) => [
+                          ...p,
+                          {
+                            type: "mol_edit",
+                            ts,
+                            parent: payload.parent,
+                            candidate: payload.candidate,
+                            delta: payload.delta,
+                            agent: "editor",
+                          },
+                          ...(payload.candidate_scores
+                            ? [{
+                                type: "score" as const,
+                                ts,
+                                smiles: payload.candidate,
+                                scores: payload.candidate_scores,
+                                composite: Object.entries(payload.candidate_scores).reduce(
+                                  (sum, [k, v]: [string, any]) =>
+                                    sum + (REWARD_WEIGHTS[k] ?? 0) * v,
+                                  0
+                                ),
+                              }]
+                            : []),
+                          ...(payload.candidate_scores
+                            ? [{
+                                type: "candidate_added" as const,
+                                ts,
+                                smiles: payload.candidate,
+                                scores: payload.candidate_scores,
+                                composite: Object.entries(payload.candidate_scores).reduce(
+                                  (sum, [k, v]: [string, any]) =>
+                                    sum + (REWARD_WEIGHTS[k] ?? 0) * v,
+                                  0
+                                ),
+                              }]
+                            : []),
+                        ]);
                       }
                     }}
                   />

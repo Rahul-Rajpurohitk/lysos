@@ -46,9 +46,26 @@ ALLOWED_ORIGINS = [
     ).split(",") if o.strip()
 ]
 MAX_BODY_BYTES = int(os.environ.get("LYSOS_MAX_BODY_BYTES", str(1 * 1024 * 1024)))
-RATE_LIMIT_DESIGN_PER_MIN = int(os.environ.get("LYSOS_RL_DESIGN_PER_MIN", "5"))
-RATE_LIMIT_SCORE_PER_MIN = int(os.environ.get("LYSOS_RL_SCORE_PER_MIN", "30"))
-RATE_LIMIT_DEFAULT_PER_MIN = int(os.environ.get("LYSOS_RL_DEFAULT_PER_MIN", "120"))
+
+
+def _rl_design_per_min() -> int:
+    return int(os.environ.get("LYSOS_RL_DESIGN_PER_MIN", "5"))
+
+
+def _rl_score_per_min() -> int:
+    return int(os.environ.get("LYSOS_RL_SCORE_PER_MIN", "30"))
+
+
+def _rl_default_per_min() -> int:
+    return int(os.environ.get("LYSOS_RL_DEFAULT_PER_MIN", "120"))
+
+
+# Module-level constants kept for the apply_hardening log line; the
+# middleware reads via the functions above so changes after import
+# (e.g. tests setting env vars) take effect on the next bucket creation.
+RATE_LIMIT_DESIGN_PER_MIN = _rl_design_per_min()
+RATE_LIMIT_SCORE_PER_MIN = _rl_score_per_min()
+RATE_LIMIT_DEFAULT_PER_MIN = _rl_default_per_min()
 
 
 # ---------------------------------------------------------------------
@@ -81,10 +98,10 @@ _BUCKETS: dict[tuple[str, str], _Bucket] = {}
 
 def _route_limit(path: str) -> int:
     if path.startswith("/api/design"):
-        return RATE_LIMIT_DESIGN_PER_MIN
+        return _rl_design_per_min()
     if path.startswith("/api/score") or path.startswith("/api/similar"):
-        return RATE_LIMIT_SCORE_PER_MIN
-    return RATE_LIMIT_DEFAULT_PER_MIN
+        return _rl_score_per_min()
+    return _rl_default_per_min()
 
 
 def _client_ip(req: Request) -> str:
