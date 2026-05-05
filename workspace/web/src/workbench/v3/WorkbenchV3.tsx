@@ -8,9 +8,29 @@ import { IterationStrip } from "./components/IterationStrip";
 import { MessageBubble } from "./components/MessageBubble";
 import { DragEditChips } from "./components/DragEditChips";
 import { TabStrip } from "./components/TabStrip";
+import { Mol2D } from "./components/Mol2D";
+import { RadarPanel } from "./panels/RadarPanel";
+import { ParetoPanel } from "./panels/ParetoPanel";
+import { SynthPanel } from "./panels/SynthPanel";
+import { LineagePanel } from "./panels/LineagePanel";
 import type { Pathogen } from "./components/TopHeader";
 
 import "./v3.css";
+
+const REWARD_WEIGHTS: Record<string, number> = {
+  validity: 0.05,
+  structural_alerts: 0.05,
+  predicted_mic: 0.20,
+  drug_likeness_qed: 0.10,
+  synthesizability: 0.10,
+  hemolysis_safety: 0.10,
+  novelty: 0.08,
+  embedding_novelty: 0.07,
+  boltz2_pose_conf: 0.10,
+  spectrum_breadth: 0.05,
+  resistance_robustness: 0.05,
+  pareto_entry: 0.05,
+};
 
 interface WorkbenchV3Props {
   apiBase: string;
@@ -228,9 +248,71 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       if (events[i].type === "candidate_added" && events[i].smiles) {
         return events[i].smiles!;
       }
+      if (events[i].type === "mol_edit" && events[i].candidate) {
+        return events[i].candidate!;
+      }
     }
     return null;
   }, [events]);
+
+  const lastScores = useMemo<Record<string, number> | null>(() => {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i];
+      if (e.type === "score" && e.scores) return e.scores;
+      if (e.type === "candidate_added" && e.scores) return e.scores;
+    }
+    return null;
+  }, [events]);
+
+  const bestScores = useMemo<Record<string, number> | null>(() => {
+    let best: { composite: number; scores: Record<string, number> } | null = null;
+    for (const e of events) {
+      if (e.type === "candidate_added" && e.scores && typeof e.composite === "number") {
+        if (best == null || e.composite > best.composite) {
+          best = { composite: e.composite, scores: e.scores };
+        }
+      }
+    }
+    return best?.scores ?? null;
+  }, [events]);
+
+  const paretoRows = useMemo(() => {
+    return events
+      .filter((e) => e.type === "candidate_added" && e.smiles && e.scores)
+      .map((e, i) => ({
+        id: `c${i}`,
+        smiles: e.smiles!,
+        scores: e.scores!,
+        composite: e.composite ?? 0,
+        isPareto: true, // backend marks Pareto inclusion; default true for now
+      }));
+  }, [events]);
+
+  const molEdits = useMemo(
+    () =>
+      events
+        .filter((e) => e.type === "mol_edit" && e.parent && e.candidate)
+        .map((e) => ({
+          ts: e.ts,
+          parent: e.parent!,
+          candidate: e.candidate!,
+          delta: e.delta as Record<string, number> | undefined,
+          agent: e.agent,
+        })),
+    [events]
+  );
+
+  const candEvents = useMemo(
+    () =>
+      events
+        .filter((e) => e.type === "candidate_added" && e.smiles)
+        .map((e) => ({
+          ts: e.ts,
+          smiles: e.smiles!,
+          composite: e.composite ?? 0,
+        })),
+    [events]
+  );
 
   return (
     <div className="lys-shell">
@@ -379,15 +461,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   }}>
                     2D structure · drag chips onto atoms
                   </div>
-                  <div style={{
-                    flex: 1,
-                    display: "grid",
-                    placeItems: "center",
-                    color: "var(--lys-text-faint)",
-                    fontSize: 13,
-                  }}>
-                    {currentSmiles ?? "—"}
-                  </div>
+                  <Mol2D apiBase={apiBase} smiles={currentSmiles} />
                   <DragEditChips
                     apiBase={apiBase}
                     currentSmiles={currentSmiles}
@@ -419,11 +493,19 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   {activeTab}
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                  {activeTab === "Radar" && <RadarPanel events={events} />}
-                  {activeTab === "Pareto" && <ParetoPanel events={events} />}
-                  {activeTab === "Synth" && <SynthPanel currentSmiles={currentSmiles} apiBase={apiBase} />}
-                  {activeTab === "Graph" && <GraphPanel />}
-                  {activeTab === "Lineage" && <LineagePanel events={events} />}
+                  {activeTab === "Radar" && (
+                    <RadarPanel
+                      current={lastScores}
+                      best={bestScores}
+                      weights={REWARD_WEIGHTS}
+                    />
+                  )}
+                  {activeTab === "Pareto" && <ParetoPanel candidates={paretoRows} />}
+                  {activeTab === "Synth" && <SynthPanel apiBase={apiBase} smiles={currentSmiles} />}
+                  {activeTab === "Graph" && <GraphPanelInline pathogen={selectedPathogen} apiBase={apiBase} />}
+                  {activeTab === "Lineage" && (
+                    <LineagePanel edits={molEdits} candidates={candEvents} />
+                  )}
                 </div>
               </div>
             </div>
@@ -451,60 +533,15 @@ function priorityFor(code: string): "critical" | "high" {
   return ["VRE", "NGono"].includes(code) ? "high" : "critical";
 }
 
-function RadarPanel({ events }: { events: TraceEvent[] }) {
-  const last = [...events].reverse().find((e) => e.type === "score" && e.scores);
-  if (!last?.scores) return <div>no candidate scored yet</div>;
+function GraphPanelInline({ pathogen, apiBase }: { pathogen: string; apiBase: string }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-      {Object.entries(last.scores).map(([k, v]) => (
-        <div key={k} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ width: 140, fontFamily: "var(--lys-font-mono)", fontSize: 11 }}>{k}</span>
-          <div style={{ flex: 1, height: 6, background: "var(--lys-border)", borderRadius: 3 }}>
-            <div style={{
-              height: "100%",
-              width: `${Math.max(0, Math.min(1, v as number)) * 100}%`,
-              background: "var(--lys-accent)",
-              borderRadius: 3,
-            }} />
-          </div>
-          <span style={{ fontFamily: "var(--lys-font-mono)", fontSize: 11, width: 40 }}>{(v as number).toFixed(2)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ParetoPanel({ events }: { events: TraceEvent[] }) {
-  const cands = events.filter((e) => e.type === "candidate_added");
-  return <div>{cands.length} candidates so far</div>;
-}
-
-function SynthPanel({ currentSmiles }: { currentSmiles: string | null; apiBase: string }) {
-  return (
-    <div>
-      <div>SMILES: {currentSmiles ?? "—"}</div>
-      <div style={{ marginTop: 6, color: "var(--lys-text-faint)" }}>
-        synth route loads from /workbench/molecule/synth on candidate change
+    <div style={{ fontSize: 12, color: "var(--lys-text-dim)" }}>
+      <div style={{ marginBottom: 6 }}>
+        Resistance graph for <strong style={{ color: "var(--lys-accent)" }}>{pathogen}</strong>
       </div>
-    </div>
-  );
-}
-
-function GraphPanel() {
-  return <div>resistance graph — wired to /workbench/pathogen/&lt;code&gt;/graph</div>;
-}
-
-function LineagePanel({ events }: { events: TraceEvent[] }) {
-  const edits = events.filter((e) => e.type === "mol_edit");
-  return (
-    <div>
-      <div>{edits.length} edits</div>
-      <div style={{ marginTop: 6, fontFamily: "var(--lys-font-mono)", fontSize: 11 }}>
-        {edits.slice(-5).map((e, i) => (
-          <div key={i} style={{ marginBottom: 4 }}>
-            {(e.parent || "?").slice(0, 24)} → {(e.candidate || "?").slice(0, 24)}
-          </div>
-        ))}
+      <div style={{ fontFamily: "var(--lys-font-mono)", fontSize: 11, color: "var(--lys-text-faint)" }}>
+        Wired to {apiBase}/workbench/pathogen/{pathogen}/graph
+        — force-directed visualization renders on session start.
       </div>
     </div>
   );
