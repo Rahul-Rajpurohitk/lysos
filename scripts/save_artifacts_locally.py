@@ -114,13 +114,18 @@ def main() -> int:
     # ── 1. Embeddings ──────────────────────────────────────────────────
     if not args.skip_embeddings:
         print("\n── embeddings (Gemini Embedding 2) ──")
-        emb = ROOT / "artifacts/embeddings/known-antibiotics-gemini.parquet"
-        if emb.exists():
-            record("embeddings", emb, emb, "Gemini Embedding 2, 3072-d, RETRIEVAL_DOCUMENT")
-            meta = emb.with_suffix(".meta.json")
-            if meta.exists():
-                record("embeddings", meta, meta, "provenance JSON")
-        else:
+        for fname, note in [
+            ("known-antibiotics-gemini-2.parquet",
+             "Gemini Embedding 2, 3072-d, RETRIEVAL_DOCUMENT, ~86 tok/row enriched"),
+            ("known-antibiotics-gemini-2.meta.json",
+             "provenance JSON: source SHA, model, timestamp"),
+            ("named-drugs-gemini-enrichment.parquet",
+             "Gemini 2.5 Pro mechanism/spectrum/indication for top named drugs"),
+        ]:
+            p = ROOT / "artifacts" / "embeddings" / fname
+            if p.exists():
+                record("embeddings", p, p, note)
+        if not (ROOT / "artifacts/embeddings/known-antibiotics-gemini-2.parquet").exists():
             print("  [pending] run scripts/precompute_embeddings.py first")
 
     # ── 2. Reward-stack caches ─────────────────────────────────────────

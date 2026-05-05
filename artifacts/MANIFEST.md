@@ -1,13 +1,15 @@
 # Lysos artifact manifest
 
-Generated: 2026-05-05 14:40:51
-Total bytes: 891.5MB (934,850,821)
+Generated: 2026-05-05 15:46:17
+Total bytes: 1.2GB (1,315,162,732)
 
 Everything in this tree is owned locally — independent of HF Hub or GitHub.
 Heavy binaries are gitignored; this manifest tracks what's where.
 
 | Category | Path | Size | Source | Note |
 |----------|------|------|--------|------|
+| embeddings | `embeddings/known-antibiotics-gemini-2.parquet` | 362.7MB | `artifacts/embeddings/known-antibiotics-gemini-2.parquet` | Gemini Embedding 2, 3072-d, RETRIEVAL_DOCUMENT, ~86 tok/row enriched |
+| embeddings | `embeddings/known-antibiotics-gemini-2.meta.json` | 323.0B | `artifacts/embeddings/known-antibiotics-gemini-2.meta.json` | provenance JSON: source SHA, model, timestamp |
 | cache | `caches/boltz2_poses_cache.parquet` | 117.5KB | `data/processed/boltz2_poses_cache.parquet` | 30K rows × 8 pathogens, Boltz-2 ipTM proxy |
 | cache | `caches/aizynth_calibration_cache.parquet` | 36.7KB | `data/processed/aizynth_calibration_cache.parquet` | 1000 retrosynth routes, overnight USPTO sweep |
 | cache | `caches/synth_calibration_cache.parquet` | 1.3MB | `data/processed/synth_calibration_cache.parquet` | SAscore baseline cache |

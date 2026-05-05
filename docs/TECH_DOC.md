@@ -134,6 +134,9 @@ Defined in `workspace/api/server.py` (PATHOGENS list) and
 | **CompositeReward** | Weighted sum of 12 reward components, sum=1.0                |
 | **Hard negative** | Candidate that is high on one reward axis but low on an anti-correlated one (Pareto trap) |
 | **Workbench**    | Multi-agent state machine with 25 tools (4 first-class + 9 sub-agents) |
+| **Gemini Embedding 2** | `gemini-embedding-2` API model, 3072-d Matryoshka, 8192-token input window, multimodal-ready. Used by `embedding_novelty` reward + `retrieval` + `dedup`. NOT the older `gemini-embedding-001`. |
+| **Enrichment template** | Shared text template (`src/embeddings/enrichment.py`) used by all 5 embedding call sites — produces `Drug: <name> (source). Type: small molecule/peptide. Stereochemistry. SMILES. InChIKey. Physicochemical (MW, logP, TPSA, QED). Lipinski (HBA/HBD/rot/rings/heavy)`. ~86 tokens/row average. |
+| **Pre-computed embeddings** | `artifacts/embeddings/known-antibiotics-gemini-2.parquet` — 30,743 rows × 3072-d, L2-normalized, computed once. Reward stack reads from disk, no live API calls during training. 362.7 MB. |
 
 ---
 
@@ -241,7 +244,7 @@ Defined in `configs/stage3_rl_grpo.yaml` and `src/eval/rewards/`.
 | synthesizability      | 0.10   | `src.eval.rewards.synth:sa_score`               | SAscore (low is hard, inverted) + AiZynth route depth |
 | hemolysis_safety      | 0.10   | `src.eval.rewards.safety:hemolysis_inverse`     | xgboost on 8K hemolysis dataset |
 | novelty               | 0.08   | `src.eval.rewards.novelty:tanimoto_distance_to_known` | 1 - max Tanimoto on ECFP4 |
-| embedding_novelty     | 0.07   | `src.eval.rewards.embedding_novelty:embedding_novelty` | 1 - cosine in Gemini Embedding 2 (3072-d) |
+| embedding_novelty     | 0.07   | `src.eval.rewards.embedding_novelty:embedding_novelty` | 1 - cosine in **gemini-embedding-2** (3072-d, 8K input, multimodal). Reads pre-computed `artifacts/embeddings/known-antibiotics-gemini-2.parquet` for 30K refs. Query side enriched via `build_query_text()` (RDKit-derived MW/logP/TPSA/QED/Lipinski) so doc + query share feature space. |
 | boltz2_pose_conf      | 0.10   | `src.eval.rewards.boltz2_pose:pose_confidence`  | Boltz-2 ipTM (cached) |
 | spectrum_breadth      | 0.05   | `src.eval.rewards.spectrum:multi_pathogen_breadth` | mean MIC across 8 pathogens |
 | resistance_robustness | 0.05   | `src.eval.rewards.resistance:robustness_score`  | retained activity under known escape mutations |
@@ -373,7 +376,27 @@ Wrapped in `stage3_rl_grpo.py:reward_callable`:
 | `scripts/verify_keys.py`                 | Live API check for HF + Gemini + WANDB |
 | `scripts/smoke_pipeline_e2e.py`          | CPU smoke (tiny-gpt2) running all 3 stages in 22s |
 
-### 5.6 TRL version compatibility
+### 5.6 Context-length budget
+
+Gemma 4 31B native `max_position_embeddings = 262,144`. We use a fraction
+of it during fine-tuning to keep memory + wall-time tractable on the
+target hardware:
+
+| Stage   | Field                  | Old   | Current  | Why                              |
+|---------|------------------------|-------|----------|----------------------------------|
+| 1       | `max_seq_length`       | 4096  | **8192** | TDC reasoning chains fit fully (some teacher traces hit 6-7K) |
+| 2       | `max_seq_length`       | 4096  | **8192** | pro-v12 named-drug elite CoT rows + long teacher distillation traces no longer truncated |
+| 2.5 DPO | `max_length`           | 2048  | **4096** | DPO chosen+rejected pairs occasionally exceed 2K combined |
+| 2.5 DPO | `max_prompt_length`    | 768   | **1024** | matches our richer prompt enrichment |
+| 3 GRPO  | `max_prompt_length`    | 1024  | **2048** | RL prompts include resistome briefing + first-line context + lit snippet |
+| 3 GRPO  | `max_completion_length`| 512   | **1024** | longer reasoning traces during generation |
+
+Stage 1 (8× MI300X ZeRO-3 with optimizer offload to CPU): 8192 fits easily.
+Stage 2 / 2.5 / 3 (1× MI300X with gradient_checkpointing): 8192 / 4096 fits
+within VRAM budget; ~10-15% throughput cost vs 4096 due to attention being
+quadratic up to the sliding window (1024).
+
+### 5.7 TRL version compatibility
 
 The training scripts handle TRL 0.x and 1.x via signature-introspection
 filters. Built-in shims:
@@ -385,7 +408,18 @@ filters. Built-in shims:
 If a kwarg is dropped by the running TRL, training logs a warning
 listing what was filtered.
 
-### 5.7 Tokenizer alignment guard
+### 5.8 Gemini Pro auxiliary scripts (not on the GPU pipeline)
+
+Three Gemini 2.5 Pro scripts that run before/after training on the laptop
+or VM. Each has a documented dollar cost; total ~$3.75 of the prepaid $10.
+
+| Script                                          | When           | Cost  | What it produces |
+|-------------------------------------------------|----------------|-------|------------------|
+| `scripts/run_gemini_comparator.py`              | post-Stage-3   | ~$1.25 | `reports/gemini_25_pro_baseline.jsonl` — Gemini 2.5 Pro zero-shot responses on the 200-prompt eval set. Fed into the leaderboard for direct head-to-head with Lysos-RL. |
+| `scripts/enrich_named_drugs_with_gemini.py`     | anytime        | ~$1.50 | `artifacts/embeddings/named-drugs-gemini-enrichment.parquet` — mechanism / spectrum / indication / resistance_escape JSON for top ~40 named antibiotics. Plug into the embedding template as a higher-fidelity layer for the most clinically-relevant references. |
+| `scripts/llm_as_judge_eval.py`                  | post-Stage-3   | ~$1.00 | `reports/lysos_rl_judge_scores.jsonl` — qualitative scores (reasoning_quality / citation_grounding / mechanism_plausibility / safety_awareness, each 0-10) for 50 held-out responses. Goes into the methods paper alongside the verifiable reward metrics. |
+
+### 5.9 Tokenizer alignment guard
 
 When Stage 2/2.5/3 loads from a previously trained adapter,
 `sft_runner.py` reads the prior tokenizer and asserts vocab_size matches

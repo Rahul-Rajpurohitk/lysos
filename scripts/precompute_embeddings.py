@@ -53,7 +53,7 @@ def main() -> int:
                     default=ROOT / "data/processed/known-antibiotics-canonical.parquet",
                     help="Parquet with `smiles` column (and optional `name`, `drug_class`)")
     ap.add_argument("--out", type=Path,
-                    default=ARTIFACTS / "known-antibiotics-gemini.parquet")
+                    default=ARTIFACTS / "known-antibiotics-gemini-2.parquet")
     ap.add_argument("--limit", type=int, default=None,
                     help="Only embed N rows (smoke test)")
     ap.add_argument("--batch_size", type=int, default=64,
