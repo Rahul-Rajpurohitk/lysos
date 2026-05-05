@@ -49,17 +49,27 @@ def _load_dotenv() -> None:
 
 def gemini_25_pro(prompt: str, api_key: str,
                   model: str = "gemini-2.5-pro",
-                  max_tokens: int = 1024,
-                  timeout: float = 90.0) -> dict:
-    """Single Gemini 2.5 Pro generation. Returns dict with response + usage."""
+                  max_tokens: int = 8192,
+                  timeout: float = 180.0,
+                  capture_thinking: bool = True) -> dict:
+    """Single Gemini 2.5 Pro generation. Returns dict with response + usage.
+
+    Captures the full reasoning trace via `thinkingConfig.includeThoughts=True`.
+    For each call you get back BOTH the visible answer AND the thinking trace
+    so we can compare not just answers but reasoning chains in the methods
+    paper. See TECH_DOC §5.8.1 for the budget gotcha.
+    """
     url = (f"https://generativelanguage.googleapis.com/v1beta/"
            f"models/{model}:generateContent")
+    gen_cfg: dict = {
+        "temperature": 0.0,
+        "maxOutputTokens": max_tokens,
+    }
+    if capture_thinking:
+        gen_cfg["thinkingConfig"] = {"includeThoughts": True}
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.0,
-            "maxOutputTokens": max_tokens,
-        },
+        "generationConfig": gen_cfg,
     }
     req = urllib.request.Request(
         url,
@@ -74,24 +84,40 @@ def gemini_25_pro(prompt: str, api_key: str,
     except urllib.error.HTTPError as e:
         return {
             "response": f"<HTTP_ERROR_{e.code}: {e.read().decode('utf-8', 'replace')[:200]}>",
-            "tokens_in": 0, "tokens_out": 0, "latency_ms": int((time.time() - t0) * 1000),
+            "thinking": "",
+            "tokens_in": 0, "tokens_out": 0, "tokens_think": 0,
+            "finish_reason": "ERROR",
+            "latency_ms": int((time.time() - t0) * 1000),
         }
     except Exception as e:  # noqa: BLE001
         return {
             "response": f"<ERROR: {type(e).__name__}: {e}>",
-            "tokens_in": 0, "tokens_out": 0, "latency_ms": int((time.time() - t0) * 1000),
+            "thinking": "",
+            "tokens_in": 0, "tokens_out": 0, "tokens_think": 0,
+            "finish_reason": "ERROR",
+            "latency_ms": int((time.time() - t0) * 1000),
         }
 
     text = ""
+    thinking = ""
+    finish_reason = ""
     for cand in d.get("candidates", []):
-        for part in cand.get("content", {}).get("parts", []):
-            text += part.get("text", "")
+        finish_reason = cand.get("finishReason", finish_reason) or finish_reason
+        for part in cand.get("content", {}).get("parts", []) or []:
+            t = part.get("text", "")
+            if part.get("thought") is True:
+                thinking += t
+            else:
+                text += t
 
     usage = d.get("usageMetadata", {})
     return {
         "response": text,
+        "thinking": thinking,
         "tokens_in": usage.get("promptTokenCount", 0),
         "tokens_out": usage.get("candidatesTokenCount", 0),
+        "tokens_think": usage.get("thoughtsTokenCount", 0),
+        "finish_reason": finish_reason,
         "latency_ms": int((time.time() - t0) * 1000),
     }
 
@@ -148,7 +174,12 @@ def main() -> int:
     ap.add_argument("--out", type=Path,
                     default=ROOT / "reports" / "gemini_25_pro_baseline.jsonl")
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--max_tokens", type=int, default=1024)
+    ap.add_argument("--max_tokens", type=int, default=8192,
+                    help="Combined thinking+output budget (gemini-2.5-pro is "
+                         "a thinking model; <2000 → empty output). Default 8192.")
+    ap.add_argument("--no-thinking", action="store_true",
+                    help="Disable thinking-trace capture (we still pay for "
+                         "thinking tokens, just don't get them back).")
     args = ap.parse_args()
 
     _load_dotenv()
@@ -176,38 +207,48 @@ def main() -> int:
     rows = []
     total_in = 0
     total_out = 0
+    total_think = 0
     t0 = time.time()
     print(f"[INFO] Running Gemini {args.model} on {len(prompts)} prompts...")
     with args.out.open("w") as f:
         for i, p in enumerate(prompts):
             r = gemini_25_pro(p["prompt"], api_key,
-                              model=args.model, max_tokens=args.max_tokens)
+                              model=args.model,
+                              max_tokens=args.max_tokens,
+                              capture_thinking=not args.no_thinking)
             row = {
                 "prompt_idx": i,
                 "source": p["source"],
                 "task": p.get("task"),
                 "prompt": p["prompt"],
                 "response": r["response"],
+                "thinking": r.get("thinking", ""),
                 "tokens_in": r["tokens_in"],
                 "tokens_out": r["tokens_out"],
+                "tokens_think": r.get("tokens_think", 0),
+                "finish_reason": r.get("finish_reason", ""),
                 "latency_ms": r["latency_ms"],
                 "model": args.model,
             }
             rows.append(row)
             total_in += r["tokens_in"]
             total_out += r["tokens_out"]
+            total_think += r.get("tokens_think", 0)
             f.write(json.dumps(row) + "\n")
+            f.flush()  # incremental — kill-resilient
             if (i + 1) % 10 == 0 or i == len(prompts) - 1:
                 rate = (i + 1) / (time.time() - t0)
-                cost = (total_in / 1e6) * 1.25 + (total_out / 1e6) * 10.0
-                print(f"  [{i+1}/{len(prompts)}] {rate:.2f} prompts/s "
-                      f"tok_in={total_in:,} tok_out={total_out:,} "
-                      f"cost≈${cost:.3f}")
+                billed_out = total_out + total_think
+                cost = (total_in / 1e6) * 1.25 + (billed_out / 1e6) * 10.0
+                print(f"  [{i+1}/{len(prompts)}] {rate:.2f} p/s "
+                      f"in={total_in:,} out={total_out:,} think={total_think:,} "
+                      f"cost≈${cost:.3f}", flush=True)
 
-    cost = (total_in / 1e6) * 1.25 + (total_out / 1e6) * 10.0
+    billed_out = total_out + total_think
+    cost = (total_in / 1e6) * 1.25 + (billed_out / 1e6) * 10.0
     print(f"\n[OK] Wrote {len(rows)} rows to {args.out}")
-    print(f"[OK] Total: {total_in:,} input + {total_out:,} output tokens "
-          f"≈ ${cost:.3f}")
+    print(f"[OK] Total: {total_in:,} in + {total_out:,} out + "
+          f"{total_think:,} think ≈ ${cost:.3f}")
     return 0
 
 

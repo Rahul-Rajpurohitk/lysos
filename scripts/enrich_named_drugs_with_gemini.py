@@ -364,24 +364,37 @@ TOP_NAMED_DRUGS: list[tuple[str, str]] = [
 
 def gemini_25_pro(prompt: str, api_key: str,
                   model: str = "gemini-2.5-pro",
-                  max_tokens: int = 4000, timeout: float = 120.0) -> tuple[str, int, int, int]:
-    """Single Gemini 2.5 Pro call. Returns (text, tokens_in, tokens_out, thoughts).
+                  max_tokens: int = 8192,
+                  timeout: float = 180.0,
+                  capture_thinking: bool = True) -> dict:
+    """Single Gemini 2.5 Pro call.
 
-    NOTE: gemini-2.5-pro is a *thinking* model — `maxOutputTokens` is the
-    combined budget for thinking + output. Empirically thinking consumes
-    600-1000 tokens for pharmacology prompts, so set `max_tokens >= 2000`
-    or you'll get empty `content` with finishReason=MAX_TOKENS. Default
-    here is 4000 to leave generous headroom.
+    Returns dict: {
+      "text": <visible JSON>,
+      "thinking": <full reasoning trace as plain text>,
+      "tokens_in", "tokens_out", "tokens_think", "finish_reason",
+    }
+
+    NOTE: gemini-2.5-pro is a *thinking* model — `maxOutputTokens` covers
+    thinking + visible output. With `thinkingConfig.includeThoughts=True`
+    the API returns the reasoning trace as a separate part with
+    `thought: true`. Pharmacology prompts use ~700-1500 thinking tokens
+    + ~150-200 output, so default 8192 leaves clear headroom. Failure
+    mode if budget too small: empty visible text + finishReason=MAX_TOKENS.
+    See TECH_DOC §5.8.1.
     """
     url = (f"https://generativelanguage.googleapis.com/v1beta/"
            f"models/{model}:generateContent")
+    gen_cfg: dict = {
+        "temperature": 0.0,
+        "maxOutputTokens": max_tokens,
+        "responseMimeType": "application/json",
+    }
+    if capture_thinking:
+        gen_cfg["thinkingConfig"] = {"includeThoughts": True}
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.0,
-            "maxOutputTokens": max_tokens,
-            "responseMimeType": "application/json",  # ask the API to emit pure JSON
-        },
+        "generationConfig": gen_cfg,
     }
     req = urllib.request.Request(
         url, data=json.dumps(body).encode("utf-8"),
@@ -389,6 +402,7 @@ def gemini_25_pro(prompt: str, api_key: str,
         method="POST",
     )
     last_err = ""
+    d: dict | None = None
     for attempt in range(3):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -404,22 +418,37 @@ def gemini_25_pro(prompt: str, api_key: str,
             if e.code == 429 or e.code >= 500:
                 time.sleep(min(8 * (attempt + 1), 30))
                 continue
-            return f"<ERR: {last_err}>", 0, 0, 0
+            return {"text": f"<ERR: {last_err}>", "thinking": "",
+                    "tokens_in": 0, "tokens_out": 0, "tokens_think": 0,
+                    "finish_reason": "ERROR"}
         except Exception as e:  # noqa: BLE001
             last_err = str(e)
             time.sleep(2 * (attempt + 1))
-    else:
-        return f"<ERR: {last_err}>", 0, 0, 0
+    if d is None:
+        return {"text": f"<ERR: {last_err}>", "thinking": "",
+                "tokens_in": 0, "tokens_out": 0, "tokens_think": 0,
+                "finish_reason": "ERROR"}
 
     text = ""
+    thinking = ""
+    finish_reason = ""
     for cand in d.get("candidates", []):
+        finish_reason = cand.get("finishReason", finish_reason) or finish_reason
         for part in cand.get("content", {}).get("parts", []) or []:
-            text += part.get("text", "")
+            t = part.get("text", "")
+            if part.get("thought") is True:
+                thinking += t
+            else:
+                text += t
     u = d.get("usageMetadata", {})
-    return (text,
-            u.get("promptTokenCount", 0),
-            u.get("candidatesTokenCount", 0),
-            u.get("thoughtsTokenCount", 0))
+    return {
+        "text": text,
+        "thinking": thinking,
+        "tokens_in": u.get("promptTokenCount", 0),
+        "tokens_out": u.get("candidatesTokenCount", 0),
+        "tokens_think": u.get("thoughtsTokenCount", 0),
+        "finish_reason": finish_reason,
+    }
 
 
 def parse_json_response(text: str) -> dict:
@@ -533,7 +562,10 @@ def main() -> int:
     t0 = time.time()
     for i, (name, smi) in enumerate(drugs):
         prompt = PROMPT_TEMPLATE.format(name=name, smiles=smi)
-        text, t_in, t_out, t_think = gemini_25_pro(prompt, api_key, model=args.model)
+        r = gemini_25_pro(prompt, api_key, model=args.model)
+        text = r["text"]
+        thinking = r["thinking"]
+        t_in, t_out, t_think = r["tokens_in"], r["tokens_out"], r["tokens_think"]
         parsed = parse_json_response(text)
         if not parsed.get("mechanism"):
             n_empty += 1
@@ -544,10 +576,14 @@ def main() -> int:
             "spectrum": parsed.get("spectrum", ""),
             "indications": parsed.get("indications", ""),
             "resistance_escape": parsed.get("resistance_escape", ""),
-            "raw_response": text[:1500],
+            "raw_response": text[:2000],
+            # Full reasoning trace — gold for Stage-2 SFT pharmacology
+            # prompts. ~2000-4000 chars / drug × 218 drugs ≈ 600KB total.
+            "thinking": thinking,
             "tokens_in": t_in,
             "tokens_out": t_out,
             "tokens_think": t_think,
+            "finish_reason": r.get("finish_reason", ""),
         })
         total_in += t_in
         total_out += t_out
@@ -557,8 +593,8 @@ def main() -> int:
         cost = (total_in / 1e6) * 1.25 + (billed_out / 1e6) * 10.0
         if (i + 1) % 5 == 0 or i == len(drugs) - 1:
             print(f"  [{i+1}/{len(drugs)}] {name}  "
-                  f"out={t_out} think={t_think}  cum ${cost:.3f}  "
-                  f"empty={n_empty}", flush=True)
+                  f"out={t_out} think={t_think} (chars={len(thinking)})  "
+                  f"cum ${cost:.3f}  empty={n_empty}", flush=True)
         # Incremental save so a crash doesn't waste API spend.
         if args.save_every and (i + 1) % args.save_every == 0:
             _flush(rows, note=f"checkpoint @ {i+1}/{len(drugs)}")

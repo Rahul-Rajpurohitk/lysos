@@ -66,12 +66,27 @@ Score harshly. 10 = top-tier expert clinician quality. 5 = passable senior Pharm
 
 def gemini_25_pro(prompt: str, api_key: str,
                   model: str = "gemini-2.5-pro",
-                  max_tokens: int = 800, timeout: float = 90.0) -> tuple[str, int, int]:
+                  max_tokens: int = 8192,
+                  timeout: float = 180.0,
+                  capture_thinking: bool = True) -> dict:
+    """Single judge call. Returns dict with text, thinking, token counts.
+
+    Default 8192 since gemini-2.5-pro is a thinking model and judging
+    multi-axis scientific responses uses ~1500-2500 thinking tokens
+    (the 800-token original budget got us empty responses).
+    """
     url = (f"https://generativelanguage.googleapis.com/v1beta/"
            f"models/{model}:generateContent")
+    gen_cfg: dict = {
+        "temperature": 0.0,
+        "maxOutputTokens": max_tokens,
+        "responseMimeType": "application/json",
+    }
+    if capture_thinking:
+        gen_cfg["thinkingConfig"] = {"includeThoughts": True}
     body = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.0, "maxOutputTokens": max_tokens},
+        "generationConfig": gen_cfg,
     }
     req = urllib.request.Request(
         url, data=json.dumps(body).encode("utf-8"),
@@ -82,13 +97,29 @@ def gemini_25_pro(prompt: str, api_key: str,
         with urllib.request.urlopen(req, timeout=timeout) as r:
             d = json.loads(r.read())
     except Exception as e:  # noqa: BLE001
-        return f"<ERR: {e}>", 0, 0
+        return {"text": f"<ERR: {e}>", "thinking": "",
+                "tokens_in": 0, "tokens_out": 0, "tokens_think": 0,
+                "finish_reason": "ERROR"}
     text = ""
+    thinking = ""
+    finish_reason = ""
     for cand in d.get("candidates", []):
-        for part in cand.get("content", {}).get("parts", []):
-            text += part.get("text", "")
+        finish_reason = cand.get("finishReason", finish_reason) or finish_reason
+        for part in cand.get("content", {}).get("parts", []) or []:
+            t = part.get("text", "")
+            if part.get("thought") is True:
+                thinking += t
+            else:
+                text += t
     u = d.get("usageMetadata", {})
-    return text, u.get("promptTokenCount", 0), u.get("candidatesTokenCount", 0)
+    return {
+        "text": text,
+        "thinking": thinking,
+        "tokens_in": u.get("promptTokenCount", 0),
+        "tokens_out": u.get("candidatesTokenCount", 0),
+        "tokens_think": u.get("thoughtsTokenCount", 0),
+        "finish_reason": finish_reason,
+    }
 
 
 def parse_json(text: str) -> dict:
@@ -157,7 +188,7 @@ def main() -> int:
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
 
-    total_in = total_out = 0
+    total_in = total_out = total_think = 0
     out_rows = []
     t0 = time.time()
     with args.out.open("w") as f:
@@ -166,8 +197,8 @@ def main() -> int:
                 prompt=r.get("prompt", "")[:1500],
                 response=r.get("response", "")[:2000],
             )
-            text, t_in, t_out = gemini_25_pro(judge_prompt, api_key, model=args.model)
-            parsed = parse_json(text)
+            res = gemini_25_pro(judge_prompt, api_key, model=args.model)
+            parsed = parse_json(res["text"])
             out = {
                 "prompt_idx": r.get("prompt_idx", i),
                 "source": r.get("source"),
@@ -180,17 +211,26 @@ def main() -> int:
                     "overall":               parsed.get("overall"),
                 },
                 "rationale": parsed.get("rationale", ""),
+                # Judge thinking trace = the rationale chain we'd otherwise
+                # have to reconstruct. Keep verbatim for the methods paper.
+                "judge_thinking": res.get("thinking", ""),
                 "judge_model": args.model,
-                "tokens_in": t_in,
-                "tokens_out": t_out,
+                "tokens_in": res["tokens_in"],
+                "tokens_out": res["tokens_out"],
+                "tokens_think": res.get("tokens_think", 0),
+                "finish_reason": res.get("finish_reason", ""),
             }
             out_rows.append(out)
             f.write(json.dumps(out) + "\n")
-            total_in += t_in
-            total_out += t_out
+            f.flush()
+            total_in += res["tokens_in"]
+            total_out += res["tokens_out"]
+            total_think += res.get("tokens_think", 0)
             if (i + 1) % 10 == 0 or i == len(rows) - 1:
-                cost = (total_in / 1e6) * 1.25 + (total_out / 1e6) * 10.0
-                print(f"  [{i+1}/{len(rows)}] cum cost ${cost:.3f}")
+                billed_out = total_out + total_think
+                cost = (total_in / 1e6) * 1.25 + (billed_out / 1e6) * 10.0
+                print(f"  [{i+1}/{len(rows)}] in={total_in:,} out={total_out:,} "
+                      f"think={total_think:,} cum ${cost:.3f}", flush=True)
 
     # Roll-up summary
     valid = [r for r in out_rows if r["scores"].get("overall") is not None]
