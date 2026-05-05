@@ -413,7 +413,25 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
           <Allotment.Pane minSize={320} preferredSize={460}>
             <div className="lys-chat">
               <div className="lys-chat__head">
-                <span className="lys-chat__title">Conversation · {messages.length} msg</span>
+                <span className="lys-chat__title">
+                  Conversation · {messages.length} msg
+                  {replayEvents != null && (
+                    <span style={{
+                      marginLeft: 8,
+                      padding: "2px 8px",
+                      fontSize: 10,
+                      background: "rgba(167, 139, 250, 0.15)",
+                      color: "#c4b5fd",
+                      border: "1px solid rgba(167, 139, 250, 0.35)",
+                      borderRadius: 999,
+                      fontFamily: "var(--lys-font-mono)",
+                      letterSpacing: "0.05em",
+                      textTransform: "uppercase",
+                    }}>
+                      replay {replayIdx}/{replayEvents.length}
+                    </span>
+                  )}
+                </span>
                 <div className="lys-chat__mode-toggle">
                   <button
                     className={chatMode === "Stream" ? "active" : ""}
