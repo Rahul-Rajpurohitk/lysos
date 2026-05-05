@@ -411,25 +411,54 @@ listing what was filtered.
 ### 5.8 Gemini Pro auxiliary scripts (not on the GPU pipeline)
 
 Three Gemini 2.5 Pro scripts that run before/after training on the laptop
-or VM. Total ~$5 of the prepaid $10 budget.
+or VM. Total ~$8.75 of the $25 budget. All three capture the model's
+reasoning trace via `thinkingConfig.includeThoughts=true` — we pay for
+thinking tokens regardless, so we always retrieve them.
 
 | Script                                          | When           | Cost  | What it produces |
 |-------------------------------------------------|----------------|-------|------------------|
-| `scripts/run_gemini_comparator.py`              | post-Stage-3   | ~$1.25 | `reports/gemini_25_pro_baseline.jsonl` — Gemini 2.5 Pro zero-shot responses on the 200-prompt eval set. Fed into the leaderboard for direct head-to-head with Lysos-RL. |
-| `scripts/enrich_named_drugs_with_gemini.py`     | anytime        | ~$2.50 | `artifacts/embeddings/named-drugs-gemini-enrichment.parquet` — mechanism / spectrum / indication / resistance_escape JSON for **218 top named antibiotics** (Wave 1 core 107 + Wave 2 broader-class 80 + Wave 3 combos/comparators 31). Powers `src.embeddings.pharma_lookup` for downstream Stage-2 SFT prompt enrichment, RAG re-ranking, and combo-reasoning data. |
-| `scripts/llm_as_judge_eval.py`                  | post-Stage-3   | ~$1.00 | `reports/lysos_rl_judge_scores.jsonl` — qualitative scores (reasoning_quality / citation_grounding / mechanism_plausibility / safety_awareness, each 0-10) for 50 held-out responses. Goes into the methods paper alongside the verifiable reward metrics. |
+| `scripts/enrich_named_drugs_with_gemini.py`     | pre-training   | ~$2.50 | `artifacts/embeddings/named-drugs-gemini-enrichment.parquet` — mechanism / spectrum / indications / resistance_escape JSON + **full reasoning trace** for **218 top named antibiotics** (Wave 1 core 107 + Wave 2 broader-class ~80 + Wave 3 combos/comparators ~31). Powers `src.embeddings.pharma_lookup` for Stage-2 SFT prompt enrichment, RAG re-ranking, and gold-standard pharmacology chain-of-thought. ~135K tokens of reasoning trace stored. |
+| `scripts/run_gemini_comparator.py`              | post-Stage-3   | ~$5.00 | `reports/gemini_25_pro_baseline.jsonl` — Gemini 2.5 Pro zero-shot responses + thinking on 200-prompt eval set. Direct head-to-head with Lysos-RL, plus reasoning-vs-reasoning analysis for the methods paper. |
+| `scripts/llm_as_judge_eval.py`                  | post-Stage-3   | ~$1.25 | `reports/lysos_rl_judge_scores.jsonl` — qualitative scores (reasoning_quality / citation_grounding / mechanism_plausibility / safety_awareness, each 0-10) + `judge_thinking` rationale chain for 50 held-out responses. |
 
 #### 5.8.1 gemini-2.5-pro thinking-budget gotcha
 
 `gemini-2.5-pro` is a *thinking* model: `maxOutputTokens` is the combined
 budget for thinking + visible output. For pharmacology prompts the
-thinking phase consumes ~700-1000 tokens. Setting `maxOutputTokens=600`
-results in `finishReason=MAX_TOKENS`, empty `content.parts`, and
-`thoughtsTokenCount` ~= the budget. Always set ≥ 2000; we default to
-4000 with `responseMimeType=application/json` so the API returns clean
-JSON (no markdown fence stripping). Cost = (input × $1.25/M) +
-((output + thinking) × $10/M). Resume mode (`--skip-existing`) and
-incremental save (`--save-every 20`) protect API spend across restarts.
+thinking phase consumes ~700-1500 tokens (judge / comparator: 1500-2500).
+Setting `maxOutputTokens=600` results in `finishReason=MAX_TOKENS`, empty
+`content.parts`, and `thoughtsTokenCount` ~= the budget. All three
+scripts now default to **8192**. Cost = (input × $1.25/M) + ((output +
+thinking) × $10/M); thinking is billed at output rates whether or not
+you `includeThoughts=true`, so always capture it.
+
+#### 5.8.2 thinking-trace consumption
+
+Every row in the enrichment parquet has a `thinking` column (~2000 chars
+on average) with the model's step-by-step pharmacology reasoning. Access
+patterns:
+
+```python
+from src.embeddings import get_pharma_thinking, format_pharma_card
+trace = get_pharma_thinking("amoxicillin")        # ~2000 chars CoT
+card = lookup_pharma("amoxicillin")
+print(format_pharma_card(card))                   # one-line briefing
+```
+
+Downstream consumers:
+- **Stage-2 SFT data builders**: optionally append `thinking` as
+  reasoning trace before the JSON answer for chain-of-thought training
+- **RAG retrieval rerank**: when `enrich_pharma=True`, top-k hits get
+  mechanism/spectrum/resistance_escape attached
+- **Comparator analysis**: head-to-head reasoning chains (Lysos vs
+  Gemini Pro thinking) become the qualitative section of the paper
+
+#### 5.8.3 retry hardening
+
+All three scripts: `timeout=300s`, `max_retries=5`, exponential backoff
+(8s × attempt for 429/5xx, 5s × attempt for network). Incremental
+parquet checkpoints every 20 rows + atomic `.tmp → rename` so a kill
+or crash never corrupts in-flight data.
 
 ### 5.9 Tokenizer alignment guard
 

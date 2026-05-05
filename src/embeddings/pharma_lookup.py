@@ -17,7 +17,8 @@ Why this is *not* in `enrichment.py`:
 
 Output schema (from the parquet):
   name, smiles, mechanism, spectrum, indications, resistance_escape,
-  raw_response, tokens_in, tokens_out, tokens_think
+  thinking (full reasoning trace ~2000 chars/row — gold for SFT),
+  raw_response, tokens_in, tokens_out, tokens_think, finish_reason
 
 Usage:
     from src.embeddings.pharma_lookup import lookup, format_card
@@ -70,6 +71,7 @@ def _load(parquet: Path) -> None:
             return
 
         cache: dict[str, dict[str, str]] = {}
+        has_thinking = "thinking" in df.columns
         for _, row in df.iterrows():
             mech = str(row.get("mechanism") or "")
             if not mech:
@@ -82,6 +84,8 @@ def _load(parquet: Path) -> None:
                 "indications": str(row.get("indications") or ""),
                 "resistance_escape": str(row.get("resistance_escape") or ""),
             }
+            if has_thinking:
+                entry["thinking"] = str(row.get("thinking") or "")
             cache[_normalize(entry["name"])] = entry
         _CACHE.clear()
         _CACHE.update(cache)
@@ -138,9 +142,29 @@ def all_drugs(*, parquet: Path = DEFAULT_PARQUET) -> list[str]:
 
 
 def stats(*, parquet: Path = DEFAULT_PARQUET) -> dict[str, int]:
-    """Return {n_drugs} after loading."""
+    """Return summary metrics after loading."""
     _load(parquet)
-    return {"n_drugs": len(_CACHE)}
+    n_with_thinking = sum(1 for c in _CACHE.values() if c.get("thinking"))
+    total_thinking_chars = sum(len(c.get("thinking", "")) for c in _CACHE.values())
+    return {
+        "n_drugs": len(_CACHE),
+        "n_with_thinking": n_with_thinking,
+        "total_thinking_chars": total_thinking_chars,
+    }
+
+
+def get_thinking(name: str, *, parquet: Path = DEFAULT_PARQUET) -> str | None:
+    """Return the full reasoning trace for `name`, or None if not enriched.
+
+    Trace is ~2000 chars of step-by-step pharmacology thinking — useful
+    as gold-standard reasoning for Stage-2 SFT data builders that want
+    chain-of-thought training targets.
+    """
+    card = lookup(name, parquet=parquet)
+    if not card:
+        return None
+    t = card.get("thinking")
+    return t if t else None
 
 
 if __name__ == "__main__":
