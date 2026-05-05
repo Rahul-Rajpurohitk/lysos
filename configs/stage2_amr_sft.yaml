@@ -42,10 +42,11 @@ dataset:
   #   pro-v4   → rahul24raj/lysos-amr-stage2-pro-v4   (pro-v3 + tool-call-results + long-form-traces + pk-panel + decoys + activity-cliffs + smiles-augmentation + pathogen-primer + canonical-chemistry)
   #   pro-v5   → rahul24raj/lysos-amr-stage2-pro-v5   (pro-v4 cleaned — list→string content, placeholder SMILES replaced, assistant-text dedup capped at 12, short answers diversified, full-row dedup)
   #   pro-v6   → rahul24raj/lysos-amr-stage2-pro-v6   (pro-v5 + 3,000 chem teacher traces)
-  #   pro-v7   → rahul24raj/lysos-amr-stage2-pro-v7   (DEFAULT: pro-v5 + 5,000 chem teacher + 6,500 systems-level teacher traces covering Strategist campaign planning, tool orchestration, multi-pathogen spectrum, failure-mode debug, constraint compliance, wet-lab handoff, resistance forecasting, combo therapy, clinical positioning, manufacturing reasoning, literature grounding, confidence calibration, Workbench state reasoning)
+  #   pro-v7   → rahul24raj/lysos-amr-stage2-pro-v7   (pro-v5 + 5K chem + 6.5K systems teacher)
+  #   pro-v8   → rahul24raj/lysos-amr-stage2-pro-v8   (DEFAULT: pro-v5 + 43,500 teacher distillation across 5 layers — chem 5K, systems 6.5K, architecture 10K, raw-data/core 12K, edge/clinical 10K)
   source: local
-  path: data/processed/amr-stage2-pro-v7
-  hub_id: rahul24raj/lysos-amr-stage2-pro-v7
+  path: data/processed/amr-stage2-pro-v8
+  hub_id: rahul24raj/lysos-amr-stage2-pro-v8
   split_train: train
   split_eval: valid
   text_field: messages
