@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
 import sys
 import time
 import urllib.error
@@ -365,8 +366,9 @@ TOP_NAMED_DRUGS: list[tuple[str, str]] = [
 def gemini_25_pro(prompt: str, api_key: str,
                   model: str = "gemini-2.5-pro",
                   max_tokens: int = 8192,
-                  timeout: float = 180.0,
-                  capture_thinking: bool = True) -> dict:
+                  timeout: float = 300.0,
+                  capture_thinking: bool = True,
+                  max_retries: int = 5) -> dict:
     """Single Gemini 2.5 Pro call.
 
     Returns dict: {
@@ -403,7 +405,7 @@ def gemini_25_pro(prompt: str, api_key: str,
     )
     last_err = ""
     d: dict | None = None
-    for attempt in range(3):
+    for attempt in range(max_retries):
         try:
             with urllib.request.urlopen(req, timeout=timeout) as r:
                 d = json.loads(r.read())
@@ -415,14 +417,25 @@ def gemini_25_pro(prompt: str, api_key: str,
             except Exception:
                 pass
             last_err = f"HTTP {e.code}: {body_text}"
+            # Retry on rate-limit / server-side / quota
             if e.code == 429 or e.code >= 500:
-                time.sleep(min(8 * (attempt + 1), 30))
+                wait = min(8 * (attempt + 1), 60)
+                print(f"    [retry {attempt+1}/{max_retries}] HTTP {e.code} — sleep {wait}s",
+                      flush=True)
+                time.sleep(wait)
                 continue
             return {"text": f"<ERR: {last_err}>", "thinking": "",
                     "tokens_in": 0, "tokens_out": 0, "tokens_think": 0,
                     "finish_reason": "ERROR"}
+        except (urllib.error.URLError, TimeoutError, socket.timeout, OSError) as e:
+            # Network blip / read timeout / connection reset — backoff + retry
+            last_err = f"{type(e).__name__}: {e}"
+            wait = min(5 * (attempt + 1), 45)
+            print(f"    [retry {attempt+1}/{max_retries}] {last_err} — sleep {wait}s",
+                  flush=True)
+            time.sleep(wait)
         except Exception as e:  # noqa: BLE001
-            last_err = str(e)
+            last_err = f"{type(e).__name__}: {e}"
             time.sleep(2 * (attempt + 1))
     if d is None:
         return {"text": f"<ERR: {last_err}>", "thinking": "",
