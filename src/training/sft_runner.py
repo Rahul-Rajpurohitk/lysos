@@ -152,7 +152,11 @@ def run_sft(args: argparse.Namespace) -> int:
             model = PeftModel.from_pretrained(model, existing)
             model = model.merge_and_unload()
 
-        lora_cfg = LoraConfig(
+        # For multimodal Gemma 4 wrappers, scope LoRA to the text decoder
+        # only (skip vision_tower and embed_vision which use Gemma4ClippableLinear
+        # that PEFT cannot wrap). exclude_modules takes a regex; vision_tower
+        # and embed_vision are the multimodal-only sub-trees.
+        lora_kwargs = dict(
             r=cfg.peft.r,
             lora_alpha=cfg.peft.alpha,
             lora_dropout=cfg.peft.dropout,
@@ -160,6 +164,12 @@ def run_sft(args: argparse.Namespace) -> int:
             task_type=cfg.peft.task_type,
             target_modules=list(cfg.peft.target_modules),
         )
+        # Skip multimodal towers if the model has them (Gemma 4 31B-it case)
+        if hasattr(model, "vision_tower") or any("vision_tower" in n
+                                                  for n, _ in model.named_modules()):
+            lora_kwargs["exclude_modules"] = r".*(vision_tower|embed_vision|audio).*"
+            log.info("Multimodal model detected: exclude_modules set on vision/audio paths")
+        lora_cfg = LoraConfig(**lora_kwargs)
         model = get_peft_model(model, lora_cfg)
         model.print_trainable_parameters()
 
