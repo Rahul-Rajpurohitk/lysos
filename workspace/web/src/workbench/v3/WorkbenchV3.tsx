@@ -1093,20 +1093,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    // Scaffold launcher (full dropdown with search) — kept as
-                    // a top-row card for advanced users; quick picks live in
-                    // the navbar above.
-                    { id: "scaffold", title: "Start from · scaffold dropdown", size: 2, expandedH: 130, body:
-                      <ScaffoldPickerCard
-                        apiBase={apiBase}
-                        onLoadSmiles={(smi, name) => {
-                          loadSmilesIntoCanvas(smi, {
-                            createdBy: "user",
-                            parentId: null,
-                            logLabel: `[template · ${name ?? ""}]`,
-                          });
-                        }}
-                      /> },
+                    // Scaffold launcher lives in the navbar — no duplicate card.
                     { id: "3d", title: "3D molecule theater · drag-edit", expandedH: 480, body:
                       <Mol3DTheaterWindow
                         apiBase={apiBase}

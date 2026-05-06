@@ -191,29 +191,58 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit }: Mol3DProps)
     stageObj.current?.setSpin(spin);
   }, [spin]);
 
-  // Load ligand from our /workbench/molecule/3d endpoint
+  // Load ligand from our /workbench/molecule/3d endpoint.
+  // Stage may not be initialized yet on first SMILES change — poll briefly.
   useEffect(() => {
-    const stage = stageObj.current;
-    if (!stage || !smiles) return;
-    if (ligandComp.current) {
-      stage.removeComponent(ligandComp.current);
-      ligandComp.current = null;
-    }
-    fetch(`${apiBase}/workbench/molecule/3d`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ smiles, optimize: true, add_hydrogens: false }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then(async (d) => {
-        if (!d?.sdf) return;
+    if (!smiles) return;
+    let cancelled = false;
+    let attempts = 0;
+    const tryLoad = async () => {
+      const stage = stageObj.current;
+      if (!stage) {
+        if (cancelled) return;
+        attempts++;
+        if (attempts > 30) {  // ~3s timeout waiting for NGL init
+          setError("3D viewer init timeout — refresh the page");
+          return;
+        }
+        setTimeout(tryLoad, 100);
+        return;
+      }
+      // Stage ready — clear old ligand + fetch new SDF
+      if (ligandComp.current) {
+        try { stage.removeComponent(ligandComp.current); } catch {/*noop*/}
+        ligandComp.current = null;
+      }
+      try {
+        const r = await fetch(`${apiBase}/workbench/molecule/3d`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ smiles, optimize: true, add_hydrogens: false }),
+        });
+        if (!r.ok) {
+          setError(`SDF fetch failed: ${r.status}`);
+          return;
+        }
+        const d = await r.json();
+        if (!d?.sdf) {
+          setError("no SDF returned");
+          return;
+        }
+        if (cancelled) return;
         const blob = new Blob([d.sdf], { type: "text/plain" });
         const comp = await stage.loadFile(blob, { ext: "sdf" });
+        if (cancelled) return;
         ligandComp.current = comp;
         comp.addRepresentation("ball+stick", { multipleBond: true });
         comp.autoView();
-      })
-      .catch(() => {});
+        setError(null);
+      } catch (e: any) {
+        if (!cancelled) setError(`load error: ${e?.message ?? e}`);
+      }
+    };
+    tryLoad();
+    return () => { cancelled = true; };
   }, [smiles, apiBase]);
 
   function applyRepresentation(comp: any, rep: Representation, wire: boolean) {
@@ -334,18 +363,43 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit }: Mol3DProps)
         position: "relative",
         background: "var(--lys-bg-2)",
         cursor: armedOpId ? "crosshair" : "default",
+        overflow: "hidden",
       }}>
+        {/* Empty / loading / error state — only shown when there's no
+            ligand component yet, or when error is set. */}
+        {!smiles && (
+          <div style={{
+            position: "absolute", inset: 0,
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            color: "var(--lys-text-faint)", fontSize: 12,
+            textAlign: "center", padding: 16, gap: 4,
+            pointerEvents: "none",
+          }}>
+            <span style={{ fontSize: 20, opacity: 0.4 }}>⊕</span>
+            <span>no candidate yet</span>
+            <span style={{ fontSize: 10, fontFamily: "var(--lys-font-mono)" }}>
+              pick a scaffold or run /design
+            </span>
+          </div>
+        )}
         {error && (
           <div style={{
             position: "absolute",
             top: "50%",
             left: "50%",
             transform: "translate(-50%, -50%)",
-            color: "var(--lys-text-faint)",
-            fontSize: 12,
+            color: "#dc2626",
+            fontSize: 11,
+            fontFamily: "var(--lys-font-mono)",
             textAlign: "center",
+            background: "rgba(255,255,255,0.95)",
+            padding: "6px 10px",
+            borderRadius: 4,
+            border: "1px solid rgba(220,38,38,0.3)",
+            zIndex: 10,
           }}>
-            {error}
+            ⚠ {error}
           </div>
         )}
         {editStatus && (

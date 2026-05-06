@@ -61,16 +61,27 @@ function injectSvgSafely(host: HTMLElement, svgText: string): SVGSVGElement | nu
       if (attr.name.startsWith("on")) el.removeAttribute(attr.name);
     }
   });
-  // Force responsive scaling — clear fixed pixel dimensions, set 100%/100%
-  // so the SVG scales to fit the host element. The viewBox (set by RDKit)
-  // preserves the structure.
-  svg.setAttribute("width", "100%");
-  svg.setAttribute("height", "100%");
-  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  (svg as unknown as SVGSVGElement).style.maxWidth = "100%";
-  (svg as unknown as SVGSVGElement).style.maxHeight = "100%";
+  // Force responsive scaling — drop any fixed pixel dimensions, ensure
+  // a viewBox exists, set 100%/100% so the SVG fits the host element.
+  const svgEl = svg as unknown as SVGSVGElement;
+  // If viewBox is missing, synthesize from width/height attributes
+  if (!svgEl.hasAttribute("viewBox")) {
+    const w = svgEl.getAttribute("width") || "480";
+    const h = svgEl.getAttribute("height") || "340";
+    const wn = parseFloat(w);
+    const hn = parseFloat(h);
+    if (!isNaN(wn) && !isNaN(hn)) {
+      svgEl.setAttribute("viewBox", `0 0 ${wn} ${hn}`);
+    }
+  }
+  svgEl.setAttribute("width", "100%");
+  svgEl.setAttribute("height", "100%");
+  svgEl.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  svgEl.style.width = "100%";
+  svgEl.style.height = "100%";
+  svgEl.style.display = "block";
   host.appendChild(svg);
-  return svg as unknown as SVGSVGElement;
+  return svgEl;
 }
 
 // Per-actor halo color (matches AgentAvatar palette).
