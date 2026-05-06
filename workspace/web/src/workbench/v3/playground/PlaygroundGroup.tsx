@@ -70,6 +70,15 @@ export function PlaygroundGroup(p: Props) {
   const tone = COLORS[p.category];
   const [dragging, setDragging] = useState(false);
   const [resizing, setResizing] = useState(false);
+  // Per-card collapse state — toggled by clicking the chevron in the card header
+  const [collapsedCards, setCollapsedCards] = useState<Set<string>>(new Set());
+  const toggleCardCollapsed = (id: string) => {
+    setCollapsedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   const start = useRef<{ mx: number; my: number; layout: GroupLayout } | null>(null);
 
   function startDrag(e: React.MouseEvent) {
@@ -202,50 +211,83 @@ export function PlaygroundGroup(p: Props) {
           gap: 8,
           overflow: "auto",
         }}>
-          {p.cards.map((c) => (
-            <div
-              key={c.id}
-              style={{
-                gridColumn: c.size === 2 ? "1 / -1" : "auto",
-                background: "var(--lys-bg-2, #ffffff)",
-                borderRadius: 8,
-                border: `1px solid ${tone}1a`,
-                overflow: "hidden",
-                display: "flex",
-                flexDirection: "column",
-                minHeight: 240,
-                maxHeight: 480,  // cap individual card height so 7-card groups stay scrollable
-                isolation: "isolate",  // each card has its own stacking context
-              }}
-            >
-              <div style={{
-                padding: "5px 10px",
-                fontSize: 10,
-                fontFamily: "var(--lys-font-mono)",
-                color: tone,
-                letterSpacing: "0.04em",
-                background: `${tone}06`,
-                borderBottom: `1px solid ${tone}1a`,
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                fontWeight: 600,
-              }}>
-                <ChevronDown size={9} />
-                <span style={{
-                  flex: 1, color: "var(--lys-text)",
-                  textTransform: "none", letterSpacing: 0,
-                  fontFamily: "var(--lys-font-body)", fontWeight: 500,
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>
-                  {c.title}
-                </span>
+          {p.cards.map((c) => {
+            const cardCollapsed = collapsedCards.has(c.id);
+            return (
+              <div
+                key={c.id}
+                style={{
+                  gridColumn: c.size === 2 ? "1 / -1" : "auto",
+                  background: "var(--lys-bg-2, #ffffff)",
+                  borderRadius: 8,
+                  border: `1px solid ${tone}1a`,
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  minHeight: cardCollapsed ? 28 : 240,
+                  maxHeight: cardCollapsed ? 28 : 480,
+                  height: cardCollapsed ? 28 : "auto",
+                  isolation: "isolate",
+                  transition: "min-height 140ms ease, max-height 140ms ease",
+                }}
+              >
+                {/* Card header — clickable to toggle collapse */}
+                <div
+                  onClick={(e) => { e.stopPropagation(); toggleCardCollapsed(c.id); }}
+                  title={cardCollapsed ? "Expand card" : "Collapse card"}
+                  style={{
+                    padding: "5px 10px",
+                    fontSize: 10,
+                    fontFamily: "var(--lys-font-mono)",
+                    color: tone,
+                    letterSpacing: "0.04em",
+                    background: `${tone}06`,
+                    borderBottom: cardCollapsed ? 0 : `1px solid ${tone}1a`,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    userSelect: "none",
+                    flexShrink: 0,
+                  }}
+                  onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.background = `${tone}12`; }}
+                  onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.background = `${tone}06`; }}
+                >
+                  <ChevronDown
+                    size={10}
+                    style={{
+                      transform: cardCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                      transition: "transform 120ms ease",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <span style={{
+                    flex: 1, color: "var(--lys-text)",
+                    textTransform: "none", letterSpacing: 0,
+                    fontFamily: "var(--lys-font-body)", fontWeight: 500,
+                    whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                  }}>
+                    {c.title}
+                  </span>
+                </div>
+                {/* Body — inner card components manage their own internal scroll
+                    via flex:1 + overflow:auto on their list/content area. We
+                    keep overflow:hidden here so we don't double-scroll. */}
+                {!cardCollapsed && (
+                  <div style={{
+                    flex: 1, minHeight: 0,
+                    overflow: "hidden",
+                    position: "relative",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}>
+                    {c.body}
+                  </div>
+                )}
               </div>
-              <div style={{ flex: 1, minHeight: 0, overflow: "hidden", position: "relative" }}>
-                {c.body}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
