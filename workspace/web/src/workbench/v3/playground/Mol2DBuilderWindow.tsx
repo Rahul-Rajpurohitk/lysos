@@ -61,9 +61,14 @@ const SMARTS_PRESETS = [
 
 interface PopoverState {
   atomIdx: number;
+  // Viewport-fixed coordinates (clientX/clientY at click). Renderer
+  // clamps these to keep the popover inside the viewport.
   x: number;
   y: number;
 }
+
+const CHEM_POP_W = 280;
+const CHEM_POP_H = 380;
 
 function smilesToB64(s: string): string {
   if (typeof window === "undefined") return "";
@@ -311,13 +316,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           });
           return;
         }
-        const rect = containerRef.current?.getBoundingClientRect();
-        if (!rect) return;
-        setPop({
-          atomIdx: idx,
-          x: Math.max(8, Math.min(me.clientX - rect.left, rect.width - 280)),
-          y: Math.max(8, Math.min(me.clientY - rect.top, rect.height - 220)),
-        });
+        // Viewport-fixed coords; renderer clamps so the popover never
+        // overflows the screen edges (handled at render time).
+        setPop({ atomIdx: idx, x: me.clientX, y: me.clientY });
       };
       const onEnter = () => onCursorHover?.(idx);
       const onLeave = () => onCursorHover?.(null);
@@ -913,8 +914,15 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             } catch {/*noop*/}
           }}
         />
-        {pop && smiles && (
-          <div data-chem-pop style={{ position: "absolute", left: pop.x, top: pop.y, zIndex: 100 }}>
+        {pop && smiles && createPortal(
+          <div data-chem-pop style={{
+            position: "fixed",
+            left: Math.max(8, Math.min(pop.x + 12, window.innerWidth - CHEM_POP_W - 8)),
+            top: Math.max(8, Math.min(pop.y + 12, window.innerHeight - CHEM_POP_H - 8)),
+            zIndex: 6000,
+            width: CHEM_POP_W,
+            maxHeight: CHEM_POP_H,
+          }}>
             <ChemKnowledgeCard
               apiBase={apiBase}
               smiles={smiles}
@@ -922,8 +930,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               onApply={(op, params) => applyEdit(op, params, pop.atomIdx)}
               onClose={() => setPop(null)}
             />
-          </div>
-        )}
+          </div>, document.body)}
       </div>
       {/* Multi-select bond toolbar — sibling row BELOW the body row so it
           never overlaps the molecule SVG. Animates in only when ≥2 atoms
