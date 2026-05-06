@@ -343,6 +343,40 @@ class Mol3DRequest(BaseModel):
     seed: int = 0xC0FFEE
 
 
+# ---------------------------------------------------------------------------
+# W2 — Score a molecule (deterministic, no agent debate).
+# ---------------------------------------------------------------------------
+
+
+class ScoreMoleculeRequest(BaseModel):
+    smiles: str
+    target_pathogen: str = "MRSA"
+
+
+@router.post("/score")
+async def workbench_score(req: ScoreMoleculeRequest) -> dict:
+    """Run the 12-component reward stack on a SMILES.
+
+    Reuses workspace.tools.scoring.score_molecule which calls into
+    src.eval.rewards.* — the same composite Stage 3 GRPO training uses.
+
+    Returns: composite ∈ [0, 1] + per-component value/weight/contribution.
+    """
+    try:
+        from tools.scoring.score_molecule import score_molecule
+    except ImportError as exc:
+        raise HTTPException(503, f"scoring module not available: {exc}")
+
+    try:
+        breakdown = score_molecule(smiles=req.smiles, target_pathogen=req.target_pathogen)
+    except Exception as exc:  # noqa: BLE001
+        # Most likely: invalid SMILES, RDKit can't sanitize, or a missing
+        # reward dep. Surface the error verbatim — the chat card renders it.
+        raise HTTPException(422, f"score failed: {exc}")
+
+    return breakdown.model_dump()
+
+
 @router.post("/molecule/3d")
 async def molecule_3d(req: Mol3DRequest) -> dict:
     """Generate a proper 3D conformer from SMILES via RDKit.

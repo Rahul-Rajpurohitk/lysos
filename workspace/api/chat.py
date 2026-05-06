@@ -92,6 +92,8 @@ class ChatResponse(BaseModel):
     text: str = ""
     error: str = ""
     artifact: Optional[dict] = None
+    data: dict = {}                           # structured chat-card payload
+    card_kind: str = ""                       # discriminator: score | candidate | sar_tree | …
     follow_ups: list[str] = []
     elapsed_ms: int = 0
     events: list[dict] = []
@@ -195,6 +197,8 @@ async def chat(req: ChatRequest) -> ChatResponse:
         text=resp.text,
         error=resp.error,
         artifact=resp.artifact,
+        data=resp.data,
+        card_kind=resp.card_kind,
         follow_ups=resp.follow_ups,
         elapsed_ms=resp.elapsed_ms,
         events=resp.events,

@@ -48,6 +48,8 @@ class HarnessResponse:
     message_id: str
     text: str = ""                              # markdown for chat
     artifact: Optional[dict] = None             # for right panel
+    data: dict[str, Any] = field(default_factory=dict)  # structured chat-card payload
+    card_kind: str = ""                         # discriminator: score | candidate | sar_tree | ...
     follow_ups: list[str] = field(default_factory=list)
     events: list[dict] = field(default_factory=list)  # trace events
     error: str = ""
@@ -132,12 +134,21 @@ class Harness:
             result: CommandResult = await cmd.execute(args, self._mk_cmd_ctx(session))
             trace("act.slash.done", cmd=head, error=bool(result.error))
 
+            # Map slash → frontend chat-card kind so the UI knows what
+            # component to render (RewardCard for /score, etc.). Most
+            # commands just produce text; this is the structured channel.
+            card_kind = ""
+            if head == "score" and result.data:
+                card_kind = "score"
+
             return HarnessResponse(
                 session_id=session.session_id,
                 message_id=msg_id,
                 text=result.output if not result.error else "",
                 error=result.error,
                 artifact=result.artifact,
+                data=result.data or {},
+                card_kind=card_kind,
                 follow_ups=result.follow_ups,
                 events=events,
                 elapsed_ms=int((time.perf_counter() - t0) * 1000),

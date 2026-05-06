@@ -20,6 +20,7 @@ import { motion } from "framer-motion";
 import { ChevronRight, Star, ArrowRight, Flag, Wrench, BrainCircuit } from "lucide-react";
 import { agentColor } from "./AgentAvatar";
 import { InlineSmilesCard } from "./InlineSmilesCard";
+import { RewardCard } from "./RewardCard";
 
 export interface ChatMsg {
   id?: string;
@@ -45,6 +46,9 @@ export interface ChatMsg {
   model?: string;
   tokens?: number;
   latency_ms?: number;
+  // structured chat-card payloads (W2+)
+  card_kind?: string;
+  data?: Record<string, any>;
 }
 
 interface MessageRowProps {
@@ -57,6 +61,8 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles }: MessageRowProps) {
   if (msg.type === "candidate_added") return <CandidateRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "mol_edit") return <EditRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "state_change") return <StateRow msg={msg} />;
+  // Structured chat cards from slash commands (/score, /design, /explain, …)
+  if (msg.card_kind === "score" && msg.data) return <RewardCard msg={msg} onLoadSmiles={onLoadSmiles} />;
 
   const agent = msg.agent ?? msg.type ?? "system";
   const color = agentColor(agent);
