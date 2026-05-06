@@ -37,6 +37,8 @@ import { LiveAtomsCard } from "./playground/LiveAtomsCard";
 import { ScaffoldPickerCard } from "./playground/ScaffoldPickerCard";
 import { EditLogCard } from "./playground/EditLogCard";
 import { ConnectionStatusCard } from "./playground/ConnectionStatusCard";
+import { StructuralAlertsCard } from "./playground/StructuralAlertsCard";
+import { ResistanceMapCard } from "./playground/ResistanceMapCard";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -187,7 +189,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     "scoring":   { x: 752, y: 16,  w: 460, h: 360, z: 1 },
     "agents":    { x: 752, y: 392, w: 460, h: 280, z: 1 },
     "live":      { x: 752, y: 688, w: 460, h: 380, z: 1 },
-    "knowledge": { x: 16,  y: 952, w: 1196, h: 360, z: 1, collapsed: true },
+    "knowledge": { x: 16,  y: 952, w: 1196, h: 480, z: 1 },
   };
   const [playgroundGroupLayouts, setPlaygroundGroupLayouts] = useState<Record<string, Record<string, GroupLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
@@ -1143,6 +1145,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "knowledge",
                   category: "Knowledge",
                   cards: [
+                    { id: "alerts", title: "Structural alerts · PAINS / toxicophores",  body:
+                      <StructuralAlertsCard apiBase={apiBase} smiles={currentSmiles} /> },
+                    { id: "resistance", title: `Resistance map · ${selectedPathogen}`, body:
+                      <ResistanceMapCard apiBase={apiBase} pathogen={selectedPathogen} /> },
                     { id: "artifact", title: "Artifact · /explain output", size: 2, body:
                       <ArtifactPanel doc={artifactDoc} /> },
                   ],

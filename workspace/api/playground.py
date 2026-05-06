@@ -167,6 +167,40 @@ async def predict_edit(req: PredictEditRequest) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Knowledge endpoints — structural alerts, resistance facts, functional groups
+# ---------------------------------------------------------------------------
+
+@router.get("/knowledge/alerts")
+async def get_alerts(smiles: Optional[str] = None) -> dict[str, Any]:
+    """Structural alerts library + (optionally) hits on a given SMILES.
+    Reads rules/structural_alerts.json + RDKit SMARTS matching."""
+    rules = get_rules()
+    if smiles:
+        hits = rules.check_structural_alerts(smiles)
+        return {"smiles": smiles, "hits": hits, "n_hits": len(hits)}
+    # No SMILES → return the full registered library (~20 alerts)
+    return {"alerts": rules._structural_alerts or []}
+
+
+@router.get("/knowledge/resistance")
+async def get_resistance(pathogen: Optional[str] = None) -> dict[str, Any]:
+    """Curated ResistanceFact entries — pathogen × gene × defeated drug class.
+    Optionally filter by pathogen (MRSA / Mtb / EColi-CRE / Paer / VRE / NGono / Abaum)."""
+    rules = get_rules()
+    facts = rules._resistance or []
+    if pathogen:
+        facts = [f for f in facts if (f.get("pathogen") or "").lower() == pathogen.lower()]
+    return {"pathogen": pathogen, "facts": facts, "n_facts": len(facts)}
+
+
+@router.get("/knowledge/functional-groups")
+async def get_functional_groups() -> dict[str, Any]:
+    """22-entry functional group library with SMARTS + drug examples."""
+    rules = get_rules()
+    return {"functional_groups": rules._functional_groups or []}
+
+
+# ---------------------------------------------------------------------------
 # Job queue — async pool for /dock /admet /conformer /retrosynth
 # ---------------------------------------------------------------------------
 

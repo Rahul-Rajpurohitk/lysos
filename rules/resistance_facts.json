@@ -1,0 +1,172 @@
+[
+  {
+    "pathogen": "MRSA",
+    "gene": "mecA",
+    "encodes": "PBP2a",
+    "mechanism": "Low-affinity penicillin-binding protein; rescues cell-wall synthesis when native PBPs are inhibited",
+    "defeats": ["penicillin", "methicillin", "oxacillin", "cephalosporin (1st-3rd gen)"],
+    "exceptions": ["ceftaroline (5th gen, binds PBP2a)", "ceftobiprole"],
+    "MIC_shift": "≥4 µg/mL → ≥256 µg/mL",
+    "citation": "Lim & Strynadka, Nat Struct Biol 2002"
+  },
+  {
+    "pathogen": "MRSA",
+    "gene": "mecC",
+    "encodes": "PBP2c",
+    "mechanism": "Variant PBP2a from livestock-associated MRSA strains",
+    "defeats": ["β-lactams"],
+    "exceptions": ["ceftaroline (variable)"],
+    "MIC_shift": "≥4 µg/mL",
+    "citation": "García-Álvarez et al., Lancet Inf Dis 2011"
+  },
+  {
+    "pathogen": "EColi-CRE",
+    "gene": "blaKPC",
+    "encodes": "KPC β-lactamase (Ambler class A)",
+    "mechanism": "Serine β-lactamase; hydrolyzes carbapenems via acyl-enzyme intermediate",
+    "defeats": ["meropenem", "imipenem", "ertapenem", "doripenem", "all penicillins/cephalosporins"],
+    "exceptions": ["ceftazidime-avibactam", "meropenem-vaborbactam", "imipenem-relebactam"],
+    "MIC_shift": "Meropenem ≥4 µg/mL",
+    "citation": "Yigit et al., AAC 2001"
+  },
+  {
+    "pathogen": "EColi-CRE",
+    "gene": "blaNDM-1",
+    "encodes": "NDM metallo-β-lactamase (class B)",
+    "mechanism": "Zn²⁺-dependent β-lactamase; hydrolyzes virtually all β-lactams except aztreonam",
+    "defeats": ["all carbapenems", "all penicillins", "all cephalosporins"],
+    "exceptions": ["aztreonam (resists MBLs)", "aztreonam-avibactam (CRE-MBL ESBL co-producers)", "cefiderocol"],
+    "MIC_shift": "Meropenem ≥16 µg/mL",
+    "citation": "Yong et al., AAC 2009"
+  },
+  {
+    "pathogen": "EColi-CRE",
+    "gene": "blaOXA-48",
+    "encodes": "OXA-48 (class D oxacillinase)",
+    "mechanism": "Serine β-lactamase with carbapenemase activity; weakly hydrolyzes carbapenems",
+    "defeats": ["meropenem (variable)", "ertapenem", "carbapenems (low-level resistance)"],
+    "exceptions": ["ceftazidime-avibactam", "cefiderocol"],
+    "MIC_shift": "Meropenem 0.5-8 µg/mL",
+    "citation": "Poirel et al., AAC 2004"
+  },
+  {
+    "pathogen": "Abaum",
+    "gene": "blaOXA-23",
+    "encodes": "OXA-23 carbapenemase",
+    "mechanism": "Class D serine β-lactamase; major Acinetobacter carbapenem resistance",
+    "defeats": ["imipenem", "meropenem", "ertapenem"],
+    "exceptions": ["sulbactam-durlobactam", "cefiderocol"],
+    "MIC_shift": "Meropenem ≥8 µg/mL",
+    "citation": "Donald et al., AAC 2000"
+  },
+  {
+    "pathogen": "Paer",
+    "gene": "mexAB-oprM",
+    "encodes": "RND multi-drug efflux pump",
+    "mechanism": "Tripartite efflux pump exports diverse drug classes from periplasm",
+    "defeats": ["fluoroquinolones", "macrolides", "tetracyclines", "β-lactams", "chloramphenicol"],
+    "exceptions": ["aminoglycosides (poor substrate)", "polymyxins (membrane-targeting)"],
+    "MIC_shift": "2-32× depending on substrate",
+    "citation": "Poole et al., J Bacteriol 1993"
+  },
+  {
+    "pathogen": "Paer",
+    "gene": "ampC",
+    "encodes": "Pseudomonas-derived chromosomal cephalosporinase (PDC)",
+    "mechanism": "Inducible class C β-lactamase; hydrolyzes cephalosporins",
+    "defeats": ["3rd-gen cephalosporins (ceftazidime, cefotaxime)", "extended-spectrum penicillins"],
+    "exceptions": ["cefepime (zwitterionic 4th-gen)", "carbapenems"],
+    "MIC_shift": "Ceftazidime ≥16 µg/mL when derepressed",
+    "citation": "Lister et al., Clin Microbiol Rev 2009"
+  },
+  {
+    "pathogen": "VRE",
+    "gene": "vanA",
+    "encodes": "D-Ala-D-Lac ligase",
+    "mechanism": "Replaces vancomycin's D-Ala-D-Ala target with D-Ala-D-Lac (1000× lower vanco affinity)",
+    "defeats": ["vancomycin", "teicoplanin"],
+    "exceptions": ["linezolid (oxazolidinone, 50S)", "daptomycin", "tigecycline"],
+    "MIC_shift": "Vancomycin ≥256 µg/mL",
+    "citation": "Bugg et al., Biochemistry 1991"
+  },
+  {
+    "pathogen": "VRE",
+    "gene": "vanB",
+    "encodes": "Inducible D-Ala-D-Lac ligase",
+    "mechanism": "Same biochemistry as vanA but inducible only by vancomycin (not teicoplanin)",
+    "defeats": ["vancomycin"],
+    "exceptions": ["teicoplanin (variable)", "linezolid", "daptomycin"],
+    "MIC_shift": "Vancomycin ≥32 µg/mL",
+    "citation": "Evers et al., AAC 1996"
+  },
+  {
+    "pathogen": "MRSA",
+    "gene": "ermB",
+    "encodes": "23S rRNA methyltransferase",
+    "mechanism": "Methylates A2058 of 23S rRNA → blocks macrolide / lincosamide / streptogramin B binding (MLSB resistance)",
+    "defeats": ["erythromycin", "azithromycin", "clindamycin"],
+    "exceptions": ["linezolid (different binding site)", "tigecycline"],
+    "MIC_shift": "Erythromycin ≥256 µg/mL",
+    "citation": "Weisblum, AAC 1995"
+  },
+  {
+    "pathogen": "Mtb",
+    "gene": "rpoB (S531L)",
+    "encodes": "RNA polymerase β subunit point mutation",
+    "mechanism": "Single AA change in rifampin binding pocket → loss of inhibitor binding",
+    "defeats": ["rifampin", "rifabutin (cross-resistant in many)"],
+    "exceptions": ["rifapentine (variable)"],
+    "MIC_shift": "Rifampin ≥1 µg/mL",
+    "citation": "Telenti et al., Lancet 1993"
+  },
+  {
+    "pathogen": "Mtb",
+    "gene": "katG (S315T)",
+    "encodes": "Catalase-peroxidase point mutation",
+    "mechanism": "Reduces activation of isoniazid prodrug → INH-NAD adduct never forms",
+    "defeats": ["isoniazid"],
+    "exceptions": ["ethionamide (alt activator)"],
+    "MIC_shift": "INH ≥1 µg/mL",
+    "citation": "Heym et al., Mol Microbiol 1995"
+  },
+  {
+    "pathogen": "EColi-CRE",
+    "gene": "gyrA (S83L)",
+    "encodes": "DNA gyrase A subunit",
+    "mechanism": "Quinolone-resistance determining region (QRDR) mutation; reduces fluoroquinolone binding",
+    "defeats": ["ciprofloxacin", "levofloxacin", "norfloxacin"],
+    "exceptions": ["delafloxacin (some activity)"],
+    "MIC_shift": "Cipro ≥4 µg/mL",
+    "citation": "Yoshida et al., AAC 1990"
+  },
+  {
+    "pathogen": "EColi-CRE",
+    "gene": "aac(6')-Ib-cr",
+    "encodes": "Bifunctional aminoglycoside acetyltransferase",
+    "mechanism": "Acetylates both aminoglycosides AND ciprofloxacin's piperazinyl N",
+    "defeats": ["ciprofloxacin (low-level)", "amikacin", "tobramycin", "kanamycin"],
+    "exceptions": ["gentamicin (poor substrate)"],
+    "MIC_shift": "Cipro 2-4× shift",
+    "citation": "Robicsek et al., Nat Med 2006"
+  },
+  {
+    "pathogen": "NGono",
+    "gene": "penA mosaic",
+    "encodes": "Mosaic PBP2 alleles",
+    "mechanism": "Imported PBP2 from Neisseria commensals; reduced ceftriaxone affinity",
+    "defeats": ["ceftriaxone (decreased susceptibility)", "cefixime"],
+    "exceptions": ["zoliflodacin (novel topoisomerase inhibitor)", "gepotidacin"],
+    "MIC_shift": "Ceftriaxone 0.125-0.5 µg/mL",
+    "citation": "Ohnishi et al., AAC 2011"
+  },
+  {
+    "pathogen": "NGono",
+    "gene": "23S rRNA A2059G",
+    "encodes": "Ribosomal RNA point mutation",
+    "mechanism": "23S RNA mutation in macrolide binding site",
+    "defeats": ["azithromycin"],
+    "exceptions": ["spectinomycin", "ceftriaxone"],
+    "MIC_shift": "Azithro ≥256 µg/mL",
+    "citation": "Chisholm et al., JAC 2010"
+  }
+]

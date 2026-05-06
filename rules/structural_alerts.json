@@ -1,0 +1,142 @@
+[
+  {
+    "name": "Catechol",
+    "smarts": "[OH]c1ccccc1[OH]",
+    "severity": "high",
+    "category": "PAINS",
+    "note": "Catechol moieties are PAINS frequent hitters; metal chelation + auto-oxidation. Cefiderocol exception uses this intentionally as a siderophore."
+  },
+  {
+    "name": "Quinone",
+    "smarts": "O=C1C=CC(=O)C=C1",
+    "severity": "high",
+    "category": "PAINS",
+    "note": "Para-quinones are reactive Michael acceptors → covalent adducts to thiols/amines, redox cycling toxicity."
+  },
+  {
+    "name": "Aryl-aldehyde (PAINS)",
+    "smarts": "[CH](=O)c1ccccc1",
+    "severity": "medium",
+    "category": "PAINS",
+    "note": "Salicylaldehyde-like motifs flag in PAINS filters; can form Schiff bases with biogenic amines."
+  },
+  {
+    "name": "Hydrazine",
+    "smarts": "N-N",
+    "severity": "high",
+    "category": "toxicophore",
+    "note": "Hydrazines (N-N single bond) are mutagenic/hepatotoxic in many cases. Linezolid's oxazolidinone N is exempt (in-ring)."
+  },
+  {
+    "name": "Acyl halide",
+    "smarts": "C(=O)[F,Cl,Br,I]",
+    "severity": "high",
+    "category": "reactive",
+    "note": "Acyl halides hydrolyze rapidly; never appear in marketed drugs."
+  },
+  {
+    "name": "Epoxide",
+    "smarts": "C1CO1",
+    "severity": "high",
+    "category": "reactive",
+    "note": "3-membered O-ring; alkylates DNA/proteins. Use only as a designed warhead (e.g. fosfomycin)."
+  },
+  {
+    "name": "Aziridine",
+    "smarts": "C1CN1",
+    "severity": "high",
+    "category": "reactive",
+    "note": "3-membered N-ring; alkylating agent (mitomycin C class warhead)."
+  },
+  {
+    "name": "Michael acceptor (α,β-unsaturated carbonyl)",
+    "smarts": "C=CC(=O)",
+    "severity": "medium",
+    "category": "PAINS",
+    "note": "Prone to thiol addition; common false positive in HTS. Some kinase inhibitors use this as a designed covalent warhead."
+  },
+  {
+    "name": "Sulfonate ester",
+    "smarts": "S(=O)(=O)O[#6]",
+    "severity": "high",
+    "category": "reactive",
+    "note": "Mesylate/tosylate-class esters are alkylating agents (mutagens)."
+  },
+  {
+    "name": "Thiocyanate",
+    "smarts": "[#6]SC#N",
+    "severity": "high",
+    "category": "reactive",
+    "note": "Reactive electrophile; promiscuous binder."
+  },
+  {
+    "name": "Aromatic-N-oxide",
+    "smarts": "[#7+][O-]",
+    "severity": "medium",
+    "category": "toxicophore",
+    "note": "Some N-oxides are bioactivated to genotoxins (e.g. 4-nitroquinoline N-oxide)."
+  },
+  {
+    "name": "Disulfide",
+    "smarts": "[#16]-[#16]",
+    "severity": "medium",
+    "category": "PAINS",
+    "note": "Reduces in cell to thiols; promiscuous."
+  },
+  {
+    "name": "Crown/macrocycle (large ring)",
+    "smarts": "[r{8-30}]",
+    "severity": "low",
+    "category": "ADMET",
+    "note": "Large rings often have low membrane permeability; macrolide antibiotics (erythromycin, azithromycin) are intentional exceptions."
+  },
+  {
+    "name": "Isothiocyanate",
+    "smarts": "[#6]N=C=S",
+    "severity": "high",
+    "category": "reactive",
+    "note": "Thiol-trapping electrophile; common in mustard oil (allyl-NCS)."
+  },
+  {
+    "name": "1,2-dihydroxybenzene oxidation hazard",
+    "smarts": "Oc1ccc(O)cc1",
+    "severity": "medium",
+    "category": "PAINS",
+    "note": "Hydroquinone oxidizes to benzoquinone (Michael acceptor); same lineage as catechol issue."
+  },
+  {
+    "name": "Aliphatic primary amine on benzylic C (toxicophore)",
+    "smarts": "[NH2][CH2]c1ccccc1",
+    "severity": "low",
+    "category": "ADMET",
+    "note": "Benzylamines are MAO substrates (amphetamine-class); CNS effects expected."
+  },
+  {
+    "name": "Pentavalent P (phosphate)",
+    "smarts": "P(=O)(O)(O)O",
+    "severity": "low",
+    "category": "permeability",
+    "note": "Phosphates have very low passive permeability; viable as nucleotide prodrugs only."
+  },
+  {
+    "name": "Trichloromethyl",
+    "smarts": "C(Cl)(Cl)Cl",
+    "severity": "high",
+    "category": "toxicophore",
+    "note": "CCl3 group → trichlorocarbon radical (chloroform-class hepatotoxicity)."
+  },
+  {
+    "name": "β-lactam ring",
+    "smarts": "O=C1NCC1",
+    "severity": "info",
+    "category": "antibiotic-pharmacophore",
+    "note": "Required pharmacophore for penicillins / cephalosporins / carbapenems / monobactams. NOT a structural alert; flagged here for visibility."
+  },
+  {
+    "name": "Quinolone core",
+    "smarts": "O=c1ccnc2ccccc12",
+    "severity": "info",
+    "category": "antibiotic-pharmacophore",
+    "note": "Fluoroquinolone scaffold; binds DNA gyrase (gyrA, parC). Adding F at C6 boosts activity 4-10×."
+  }
+]
