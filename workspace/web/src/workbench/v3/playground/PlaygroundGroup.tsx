@@ -36,6 +36,10 @@ export interface CardSpec {
   /** Card width in flex-grid units (1 = half, 2 = full).
    *  Default = 1. Cards with size 2 take a full row. */
   size?: 1 | 2;
+  /** Override the default expanded height for this specific card.
+   *  Useful for compact dropdown-trigger cards (e.g. ScaffoldPicker = 120) or
+   *  taller dashboards. Defaults to 320 (size:1) or 360 (size:2). */
+  expandedH?: number;
 }
 
 interface Props {
@@ -158,7 +162,7 @@ export function PlaygroundGroup(p: Props) {
       const isCollapsed = collapsedCards.has(c.id);
       const cardH = isCollapsed
         ? CARD_COLLAPSED_H
-        : (c.size === 2 ? CARD_EXPANDED_H_S2 : CARD_EXPANDED_H_S1);
+        : (c.expandedH ?? (c.size === 2 ? CARD_EXPANDED_H_S2 : CARD_EXPANDED_H_S1));
       if (c.size === 2) {
         flushRow();              // size:2 always starts a fresh row
         totalRowH += cardH;
@@ -281,9 +285,11 @@ export function PlaygroundGroup(p: Props) {
             const cardCollapsed = collapsedCards.has(c.id);
             // Fixed height when expanded → guarantees the inner list has a
             // scroll boundary even if the current content fits.
-            // size:2 (full-row) cards get a taller body since they often
-            // hold richer dashboards (Properties, Library, etc.)
-            const expandedH = c.size === 2 ? 360 : 320;
+            // size:2 (full-row) cards get a taller body by default since
+            // they often hold richer dashboards (Properties, Library, etc.).
+            // Cards can override via expandedH for compact dropdown-style
+            // triggers (e.g. ScaffoldPicker = 120).
+            const expandedH = c.expandedH ?? (c.size === 2 ? 360 : 320);
             return (
               <div
                 key={c.id}

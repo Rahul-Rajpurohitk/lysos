@@ -1067,7 +1067,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "chem",
                   category: "Chemistry",
                   cards: [
-                    { id: "scaffold", title: "Start from · 21 templates", size: 2, body:
+                    { id: "scaffold", title: "Start from · scaffold dropdown", size: 2, expandedH: 130, body:
                       <ScaffoldPickerCard
                         apiBase={apiBase}
                         onLoadSmiles={(smi, name) => {
