@@ -73,8 +73,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [pop, setPop] = useState<PopoverState | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgHostRef = useRef<HTMLDivElement | null>(null);
+
+  // Reset selection when SMILES changes (atom indices reshuffle)
+  useEffect(() => { setSelected(new Set()); }, [smiles]);
 
   // Fetch 2D SVG whenever SMILES changes
   useEffect(() => {
@@ -109,6 +113,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       const onClick = (e: Event) => {
         e.stopPropagation();
         const me = e as MouseEvent;
+        // Shift-click toggles multi-select (for bond creation between two atoms)
+        if (me.shiftKey) {
+          setSelected((cur) => {
+            const next = new Set(cur);
+            if (next.has(idx)) next.delete(idx);
+            else next.add(idx);
+            return next;
+          });
+          return;
+        }
         const rect = containerRef.current?.getBoundingClientRect();
         if (!rect) return;
         setPop({
@@ -128,6 +142,33 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     });
     return () => handlers.forEach(({ node, type, fn }) => node.removeEventListener(type, fn));
   }, [svg, onCursorHover]);
+
+  // Render selection rings (shift-click multi-select for bond creation)
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-sel="1"]').forEach((n) => n.remove());
+    selected.forEach((idx) => {
+      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
+      if (!target) return;
+      const bbox = (target as SVGGraphicsElement).getBBox?.();
+      if (!bbox) return;
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("data-sel", "1");
+      ring.setAttribute("cx", String(cx));
+      ring.setAttribute("cy", String(cy));
+      ring.setAttribute("r", "10");
+      ring.setAttribute("fill", "rgba(245,158,11,0.10)");
+      ring.setAttribute("stroke", "#f59e0b");
+      ring.setAttribute("stroke-width", "2");
+      ring.style.pointerEvents = "none";
+      svgEl.appendChild(ring);
+    });
+  }, [selected, svg]);
 
   // Apply cursor halos for non-self actors. Each cursors[actor].atom_idx
   // gets a colored ring drawn over its atom group via SVG <circle>.
@@ -204,9 +245,17 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         // SMARTS pattern.
         body.op = "add_methyl_at";
         body.atom_index = atomIdx;
+      } else if (op === "delete_atom") {
+        body.op = "delete_atom";
+        body.atom_index = atomIdx;
       } else if (op === "break_bond") {
         body.op = "break_bond";
         body.bond_index = atomIdx;
+      } else if (op === "add_atom_at") {
+        body.op = "add_atom_at";
+        body.atom_index = atomIdx;
+        body.new_element = params.new_element ?? "C";
+        body.bond_order = "single";
       } else {
         setError(`unsupported op: ${op}`);
         setTimeout(() => setError(""), 1800);
@@ -261,7 +310,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           2D · {pathogen}
         </span>
         <span style={{ flex: 1 }} />
-        <span style={{ color: "var(--lys-text-dim)" }}>click an atom →</span>
+        {selected.size > 0 && (
+          <span style={{ color: "#f59e0b", fontWeight: 600 }}>
+            {selected.size} sel
+          </span>
+        )}
+        <span style={{ color: "var(--lys-text-dim)" }}>click → edit · shift-click → multi-select</span>
       </div>
       <div style={{ flex: 1, position: "relative", overflow: "auto", display: "grid", placeItems: "center" }}>
         {svg
@@ -296,6 +350,88 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               onApply={(op, params) => applyEdit(op, params, pop.atomIdx)}
               onClose={() => setPop(null)}
             />
+          </div>
+        )}
+        {/* Multi-select toolbar — appears when ≥2 atoms shift-clicked.
+            Lets the user join the selection with a bond of any order. */}
+        {selected.size >= 2 && smiles && (
+          <div style={{
+            position: "absolute",
+            bottom: 8, left: "50%", transform: "translateX(-50%)",
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "4px 8px",
+            background: "rgba(245, 158, 11, 0.10)",
+            border: "1px solid rgba(245, 158, 11, 0.35)",
+            borderRadius: 999,
+            fontSize: 10,
+            fontFamily: "var(--lys-font-mono)",
+            color: "#92400e",
+            zIndex: 50,
+          }}>
+            <span>selected: {Array.from(selected).slice(0, 4).join(",")}</span>
+            <span style={{ opacity: 0.6 }}>·</span>
+            {(["single", "double", "triple"] as const).map((bo) => (
+              <button
+                key={bo}
+                type="button"
+                onClick={async () => {
+                  const ids = Array.from(selected);
+                  if (ids.length < 2) return;
+                  // Bond first two; user can iterate for chains
+                  try {
+                    const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        smiles,
+                        op: "add_bond",
+                        atom_index_a: ids[0],
+                        atom_index_b: ids[1],
+                        bond_order: bo,
+                      }),
+                    });
+                    if (!r.ok) {
+                      const txt = await r.text();
+                      setError(`bond ${r.status}: ${txt.slice(0, 80)}`);
+                      setTimeout(() => setError(""), 2200);
+                      return;
+                    }
+                    const d = await r.json();
+                    if (d.smiles) {
+                      onMoleculeEdit?.(d.smiles, {
+                        op: "add_bond",
+                        atom_idx: ids[0],
+                        label: `${bo} bond ${ids[0]}–${ids[1]}`,
+                      });
+                      setSelected(new Set());
+                    }
+                  } catch (exc: any) {
+                    setError(`bond error: ${exc?.message ?? exc}`);
+                    setTimeout(() => setError(""), 2200);
+                  }
+                }}
+                style={{
+                  border: 0, background: "rgba(245,158,11,0.25)", color: "#92400e",
+                  padding: "2px 8px", borderRadius: 999,
+                  fontFamily: "inherit", fontSize: 10, fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                + {bo} bond
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              title="Clear selection"
+              style={{
+                border: 0, background: "transparent", color: "#92400e",
+                padding: "2px 6px", borderRadius: 4,
+                cursor: "pointer", fontFamily: "inherit", fontSize: 10,
+              }}
+            >
+              clear
+            </button>
           </div>
         )}
       </div>

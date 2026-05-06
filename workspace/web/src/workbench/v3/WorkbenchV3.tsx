@@ -34,6 +34,7 @@ import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
 import { LiveAtomsCard } from "./playground/LiveAtomsCard";
+import { ScaffoldPickerCard } from "./playground/ScaffoldPickerCard";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -909,6 +910,19 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "chem",
                   category: "Chemistry",
                   cards: [
+                    { id: "scaffold", title: "Start from · 21 templates", size: 2, body:
+                      <ScaffoldPickerCard
+                        apiBase={apiBase}
+                        onLoadSmiles={(smi, name) => {
+                          setEvents((p) => [
+                            ...p,
+                            { type: "agent_message", ts: Date.now()/1000, agent: "user",
+                              content: `[load template ${name ?? ""}] ${smi}` } as any,
+                            { type: "candidate_added", ts: Date.now()/1000, smiles: smi,
+                              composite: 0, agent: "user" } as any,
+                          ]);
+                        }}
+                      /> },
                     { id: "3d", title: "3D molecule theater · drag-edit", size: 2, body:
                       <Mol3DTheaterWindow
                         apiBase={apiBase}

@@ -468,6 +468,67 @@ async def workbench_design(req: DesignRequest) -> DesignResponse:
 
 
 # ---------------------------------------------------------------------------
+# Scaffold templates — curated starting molecules for "build from"
+# ---------------------------------------------------------------------------
+
+
+SCAFFOLD_TEMPLATES = [
+    {"id": "benzene", "name": "Benzene", "category": "ring",
+     "smiles": "c1ccccc1", "tag": "aromatic 6-ring"},
+    {"id": "pyridine", "name": "Pyridine", "category": "ring",
+     "smiles": "c1ccncc1", "tag": "aromatic 6-ring with N"},
+    {"id": "pyrimidine", "name": "Pyrimidine", "category": "ring",
+     "smiles": "c1ncncc1", "tag": "aromatic, 2 N"},
+    {"id": "cyclohexane", "name": "Cyclohexane", "category": "ring",
+     "smiles": "C1CCCCC1", "tag": "saturated 6-ring"},
+    {"id": "imidazole", "name": "Imidazole", "category": "ring",
+     "smiles": "c1[nH]cnc1", "tag": "aromatic 5-ring (2 N)"},
+    {"id": "thiophene", "name": "Thiophene", "category": "ring",
+     "smiles": "c1ccsc1", "tag": "aromatic 5-ring with S"},
+
+    {"id": "beta_lactam", "name": "β-Lactam (penam core)", "category": "antibiotic",
+     "smiles": "O=C1CCN1", "tag": "4-ring · MRSA target (penicillins)"},
+    {"id": "cephem", "name": "Cephem core", "category": "antibiotic",
+     "smiles": "O=C1N2CCSC2C1", "tag": "fused β-lactam (cephalosporins)"},
+    {"id": "carbapenem", "name": "Carbapenem core", "category": "antibiotic",
+     "smiles": "O=C1N2CCC2C1", "tag": "MRSA-active β-lactam"},
+    {"id": "monobactam", "name": "Monobactam (aztreonam-like)", "category": "antibiotic",
+     "smiles": "O=C1CCN1S(=O)(=O)O", "tag": "Gram-neg β-lactam"},
+    {"id": "fluoroquinolone", "name": "Fluoroquinolone (cipro core)", "category": "antibiotic",
+     "smiles": "O=C(O)c1cnc2ccc(F)cc2c1=O", "tag": "DNA gyrase inhibitor"},
+    {"id": "oxazolidinone", "name": "Oxazolidinone (linezolid core)", "category": "antibiotic",
+     "smiles": "O=C1OCCN1", "tag": "ribosome 50S inhibitor (active vs MRSA/VRE)"},
+    {"id": "macrolide_aglycone", "name": "Macrolide aglycone (erythronolide)", "category": "antibiotic",
+     "smiles": "CCC1OC(=O)C(C)C(O)C(C)C(=O)C(C)CC(C)C(O)C(C)C(=O)O1", "tag": "14-member ring · 50S binder"},
+    {"id": "tetracycline_core", "name": "Tetracycline 4-ring core", "category": "antibiotic",
+     "smiles": "Oc1ccc2c(c1)CC1CC3CC(=O)C(=C(O)c3c1C2)C(N)=O", "tag": "broad-spectrum scaffold"},
+    {"id": "vancomycin_micro", "name": "Vancomycin glycopeptide micro-fragment", "category": "antibiotic",
+     "smiles": "NC(CC(=O)N)C(=O)O", "tag": "D-Ala-D-Ala mimic"},
+
+    {"id": "aspirin", "name": "Aspirin", "category": "drug",
+     "smiles": "CC(=O)Oc1ccccc1C(=O)O", "tag": "common test molecule"},
+    {"id": "caffeine", "name": "Caffeine", "category": "drug",
+     "smiles": "CN1C=NC2=C1C(=O)N(C(=O)N2C)C", "tag": "purine, multi-N reference"},
+    {"id": "amoxicillin", "name": "Amoxicillin", "category": "drug",
+     "smiles": "CC1(C)SC2C(NC(=O)C(N)c3ccc(O)cc3)C(=O)N2C1C(=O)O", "tag": "MRSA reference (FDA)"},
+    {"id": "ciprofloxacin", "name": "Ciprofloxacin", "category": "drug",
+     "smiles": "O=C(O)c1cn(C2CC2)c2cc(N3CCNCC3)c(F)cc2c1=O", "tag": "fluoroquinolone (FDA)"},
+    {"id": "linezolid", "name": "Linezolid", "category": "drug",
+     "smiles": "CC(=O)NC[C@H]1CN(c2ccc(N3CCOCC3)c(F)c2)C(=O)O1", "tag": "VRE/MRSA (FDA)"},
+
+    {"id": "empty", "name": "Empty (start from atom)", "category": "scratch",
+     "smiles": "C", "tag": "single carbon — build from scratch"},
+]
+
+
+@router.get("/playground/scaffolds")
+async def list_scaffolds() -> dict:
+    """Curated scaffold templates for 'start from'. Each has SMILES + a
+    short pharmacology tag for the picker UI."""
+    return {"total": len(SCAFFOLD_TEMPLATES), "scaffolds": SCAFFOLD_TEMPLATES}
+
+
+# ---------------------------------------------------------------------------
 # CHEM RULES ENGINE — atom-level chemistry knowledge for the playground.
 #
 # The 2D builder window calls this whenever the user clicks an atom on a
@@ -1593,10 +1654,18 @@ async def molecule_3d(req: Mol3DRequest) -> dict:
 
 class AtomEditRequest(BaseModel):
     smiles: str
-    op: Literal["swap_element", "break_bond", "add_methyl_at"]
-    atom_index: Optional[int] = None    # for swap_element / add_methyl_at
-    bond_index: Optional[int] = None    # for break_bond
-    new_element: Optional[str] = None   # for swap_element: C, N, O, F, S, Cl, Br
+    op: Literal[
+        "swap_element", "break_bond", "add_methyl_at",
+        "add_atom_at", "delete_atom", "add_bond", "delete_bond",
+        "add_functional_group_at",
+    ]
+    atom_index: Optional[int] = None       # for swap_element / add_*_at / delete_atom
+    atom_index_a: Optional[int] = None     # for add_bond (first atom)
+    atom_index_b: Optional[int] = None     # for add_bond (second atom)
+    bond_index: Optional[int] = None       # for break_bond / delete_bond
+    new_element: Optional[str] = None      # element symbol for swap/add_atom_at
+    bond_order: Optional[Literal["single", "double", "triple", "aromatic"]] = "single"
+    functional_group: Optional[str] = None # name for add_functional_group_at
 
 
 @router.post("/molecule/edit")
@@ -1614,27 +1683,108 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
         raise HTTPException(422, f"unparseable SMILES: {req.smiles}")
     rw = Chem.RWMol(mol)
 
+    ELEMENTS = {"C": 6, "N": 7, "O": 8, "F": 9, "S": 16, "Cl": 17, "Br": 35, "P": 15, "H": 1}
+    BOND_ORDERS = {
+        "single": Chem.BondType.SINGLE,
+        "double": Chem.BondType.DOUBLE,
+        "triple": Chem.BondType.TRIPLE,
+        "aromatic": Chem.BondType.AROMATIC,
+    }
+
+    # Functional group library (SMARTS templates for "attach this fragment")
+    # Each has (atoms_to_add, bonds_to_add) starting from anchor=req.atom_index
+    FG_TEMPLATES = {
+        "hydroxyl":   [("O", "single")],
+        "methyl":     [("C", "single")],
+        "amine":      [("N", "single")],
+        "fluorine":   [("F", "single")],
+        "chlorine":   [("Cl", "single")],
+        "carbonyl":   [("C", "single"), ("O", "double")],   # ketone-like
+        "carboxyl":   [("C", "single"), ("O", "double"), ("O", "single")],
+        "nitro":      [("N", "single"), ("O", "double"), ("O", "single")],
+        "cyano":      [("C", "single"), ("N", "triple")],
+        "trifluoromethyl": [("C", "single"), ("F", "single"), ("F", "single"), ("F", "single")],
+    }
+
     if req.op == "swap_element":
         if req.atom_index is None or req.new_element is None:
             raise HTTPException(422, "swap_element needs atom_index + new_element")
         if req.atom_index < 0 or req.atom_index >= rw.GetNumAtoms():
-            raise HTTPException(422, f"atom_index out of range")
-        ELEMENTS = {"C": 6, "N": 7, "O": 8, "F": 9, "S": 16, "Cl": 17, "Br": 35, "P": 15}
+            raise HTTPException(422, "atom_index out of range")
         if req.new_element not in ELEMENTS:
             raise HTTPException(422, f"unsupported element: {req.new_element}")
         rw.GetAtomWithIdx(req.atom_index).SetAtomicNum(ELEMENTS[req.new_element])
-    elif req.op == "break_bond":
+
+    elif req.op == "break_bond" or req.op == "delete_bond":
         if req.bond_index is None:
-            raise HTTPException(422, "break_bond needs bond_index")
+            raise HTTPException(422, f"{req.op} needs bond_index")
         if req.bond_index < 0 or req.bond_index >= rw.GetNumBonds():
-            raise HTTPException(422, f"bond_index out of range")
+            raise HTTPException(422, "bond_index out of range")
         b = rw.GetBondWithIdx(req.bond_index)
         rw.RemoveBond(b.GetBeginAtomIdx(), b.GetEndAtomIdx())
+
     elif req.op == "add_methyl_at":
         if req.atom_index is None:
             raise HTTPException(422, "add_methyl_at needs atom_index")
         c = rw.AddAtom(Chem.Atom(6))
         rw.AddBond(req.atom_index, c, Chem.BondType.SINGLE)
+
+    elif req.op == "add_atom_at":
+        if req.atom_index is None or req.new_element is None:
+            raise HTTPException(422, "add_atom_at needs atom_index + new_element")
+        if req.new_element not in ELEMENTS:
+            raise HTTPException(422, f"unsupported element: {req.new_element}")
+        new_idx = rw.AddAtom(Chem.Atom(ELEMENTS[req.new_element]))
+        bond_type = BOND_ORDERS.get(req.bond_order or "single", Chem.BondType.SINGLE)
+        rw.AddBond(req.atom_index, new_idx, bond_type)
+
+    elif req.op == "delete_atom":
+        if req.atom_index is None:
+            raise HTTPException(422, "delete_atom needs atom_index")
+        if req.atom_index < 0 or req.atom_index >= rw.GetNumAtoms():
+            raise HTTPException(422, "atom_index out of range")
+        rw.RemoveAtom(req.atom_index)
+
+    elif req.op == "add_bond":
+        if req.atom_index_a is None or req.atom_index_b is None:
+            raise HTTPException(422, "add_bond needs atom_index_a + atom_index_b")
+        if req.atom_index_a == req.atom_index_b:
+            raise HTTPException(422, "cannot bond an atom to itself")
+        n = rw.GetNumAtoms()
+        if not (0 <= req.atom_index_a < n and 0 <= req.atom_index_b < n):
+            raise HTTPException(422, "atom_index_a or _b out of range")
+        # Reject if bond already exists
+        if rw.GetBondBetweenAtoms(req.atom_index_a, req.atom_index_b) is not None:
+            raise HTTPException(422, f"bond already exists between {req.atom_index_a} and {req.atom_index_b}")
+        bond_type = BOND_ORDERS.get(req.bond_order or "single", Chem.BondType.SINGLE)
+        rw.AddBond(req.atom_index_a, req.atom_index_b, bond_type)
+
+    elif req.op == "add_functional_group_at":
+        if req.atom_index is None or req.functional_group is None:
+            raise HTTPException(422, "add_functional_group_at needs atom_index + functional_group")
+        tpl = FG_TEMPLATES.get(req.functional_group)
+        if tpl is None:
+            raise HTTPException(422, f"unknown functional group: {req.functional_group}")
+        # Build the fragment: anchor connects to new atom 1, which connects to others linearly
+        # (simple chain layout; ring FGs would need a separate template).
+        prev_idx = req.atom_index
+        first_new_idx = None
+        for i, (elt, bo) in enumerate(tpl):
+            if elt not in ELEMENTS:
+                raise HTTPException(422, f"unsupported element in template: {elt}")
+            new_idx = rw.AddAtom(Chem.Atom(ELEMENTS[elt]))
+            if first_new_idx is None:
+                first_new_idx = new_idx
+            bond_type = BOND_ORDERS.get(bo, Chem.BondType.SINGLE)
+            # Carbonyl/carboxyl/nitro have branching: atom 1 of template gets =O / extra bonds.
+            # Simple heuristic: subsequent atoms connect back to first_new_idx for branched FGs.
+            if i == 0 or req.functional_group not in ("carbonyl", "carboxyl", "nitro", "trifluoromethyl"):
+                rw.AddBond(prev_idx, new_idx, bond_type)
+                prev_idx = new_idx
+            else:
+                # Branch off the first added atom (anchor of the FG)
+                rw.AddBond(first_new_idx, new_idx, bond_type)
+
     else:
         raise HTTPException(422, f"unknown op: {req.op}")
 
