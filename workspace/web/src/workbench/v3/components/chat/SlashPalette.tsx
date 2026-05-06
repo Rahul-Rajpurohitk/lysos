@@ -44,6 +44,7 @@ export const DEFAULT_COMMANDS: SlashCommand[] = [
   { name: "clear",       description: "Clear the active session",                    category: "system" },
   { name: "set-target",  description: "Set the active target pathogen",              category: "system",     argument_hint: "<pathogen>",  aliases: ["target"] },
   { name: "branch",      description: "Fork the active candidate as a new lineage",  category: "system",     argument_hint: "<hint>",       requires_smiles: true },
+  { name: "trace",       description: "Show the last N harness events",              category: "system",     argument_hint: "[n=20]" },
   { name: "run",         description: "Execute a Python cell in the sandbox",        category: "sandbox",    argument_hint: "<python>" },
 
   // DESIGN
@@ -54,9 +55,15 @@ export const DEFAULT_COMMANDS: SlashCommand[] = [
   // SCORING
   { name: "score",       description: "Run the 12-component reward stack",           category: "scoring",    argument_hint: "[smiles]" },
   { name: "similar",     description: "Top-K similar known antibiotics",             category: "scoring",    argument_hint: "[k=5]", aliases: ["sim"], requires_smiles: true },
+  { name: "admet",       description: "ADMET panel (TDC predictor)",                 category: "scoring",    argument_hint: "[smiles]" },
+  { name: "synth",       description: "Retrosynthesis route + cost estimate",        category: "scoring",    argument_hint: "[smiles]" },
 
   // KNOWLEDGE
   { name: "explain",     description: "Mechanism + spectrum + resistance",           category: "knowledge",  argument_hint: "<drug_name>" },
+
+  // STRUCTURAL
+  { name: "dock",        description: "Dock active candidate against target PDB",    category: "structural", argument_hint: "[pdb_id]", aliases: ["docking"], requires_smiles: true },
+  { name: "complex",     description: "Boltz-2 3D complex pose (ipTM/pTM)",          category: "structural", argument_hint: "[pathogen]", requires_smiles: true },
 
   // AMR
   { name: "resistance",  description: "Pathogen resistome + escape probability",     category: "amr",        argument_hint: "<pathogen>", aliases: ["res"] },

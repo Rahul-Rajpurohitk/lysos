@@ -435,6 +435,150 @@ class SetTargetCommand(Command):
 # Default registry
 # ---------------------------------------------------------------------------
 
+class AdmetCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="admet",
+            description="Predict ADMET panel (absorption, distribution, metabolism, excretion, toxicity)",
+            type=CommandType.LOCAL,
+            argument_hint="[smiles]  (defaults to active candidate)",
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        smiles = args.strip() or ctx.active_smiles
+        if not smiles:
+            return CommandResult(error="Provide a SMILES or set an active candidate.")
+        try:
+            from workspace.tools.scoring.predict_admet import predict_admet
+            r = predict_admet(smiles=smiles)
+            return CommandResult(
+                output=f"ADMET panel for `{smiles}`",
+                data=r.model_dump() if hasattr(r, "model_dump") else dict(r),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"admet failed: {exc}")
+
+
+class SynthCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="synth",
+            description="Retrosynthesis route + estimated cost ($/g, step count)",
+            type=CommandType.LOCAL,
+            argument_hint="[smiles]",
+            requires_smiles=False,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        smiles = args.strip() or ctx.active_smiles
+        if not smiles:
+            return CommandResult(error="Provide a SMILES or set an active candidate.")
+        try:
+            from workspace.tools.scoring.predict_synthesis_route import predict_synthesis_route
+            r = predict_synthesis_route(smiles=smiles)
+            return CommandResult(
+                output=f"Retrosynthesis route for `{smiles}`",
+                data=r.model_dump() if hasattr(r, "model_dump") else dict(r),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"synth failed: {exc}")
+
+
+class DockCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="dock",
+            description="Dock the active candidate against the active target's PDB",
+            type=CommandType.LOCAL,
+            argument_hint="[pdb_id]",
+            aliases=["docking"],
+            requires_smiles=True,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        pdb_id = args.strip()
+        try:
+            from workspace.tools.structural.dock_against_target import dock_against_target
+            r = dock_against_target(
+                smiles=ctx.active_smiles,
+                target_pdb=pdb_id or None,
+                pathogen=ctx.active_target,
+            )
+            return CommandResult(
+                output=f"Docking score for `{ctx.active_smiles}`",
+                data=r.model_dump() if hasattr(r, "model_dump") else dict(r),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"dock failed: {exc}")
+
+
+class ComplexCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="complex",
+            description="Predict 3D complex structure (Boltz-2 ipTM/pTM pose)",
+            type=CommandType.LOCAL,
+            argument_hint="[pathogen|target_pdb]",
+            requires_smiles=True,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        target = args.strip() or ctx.active_target
+        try:
+            from workspace.tools.structural.predict_complex_structure import predict_complex_structure
+            r = predict_complex_structure(
+                ligand_smiles=ctx.active_smiles,
+                pathogen=target,
+            )
+            return CommandResult(
+                output=f"Boltz-2 complex pose for `{ctx.active_smiles}` vs {target}",
+                data=r.model_dump() if hasattr(r, "model_dump") else dict(r),
+                artifact={
+                    "kind": "scene_3d_request",
+                    "smiles": ctx.active_smiles,
+                    "target": target,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"complex failed: {exc}")
+
+
+class TraceCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="trace",
+            description="Show the last N harness/tool events for this session",
+            type=CommandType.SYSTEM,
+            argument_hint="[n=20]",
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        n = 20
+        try:
+            if args.strip():
+                n = max(1, min(200, int(args.strip())))
+        except ValueError:
+            pass
+        try:
+            from workspace.agents.harness.tracing import get_tracer
+            tracer = get_tracer(ctx.session_id)
+            recent = tracer.dump_recent(n)
+            if not recent:
+                return CommandResult(output="_(no trace events yet)_")
+            md_lines = ["| Time | Event | Elapsed |", "|---|---|---|"]
+            for ev in recent[-n:]:
+                ts = ev.get("timestamp", 0)
+                t_str = f"{ts:.3f}" if isinstance(ts, (int, float)) else str(ts)
+                el = ev.get("elapsed_ms")
+                md_lines.append(
+                    f"| `{t_str}` | {ev.get('type', '?')} | "
+                    f"{el if el is not None else '—'} ms |"
+                )
+            return CommandResult(output="\n".join(md_lines), data={"events": recent})
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"trace failed: {exc}")
+
+
 def create_default_registry() -> CommandRegistry:
     """Build the production registry. Add new commands here."""
     r = CommandRegistry()
@@ -451,6 +595,11 @@ def create_default_registry() -> CommandRegistry:
         RunCommand(),
         BranchCommand(),
         SetTargetCommand(),
+        AdmetCommand(),
+        SynthCommand(),
+        DockCommand(),
+        ComplexCommand(),
+        TraceCommand(),
     ]:
         r.register(cmd)
     return r
