@@ -17,20 +17,13 @@
  *    knows what their input does.
  *  - Auto-grow up to 6 lines; scroll past that.
  */
-import { ArrowUp, X, Beaker, FlaskConical, FileSearch, GitBranch, Plus } from "lucide-react";
-import clsx from "clsx";
+import { ArrowUp, X, Beaker } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { SlashPalette, type SlashCommand, DEFAULT_COMMANDS } from "./SlashPalette";
 
 interface Constraint {
   id: string;
   label: string;
-}
-
-interface SlashCmd {
-  cmd: string;
-  desc: string;
-  icon: React.ReactNode;
-  apply: (rest: string) => { send?: string; constraint?: string };
 }
 
 interface TightComposerProps {
@@ -41,40 +34,31 @@ interface TightComposerProps {
   onRemoveConstraint: (id: string) => void;
 }
 
-const SLASH: SlashCmd[] = [
-  {
-    cmd: "/constraint",
-    desc: "Pin a chemistry constraint",
-    icon: <FlaskConical size={12} />,
-    apply: (r) => ({ constraint: r }),
-  },
-  {
-    cmd: "/from-paper",
-    desc: "Mine constraints from a paper (DOI / title)",
-    icon: <FileSearch size={12} />,
-    apply: (r) => ({ send: `From paper: ${r}` }),
-  },
-  {
-    cmd: "/scaffold-hop",
-    desc: "Scaffold-hop the current top candidate",
-    icon: <GitBranch size={12} />,
-    apply: () => ({ send: "Scaffold-hop the current top candidate." }),
-  },
-  {
-    cmd: "/branch",
-    desc: "Branch into a parallel exploration",
-    icon: <Plus size={12} />,
-    apply: () => ({ send: "Branch into parallel exploration." }),
-  },
-];
-
 export function TightComposer(p: TightComposerProps) {
   const [text, setText] = useState("");
-  const [showSlash, setShowSlash] = useState(false);
-  const [slashIdx, setSlashIdx] = useState(0);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const [registry, setRegistry] = useState<SlashCommand[]>(DEFAULT_COMMANDS);
 
-  const filtered = SLASH.filter((c) => c.cmd.startsWith(text.split(/\s/)[0]));
+  // Fetch the live command registry from the FastAPI server (so the palette
+  // stays in sync with workspace/agents/commands.py without a frontend
+  // rebuild). Falls back to DEFAULT_COMMANDS shipped with the bundle.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/commands/list")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d) && d.length) {
+          setRegistry(d as SlashCommand[]);
+        }
+      })
+      .catch(() => {
+        /* fall back to bundled DEFAULT_COMMANDS */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // auto-grow up to ~6 lines
   useEffect(() => {
@@ -86,38 +70,48 @@ export function TightComposer(p: TightComposerProps) {
 
   function reset() {
     setText("");
-    setShowSlash(false);
-    setSlashIdx(0);
+    setPaletteOpen(false);
   }
 
-  function applySlash(cmd: SlashCmd) {
-    const rest = text.slice(cmd.cmd.length).trim();
-    const r = cmd.apply(rest);
-    if (r.constraint) p.onIntervene("constraint", { label: r.constraint });
-    if (r.send) p.onSend(r.send);
-    reset();
+  function applySlash(cmd: SlashCommand) {
+    // The user picked a command from the palette. Insert "/<name> "
+    // into the textarea so they can fill the args, OR auto-send if the
+    // command takes no arguments.
+    const argHint = cmd.argument_hint || "";
+    if (!argHint) {
+      // No-args command: send immediately
+      p.onSend(`/${cmd.name}`);
+      reset();
+    } else {
+      setText(`/${cmd.name} `);
+      setPaletteOpen(false);
+      // Refocus textarea
+      requestAnimationFrame(() => taRef.current?.focus());
+    }
   }
 
   function send() {
     const t = text.trim();
     if (!t) return;
-    if (t.startsWith("/")) {
-      const cmd = SLASH.find((c) => t.startsWith(c.cmd));
-      if (cmd) return applySlash(cmd);
-    }
+    // Slash command: pass through as-is — server-side harness routes it
     if (p.isRunning) p.onIntervene("directive", { text: t });
     else p.onSend(t);
     reset();
   }
 
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (showSlash && filtered.length > 0) {
-      if (e.key === "ArrowDown") { e.preventDefault(); setSlashIdx((i) => (i + 1) % filtered.length); return; }
-      if (e.key === "ArrowUp") { e.preventDefault(); setSlashIdx((i) => (i - 1 + filtered.length) % filtered.length); return; }
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); applySlash(filtered[slashIdx]); return; }
-      if (e.key === "Escape") { setShowSlash(false); return; }
+    if (paletteOpen) {
+      // Palette manages its own ↑↓↵Esc Tab — let it handle, but still
+      // intercept Enter-without-modifier here in case palette is closed.
+      if (e.key === "Escape") {
+        setPaletteOpen(false);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Tab") {
+        // Palette handles via window keydown listener
+        return;
+      }
     }
-    // Enter to send (unless Shift+Enter for newline). Cmd+Enter also works.
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -167,54 +161,15 @@ export function TightComposer(p: TightComposerProps) {
         </div>
       )}
 
-      {/* Slash menu */}
-      {showSlash && filtered.length > 0 && (
-        <div style={{
-          position: "absolute",
-          bottom: "calc(100% - 6px)",
-          left: 16,
-          right: 16,
-          background: "white",
-          border: "1px solid var(--lys-border-strong)",
-          borderRadius: 8,
-          padding: 4,
-          boxShadow: "var(--lys-shadow-lg)",
-          zIndex: 50,
-        }}>
-          {filtered.map((c, i) => (
-            <button
-              key={c.cmd}
-              className={clsx(i === slashIdx && "lys-slash-menu__item--active")}
-              onClick={() => applySlash(c)}
-              onMouseEnter={() => setSlashIdx(i)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 8px",
-                width: "100%",
-                border: 0,
-                background: i === slashIdx ? "var(--lys-surface-2)" : "transparent",
-                color: "var(--lys-text)",
-                fontFamily: "inherit",
-                fontSize: 12,
-                cursor: "pointer",
-                borderRadius: 4,
-                textAlign: "left",
-              }}
-            >
-              {c.icon}
-              <span style={{
-                fontFamily: "var(--lys-font-mono)",
-                color: "var(--lys-accent)",
-                fontWeight: 600,
-                width: 100,
-              }}>{c.cmd}</span>
-              <span style={{ color: "var(--lys-text-dim)", fontSize: 11 }}>{c.desc}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Slash command palette — Claude Code style, registry-driven */}
+      <SlashPalette
+        query={text}
+        open={paletteOpen}
+        onPick={applySlash}
+        onClose={() => setPaletteOpen(false)}
+        commands={registry}
+      />
+
 
       {/* Input */}
       <div style={{
@@ -236,10 +191,10 @@ export function TightComposer(p: TightComposerProps) {
           onChange={(e) => {
             const v = e.target.value;
             setText(v);
-            setShowSlash(v.startsWith("/"));
+            setPaletteOpen(v.startsWith("/"));
           }}
           onKeyDown={handleKey}
-          onFocus={() => setShowSlash(text.startsWith("/"))}
+          onFocus={() => setPaletteOpen(text.startsWith("/"))}
           style={{
             width: "100%",
             border: 0,

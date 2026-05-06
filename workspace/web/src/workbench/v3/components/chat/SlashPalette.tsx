@@ -14,7 +14,7 @@
  *  - The whole palette is one column, no grids, no badges.
  *  - Renders OVER the composer, not above it (z-index 50, anchored bottom).
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export interface SlashCommand {
   name: string;                     // "design", "edit", ...
@@ -88,7 +88,6 @@ interface Props {
 
 export function SlashPalette({ query, open, onPick, onClose, commands }: Props) {
   const [highlightIdx, setHighlightIdx] = useState(0);
-  const listRef = useRef<HTMLDivElement>(null);
 
   const all = commands ?? DEFAULT_COMMANDS;
 
