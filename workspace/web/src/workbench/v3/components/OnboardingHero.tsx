@@ -32,22 +32,22 @@ const FEATURES = [
   {
     icon: <Brain size={14} />,
     title: "Multi-agent debate",
-    body: "Designer drafts, Critic challenges, Editor refines, Strategist directs. Nine sub-agents on demand.",
+    body: "Four specialists negotiate every candidate — Designer drafts, Critic challenges, Editor refines, Strategist directs.",
   },
   {
     icon: <FlaskConical size={14} />,
-    title: "12-component reward stack",
-    body: "MIC · QED · SAscore · hemolysis · novelty · pose · spectrum. Live radar updates per edit.",
+    title: "12-axis live reward",
+    body: "Each edit re-scores potency, drug-likeness, toxicity, novelty, pose, and spectrum. The radar updates the moment an atom changes.",
   },
   {
     icon: <Microscope size={14} />,
-    title: "Drag-edit chemistry",
-    body: "Click any atom on the 3D ligand; pose recomputes, agents debate your edit live.",
+    title: "Click-to-edit chemistry",
+    body: "Mutate any atom on the 3D ligand. The pose recomputes, the agents debate the move, the score shifts.",
   },
   {
     icon: <Target size={14} />,
-    title: "MI300X-trained policy",
-    body: "Gemma 4 31B base. 4-stage pipeline: TxGemma → AMR SFT → DPO → GRPO on real assays.",
+    title: "Trained on AMD MI300X",
+    body: "Gemma 4 31B fine-tuned in four stages: TxGemma supervision → AMR SFT → DPO preferences → GRPO reinforcement on real assays.",
   },
 ];
 
@@ -188,8 +188,8 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
             Pick a pathogen to start
           </div>
           <div style={{
-            display: "flex",
-            flexWrap: "wrap",
+            display: "grid",
+            gridTemplateColumns: "repeat(4, 1fr)",
             gap: 4,
           }}>
             {sorted.slice(0, 8).map((p) => (
@@ -198,7 +198,7 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
                 onClick={() => onPickPathogen(p.code)}
                 className="lys-onb-pill"
                 style={{
-                  padding: "3px 9px",
+                  padding: "4px 8px",
                   border: 0,
                   borderRadius: 999,
                   background: "rgba(16, 185, 129, 0.08)",
@@ -208,6 +208,10 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
                   fontWeight: 600,
                   cursor: "pointer",
                   transition: "background 0.12s, transform 0.12s",
+                  textAlign: "center",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
                 {p.code}
