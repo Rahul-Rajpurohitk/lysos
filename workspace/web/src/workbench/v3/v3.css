@@ -483,9 +483,9 @@
 }
 .lys-chat__composer {
   flex: 0 0 auto;
-  /* Pull composer flush to the panel edges (Claude.ai style) */
-  padding: 6px 6px 10px;
-  border-top: 1px solid var(--lys-border-faint, rgba(0,0,0,0.04));
+  /* Composer flush to the panel edges, NO divider above (per redesign) */
+  padding: 4px 0 8px;
+  border-top: 0;
   background: var(--lys-bg);
 }
 

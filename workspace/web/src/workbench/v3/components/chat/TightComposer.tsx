@@ -121,7 +121,7 @@ export function TightComposer(p: TightComposerProps) {
   const canSend = text.trim().length > 0;
 
   return (
-    <div style={{ position: "relative", padding: "6px 8px 10px" }}>
+    <div style={{ position: "relative", padding: "4px 4px 8px" }}>
       {/* Constraint chip strip — only when constraints exist */}
       {p.constraints.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>

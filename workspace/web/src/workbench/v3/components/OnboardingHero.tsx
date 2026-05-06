@@ -85,37 +85,37 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
         <div style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: 6,
-          padding: "4px 12px",
+          gap: 4,
+          padding: "2px 8px",
           background: "var(--lys-accent-soft)",
-          border: "1px solid rgba(16, 185, 129, 0.3)",
+          border: "1px solid rgba(16, 185, 129, 0.25)",
           borderRadius: 999,
-          fontSize: 11,
+          fontSize: 9.5,
           color: "#047857",
           fontFamily: "var(--lys-font-mono)",
-          letterSpacing: "0.1em",
+          letterSpacing: "0.08em",
           textTransform: "uppercase",
-          marginBottom: 16,
+          marginBottom: 10,
         }}>
-          <Zap size={11} fill="currentColor" /> AMD Hackathon · May 2026
+          <Zap size={9} fill="currentColor" /> AMD Hackathon · May 2026
         </div>
         <h1 style={{
-          fontSize: 36,
-          fontWeight: 700,
-          letterSpacing: "-0.03em",
+          fontSize: 22,
+          fontWeight: 600,
+          letterSpacing: "-0.02em",
           margin: 0,
-          marginBottom: 8,
+          marginBottom: 6,
           color: "var(--lys-text)",
-          lineHeight: 1.1,
+          lineHeight: 1.15,
         }}>
           Lysos Workbench
         </h1>
         <p style={{
-          fontSize: 16,
+          fontSize: 12.5,
           color: "var(--lys-text-dim)",
           margin: 0,
-          marginBottom: 24,
-          lineHeight: 1.5,
+          marginBottom: 14,
+          lineHeight: 1.45,
         }}>
           Generative drug-design for antimicrobial resistance. Pick a WHO-priority
           pathogen, watch 4 agents debate, drag-edit the molecule, and follow
@@ -125,9 +125,9 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
         <div style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: 8,
+          gap: 6,
           color: "var(--lys-text-faint)",
-          fontSize: 12,
+          fontSize: 10.5,
           fontFamily: "var(--lys-font-mono)",
         }}>
           <span>start with a pathogen ↓</span>
@@ -179,31 +179,31 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
               marginBottom: 4,
             }}>
               <span style={{
-                fontSize: 16,
+                fontSize: 12,
                 fontWeight: 600,
                 color: "var(--lys-accent)",
                 fontFamily: "var(--lys-font-mono)",
               }}>{p.code}</span>
               <span style={{
-                fontSize: 10,
+                fontSize: 9,
                 color: "var(--lys-text-faint)",
-                letterSpacing: "0.05em",
+                letterSpacing: "0.04em",
                 textTransform: "uppercase",
               }}>{p.name.split("(")[0].trim()}</span>
             </div>
             <p style={{
-              fontSize: 12,
+              fontSize: 11,
               color: "var(--lys-text-dim)",
               margin: 0,
-              marginBottom: 8,
+              marginBottom: 6,
               lineHeight: 1.4,
             }}>
               {TIER_DESCRIPTIONS[p.code] ?? p.name}
             </p>
             <div style={{
               display: "flex",
-              gap: 12,
-              fontSize: 10,
+              gap: 10,
+              fontSize: 9.5,
               fontFamily: "var(--lys-font-mono)",
               color: "var(--lys-text-faint)",
             }}>
