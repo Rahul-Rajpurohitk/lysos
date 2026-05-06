@@ -34,6 +34,18 @@ interface Props {
   onLoadFromLibrary?: (smi: string, name: string) => void;
 }
 
+function navBtnStyle(active: boolean, accent: string): React.CSSProperties {
+  return {
+    display: "inline-flex", alignItems: "center", gap: 4,
+    padding: "2px 7px", borderRadius: 4,
+    border: `1px solid ${active ? accent : "var(--lys-border-faint, rgba(0,0,0,0.08))"}`,
+    background: active ? `${accent}10` : "transparent",
+    cursor: "pointer", fontFamily: "inherit",
+    fontSize: 9.5, color: active ? accent : "var(--lys-text-dim)",
+    fontWeight: 500,
+  };
+}
+
 const SMARTS_PRESETS = [
   { label: "aromatic-N", pattern: "[n]" },
   { label: "carbonyl", pattern: "[CX3]=[OX1]" },
@@ -123,6 +135,43 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   // Library popover state
   const [libraryOpen, setLibraryOpen] = useState(false);
   const libraryBtnRef = useRef<HTMLButtonElement | null>(null);
+  // SMARTS popover state (top-nav button → portal popover)
+  const [smartsOpen, setSmartsOpen] = useState(false);
+  const [smartsPopPos, setSmartsPopPos] = useState<{ left: number; top: number } | null>(null);
+  const smartsBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!smartsOpen) { setSmartsPopPos(null); return; }
+    const update = () => {
+      if (!smartsBtnRef.current) return;
+      const r = smartsBtnRef.current.getBoundingClientRect();
+      setSmartsPopPos({ left: r.left, top: r.bottom + 4 });
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [smartsOpen]);
+
+  useEffect(() => {
+    if (!smartsOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-smarts-pop]")) return;
+      if (smartsBtnRef.current?.contains(t)) return;
+      setSmartsOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setSmartsOpen(false); };
+    setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [smartsOpen]);
   // Drag-to-bond state — mousedown on atom A, drag to atom B → add_bond
   const [dragStart, setDragStart] = useState<number | null>(null);
   const [dragHover, setDragHover] = useState<number | null>(null);
@@ -672,26 +721,30 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         <span style={{ letterSpacing: "0.06em", textTransform: "uppercase" }}>
           2D · {pathogen}
         </span>
-        {/* Library trigger — opens portal popover with saved molecules */}
+        {/* Library trigger */}
         {onLoadFromLibrary && (
           <button
             ref={libraryBtnRef}
             type="button"
             onClick={() => setLibraryOpen((o) => !o)}
             title="Saved molecules · search & load"
-            style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              padding: "2px 7px", borderRadius: 4,
-              border: `1px solid ${libraryOpen ? "#10b981" : "var(--lys-border-faint, rgba(0,0,0,0.08))"}`,
-              background: libraryOpen ? "rgba(16,185,129,0.08)" : "transparent",
-              cursor: "pointer", fontFamily: "inherit",
-              fontSize: 9.5, color: "var(--lys-text-dim)",
-              fontWeight: 500,
-            }}>
+            style={navBtnStyle(libraryOpen, "#10b981")}>
             <span style={{ fontSize: 10, lineHeight: 1 }}>📚</span>
             <span style={{ textTransform: "none", letterSpacing: 0 }}>Library</span>
           </button>
         )}
+        {/* SMARTS trigger — same compact pattern as Library */}
+        <button
+          ref={smartsBtnRef}
+          type="button"
+          onClick={() => setSmartsOpen((o) => !o)}
+          title="SMARTS pattern match · highlight motifs"
+          style={navBtnStyle(smartsOpen, "#0891b2")}>
+          <span style={{ fontSize: 10, lineHeight: 1 }}>🔍</span>
+          <span style={{ textTransform: "none", letterSpacing: 0 }}>
+            SMARTS{smartsHits.length > 0 ? ` · ${smartsHits.length}` : ""}
+          </span>
+        </button>
         <span style={{ flex: 1 }} />
         {selected.size > 0 && (
           <span style={{ color: "#f59e0b", fontWeight: 600 }}>{selected.size} selected</span>
@@ -703,10 +756,8 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         )}
       </div>
 
-      {/* SMARTS strip — embedded inside 2D viewer (NOT a separate card).
-          Single inline row with input, match button, preset chips, and
-          live hit count. Match results highlight directly on the SVG below. */}
-      <div style={{
+      {/* SMARTS-strip ELIMINATED — moved to top-nav button (popover render at end of component). */}
+      {false && <div style={{
         padding: "4px 8px",
         borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
         display: "flex", alignItems: "center", gap: 6,
@@ -778,7 +829,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               }}>{p.label}</button>
           ))}
         </div>
-      </div>
+      </div>}
       {/* Body row: SVG viewer (flex 1) + atoms rail (260 px).
           position: relative so the popover + multi-select toolbar (children
           with position: absolute) anchor here. */}
@@ -873,89 +924,97 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             />
           </div>
         )}
-        {/* Multi-select toolbar — appears when ≥2 atoms shift-clicked.
-            Lets the user join the selection with a bond of any order. */}
-        {selected.size >= 2 && smiles && (
-          <div style={{
-            position: "absolute",
-            bottom: 8, left: "50%", transform: "translateX(-50%)",
-            display: "flex", alignItems: "center", gap: 6,
-            padding: "4px 8px",
-            background: "rgba(245, 158, 11, 0.10)",
-            border: "1px solid rgba(245, 158, 11, 0.35)",
-            borderRadius: 999,
-            fontSize: 10,
-            fontFamily: "var(--lys-font-mono)",
-            color: "#92400e",
-            zIndex: 50,
-          }}>
-            <span>selected: {Array.from(selected).slice(0, 4).join(",")}</span>
-            <span style={{ opacity: 0.6 }}>·</span>
-            {(["single", "double", "triple"] as const).map((bo) => (
-              <button
-                key={bo}
-                type="button"
-                onClick={async () => {
-                  const ids = Array.from(selected);
-                  if (ids.length < 2) return;
-                  // Bond first two; user can iterate for chains
-                  try {
-                    const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        smiles,
-                        op: "add_bond",
-                        atom_index_a: ids[0],
-                        atom_index_b: ids[1],
-                        bond_order: bo,
-                      }),
-                    });
-                    if (!r.ok) {
-                      const txt = await r.text();
-                      setError(`bond ${r.status}: ${txt.slice(0, 80)}`);
-                      setTimeout(() => setError(""), 2200);
-                      return;
-                    }
-                    const d = await r.json();
-                    if (d.smiles) {
-                      onMoleculeEdit?.(d.smiles, {
-                        op: "add_bond",
-                        atom_idx: ids[0],
-                        label: `${bo} bond ${ids[0]}–${ids[1]}`,
-                      });
-                      setSelected(new Set());
-                    }
-                  } catch (exc: any) {
-                    setError(`bond error: ${exc?.message ?? exc}`);
-                    setTimeout(() => setError(""), 2200);
-                  }
-                }}
-                style={{
-                  border: 0, background: "rgba(245,158,11,0.25)", color: "#92400e",
-                  padding: "2px 8px", borderRadius: 999,
-                  fontFamily: "inherit", fontSize: 10, fontWeight: 700,
-                  cursor: "pointer",
-                }}
-              >
-                + {bo} bond
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setSelected(new Set())}
-              title="Clear selection"
-              style={{
-                border: 0, background: "transparent", color: "#92400e",
-                padding: "2px 6px", borderRadius: 4,
-                cursor: "pointer", fontFamily: "inherit", fontSize: 10,
-              }}
-            >
-              clear
-            </button>
-          </div>
-        )}
       </div>
+      {/* Multi-select bond toolbar — sibling row BELOW the body row so it
+          never overlaps the molecule SVG. Animates in only when ≥2 atoms
+          are shift-clicked. Chemistry-rules-aware: bond orders limited by
+          remaining valence on both endpoints. */}
+      {selected.size >= 2 && smiles && (
+        <div style={{
+          flexShrink: 0,
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "6px 12px",
+          background: "linear-gradient(180deg, rgba(245,158,11,0.06), rgba(245,158,11,0.10))",
+          borderTop: "1px solid rgba(245, 158, 11, 0.32)",
+          fontSize: 10.5,
+          fontFamily: "var(--lys-font-mono)",
+          color: "#92400e",
+        }}>
+          <span style={{ fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            bond
+          </span>
+          <span style={{ opacity: 0.7 }}>
+            atom {Array.from(selected).slice(0, 2).join(" ↔ atom ")}
+            {selected.size > 2 ? ` +${selected.size - 2}` : ""}
+          </span>
+          <span style={{ flex: 1 }} />
+          {(["single", "double", "triple"] as const).map((bo) => (
+            <button
+              key={bo}
+              type="button"
+              onClick={async () => {
+                const ids = Array.from(selected);
+                if (ids.length < 2) return;
+                try {
+                  const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      smiles,
+                      op: "add_bond",
+                      atom_index_a: ids[0],
+                      atom_index_b: ids[1],
+                      bond_order: bo,
+                    }),
+                  });
+                  if (!r.ok) {
+                    const txt = await r.text();
+                    setError(`bond ${r.status}: ${txt.slice(0, 80)}`);
+                    setTimeout(() => setError(""), 2200);
+                    return;
+                  }
+                  const d = await r.json();
+                  if (d.smiles) {
+                    onMoleculeEdit?.(d.smiles, {
+                      op: "add_bond",
+                      atom_idx: ids[0],
+                      label: `${bo} bond ${ids[0]}–${ids[1]}`,
+                    });
+                    setSelected(new Set());
+                  }
+                } catch (exc: any) {
+                  setError(`bond error: ${exc?.message ?? exc}`);
+                  setTimeout(() => setError(""), 2200);
+                }
+              }}
+              style={{
+                border: "1px solid rgba(245,158,11,0.45)",
+                background: "rgba(245,158,11,0.18)",
+                color: "#92400e",
+                padding: "3px 10px", borderRadius: 999,
+                fontFamily: "inherit", fontSize: 10, fontWeight: 700,
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(245,158,11,0.32)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "rgba(245,158,11,0.18)"; }}
+            >
+              + {bo}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setSelected(new Set())}
+            title="Clear selection"
+            style={{
+              border: 0, background: "transparent", color: "#92400e",
+              padding: "3px 8px", borderRadius: 4,
+              cursor: "pointer", fontFamily: "inherit", fontSize: 10,
+            }}
+          >
+            clear
+          </button>
+        </div>
+      )}
       {libraryOpen && libraryBtnRef.current && onLoadFromLibrary && (
         <LibraryPopover
           apiBase={apiBase}
@@ -965,6 +1024,96 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           onLoad={(smi, name) => { onLoadFromLibrary(smi, name); setLibraryOpen(false); }}
         />
       )}
+      {smartsOpen && smartsPopPos && createPortal(
+        <div data-smarts-pop style={{
+          position: "fixed", left: smartsPopPos.left, top: smartsPopPos.top,
+          width: 460, maxHeight: "60vh",
+          background: "var(--lys-bg-2, #ffffff)",
+          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+          borderRadius: 10,
+          boxShadow: "0 14px 40px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.10)",
+          zIndex: 5000, display: "flex", flexDirection: "column",
+          overflow: "hidden", fontFamily: "var(--lys-font-body)",
+        }}>
+          <div style={{ padding: "8px 10px",
+            borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+            display: "flex", flexDirection: "column", gap: 6,
+            background: "var(--lys-bg, #fafafa)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)" }}>
+                🔍 SMARTS{smartsHits.length > 0 ? ` · ${smartsHits.length} hits` : ""}
+              </span>
+              <span style={{ flex: 1 }} />
+              <button type="button" onClick={() => setSmartsOpen(false)}
+                style={{ border: 0, background: "transparent", cursor: "pointer",
+                  padding: 4, color: "var(--lys-text-faint)" }}>✕</button>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <input
+                value={smarts}
+                onChange={(e) => setSmarts(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") runSmartsMatch(smarts); }}
+                placeholder="pattern · e.g. c1ccccc1 — Enter to match"
+                disabled={!smiles}
+                autoFocus
+                style={{
+                  flex: 1, fontSize: 11, fontFamily: "var(--lys-font-mono)",
+                  padding: "4px 8px", borderRadius: 4,
+                  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+                  background: "var(--lys-bg-2, #ffffff)",
+                  color: "var(--lys-text)", outline: "none",
+                }} />
+              <button type="button"
+                onClick={() => runSmartsMatch(smarts)}
+                disabled={!smiles || !smarts || smartsLoading}
+                style={{
+                  padding: "4px 11px", borderRadius: 4,
+                  fontSize: 10, fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+                  background: "#0891b2", color: "white", border: 0,
+                  cursor: smiles && smarts ? "pointer" : "not-allowed",
+                  opacity: smiles && smarts ? 1 : 0.5,
+                }}>{smartsLoading ? "…" : "match"}</button>
+              {smartsHits.length > 0 && (
+                <button type="button"
+                  onClick={() => { setSmarts(""); setSmartsHits([]); setSmartsError(""); }}
+                  title="Clear match"
+                  style={{ border: 0, background: "transparent",
+                    color: "var(--lys-text-faint)",
+                    cursor: "pointer", padding: 4, fontSize: 12 }}>✕</button>
+              )}
+            </div>
+            {smartsError && (
+              <span style={{ fontSize: 9.5, color: "#dc2626",
+                fontFamily: "var(--lys-font-mono)" }}>⚠ {smartsError}</span>
+            )}
+          </div>
+          <div className="lys-card-body" style={{
+            flex: 1, overflow: "auto", padding: 8,
+            display: "flex", flexWrap: "wrap", gap: 4,
+          }}>
+            <span style={{ fontSize: 9, color: "var(--lys-text-faint)",
+              fontFamily: "var(--lys-font-mono)",
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              fontWeight: 700, alignSelf: "center", marginRight: 4,
+            }}>presets</span>
+            {SMARTS_PRESETS.map((p) => (
+              <button key={p.label} type="button"
+                onClick={() => { setSmarts(p.pattern); runSmartsMatch(p.pattern); }}
+                title={p.pattern}
+                disabled={!smiles}
+                style={{
+                  fontSize: 10, padding: "3px 9px", borderRadius: 999,
+                  border: `1px solid ${smarts === p.pattern ? "#0891b2" : "var(--lys-border-faint, rgba(0,0,0,0.10))"}`,
+                  background: smarts === p.pattern ? "rgba(8,145,178,0.10)" : "var(--lys-bg-2, #ffffff)",
+                  color: smarts === p.pattern ? "#0891b2" : "var(--lys-text-dim)",
+                  cursor: smiles ? "pointer" : "not-allowed",
+                  opacity: smiles ? 1 : 0.5,
+                  fontFamily: "var(--lys-font-body)",
+                  fontWeight: smarts === p.pattern ? 700 : 500,
+                }}>{p.label}</button>
+            ))}
+          </div>
+        </div>, document.body)}
     </div>
   );
 }

@@ -253,4 +253,38 @@ This file is the source of truth. Update it when:
 - The sandbox protocol changes (update §4.3)
 - The reward stack changes weighting (update §2.3)
 
-Version: 1.0 (initial — May 2026)
+Version: 1.1 (May 2026)
+
+---
+
+## 9. Workbench-as-simulation intent (v1.1)
+
+Every workbench control (atom add/delete, bond create/break, scaffold load,
+SMARTS match, library save/load, scoring) is exposed as a tool the agents
+can call. The workbench is a live simulation that BOTH the human and the
+agentic system drive. Same flow:
+
+```
+  user clicks atom → backend RDKit edits → DB persists
+                  → WS broadcast → all UI cards re-render
+       agent calls   ↑ same path   ↑ indistinguishable
+```
+
+Therefore: build data model + API + event bus FIRST, UI on top. No
+local-state-only "demo" UIs. Every feature must (1) hit a backend endpoint,
+(2) persist via the playground store, (3) broadcast on the bus, (4) be
+callable from BOTH the user UI AND the agent tool registry — same endpoint
+serves both.
+
+Proof of capability: the system must be able to build any known antibiotic
+from scratch atom-by-atom (penicillin, vancomycin, ciprofloxacin, etc.).
+Agents then USE this same toolkit to discover NEW antibiotics for the
+8 priority pathogens.
+
+Apply chemistry rules in the UI: valid bond orders given current valences,
+full periodic table for atom-add (with valence tooltips), ring-break
+warnings, etc.
+
+See `feedback_workbench_design_pattern.md` in user memory for the full
+build pattern (concise sub-containers, top-nav over sidebar, no scroll
+on canvases, hover tooltips not text labels).
