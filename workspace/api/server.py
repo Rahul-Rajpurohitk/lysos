@@ -194,6 +194,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Sandbox router not loaded: %s", exc)
 
+# Chat + agent harness — slash commands, skills-driven LLM, sandbox WS
+try:
+    from .chat import router as chat_router
+    app.include_router(chat_router)
+    log.info("Chat / harness routes loaded (POST /api/chat, WS /ws/session/<id>, GET /api/commands/list)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chat router not loaded: %s", exc)
+
 
 # ----------------------------------------------------------------------------
 # Schemas
