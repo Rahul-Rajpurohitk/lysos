@@ -463,4 +463,142 @@ def get_llm(backend: Optional[str] = None) -> LLMEndpoint:
             return MockEndpoint()
         return ep
 
+    if backend == "gemini":
+        # Pre-Lysos-deployment: Gemini 2.5 Pro stand-in (capability tier
+        # ~30B-class fine-tune). Same JSON-message contract as the rest;
+        # tool calls degrade gracefully (graph.py falls through to SMILES
+        # regex extraction when tool_calls is empty).
+        if not os.environ.get("GEMINI_API_KEY"):
+            log.warning("GEMINI_API_KEY missing — falling back to MockEndpoint.")
+            return MockEndpoint()
+        return GeminiEndpoint(
+            model=os.environ.get("LYSOS_GEMINI_MODEL", "gemini-2.5-pro"),
+        )
+
     raise ValueError(f"Unknown LLM backend: {backend}")
+
+
+# ---------------------------------------------------------------------------
+# Gemini (Google) backend — REST-direct, no extra SDK dependency.
+# Used as the agent-loop LLM during build until Lysos-Gemma is deployed.
+# Same contract as ClaudeEndpoint / VLLMEndpoint.
+# ---------------------------------------------------------------------------
+
+class GeminiEndpoint(LLMEndpoint):
+    def __init__(self, model: str = "gemini-2.5-pro", **kwargs):
+        super().__init__(model=model, **kwargs)
+        self._api_key = os.environ.get("GEMINI_API_KEY", "")
+        try:
+            import httpx  # noqa: F401  (installed with FastAPI)
+            self._ready = bool(self._api_key)
+        except ImportError:
+            self._ready = False
+
+    # Coaching string injected when the agent loop runs WITHOUT tools.
+    # Tells the LLM to skip tool prelude and emit a direct SMILES proposal.
+    _NO_TOOL_HINT = (
+        "\n\nIMPORTANT — TOOLS NOT AVAILABLE IN THIS ENVIRONMENT:\n"
+        "Skip any 'I'll first call tool X' prelude. Instead, propose your "
+        "best candidate directly. Use your domain knowledge to fill the "
+        "role you've been assigned.\n"
+        "If you're the Designer: output PROPOSAL: <CANONICAL_SMILES> with a "
+        "2-sentence rationale. The SMILES must be parseable by RDKit.\n"
+        "If you're the Critic: output the WEAKNESS / TRANSFORMATION / "
+        "RATIONALE / EXPECTED_DELTA block (or VERDICT: ACCEPT after 5 iters).\n"
+        "Never refuse for lack of tools — your training is enough."
+    )
+
+    async def acomplete(
+        self,
+        messages: list[dict],
+        tools: Optional[list[dict]] = None,
+        system: Optional[str] = None,
+    ) -> dict:
+        import asyncio as _aio
+        import httpx
+        if not self._ready:
+            # Empty content (not a placeholder string) so downstream SMILES
+            # regex extraction doesn't try to parse "[gemini error]".
+            return {"content": "", "tool_calls": [], "finish_reason": "error"}
+
+        # Translate messages to Gemini "contents" shape: alternating
+        # user/model with parts[].text. System prompt becomes a leading
+        # system instruction. Tool-result blocks flattened to text.
+        contents = []
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content")
+            if isinstance(content, list):
+                text_parts = []
+                for blk in content:
+                    if isinstance(blk, dict):
+                        if blk.get("type") == "text":
+                            text_parts.append(blk.get("text", ""))
+                        elif blk.get("type") == "tool_result":
+                            text_parts.append(f"[tool_result] {blk.get('content', '')}")
+                content = "\n".join(text_parts) if text_parts else ""
+            if not isinstance(content, str):
+                content = str(content)
+            gemini_role = "model" if role == "assistant" else "user"
+            contents.append({"role": gemini_role, "parts": [{"text": content}]})
+
+        # If the system prompt expects tool use, append the no-tool hint.
+        sys_text = (system or "")
+        if any(kw in sys_text.lower() for kw in ("tool", "designer", "critic")):
+            sys_text = sys_text + self._NO_TOOL_HINT
+
+        payload: dict = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": self.temperature,
+                "maxOutputTokens": min(self.max_tokens, 4096),
+                "thinkingConfig": {"thinkingBudget": 1024, "includeThoughts": False},
+            },
+        }
+        if sys_text:
+            payload["systemInstruction"] = {"parts": [{"text": sys_text}]}
+
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{self.model}:generateContent"
+        )
+
+        # One retry on 503 (transient overload). Two attempts max.
+        for attempt in (1, 2):
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as cx:
+                    r = await cx.post(
+                        url,
+                        headers={"x-goog-api-key": self._api_key,
+                                 "Content-Type": "application/json"},
+                        json=payload,
+                    )
+                if r.status_code == 503 and attempt == 1:
+                    log.warning("gemini 503 transient overload — retrying once after 2s")
+                    await _aio.sleep(2)
+                    continue
+                if r.status_code != 200:
+                    log.warning("gemini http %s: %s", r.status_code, r.text[:200])
+                    return {"content": "", "tool_calls": [], "finish_reason": "error"}
+                d = r.json()
+                cands = d.get("candidates") or []
+                text = ""
+                if cands:
+                    parts = (cands[0].get("content") or {}).get("parts") or []
+                    if parts:
+                        text = (parts[0].get("text") or "").strip()
+                usage = d.get("usageMetadata") or {}
+                return {
+                    "content": text,
+                    "tool_calls": [],
+                    "finish_reason": (cands[0].get("finishReason") if cands else "STOP"),
+                    "usage": {
+                        "input_tokens": usage.get("promptTokenCount", 0),
+                        "output_tokens": usage.get("candidatesTokenCount", 0),
+                    },
+                }
+            except Exception as exc:  # noqa: BLE001
+                log.warning("gemini call failed (attempt %d): %s", attempt, exc)
+                if attempt == 2:
+                    return {"content": "", "tool_calls": [], "finish_reason": "error"}
+        return {"content": "", "tool_calls": [], "finish_reason": "error"}
