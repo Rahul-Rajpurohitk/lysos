@@ -18,6 +18,7 @@ import { AgentFilterStrip } from "./AgentFilterStrip";
 import { MessageRow, ChatMsg } from "./MessageRow";
 import { IterationDivider } from "./IterationDivider";
 import { TypingIndicator } from "./TypingIndicator";
+import { ChatTabsBar, ChatTab } from "./ChatTabsBar";
 
 interface ChatPanelProps {
   events: ChatMsg[];
@@ -35,6 +36,13 @@ interface ChatPanelProps {
   /** Card-level SSE subscriptions push streamed events here so the global
    *  timeline renders them as individual rows. Wired by WorkbenchV3. */
   onIngestEvent?: (event: ChatMsg) => void;
+  // ---- multi-chat tabs (Claude.ai style) ----
+  chatTabs?: ChatTab[];
+  activeChatId?: string;
+  onSelectChat?: (id: string) => void;
+  onCloseChat?: (id: string) => void;
+  onCreateChat?: () => void;
+  onRenameChat?: (id: string, title: string) => void;
 }
 
 export function ChatPanel(p: ChatPanelProps) {
@@ -113,49 +121,60 @@ export function ChatPanel(p: ChatPanelProps) {
 
   return (
     <div className="lys-chat">
-      {/* Tight header: 32px tall, no "CONVERSATION · 0 MSG" filler.
-          Left: live iter + composite pill (the metric that matters).
-          Right: replay badge + Stream/Columns toggle. */}
-      <div style={{
-        height: 26,
-        flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        padding: "0 8px",
-        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-      }}>
-        {(p.currentIter && p.totalIters) ? (
-          <span style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "2px 8px",
-            background: "var(--lys-surface-2)",
-            borderRadius: 4,
-            fontSize: 10.5,
-            fontFamily: "var(--lys-font-mono)",
-            color: "var(--lys-text-dim)",
-          }}>
-            <Activity size={10} color={p.isRunning ? "var(--lys-accent)" : "var(--lys-text-faint)"} />
-            iter {p.currentIter}/{p.totalIters}
-            {p.composite != null && (
-              <>
-                <span style={{ color: "var(--lys-text-faint)" }}>·</span>
-                <span style={{ color: "var(--lys-text)", fontWeight: 600 }}>
-                  {p.composite.toFixed(3)}
-                </span>
-              </>
-            )}
-          </span>
-        ) : (
-          <span style={{ fontSize: 11, color: "var(--lys-text-faint)" }}>
-            session ready
-          </span>
-        )}
-        <span style={{ flex: 1 }} />
-        {p.replayBadge}
-      </div>
+      {/* Multi-chat tabs (Claude.ai style) replace the old "session ready"
+          header — no more rubbish-filler space. Live iter + composite pill
+          is shown only when a session is actively running. */}
+      {p.chatTabs && p.activeChatId && p.onSelectChat && p.onCloseChat && p.onCreateChat ? (
+        <div style={{
+          display: "flex",
+          alignItems: "stretch",
+          flexShrink: 0,
+          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+        }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <ChatTabsBar
+              tabs={p.chatTabs}
+              activeId={p.activeChatId}
+              onSelect={p.onSelectChat}
+              onClose={p.onCloseChat}
+              onCreate={p.onCreateChat}
+              onRename={p.onRenameChat}
+            />
+          </div>
+          {(p.currentIter && p.totalIters) ? (
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "2px 10px",
+              alignSelf: "center",
+              background: "var(--lys-surface-2)",
+              borderRadius: 4,
+              fontSize: 10.5,
+              fontFamily: "var(--lys-font-mono)",
+              color: "var(--lys-text-dim)",
+              marginRight: 8,
+              flexShrink: 0,
+            }}>
+              <Activity size={10} color={p.isRunning ? "var(--lys-accent)" : "var(--lys-text-faint)"} />
+              iter {p.currentIter}/{p.totalIters}
+              {p.composite != null && (
+                <>
+                  <span style={{ color: "var(--lys-text-faint)" }}>·</span>
+                  <span style={{ color: "var(--lys-text)", fontWeight: 600 }}>
+                    {p.composite.toFixed(3)}
+                  </span>
+                </>
+              )}
+            </span>
+          ) : null}
+          {p.replayBadge && (
+            <span style={{ alignSelf: "center", marginRight: 8 }}>
+              {p.replayBadge}
+            </span>
+          )}
+        </div>
+      ) : null}
 
       <AgentFilterStrip
         counts={agentCounts}

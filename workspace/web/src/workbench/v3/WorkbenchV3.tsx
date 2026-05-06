@@ -82,7 +82,31 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Session state
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [events, setEvents] = useState<TraceEvent[]>([]);
+  // ---- Multi-chat tabs (Claude.ai-style) -------------------------------
+  // Each tab is an independent chat: own events, own slash history.
+  // We store events scoped by chat session id (Map preserves insertion order
+  // for ordered tab list).
+  type ChatTabMeta = { id: string; title: string };
+  const [chatTabs, setChatTabs] = useState<ChatTabMeta[]>(() => {
+    const id = `chat-${crypto.randomUUID().slice(0, 8)}`;
+    return [{ id, title: "New chat" }];
+  });
+  const [activeChatId, setActiveChatId] = useState<string>(() => "");
+  // Lazily seed activeChatId after the initial tab is set
+  useEffect(() => {
+    if (!activeChatId && chatTabs.length > 0) setActiveChatId(chatTabs[0].id);
+  }, [activeChatId, chatTabs]);
+  const [chatEventsBySid, setChatEventsBySid] = useState<Record<string, TraceEvent[]>>({});
+  const events: TraceEvent[] = chatEventsBySid[activeChatId] ?? [];
+  function setEvents(updater: TraceEvent[] | ((prev: TraceEvent[]) => TraceEvent[])): void {
+    setChatEventsBySid((bySid) => {
+      const cur = bySid[activeChatId] ?? [];
+      const next = typeof updater === "function" ? (updater as (p: TraceEvent[]) => TraceEvent[])(cur) : updater;
+      return { ...bySid, [activeChatId]: next };
+    });
+  }
+  function _legacy_setEvents_unused(_x: TraceEvent[]) { /* kept for refactor safety */ }
+  void _legacy_setEvents_unused;
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [activeTab, setActiveTab] = useState<RightTab>("Radar");
   const [mechanismOpen, setMechanismOpen] = useState(false);
@@ -435,10 +459,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       agent: "user",
                       content: t,
                     } as any]);
-                    // 2) Stable chat session id (separate from the workbench
-                    //    design session id that /design will spawn).
-                    const chatSid = sessionId ?? `chat-${crypto.randomUUID().slice(0, 8)}`;
-                    if (!sessionId) setSessionId(chatSid);
+                    // 2) Use the active chat tab's id as the harness session
+                    //    id. Each tab is an independent chat session.
+                    const chatSid = activeChatId;
+                    // Auto-title the tab on first message (drop the slash, trim 40c)
+                    setChatTabs((tabs) => {
+                      const tab = tabs.find((x) => x.id === chatSid);
+                      if (!tab || tab.title !== "New chat") return tabs;
+                      const guess = t.replace(/^\//, "").trim().slice(0, 40) || "New chat";
+                      return tabs.map((x) => (x.id === chatSid ? { ...x, title: guess } : x));
+                    });
                     // 3) POST through the harness — slash commands route to
                     //    the registry, free prompts route to the LLM.
                     try {
@@ -524,6 +554,38 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 setActiveSubAgents((cur) =>
                   cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
                 )
+              }
+              chatTabs={chatTabs.map((t) => ({
+                id: t.id,
+                title: t.title,
+                msgCount: (chatEventsBySid[t.id] ?? []).length,
+              }))}
+              activeChatId={activeChatId}
+              onSelectChat={(id) => setActiveChatId(id)}
+              onCreateChat={() => {
+                const id = `chat-${crypto.randomUUID().slice(0, 8)}`;
+                setChatTabs((tabs) => [...tabs, { id, title: "New chat" }]);
+                setActiveChatId(id);
+              }}
+              onCloseChat={(id) => {
+                setChatTabs((tabs) => {
+                  if (tabs.length <= 1) return tabs; // never close the last
+                  const idx = tabs.findIndex((t) => t.id === id);
+                  const next = tabs.filter((t) => t.id !== id);
+                  if (id === activeChatId) {
+                    const fallback = next[Math.max(0, idx - 1)];
+                    if (fallback) setActiveChatId(fallback.id);
+                  }
+                  return next;
+                });
+                setChatEventsBySid((m) => {
+                  const { [id]: _drop, ...rest } = m;
+                  void _drop;
+                  return rest;
+                });
+              }}
+              onRenameChat={(id, title) =>
+                setChatTabs((tabs) => tabs.map((t) => (t.id === id ? { ...t, title } : t)))
               }
             />
           </Allotment.Pane>

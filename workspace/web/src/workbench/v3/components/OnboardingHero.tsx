@@ -84,7 +84,8 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
         style={{ textAlign: "center", maxWidth: 620, margin: "0 auto" }}
       >
         <h1 style={{
-          fontSize: 22,
+          // Scales 18→22pt across narrow→wide chat panels (Allotment drag-friendly)
+          fontSize: "clamp(18px, 2.6vw, 22px)",
           fontWeight: 600,
           letterSpacing: "-0.02em",
           margin: 0,
@@ -95,26 +96,28 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
           Lysos Workbench
         </h1>
         <p style={{
-          fontSize: 12,
+          fontSize: "clamp(11px, 1.4vw, 12.5px)",
           color: "var(--lys-text-dim)",
           margin: 0,
           lineHeight: 1.4,
+          maxWidth: 480,
+          marginInline: "auto",
         }}>
           The AI drug-design lab for antimicrobial resistance.
-          <span style={{ color: "var(--lys-text-faint)" }}>
-            {" "}4 specialist agents · 12-axis reward · MI300X-trained.
-          </span>
         </p>
       </motion.div>
 
-      {/* ────────── Feature cards (2×2) — the lead content now ────────── */}
+      {/* ────────── Feature cards — graceful 2→1 col on Allotment drag ────────── */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3, delay: 0.06 }}
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
+          // auto-fit so the panel can shrink (Allotment splitter drag) without
+          // the cards squashing 50/50 with awkward word-wrapping. 260px min ≈
+          // breakpoint at which two columns stop being readable.
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
           gap: 8,
           maxWidth: 760,
           margin: "0 auto",
