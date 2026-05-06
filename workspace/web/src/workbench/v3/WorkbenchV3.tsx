@@ -202,16 +202,15 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   //   KNOWLEDGE (blue)     — artifact pane (only visible after /explain)
   // Each group is draggable + resizable. Cards inside each group are
   // arranged in a 2-col grid (size=2 for full-row cards).
-  // h here is a fallback only — autoFit:true means the group will compute
-  // its actual height from its cards (one row pair = 320px, full-row
-  // size:2 cards = 360px, plus header + padding + gaps). Containers
-  // start at sensible (x, y, w) anchors and auto-grow vertically.
+  // Containers default to LANDSCAPE proportions (wider than tall) — they're
+  // app-screens, not magazine pages. autoFit:true → height auto-computes
+  // from cards. Width is the dimension we hand-tune for proportion.
   const DEFAULT_GROUP_LAYOUT: Record<string, GroupLayout> = {
-    "chem":      { x: 16,  y: 16,   w: 720,  h: 920, z: 1, autoFit: true },
-    "scoring":   { x: 752, y: 16,   w: 580,  h: 360, z: 1, autoFit: true },
-    "agents":    { x: 752, y: 800,  w: 580,  h: 280, z: 1, autoFit: true },
-    "live":      { x: 16,  y: 1700, w: 580,  h: 380, z: 1, autoFit: true },
-    "knowledge": { x: 16,  y: 2100, w: 1316, h: 480, z: 1, autoFit: true },
+    "chem":      { x: 16,   y: 16,   w: 1500, h: 1320, z: 1, autoFit: true },
+    "scoring":   { x: 1532, y: 16,   w: 700,  h: 1200, z: 1, autoFit: true },
+    "agents":    { x: 1532, y: 1240, w: 700,  h: 1100, z: 1, autoFit: true },
+    "knowledge": { x: 16,   y: 1356, w: 1500, h: 1200, z: 1, autoFit: true },
+    "live":      { x: 16,   y: 2580, w: 1500, h: 600,  z: 1, autoFit: true },
   };
   const [playgroundGroupLayouts, setPlaygroundGroupLayouts] = useState<Record<string, Record<string, GroupLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
@@ -1169,9 +1168,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         smiles={currentSmiles}
                         onMatchSelected={(match) => setSmartsHighlight(match ? match.atom_indices : null)}
                       /> },
-                    { id: "properties", title: "Properties · medchem stack", size: 2, expandedH: 360, body:
+                    { id: "properties", title: "Properties · medchem stack", expandedH: 400, body:
                       <PropertiesCard apiBase={apiBase} smiles={currentSmiles} /> },
-                    { id: "library", title: "Library · saved molecules", size: 2, body:
+                    { id: "library", title: "Library · saved molecules", expandedH: 400, body:
                       <MoleculeLibraryCard
                         apiBase={apiBase}
                         currentSmiles={currentSmiles}
