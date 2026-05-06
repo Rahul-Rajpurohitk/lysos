@@ -17,5 +17,15 @@ Public API (what the FastAPI server uses):
 
 from .orchestrator import Harness  # noqa: F401
 from .skills_loader import SkillsLoader  # noqa: F401
+from .store import SessionStore, get_store  # noqa: F401
+from .tracing import Tracer, get_tracer, drop_tracer  # noqa: F401
 
-__all__ = ["Harness", "SkillsLoader"]
+__all__ = [
+    "Harness",
+    "SkillsLoader",
+    "SessionStore",
+    "get_store",
+    "Tracer",
+    "get_tracer",
+    "drop_tracer",
+]

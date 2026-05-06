@@ -35,6 +35,8 @@ from ..commands import (
     get_registry,
 )
 from .skills_loader import SkillsLoader
+from .store import SessionStore, get_store
+from .tracing import Tracer, get_tracer
 
 log = logging.getLogger("workbench.agents.harness.orchestrator")
 
@@ -74,10 +76,12 @@ class Harness:
         registry: Optional[CommandRegistry] = None,
         skills: Optional[SkillsLoader] = None,
         llm: Any = None,
+        store: Optional[SessionStore] = None,
     ):
         self.registry = registry or get_registry()
         self.skills = skills or SkillsLoader()
         self.llm = llm
+        self.store = store or get_store()
 
     # ---- public entry point ----
 

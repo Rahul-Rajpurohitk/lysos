@@ -64,8 +64,10 @@ export function TightComposer(p: TightComposerProps) {
   useEffect(() => {
     const el = taRef.current;
     if (!el) return;
+    // Default 2 lines (~52px content). Auto-grow up to 4 lines (~96px),
+    // then internal scrolling kicks in (overflow-y handled by maxHeight).
     el.style.height = "auto";
-    el.style.height = `${Math.min(132, el.scrollHeight)}px`;
+    el.style.height = `${Math.min(96, Math.max(52, el.scrollHeight))}px`;
   }, [text]);
 
   function reset() {
@@ -183,7 +185,7 @@ export function TightComposer(p: TightComposerProps) {
       >
         <textarea
           ref={taRef}
-          rows={1}
+          rows={2}
           placeholder={p.isRunning
             ? "Intervene… type a directive or constraint"
             : "Describe a target — e.g. non-toxic macrolide for MRSA that escapes mecA"}
@@ -203,11 +205,15 @@ export function TightComposer(p: TightComposerProps) {
             fontFamily: "inherit",
             fontSize: 13.5,
             lineHeight: 1.45,
-            padding: "8px 88px 8px 12px",
+            padding: "10px 92px 10px 14px",
             color: "var(--lys-text)",
             resize: "none",
-            minHeight: 36,
-            maxHeight: 132,
+            // Default visible 2 lines (~52px); auto-grow up to 4 lines (~96px);
+            // then internal scrolling kicks in via overflowY=auto.
+            minHeight: 52,
+            maxHeight: 96,
+            overflowY: "auto",
+            boxSizing: "border-box",
           }}
         />
 
