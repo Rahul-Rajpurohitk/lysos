@@ -17,7 +17,7 @@
  *    knows what their input does.
  *  - Auto-grow up to 6 lines; scroll past that.
  */
-import { ArrowUp, X, Beaker } from "lucide-react";
+import { ArrowUp, X, Beaker, FlaskConical, Target, HelpCircle, Activity } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { SlashPalette, type SlashCommand, DEFAULT_COMMANDS } from "./SlashPalette";
 
@@ -37,11 +37,38 @@ interface TightComposerProps {
   chatEmpty?: boolean;
 }
 
-const STARTER_PROMPTS: { label: string; prompt: string }[] = [
-  { label: "/design β-lactam for MRSA", prompt: "/design β-lactam for MRSA that escapes mecA" },
-  { label: "/score a candidate",        prompt: "/score CCO" },
-  { label: "/explain a target",         prompt: "/explain mecA / PBP2a" },
-  { label: "/spectrum macrolide",       prompt: "/spectrum macrolide for MRSA + VRE" },
+interface StarterPrompt {
+  cmd: string;          // accent-colored mono (e.g. "/design")
+  rest: string;         // dim normal text (e.g. "β-lactam for MRSA")
+  prompt: string;       // full text dropped into the textarea on click
+  icon: React.ReactNode;
+}
+
+const STARTER_PROMPTS: StarterPrompt[] = [
+  {
+    cmd: "/design",
+    rest: "β-lactam for MRSA",
+    prompt: "/design β-lactam for MRSA that escapes mecA",
+    icon: <FlaskConical size={11} />,
+  },
+  {
+    cmd: "/score",
+    rest: "a candidate",
+    prompt: "/score CCO",
+    icon: <Target size={11} />,
+  },
+  {
+    cmd: "/explain",
+    rest: "a target",
+    prompt: "/explain mecA / PBP2a",
+    icon: <HelpCircle size={11} />,
+  },
+  {
+    cmd: "/spectrum",
+    rest: "macrolide",
+    prompt: "/spectrum macrolide for MRSA + VRE",
+    icon: <Activity size={11} />,
+  },
 ];
 
 export function TightComposer(p: TightComposerProps) {
@@ -175,45 +202,66 @@ export function TightComposer(p: TightComposerProps) {
         </div>
       )}
 
-      {/* Starter-prompt chip strip — only on first paint of an empty chat.
-          Each chip pre-fills the textarea so the user can edit before sending.
-          This is the discovery surface for the 17-command palette. */}
+      {/* Starter-prompt chips — discovery surface for the slash-command
+          registry. Each chip is structured: icon · accent slash · dim rest.
+          Hover lifts a subtle accent border + bg-tint. */}
       {p.chatEmpty && !p.isRunning && p.constraints.length === 0 && (
         <div style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 5,
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+          gap: 4,
           marginBottom: 6,
         }}>
           {STARTER_PROMPTS.map((s) => (
             <button
-              key={s.label}
+              key={s.cmd}
               type="button"
               onClick={() => {
                 setText(s.prompt);
                 requestAnimationFrame(() => taRef.current?.focus());
               }}
+              className="lys-starter-chip"
               style={{
-                padding: "3px 9px",
-                fontSize: 11,
-                fontFamily: "var(--lys-font-mono)",
-                color: "var(--lys-text-dim)",
-                background: "var(--lys-bg-hover, rgba(0,0,0,0.04))",
-                border: 0,
-                borderRadius: 999,
+                display: "flex",
+                alignItems: "center",
+                gap: 7,
+                padding: "5px 9px",
+                background: "white",
+                border: "1px solid var(--lys-border, rgba(15,23,42,0.08))",
+                borderRadius: 6,
                 cursor: "pointer",
-                transition: "background 0.12s, color 0.12s",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "rgba(16, 185, 129, 0.10)";
-                e.currentTarget.style.color = "var(--lys-accent)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "var(--lys-bg-hover, rgba(0,0,0,0.04))";
-                e.currentTarget.style.color = "var(--lys-text-dim)";
+                fontFamily: "inherit",
+                textAlign: "left",
+                minWidth: 0,
+                transition: "border-color 0.12s, background 0.12s, transform 0.12s",
               }}
             >
-              {s.label}
+              <span style={{
+                color: "var(--lys-accent)",
+                display: "inline-flex",
+                flexShrink: 0,
+              }}>
+                {s.icon}
+              </span>
+              <span style={{
+                fontFamily: "var(--lys-font-mono)",
+                fontSize: 10.5,
+                fontWeight: 600,
+                color: "var(--lys-accent)",
+                flexShrink: 0,
+              }}>
+                {s.cmd}
+              </span>
+              <span style={{
+                fontSize: 10.5,
+                color: "var(--lys-text-dim)",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                minWidth: 0,
+              }}>
+                {s.rest}
+              </span>
             </button>
           ))}
         </div>

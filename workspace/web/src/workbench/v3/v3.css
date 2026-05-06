@@ -1353,3 +1353,16 @@
 .lys-onb-card:active {
   background: rgba(16, 185, 129, 0.12);
 }
+
+/* -------------------------------------------------------------------------
+ * Starter command chips — Claude-style discovery surface
+ * ------------------------------------------------------------------------- */
+.lys-starter-chip:hover {
+  border-color: rgba(16, 185, 129, 0.45) !important;
+  background: rgba(16, 185, 129, 0.04) !important;
+  transform: translateY(-1px);
+}
+.lys-starter-chip:active {
+  transform: translateY(0);
+  background: rgba(16, 185, 129, 0.10) !important;
+}
