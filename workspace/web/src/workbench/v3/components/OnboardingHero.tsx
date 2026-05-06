@@ -184,6 +184,7 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
             fontFamily: "var(--lys-font-mono)",
             letterSpacing: "0.06em",
             textTransform: "uppercase",
+            textAlign: "center",
           }}>
             Pick a pathogen to start
           </div>
