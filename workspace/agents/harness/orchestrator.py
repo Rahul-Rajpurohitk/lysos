@@ -140,6 +140,8 @@ class Harness:
             card_kind = ""
             if head == "score" and result.data:
                 card_kind = "score"
+            elif head in ("design", "d") and result.data and result.data.get("session_id"):
+                card_kind = "design_session"
 
             return HarnessResponse(
                 session_id=session.session_id,

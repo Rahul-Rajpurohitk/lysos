@@ -21,6 +21,7 @@ import { ChevronRight, Star, ArrowRight, Flag, Wrench, BrainCircuit } from "luci
 import { agentColor } from "./AgentAvatar";
 import { InlineSmilesCard } from "./InlineSmilesCard";
 import { RewardCard } from "./RewardCard";
+import { DesignSessionCard } from "./DesignSessionCard";
 
 export interface ChatMsg {
   id?: string;
@@ -55,14 +56,18 @@ interface MessageRowProps {
   msg: ChatMsg;
   toolCalls?: ChatMsg[];
   onLoadSmiles?: (smi: string) => void;
+  /** Push a streamed event (from a card's SSE subscription) into the
+   *  parent chat-events array so MessageRow renders it as a row. */
+  onIngestEvent?: (event: ChatMsg) => void;
 }
 
-export function MessageRow({ msg, toolCalls, onLoadSmiles }: MessageRowProps) {
+export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent }: MessageRowProps) {
   if (msg.type === "candidate_added") return <CandidateRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "mol_edit") return <EditRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "state_change") return <StateRow msg={msg} />;
   // Structured chat cards from slash commands (/score, /design, /explain, …)
   if (msg.card_kind === "score" && msg.data) return <RewardCard msg={msg} onLoadSmiles={onLoadSmiles} />;
+  if (msg.card_kind === "design_session" && msg.data) return <DesignSessionCard msg={msg} onIngestEvent={onIngestEvent} />;
 
   const agent = msg.agent ?? msg.type ?? "system";
   const color = agentColor(agent);

@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sse_starlette.sse import EventSourceResponse
 
 # Workspace-level imports
@@ -341,6 +341,118 @@ class Mol3DRequest(BaseModel):
     optimize: bool = True
     add_hydrogens: bool = True
     seed: int = 0xC0FFEE
+
+
+# ---------------------------------------------------------------------------
+# W1 — Design (one-shot create+start; pathogen + objective → multi-agent loop)
+# ---------------------------------------------------------------------------
+
+
+class DesignRequest(BaseModel):
+    pathogen: str = Field(..., description="WHO-priority pathogen code (MRSA, Mtb, …)")
+    objective: Optional[str] = Field(
+        None,
+        description="Free-text design objective (e.g. 'non-toxic macrolide that escapes mecA')",
+    )
+    constraints: list[dict] = Field(default_factory=list)
+    max_iterations: int = 8
+    autonomy: Literal["auto", "copilot", "manual"] = "copilot"
+
+
+class DesignResponse(BaseModel):
+    session_id: str
+    pathogen: str
+    objective: Optional[str]
+    sse_url: str
+    status: str
+
+
+@router.post("/design", response_model=DesignResponse)
+async def workbench_design(req: DesignRequest) -> DesignResponse:
+    """W1 entry point — kicks off a full multi-agent design session.
+
+    Creates a WorkbenchState, queues the user objective as a directive
+    intervention so the Designer reads it on iteration 1, spawns the
+    multi-agent loop in the background, and returns the session_id.
+
+    Frontend subscribes to /workbench/sessions/{id}/events (SSE) for
+    live event streaming (agent_message, candidate_added, iteration_*,
+    score, session_complete).
+    """
+    sid = str(uuid.uuid4())
+
+    # Materialize constraints (drop unparseable, log)
+    constraints: list[Constraint] = []
+    for c in req.constraints:
+        try:
+            constraints.append(Constraint(**c))
+        except Exception:
+            log.warning("Invalid constraint dropped: %s", c)
+
+    state = WorkbenchState(
+        session_id=sid,
+        target_pathogen=req.pathogen,  # type: ignore[arg-type]
+        mode="design",
+        autonomy=req.autonomy,
+        constraints=constraints,
+        max_iterations=req.max_iterations,
+    )
+
+    # Queue the free-text objective as a directive so Designer picks it up
+    if req.objective:
+        state.push_intervention("directive", {"text": req.objective})
+
+    _sessions[sid] = state
+    queue = _get_or_create_queue(sid)
+
+    # Persist (no-op if Postgres unavailable)
+    if SessionRepo is not None:
+        try:
+            SessionRepo.insert(
+                session_id=sid,
+                target_pathogen=req.pathogen,
+                mode="design",
+                autonomy=req.autonomy,
+                constraints=req.constraints,
+                max_iterations=req.max_iterations,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("SessionRepo.insert failed: %s", exc)
+
+    # Spawn the loop. Mirror the start_session pattern: tracer wraps emit,
+    # Postgres mirrors get/cand/tool tables, queue feeds SSE consumer.
+    from .tracing import Tracer
+    _tracer = Tracer(session_id=sid, emit_fn=lambda ev: queue.put(ev))
+
+    async def emit(ev: dict) -> None:
+        await _tracer.emit(ev)
+
+    async def runner() -> None:
+        try:
+            await run_workbench_loop(state, emit)
+            if SessionRepo is not None:
+                try:
+                    SessionRepo.update_termination(
+                        sid, state.terminated, state.termination_reason,
+                    )
+                except Exception:
+                    pass
+            await queue.put({"type": "session_complete", "data": {"session_id": sid}})
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Design session %s crashed", sid)
+            await queue.put({"type": "error", "data": str(exc)})
+        finally:
+            await queue.put(None)
+
+    asyncio.create_task(runner())
+
+    return DesignResponse(
+        session_id=sid,
+        pathogen=req.pathogen,
+        objective=req.objective,
+        sse_url=f"/workbench/sessions/{sid}/events",
+        status="running",
+    )
 
 
 # ---------------------------------------------------------------------------

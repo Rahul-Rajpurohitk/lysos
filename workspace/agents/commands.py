@@ -162,30 +162,91 @@ class ClearCommand(Command):
 
 
 class DesignCommand(Command):
+    """W1 — kicks off a real multi-agent design session.
+
+    Parses `<pathogen> [objective text]` from args, creates a WorkbenchState,
+    spawns run_workbench_loop in the background, and returns the session_id
+    so the frontend can subscribe to /workbench/sessions/{id}/events (SSE).
+
+    The Designer/Critic/Editor/Strategist debate happens server-side; the
+    chat panel renders agent_message + candidate_added events as they
+    stream in.
+    """
+
+    PATHOGEN_CODES = {"MRSA", "Mtb", "EColi-CRE", "KpneuCRE",
+                       "Abaum", "Paer", "VRE", "NGono"}
+    PATHOGEN_ALIASES = {
+        "mrsa": "MRSA", "mtb": "Mtb", "tb": "Mtb",
+        "ecoli": "EColi-CRE", "ecoli-cre": "EColi-CRE", "e.coli": "EColi-CRE",
+        "kpneu": "KpneuCRE", "kpneucre": "KpneuCRE", "klebsiella": "KpneuCRE",
+        "abaum": "Abaum", "acinetobacter": "Abaum",
+        "paer": "Paer", "pseudomonas": "Paer",
+        "vre": "VRE", "ngono": "NGono", "gonorrhea": "NGono",
+    }
+
     def __init__(self):
         super().__init__(
             name="design",
-            description="Propose new candidate molecules for a target",
-            type=CommandType.PROMPT,
-            argument_hint="<pathogen|target> [--n 8] [--from-paper <ref>]",
+            description="Start a multi-agent design session (Designer→Critic→Editor→Strategist)",
+            type=CommandType.LOCAL,
+            argument_hint="<pathogen> [objective text]",
             aliases=["d"],
         )
 
+    @classmethod
+    def _resolve_pathogen(cls, token: str, fallback: Optional[str]) -> str:
+        """Map a user token to a canonical pathogen code, fall back to ctx."""
+        if not token:
+            return fallback or "MRSA"
+        if token in cls.PATHOGEN_CODES:
+            return token
+        return cls.PATHOGEN_ALIASES.get(token.lower(), fallback or "MRSA")
+
     async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
-        target = args.strip() or ctx.active_target or "MRSA"
+        # Parse: first token is pathogen (or alias); the rest is the objective
+        # Examples:
+        #   "MRSA"
+        #   "MRSA non-toxic macrolide that escapes mecA"
+        #   "mrsa β-lactam"
+        head, _, tail = args.strip().partition(" ")
+        pathogen = self._resolve_pathogen(head, ctx.active_target)
+        objective = tail.strip() or None
+
+        try:
+            # Direct in-process call — no HTTP roundtrip needed
+            from api.workbench import workbench_design, DesignRequest
+        except ImportError as exc:
+            return CommandResult(error=f"design route not available: {exc}")
+
+        try:
+            req = DesignRequest(
+                pathogen=pathogen,
+                objective=objective,
+                constraints=[],
+                max_iterations=8,
+            )
+            resp = await workbench_design(req)
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"design start failed: {exc}")
+
+        line = f"design session started for **{pathogen}**"
+        if objective:
+            line += f" — *{objective}*"
+
         return CommandResult(
-            output="",
-            should_send_to_llm=True,
+            output=line,
             data={
-                "skill": "propose_pocket_aware",
-                "args": {"target": target, "n_candidates": 8},
-                "tool_hint": ["propose_pocket_aware", "score_molecule"],
-                "system_prompt_addendum": (
-                    f"You are designing antibiotic candidates for {target}. "
-                    "Use /propose first to seed, then /score to rank. "
-                    "Cite the pocket class you're targeting."
-                ),
+                "session_id": resp.session_id,
+                "pathogen": resp.pathogen,
+                "objective": resp.objective,
+                "sse_url": resp.sse_url,
+                "status": resp.status,
             },
+            follow_ups=[
+                "/score <smiles>  (when a candidate appears)",
+                "/branch <smiles>  (stress-test it)",
+                "/explain <target>  (mechanism brief)",
+            ],
         )
 
 

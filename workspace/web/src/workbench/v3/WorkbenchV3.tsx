@@ -427,15 +427,65 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 <TightComposer
                   isRunning={isRunning}
                   chatEmpty={messages.length === 0}
-                  onSend={(t: string) => {
-                    setEvents((p) => [...p, { type: "agent_message", ts: Date.now() / 1000, agent: "user", content: t }]);
-                    if (!isRunning) startSession();
+                  onSend={async (t: string) => {
+                    // 1) Echo the user message into the timeline immediately
+                    setEvents((p) => [...p, {
+                      type: "agent_message",
+                      ts: Date.now() / 1000,
+                      agent: "user",
+                      content: t,
+                    } as any]);
+                    // 2) Stable chat session id (separate from the workbench
+                    //    design session id that /design will spawn).
+                    const chatSid = sessionId ?? `chat-${crypto.randomUUID().slice(0, 8)}`;
+                    if (!sessionId) setSessionId(chatSid);
+                    // 3) POST through the harness — slash commands route to
+                    //    the registry, free prompts route to the LLM.
+                    try {
+                      const r = await fetch(`${apiBase}/api/chat`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ session_id: chatSid, text: t }),
+                      });
+                      if (!r.ok) {
+                        const errTxt = await r.text();
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: "system",
+                          content: `error ${r.status}: ${errTxt.slice(0, 200)}`,
+                        } as any]);
+                        return;
+                      }
+                      const d = await r.json();
+                      // 4) Push the response — text + structured card payload.
+                      setEvents((p) => [...p, {
+                        type: "agent_message",
+                        ts: Date.now() / 1000,
+                        agent: "assistant",
+                        content: d.text ?? d.error ?? "",
+                        card_kind: d.card_kind ?? undefined,
+                        data: d.data ?? undefined,
+                      } as any]);
+                    } catch (exc: any) {
+                      setEvents((p) => [...p, {
+                        type: "agent_message",
+                        ts: Date.now() / 1000,
+                        agent: "system",
+                        content: `network error: ${exc?.message ?? exc}`,
+                      } as any]);
+                    }
                   }}
                   onIntervene={intervene}
                   constraints={constraints}
                   onRemoveConstraint={(id: string) => setConstraints((cs) => cs.filter((c) => c.id !== id))}
                 />
               }
+              onIngestEvent={(ev) => {
+                // SSE-streamed events from a DesignSessionCard etc. land here
+                // and become rows in the chat timeline.
+                setEvents((p) => [...p, ev as any]);
+              }}
               composite={composite}
               currentIter={currentIter}
               totalIters={iters}

@@ -32,6 +32,9 @@ interface ChatPanelProps {
   onLoadSmiles: (smi: string) => void;
   subAgents: string[];
   onToggleSubAgent: (id: string) => void;
+  /** Card-level SSE subscriptions push streamed events here so the global
+   *  timeline renders them as individual rows. Wired by WorkbenchV3. */
+  onIngestEvent?: (event: ChatMsg) => void;
 }
 
 export function ChatPanel(p: ChatPanelProps) {
@@ -198,6 +201,7 @@ export function ChatPanel(p: ChatPanelProps) {
                 msg={row.msg}
                 toolCalls={row.toolCalls}
                 onLoadSmiles={p.onLoadSmiles}
+                onIngestEvent={p.onIngestEvent}
               />
             );
           })}
