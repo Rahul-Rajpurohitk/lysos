@@ -13,7 +13,8 @@
  *  5. Pick an attachment → POST /workbench/molecule/edit → onMoleculeEdit
  *     bubbles new SMILES up to canvas state.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChemKnowledgeCard } from "./ChemKnowledgeCard";
 
 interface Props {
@@ -28,6 +29,9 @@ interface Props {
   onCursorHover?: (atomIdx: number | null) => void;
   /** Optional external highlight (rare — SMARTS match is now handled internally) */
   highlightAtoms?: number[] | null;
+  /** Open the user's saved-molecules library popover. Implemented by parent
+   *  via portal so we can share the same library state across cards. */
+  onLoadFromLibrary?: (smi: string, name: string) => void;
 }
 
 const SMARTS_PRESETS = [
@@ -106,7 +110,7 @@ const ACTOR_COLOR: Record<string, string> = {
   user: "#f59e0b",
 };
 
-export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight }: Props) {
+export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, onLoadFromLibrary }: Props) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [pop, setPop] = useState<PopoverState | null>(null);
@@ -116,6 +120,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   const [smartsHits, setSmartsHits] = useState<number[]>([]);
   const [smartsError, setSmartsError] = useState<string>("");
   const [smartsLoading, setSmartsLoading] = useState(false);
+  // Library popover state
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const libraryBtnRef = useRef<HTMLButtonElement | null>(null);
   // Drag-to-bond state — mousedown on atom A, drag to atom B → add_bond
   const [dragStart, setDragStart] = useState<number | null>(null);
   const [dragHover, setDragHover] = useState<number | null>(null);
@@ -651,33 +658,49 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         background: "var(--lys-bg-2, #ffffff)",
       }}
     >
-      <div style={{
-        padding: "4px 10px",
-        fontSize: 9.5,
-        fontFamily: "var(--lys-font-mono)",
-        color: "var(--lys-text-faint)",
-        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-      }}>
+      <div
+        style={{
+          padding: "4px 10px",
+          fontSize: 9.5,
+          fontFamily: "var(--lys-font-mono)",
+          color: "var(--lys-text-faint)",
+          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+          display: "flex", alignItems: "center", gap: 6,
+        }}
+        title="Click an atom to edit · shift-click for multi-select · click-and-drag from atom to atom to add a bond"
+      >
         <span style={{ letterSpacing: "0.06em", textTransform: "uppercase" }}>
           2D · {pathogen}
         </span>
+        {/* Library trigger — opens portal popover with saved molecules */}
+        {onLoadFromLibrary && (
+          <button
+            ref={libraryBtnRef}
+            type="button"
+            onClick={() => setLibraryOpen((o) => !o)}
+            title="Saved molecules · search & load"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 4,
+              padding: "2px 7px", borderRadius: 4,
+              border: `1px solid ${libraryOpen ? "#10b981" : "var(--lys-border-faint, rgba(0,0,0,0.08))"}`,
+              background: libraryOpen ? "rgba(16,185,129,0.08)" : "transparent",
+              cursor: "pointer", fontFamily: "inherit",
+              fontSize: 9.5, color: "var(--lys-text-dim)",
+              fontWeight: 500,
+            }}>
+            <span style={{ fontSize: 10, lineHeight: 1 }}>📚</span>
+            <span style={{ textTransform: "none", letterSpacing: 0 }}>Library</span>
+          </button>
+        )}
         <span style={{ flex: 1 }} />
         {selected.size > 0 && (
-          <span style={{ color: "#f59e0b", fontWeight: 600 }}>
-            {selected.size} sel
-          </span>
+          <span style={{ color: "#f59e0b", fontWeight: 600 }}>{selected.size} selected</span>
         )}
         {dragStart != null && (
           <span style={{ color: "#06b6d4", fontWeight: 600 }}>
-            drag → atom #{dragHover ?? "?"} to bond
+            drag → {dragHover != null ? `atom ${dragHover}` : "release on atom to bond"}
           </span>
         )}
-        <span style={{ color: "var(--lys-text-dim)" }}>
-          drag → bond · click → edit · shift-click → select
-        </span>
       </div>
 
       {/* SMARTS strip — embedded inside 2D viewer (NOT a separate card).
@@ -787,8 +810,6 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           selected={selected}
           hoverIdx={null}
           onSelectAtom={(idx) => {
-            // Sync selection — clicking an atom row in the rail toggles
-            // the selection set, mirroring shift-click on the SVG.
             setSelected((cur) => {
               const next = new Set(cur);
               if (next.has(idx)) next.delete(idx); else next.add(idx);
@@ -796,6 +817,50 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             });
           }}
           onHoverAtom={(idx) => onCursorHover?.(idx)}
+          onDeleteAtom={async (idx) => {
+            if (!smiles) return;
+            try {
+              const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ smiles, op: "delete_atom", atom_index: idx }),
+              });
+              if (!r.ok) {
+                const txt = await r.text();
+                setError(`delete ${r.status}: ${txt.slice(0, 60)}`);
+                setTimeout(() => setError(""), 2200);
+                return;
+              }
+              const d = await r.json();
+              if (d.smiles) {
+                onMoleculeEdit?.(d.smiles, { op: "delete_atom", atom_idx: idx, label: `delete atom ${idx}` });
+              }
+            } catch {/*noop*/}
+          }}
+          onAddAtom={async () => {
+            if (!smiles) return;
+            // Anchor on first atom (idx 0) and add carbon — user can swap element via popover.
+            try {
+              const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  smiles, op: "add_atom_at", atom_index: 0,
+                  new_element: "C", bond_order: "single",
+                }),
+              });
+              if (!r.ok) {
+                const txt = await r.text();
+                setError(`add ${r.status}: ${txt.slice(0, 60)}`);
+                setTimeout(() => setError(""), 2200);
+                return;
+              }
+              const d = await r.json();
+              if (d.smiles) {
+                onMoleculeEdit?.(d.smiles, { op: "add_atom_at", atom_idx: 0, label: "+C atom" });
+              }
+            } catch {/*noop*/}
+          }}
         />
         {pop && smiles && (
           <div data-chem-pop style={{ position: "absolute", left: pop.x, top: pop.y, zIndex: 100 }}>
@@ -891,8 +956,274 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           </div>
         )}
       </div>
+      {libraryOpen && libraryBtnRef.current && onLoadFromLibrary && (
+        <LibraryPopover
+          apiBase={apiBase}
+          currentSmiles={smiles}
+          anchor={libraryBtnRef.current}
+          onClose={() => setLibraryOpen(false)}
+          onLoad={(smi, name) => { onLoadFromLibrary(smi, name); setLibraryOpen(false); }}
+        />
+      )}
     </div>
   );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   LibraryPopover — portal-rendered saved-molecules panel.
+   Lives next to the 2D viewer's "Library" button. Combines search +
+   tag chips + entry list in a compact 460×500 popover. Saves and loads
+   route through the same /workbench/library/molecules backend.
+   ───────────────────────────────────────────────────────────────────── */
+interface LibraryEntry {
+  id: number;
+  smiles: string;
+  canonical_smiles: string;
+  name: string;
+  tags: string[];
+  qed: number;
+  mw: number;
+  lipinski_pass: boolean;
+}
+
+function LibraryPopover({ apiBase, currentSmiles, anchor, onClose, onLoad }: {
+  apiBase: string;
+  currentSmiles: string | null;
+  anchor: HTMLElement;
+  onClose: () => void;
+  onLoad: (smi: string, name: string) => void;
+}) {
+  const [entries, setEntries] = useState<LibraryEntry[]>([]);
+  const [tags, setTags] = useState<Array<{ tag: string; count: number }>>([]);
+  const [activeTag, setActiveTag] = useState("");
+  const [query, setQuery] = useState("");
+  const [showSave, setShowSave] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveTags, setSaveTags] = useState("");
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+
+  useEffect(() => {
+    const r = anchor.getBoundingClientRect();
+    setPos({ left: r.left, top: r.bottom + 4 });
+  }, [anchor]);
+
+  async function refresh() {
+    const params = new URLSearchParams();
+    if (activeTag) params.set("tag", activeTag);
+    if (query) params.set("q", query);
+    try {
+      const r = await fetch(`${apiBase}/workbench/library/molecules?${params}`);
+      if (r.ok) {
+        const d = await r.json();
+        setEntries(d.entries ?? []);
+      }
+      const r2 = await fetch(`${apiBase}/workbench/library/tags`);
+      if (r2.ok) {
+        const d2 = await r2.json();
+        setTags(d2.tags ?? []);
+      }
+    } catch {/*noop*/}
+  }
+  useEffect(() => { refresh(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [activeTag, query]);
+
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (t.closest("[data-library-pop]")) return;
+      if (anchor.contains(t)) return;
+      onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    setTimeout(() => document.addEventListener("mousedown", onDoc), 0);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [anchor, onClose]);
+
+  const visible = useMemo(() => entries, [entries]);
+
+  async function saveCurrent() {
+    if (!currentSmiles) return;
+    const tagsArr = saveTags.split(",").map((t) => t.trim()).filter(Boolean);
+    try {
+      await fetch(`${apiBase}/workbench/library/molecules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          smiles: currentSmiles,
+          name: saveName || "(unnamed)",
+          tags: tagsArr,
+        }),
+      });
+      setShowSave(false); setSaveName(""); setSaveTags("");
+      refresh();
+    } catch {/*noop*/}
+  }
+
+  async function deleteEntry(id: number) {
+    try {
+      await fetch(`${apiBase}/workbench/library/molecules/${id}`, { method: "DELETE" });
+      refresh();
+    } catch {/*noop*/}
+  }
+
+  if (!pos) return null;
+  return createPortal(
+    <div data-library-pop style={{
+      position: "fixed", left: pos.left, top: pos.top,
+      width: 460, maxHeight: "60vh",
+      background: "var(--lys-bg-2, #ffffff)",
+      border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+      borderRadius: 10,
+      boxShadow: "0 14px 40px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.10)",
+      zIndex: 5000, display: "flex", flexDirection: "column",
+      overflow: "hidden", fontFamily: "var(--lys-font-body)",
+    }}>
+      {/* Header — search + save trigger */}
+      <div style={{ padding: "8px 10px",
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+        display: "flex", flexDirection: "column", gap: 6,
+        background: "var(--lys-bg, #fafafa)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)" }}>
+            📚 Library · {entries.length}
+          </span>
+          <span style={{ flex: 1 }} />
+          {currentSmiles && (
+            <button type="button" onClick={() => setShowSave((s) => !s)}
+              title="Save current candidate"
+              style={{
+                border: 0, background: "#10b981", color: "white",
+                padding: "3px 9px", borderRadius: 4,
+                fontSize: 10, fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+                cursor: "pointer",
+              }}>+ save</button>
+          )}
+          <button type="button" onClick={onClose}
+            style={{ border: 0, background: "transparent", cursor: "pointer",
+              padding: 4, color: "var(--lys-text-faint)" }}>✕</button>
+        </div>
+        {showSave && currentSmiles && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3,
+            padding: 6, borderRadius: 4,
+            background: "rgba(16,185,129,0.06)" }}>
+            <input value={saveName} onChange={(e) => setSaveName(e.target.value)}
+              placeholder="name (optional)"
+              style={popInput} />
+            <input value={saveTags} onChange={(e) => setSaveTags(e.target.value)}
+              placeholder="tags · comma-separated"
+              style={popInput} />
+            <div style={{ display: "flex", gap: 4 }}>
+              <button type="button" onClick={saveCurrent}
+                style={{ flex: 1, padding: "3px 8px", borderRadius: 4,
+                  fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                  background: "#10b981", color: "white", border: 0,
+                  cursor: "pointer", fontWeight: 700 }}>save</button>
+              <button type="button" onClick={() => setShowSave(false)}
+                style={{ padding: "3px 8px", borderRadius: 4,
+                  fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                  background: "transparent", color: "var(--lys-text-faint)",
+                  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.08))",
+                  cursor: "pointer" }}>cancel</button>
+            </div>
+          </div>
+        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <input value={query} onChange={(e) => setQuery(e.target.value)}
+            placeholder="search · name, note, SMILES"
+            style={{ ...popInput, flex: 1 }} />
+        </div>
+        {tags.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+            <button type="button" onClick={() => setActiveTag("")}
+              style={tagChip(!activeTag, "#10b981")}>all · {entries.length}</button>
+            {tags.map((t) => (
+              <button key={t.tag} type="button"
+                onClick={() => setActiveTag(t.tag === activeTag ? "" : t.tag)}
+                style={tagChip(t.tag === activeTag, "#10b981")}>{t.tag} · {t.count}</button>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Entries */}
+      <div className="lys-card-body" style={{ flex: 1, overflow: "auto" }}>
+        {visible.length === 0 && (
+          <div style={{ padding: 20, textAlign: "center",
+            color: "var(--lys-text-faint)", fontSize: 11,
+            fontFamily: "var(--lys-font-mono)" }}>
+            empty · save the current candidate with +
+          </div>
+        )}
+        {visible.map((e) => (
+          <div key={e.id} style={{
+            padding: "5px 10px",
+            borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.03))",
+            borderLeft: e.lipinski_pass ? "3px solid #10b981" : "3px solid #d97706",
+            cursor: "pointer", display: "flex", flexDirection: "column", gap: 2,
+          }}
+          onClick={() => onLoad(e.smiles, e.name)}
+          onMouseOver={(ev) => { (ev.currentTarget as HTMLElement).style.background = "var(--lys-bg-3, rgba(0,0,0,0.02))"; }}
+          onMouseOut={(ev) => { (ev.currentTarget as HTMLElement).style.background = "transparent"; }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700,
+                color: "var(--lys-text)",
+                fontFamily: "var(--lys-font-mono)" }}>{e.name || `#${e.id}`}</span>
+              <span style={{ flex: 1 }} />
+              <span style={{ fontSize: 9, color: "var(--lys-text-faint)",
+                fontFamily: "var(--lys-font-mono)" }}>
+                QED <span style={{ color: e.qed >= 0.67 ? "#10b981" : e.qed >= 0.4 ? "#d97706" : "#dc2626", fontWeight: 700 }}>
+                  {e.qed.toFixed(2)}
+                </span>
+              </span>
+              <span style={{ fontSize: 9, color: "var(--lys-text-faint)",
+                fontFamily: "var(--lys-font-mono)" }}>MW {e.mw.toFixed(0)}</span>
+              <button type="button"
+                onClick={(ev) => { ev.stopPropagation(); deleteEntry(e.id); }}
+                title="Delete entry"
+                style={{ border: 0, background: "transparent",
+                  cursor: "pointer", padding: "0 3px",
+                  color: "#dc2626", opacity: 0.5,
+                  fontSize: 11, fontWeight: 700 }}
+                onMouseOver={(ev) => { (ev.currentTarget as HTMLElement).style.opacity = "1"; }}
+                onMouseOut={(ev) => { (ev.currentTarget as HTMLElement).style.opacity = "0.5"; }}>×</button>
+            </div>
+            {e.tags.length > 0 && (
+              <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+                {e.tags.map((t) => (
+                  <span key={t} style={{
+                    fontSize: 8.5, padding: "0px 5px", borderRadius: 999,
+                    background: "rgba(16,185,129,0.10)", color: "#10b981",
+                    fontFamily: "var(--lys-font-mono)" }}>{t}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+const popInput: React.CSSProperties = {
+  fontSize: 11, fontFamily: "var(--lys-font-mono)",
+  padding: "3px 7px", borderRadius: 4,
+  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+  background: "var(--lys-bg-2, #ffffff)",
+  color: "var(--lys-text)", outline: "none",
+};
+
+function tagChip(active: boolean, color: string): React.CSSProperties {
+  return {
+    padding: "1px 6px", borderRadius: 999, fontSize: 9,
+    fontFamily: "var(--lys-font-mono)",
+    border: `1px solid ${active ? color : "var(--lys-border-faint, rgba(0,0,0,0.08))"}`,
+    background: active ? `${color}15` : "var(--lys-bg-2, #ffffff)",
+    color: active ? color : "var(--lys-text-dim)",
+    cursor: "pointer", fontWeight: active ? 700 : 400,
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -910,6 +1241,8 @@ interface AtomsRailProps {
   hoverIdx: number | null;
   onSelectAtom: (idx: number) => void;
   onHoverAtom: (idx: number | null) => void;
+  onDeleteAtom?: (idx: number) => void;
+  onAddAtom?: () => void;
 }
 
 interface AtomRow {
@@ -978,26 +1311,30 @@ function AtomsRail(p: AtomsRailProps) {
       display: "flex", flexDirection: "column",
       overflow: "hidden",
     }}>
-      <div style={{
-        padding: "3px 8px",
-        fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-        color: "var(--lys-text-faint)",
-        letterSpacing: "0.06em", textTransform: "uppercase",
-        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
-        display: "flex", alignItems: "center", gap: 6,
-        minHeight: 22,
-      }}>
+      <div
+        title="Click row to select an atom · click × to delete · click + to add"
+        style={{
+          padding: "3px 8px",
+          fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+          color: "var(--lys-text-faint)",
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+          display: "flex", alignItems: "center", gap: 5,
+          minHeight: 24,
+        }}>
         <span>atoms</span>
         <span style={{ fontFamily: "inherit", color: "#10b981", fontWeight: 700 }}>
           {atoms.length}
         </span>
-        {p.smiles && atoms.length > 0 && (
-          <>
-            <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 8, color: "var(--lys-text-faint)" }}>
-              click→sel · drag→bond
-            </span>
-          </>
+        <span style={{ flex: 1 }} />
+        {p.smiles && p.onAddAtom && (
+          <button type="button" onClick={p.onAddAtom}
+            title="Add a new atom (carbon by default)"
+            style={{
+              border: 0, background: "transparent",
+              cursor: "pointer", padding: "1px 4px",
+              color: "#10b981", fontSize: 13, fontWeight: 700, lineHeight: 1,
+            }}>+</button>
         )}
       </div>
       <div className="lys-card-body" style={{ flex: 1, overflow: "auto" }}>
@@ -1072,6 +1409,20 @@ function AtomsRail(p: AtomsRailProps) {
               <span style={{ color: "var(--lys-text-faint)", fontSize: 8 }}>
                 ·{a.n_neighbors}
               </span>
+              {p.onDeleteAtom && (
+                <button type="button"
+                  onClick={(e) => { e.stopPropagation(); p.onDeleteAtom!(a.idx); }}
+                  title={`Delete atom ${a.idx}`}
+                  style={{
+                    border: 0, background: "transparent",
+                    cursor: "pointer", padding: "0 3px",
+                    color: "#dc2626", opacity: 0.5,
+                    fontSize: 11, lineHeight: 1, fontWeight: 700,
+                  }}
+                  onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+                  onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
+                >×</button>
+              )}
             </div>
           );
         })}

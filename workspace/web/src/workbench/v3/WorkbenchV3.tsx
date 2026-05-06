@@ -44,7 +44,8 @@ import { AtomDetailCard } from "./playground/AtomDetailCard";
 import { PropertiesCard } from "./playground/PropertiesCard";
 // SMARTSMatchCard absorbed into Mol2DBuilderWindow as inline strip
 // import { SMARTSMatchCard } from "./playground/SMARTSMatchCard";
-import { MoleculeLibraryCard } from "./playground/MoleculeLibraryCard";
+// MoleculeLibraryCard absorbed into Mol2DBuilderWindow as portal popover
+// import { MoleculeLibraryCard } from "./playground/MoleculeLibraryCard";
 import { PathogenIntelCard } from "./playground/PathogenIntelCard";
 import { AntibioticReferenceCard } from "./playground/AntibioticReferenceCard";
 import { ToxicityProfileCard } from "./playground/ToxicityProfileCard";
@@ -1114,13 +1115,20 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "2d", title: "2D atom builder · click any atom", expandedH: 480, body:
+                    { id: "2d", title: "2D molecule builder", expandedH: 520, body:
                       <Mol2DBuilderWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
                         pathogen={selectedPathogen}
                         cursors={livePlayground.cursors}
                         highlightAtoms={smartsHighlight}
+                        onLoadFromLibrary={(smi, name) => {
+                          loadSmilesIntoCanvas(smi, {
+                            createdBy: "user",
+                            parentId: null,
+                            logLabel: `[library · ${name}]`,
+                          });
+                        }}
                         onCursorHover={(atomIdx) => {
                           // Lift hovered atom up so AtomDetailCard can render its context
                           setHoveredAtom(atomIdx);
@@ -1146,20 +1154,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       /> },
                     // Live atoms list is now embedded INSIDE the 2D builder
                     // as an atoms-rail (right side). No standalone card.
-                    { id: "properties", title: "Properties · medchem", expandedH: 220, body:
+                    { id: "properties", title: "Properties · medchem", size: 2, expandedH: 220, body:
                       <PropertiesCard apiBase={apiBase} smiles={currentSmiles} /> },
-                    { id: "library", title: "Library · saved", expandedH: 220, body:
-                      <MoleculeLibraryCard
-                        apiBase={apiBase}
-                        currentSmiles={currentSmiles}
-                        onLoad={(smi, name) => {
-                          loadSmilesIntoCanvas(smi, {
-                            createdBy: "user",
-                            parentId: null,
-                            logLabel: `[library load · ${name || "unnamed"}]`,
-                          });
-                        }}
-                      /> },
+                    // Library is now embedded INSIDE Mol2DBuilderWindow as a
+                    // portal popover (📚 button in 2D header). No standalone card.
                     // SMARTS is now embedded INSIDE Mol2DBuilderWindow as
                     // an inline strip — no standalone card needed.
                   ],
