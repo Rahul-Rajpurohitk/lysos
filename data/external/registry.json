@@ -1,0 +1,56 @@
+[
+  {
+    "name": "openadmet_expansionrx",
+    "hf_id": "openadmet/openadmet-expansionrx-challenge-train-data",
+    "description": "RNA-targeted small-molecule ADMET assays (training split).",
+    "rows": "11K+",
+    "tier": 1,
+    "sample_n": 2000,
+    "columns_hint": []
+  },
+  {
+    "name": "openadmet_cyp",
+    "hf_id": "openadmet/Octant_CYP_inhibition_reactivity_blog_release",
+    "description": "Cytochrome P450 inhibition + reactivity (Octant assays).",
+    "rows": "thousands",
+    "tier": 1,
+    "sample_n": 1500,
+    "columns_hint": []
+  },
+  {
+    "name": "b3db",
+    "hf_id": "maomlab/B3DB",
+    "description": "Blood-brain barrier permeability (curated, ML-ready).",
+    "rows": "~7K",
+    "tier": 1,
+    "sample_n": 2000,
+    "columns_hint": []
+  },
+  {
+    "name": "tdc",
+    "hf_id": "maomlab/TDC",
+    "description": "Therapeutics Data Commons multi-task subset.",
+    "rows": "varies",
+    "tier": 1,
+    "sample_n": 1000,
+    "columns_hint": []
+  },
+  {
+    "name": "eve_bio_dta",
+    "hf_id": "eve-bio/drug-target-activity",
+    "description": "1,397 FDA-approved drugs \u00d7 target binding measurements.",
+    "rows": "1.4K",
+    "tier": 1,
+    "sample_n": 1397,
+    "columns_hint": []
+  },
+  {
+    "name": "sair",
+    "hf_id": "SandboxAQ/SAIR",
+    "description": "Public protein-ligand 3D structures + binding affinity (SandboxAQ).",
+    "rows": "1M+",
+    "tier": 2,
+    "sample_n": 10000,
+    "columns_hint": []
+  }
+]

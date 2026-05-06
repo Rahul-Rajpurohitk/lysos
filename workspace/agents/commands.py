@@ -657,6 +657,47 @@ class TraceCommand(Command):
             return CommandResult(error=f"trace failed: {exc}")
 
 
+class DatasetsCommand(Command):
+    """List HuggingScience datasets registered for grounding + benchmarks."""
+    def __init__(self):
+        super().__init__(
+            name="datasets",
+            description="List HuggingScience datasets registered for grounding",
+            type=CommandType.LOCAL,
+            argument_hint="",
+            aliases=["ds"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        try:
+            from api.workbench import list_datasets
+            d = await list_datasets()
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"datasets list failed: {exc}")
+
+        rows = d.get("datasets", [])
+        if not rows:
+            return CommandResult(
+                output=(
+                    "No datasets registered yet. Run "
+                    "`python scripts/fetch_huggingscience.py --dataset tier1` "
+                    "to seed the registry."
+                ),
+            )
+        lines = ["### HuggingScience datasets (Lysos registry)\n"]
+        for r in rows:
+            mark = "✓" if r.get("fetched") else "○"
+            lines.append(
+                f"- {mark} **{r['name']}** (T{r['tier']}, ~{r['rows']}) — "
+                f"{r['description']} "
+                f"_(hf: `{r['hf_id']}`)_"
+            )
+        lines.append(
+            "\n_✓ = local subset present · ○ = registered, run fetch script._"
+        )
+        return CommandResult(output="\n".join(lines), data={"datasets": rows})
+
+
 def create_default_registry() -> CommandRegistry:
     """Build the production registry. Add new commands here."""
     r = CommandRegistry()
@@ -678,6 +719,7 @@ def create_default_registry() -> CommandRegistry:
         DockCommand(),
         ComplexCommand(),
         TraceCommand(),
+        DatasetsCommand(),
     ]:
         r.register(cmd)
     return r

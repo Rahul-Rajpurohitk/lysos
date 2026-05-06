@@ -456,6 +456,43 @@ async def workbench_design(req: DesignRequest) -> DesignResponse:
 
 
 # ---------------------------------------------------------------------------
+# HuggingScience dataset registry — exposes which external science datasets
+# are available (and which have been fetched to local parquet) so the agent
+# + frontend can discover them. Updated by scripts/fetch_huggingscience.py.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/datasets")
+async def list_datasets() -> dict:
+    """Catalog of HuggingScience datasets registered for this workbench.
+
+    The registry file is written by scripts/fetch_huggingscience.py.
+    Each entry shows whether the local subset has been fetched
+    (parquet present at data/external/<name>.parquet).
+    """
+    repo_root = _WORKSPACE.parent
+    reg_path = repo_root / "data" / "external" / "registry.json"
+    if not reg_path.exists():
+        return {"datasets": [], "registry_path": str(reg_path),
+                "note": "run `python scripts/fetch_huggingscience.py --dataset tier1` to seed"}
+
+    try:
+        entries = json.loads(reg_path.read_text())
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"registry parse failed: {exc}")
+
+    out = []
+    for e in entries:
+        local_path = repo_root / "data" / "external" / f"{e['name']}.parquet"
+        out.append({
+            **e,
+            "fetched": local_path.exists(),
+            "local_size_kb": (local_path.stat().st_size // 1024) if local_path.exists() else 0,
+        })
+    return {"datasets": out, "registry_path": str(reg_path)}
+
+
+# ---------------------------------------------------------------------------
 # W4 — Explain (target/drug → markdown brief streamed to right pane).
 #
 # Grounded against the local pharma corpus:

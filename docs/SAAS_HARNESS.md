@@ -218,6 +218,45 @@ That's the entire migration. The Gemini call site is one branch in
 chat.py guarded by `_AUTOTITLE_BACKEND == "gemini"`; flipping the env
 var bypasses it cleanly.
 
+## 8.6 HuggingScience dataset registry (external grounding sources)
+
+Lysos can plug curated HuggingFace science datasets into its grounding
+pipeline. Seeded from huggingscience.co, the registry is in
+`data/external/registry.json` and rendered to the user via the
+`/datasets` slash command + `GET /workbench/datasets` route.
+
+| name | tier | hf_id | use |
+|---|---|---|---|
+| `openadmet_expansionrx` | 1 | `openadmet/openadmet-expansionrx-challenge-train-data` | RNA-targeted ADMET assays — extends `/admet` |
+| `openadmet_cyp` | 1 | `openadmet/Octant_CYP_inhibition_reactivity_blog_release` | CYP450 inhibition — hepatotoxicity grounding |
+| `b3db` | 1 | `maomlab/B3DB` | Blood-brain barrier permeability |
+| `tdc` | 1 | `maomlab/TDC` | Multi-task drug-discovery benchmark |
+| `eve_bio_dta` | 1 | `eve-bio/drug-target-activity` | 1.4K FDA drugs × target binding |
+| `sair` | 2 | `SandboxAQ/SAIR` | 1M+ protein-ligand 3D + binding affinity (deferred — too heavy for demo laptop) |
+
+Tier-1 sets are designed to be fetched on demand:
+```bash
+python scripts/fetch_huggingscience.py --dataset tier1     # all T1
+python scripts/fetch_huggingscience.py --dataset b3db      # one
+```
+
+Each fetch pulls a bounded sample (`sample_n` per spec) into
+`data/external/<name>.parquet`. Running the script also rewrites
+`registry.json` so the slash command reflects what's locally available.
+
+**Phase 2 plans** (after hackathon):
+- Auto-augment `/admet` with retrievals from `openadmet_expansionrx`
+- New `/benchmark <smiles>` slash that scores a candidate against the
+  dataset population (percentile rank per ADMET axis)
+- New right-pane "DataSources" tab (visual catalog + click-to-load)
+- Use `sair` for a "neighbour-pose" similarity panel on the active candidate
+- Use `tdc` for adversarial Critic prompts (hard-negatives matching real
+  drug-discovery failure modes)
+
+For training/fine-tuning scale: any of these can be merged into the
+Stage 2 SFT corpus to broaden Lysos-Gemma's grounding without changing
+the training-loop code (just append rows to the parquet pipeline).
+
 ## 9. Out of scope (for now)
 
 - Auth/multi-tenant — single-user demo for the hackathon
