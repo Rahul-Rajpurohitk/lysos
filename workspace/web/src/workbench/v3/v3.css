@@ -1343,3 +1343,13 @@
   color: var(--lys-text-faint);
   font-family: ui-monospace, monospace;
 }
+
+/* -------------------------------------------------------------------------
+ * Onboarding hero — borderless pathogen cards
+ * ------------------------------------------------------------------------- */
+.lys-onb-card:hover {
+  background: var(--lys-bg-hover, rgba(16, 185, 129, 0.07));
+}
+.lys-onb-card:active {
+  background: rgba(16, 185, 129, 0.12);
+}

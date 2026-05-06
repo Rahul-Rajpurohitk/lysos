@@ -207,7 +207,7 @@ export function TightComposer(p: TightComposerProps) {
             fontFamily: "inherit",
             fontSize: 13.5,
             lineHeight: 1.45,
-            padding: "10px 92px 10px 14px",
+            padding: "10px 44px 10px 14px",
             color: "var(--lys-text)",
             resize: "none",
             // Default visible 2 lines (~52px); auto-grow up to 4 lines (~96px);
@@ -219,47 +219,33 @@ export function TightComposer(p: TightComposerProps) {
           }}
         />
 
-        {/* kbd hint + send icon — right-anchored, vertically centered */}
-        <div style={{
-          position: "absolute",
-          right: 6,
-          bottom: 6,
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-        }}>
-          <span style={{
-            fontSize: 9.5,
-            fontFamily: "var(--lys-font-mono)",
-            color: "var(--lys-text-faint)",
-            background: "var(--lys-surface-2)",
-            padding: "1px 5px",
-            borderRadius: 3,
-            opacity: text.length > 0 ? 1 : 0.6,
-          }}>
-            {p.isRunning ? "↵ intervene" : "↵ send"}
-          </span>
-          <button
-            onClick={send}
-            disabled={!canSend}
-            style={{
-              display: "grid",
-              placeItems: "center",
-              width: 24,
-              height: 24,
-              borderRadius: 5,
-              border: 0,
-              background: canSend ? "var(--lys-text)" : "var(--lys-surface-2)",
-              color: canSend ? "white" : "var(--lys-text-faint)",
-              cursor: canSend ? "pointer" : "default",
-              transition: "background 0.12s, color 0.12s",
-            }}
-            aria-label="send"
-            title={p.isRunning ? "intervene mid-loop" : "send message"}
-          >
-            <ArrowUp size={13} />
-          </button>
-        </div>
+        {/* Single send button — right-anchored, vertically centered.
+            Note: previously had a `↵ send` kbd-hint chip next to it which
+            looked like a second send button. Removed per user feedback.
+            The native title tooltip still shows the keyboard hint. */}
+        <button
+          onClick={send}
+          disabled={!canSend}
+          style={{
+            position: "absolute",
+            right: 6,
+            bottom: 6,
+            display: "grid",
+            placeItems: "center",
+            width: 26,
+            height: 26,
+            borderRadius: 6,
+            border: 0,
+            background: canSend ? "var(--lys-text)" : "var(--lys-surface-2)",
+            color: canSend ? "white" : "var(--lys-text-faint)",
+            cursor: canSend ? "pointer" : "default",
+            transition: "background 0.12s, color 0.12s",
+          }}
+          aria-label="send"
+          title={p.isRunning ? "intervene (↵)" : "send (↵)"}
+        >
+          <ArrowUp size={14} />
+        </button>
       </div>
     </div>
   );
