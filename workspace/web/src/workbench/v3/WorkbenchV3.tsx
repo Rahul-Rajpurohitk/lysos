@@ -1079,7 +1079,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "3d", title: "3D molecule theater · drag-edit", size: 2, body:
+                    { id: "3d", title: "3D molecule theater · drag-edit", expandedH: 480, body:
                       <Mol3DTheaterWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
@@ -1095,7 +1095,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "2d", title: "2D atom builder · click any atom", body:
+                    { id: "2d", title: "2D atom builder · click any atom", expandedH: 480, body:
                       <Mol2DBuilderWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
@@ -1163,14 +1163,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           } catch {/* */}
                         }}
                       /> },
-                    { id: "properties", title: "Properties · medchem stack", size: 2, body:
-                      <PropertiesCard apiBase={apiBase} smiles={currentSmiles} /> },
                     { id: "smarts", title: "SMARTS · pattern match", body:
                       <SMARTSMatchCard
                         apiBase={apiBase}
                         smiles={currentSmiles}
                         onMatchSelected={(match) => setSmartsHighlight(match ? match.atom_indices : null)}
                       /> },
+                    { id: "properties", title: "Properties · medchem stack", size: 2, expandedH: 360, body:
+                      <PropertiesCard apiBase={apiBase} smiles={currentSmiles} /> },
                     { id: "library", title: "Library · saved molecules", size: 2, body:
                       <MoleculeLibraryCard
                         apiBase={apiBase}
