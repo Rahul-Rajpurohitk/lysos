@@ -22,6 +22,7 @@ import { LineagePanel } from "./panels/LineagePanel";
 import { GraphPanel } from "./panels/GraphPanel";
 import { CandidateList } from "./components/CandidateList";
 import type { Pathogen } from "./components/TopHeader";
+import { useAutoTitle, ensureUniqueTitle } from "./hooks/useAutoTitle";
 
 import "./v3.css";
 
@@ -86,10 +87,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Each tab is an independent chat: own events, own slash history.
   // We store events scoped by chat session id (Map preserves insertion order
   // for ordered tab list).
-  type ChatTabMeta = { id: string; title: string };
+  type ChatTabMeta = { id: string; title: string; userRenamed?: boolean };
   const [chatTabs, setChatTabs] = useState<ChatTabMeta[]>(() => {
     const id = `chat-${crypto.randomUUID().slice(0, 8)}`;
-    return [{ id, title: "New chat" }];
+    return [{ id, title: "New chat", userRenamed: false }];
   });
   const [activeChatId, setActiveChatId] = useState<string>(() => "");
   // Lazily seed activeChatId after the initial tab is set
@@ -107,6 +108,35 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   }
   function _legacy_setEvents_unused(_x: TraceEvent[]) { /* kept for refactor safety */ }
   void _legacy_setEvents_unused;
+
+  // ── Auto-title for the active chat tab (LLM summarization) ─────────
+  // Watches the active tab's events; after ≥1 user message + every 3
+  // subsequent events (debounced 600ms), POSTs /api/chat/title and
+  // updates the tab title (uniqueness-checked across siblings).
+  const activeChatTab = chatTabs.find((t) => t.id === activeChatId);
+  const activeHasUserMsg = events.some((e) => (e as any).agent === "user");
+  const otherTitles = chatTabs
+    .filter((t) => t.id !== activeChatId)
+    .map((t) => t.title);
+  useAutoTitle({
+    apiBase,
+    chatId: activeChatId,
+    eventCount: events.length,
+    hasUserMessage: activeHasUserMsg,
+    isActive: !!activeChatId,
+    userRenamed: !!activeChatTab?.userRenamed,
+    takenTitles: otherTitles,
+    onTitle: (newTitle) => {
+      const unique = ensureUniqueTitle(newTitle, otherTitles);
+      setChatTabs((tabs) =>
+        tabs.map((t) =>
+          t.id === activeChatId && !t.userRenamed
+            ? { ...t, title: unique }
+            : t
+        )
+      );
+    },
+  });
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [activeTab, setActiveTab] = useState<RightTab>("Radar");
   const [mechanismOpen, setMechanismOpen] = useState(false);
@@ -462,13 +492,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     // 2) Use the active chat tab's id as the harness session
                     //    id. Each tab is an independent chat session.
                     const chatSid = activeChatId;
-                    // Auto-title the tab on first message (drop the slash, trim 40c)
-                    setChatTabs((tabs) => {
-                      const tab = tabs.find((x) => x.id === chatSid);
-                      if (!tab || tab.title !== "New chat") return tabs;
-                      const guess = t.replace(/^\//, "").trim().slice(0, 40) || "New chat";
-                      return tabs.map((x) => (x.id === chatSid ? { ...x, title: guess } : x));
-                    });
+                    // Title is set by useAutoTitle (LLM-summarized) after a
+                    // few events. We keep "New chat" as the default until
+                    // the first auto-summarization completes — no crude
+                    // first-message-snippet hack here anymore.
                     // 3) POST through the harness — slash commands route to
                     //    the registry, free prompts route to the LLM.
                     try {
@@ -609,7 +636,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               onSelectChat={(id) => setActiveChatId(id)}
               onCreateChat={() => {
                 const id = `chat-${crypto.randomUUID().slice(0, 8)}`;
-                setChatTabs((tabs) => [...tabs, { id, title: "New chat" }]);
+                setChatTabs((tabs) => [...tabs, { id, title: "New chat", userRenamed: false }]);
                 setActiveChatId(id);
               }}
               onCloseChat={(id) => {
@@ -630,7 +657,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 });
               }}
               onRenameChat={(id, title) =>
-                setChatTabs((tabs) => tabs.map((t) => (t.id === id ? { ...t, title } : t)))
+                // Mark as user-renamed so useAutoTitle leaves it alone forever.
+                setChatTabs((tabs) =>
+                  tabs.map((t) => (t.id === id ? { ...t, title, userRenamed: true } : t))
+                )
               }
             />
           </Allotment.Pane>

@@ -15,7 +15,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import {
-  Settings, FlaskConical, Edit3, BookOpen, Target, Atom, Shield, Terminal,
+  Settings, FlaskConical, Edit3, BookOpen, Target, Layers, Shield, Terminal,
 } from "lucide-react";
 
 export interface SlashCommand {
@@ -90,7 +90,7 @@ const CATEGORY_ICON: Record<SlashCategory, React.ComponentType<any>> = {
   edit: Edit3,
   knowledge: BookOpen,
   scoring: Target,
-  structural: Atom,
+  structural: Layers,
   amr: Shield,
   sandbox: Terminal,
 };

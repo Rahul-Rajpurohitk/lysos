@@ -182,6 +182,176 @@ def _infer_category(name: str) -> str:
     return "general"
 
 
+# ---------------------------------------------------------------------------
+# Auto-title — LLM summarization of a chat tab into a 3-5 word title.
+# Frontend calls this debounced after activity. Reads the Orchestrator
+# ledger (no separate transcript), so the same source of truth that
+# powers /summary also names the tab.
+# ---------------------------------------------------------------------------
+
+
+class ChatTitleRequest(BaseModel):
+    session_id: str
+    user_id: str = "anonymous"
+    # Optional: client-side recent message snapshot to use instead of the
+    # server-side ledger (useful before any orch.ingest has happened).
+    transcript: list[dict] = []
+
+
+class ChatTitleResponse(BaseModel):
+    session_id: str
+    title: str = ""
+    source: str = ""           # "llm" | "fallback" | "ledger"
+    elapsed_ms: int = 0
+
+
+_TITLE_PROMPT = (
+    "You name chat tabs in a drug-design workbench. Read the conversation below "
+    "and produce a SHORT label (3 to 6 words, max 50 chars) that captures the "
+    "user's intent. No quotes, no trailing punctuation, no markdown — just the "
+    "title text. Prefer the pathogen + scaffold/objective when present "
+    "(e.g. 'Macrolide for MRSA', 'Score CCO', 'mecA mechanism brief').\n\n"
+    "Conversation:\n{transcript}\n\nTitle:"
+)
+
+
+@router.post("/api/chat/title", response_model=ChatTitleResponse)
+async def chat_title(req: ChatTitleRequest) -> ChatTitleResponse:
+    import time as _t
+    t0 = _t.perf_counter()
+
+    # 1) Build a transcript — prefer the Orchestrator ledger, fall back
+    #    to the client-supplied snapshot.
+    try:
+        from workspace.agents.orchestrator_agent import get_orchestrator
+        orch = get_orchestrator()
+        st = orch.get(req.session_id)
+        lines: list[str] = []
+        for entry in st.ledger[-10:]:
+            agent = entry.agent or "system"
+            text = (entry.summary or "").strip()
+            if not text:
+                continue
+            lines.append(f"{agent}: {text[:140]}")
+        transcript = "\n".join(lines)
+    except Exception:
+        transcript = ""
+    if not transcript and req.transcript:
+        lines = []
+        for m in req.transcript[-10:]:
+            agent = (m.get("agent") or "system").strip()
+            text = (m.get("content") or "").strip()
+            if not text:
+                continue
+            lines.append(f"{agent}: {text[:140]}")
+        transcript = "\n".join(lines)
+
+    if not transcript:
+        return ChatTitleResponse(
+            session_id=req.session_id,
+            title="",
+            source="empty",
+            elapsed_ms=int((_t.perf_counter() - t0) * 1000),
+        )
+
+    # 2) Cheap heuristic fallback if LLM is unavailable. Try to extract
+    #    the first user message and squash it.
+    fallback = ""
+    for line in transcript.split("\n"):
+        if line.lower().startswith("user:"):
+            payload = line.split(":", 1)[1].strip()
+            payload = payload.lstrip("/")
+            fallback = " ".join(payload.split()[:6])[:50]
+            break
+
+    # 3) LLM call — try a chain of cheap-and-fast backends.
+    #    Order: Gemini Flash (cheapest + reliably online if GEMINI_API_KEY
+    #    is set) → configured LysosEndpoint/Claude → fallback heuristic.
+    title = ""
+    source = "fallback"
+    prompt = _TITLE_PROMPT.format(transcript=transcript)
+
+    # Tier 1: Gemini Flash via direct REST (no extra dep). Cheapest +
+    # reliably online if GEMINI_API_KEY is set.
+    try:
+        import os as _os
+        gemini_key = _os.getenv("GEMINI_API_KEY")
+        if gemini_key:
+            import httpx  # FastAPI dep; always present
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                "gemini-2.5-flash:generateContent"
+            )
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "maxOutputTokens": 256,
+                    "temperature": 0.4,
+                    "responseMimeType": "text/plain",
+                    # Critical: 2.5-Flash burns its output budget on
+                    # thinking tokens by default, leaving 1-2 chars for
+                    # the actual title. Disable thinking for short labels.
+                    "thinkingConfig": {"thinkingBudget": 0},
+                },
+            }
+            async with httpx.AsyncClient(timeout=8.0) as cx:
+                r = await cx.post(
+                    url,
+                    headers={"x-goog-api-key": gemini_key,
+                             "Content-Type": "application/json"},
+                    json=payload,
+                )
+            if r.status_code == 200:
+                d = r.json()
+                cands = d.get("candidates") or []
+                raw = ""
+                if cands:
+                    parts = (cands[0].get("content") or {}).get("parts") or []
+                    if parts:
+                        raw = (parts[0].get("text") or "").strip()
+                first = (raw.splitlines()[0] if raw else "").strip().strip('"\'').rstrip(".,;:!? ")
+                if first.lower().startswith("title:"):
+                    first = first.split(":", 1)[1].strip()
+                if first:
+                    title = first[:50]
+                    source = "gemini"
+            else:
+                log.debug("auto-title gemini http %s: %s", r.status_code, r.text[:120])
+    except Exception as exc:  # noqa: BLE001
+        log.debug("auto-title gemini failed: %s", exc)
+
+    # Tier 2: configured LLMEndpoint (vLLM / Claude) if Gemini didn't
+    # produce a title.
+    if not title:
+        try:
+            from workspace.agents.llm import get_llm
+            llm = get_llm()
+            result = await llm.acomplete(
+                messages=[{"role": "user", "content": prompt}],
+                system=None,
+                tools=None,
+            )
+            raw = (result.get("content") or "").strip()
+            first = (raw.splitlines()[0] if raw else "").strip().strip('"\'').rstrip(".,;:!? ")
+            if first.lower().startswith("title:"):
+                first = first.split(":", 1)[1].strip()
+            if first:
+                title = first[:50]
+                source = "llm"
+        except Exception as exc:  # noqa: BLE001
+            log.debug("auto-title fallback LLM failed: %s", exc)
+
+    if not title:
+        title = fallback or "New chat"
+
+    return ChatTitleResponse(
+        session_id=req.session_id,
+        title=title,
+        source=source,
+        elapsed_ms=int((_t.perf_counter() - t0) * 1000),
+    )
+
+
 @router.post("/api/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
     """Handle one user message. Slash commands route through the
