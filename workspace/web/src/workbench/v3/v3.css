@@ -1416,3 +1416,31 @@
   height: 0;                  /* WebKit (Chrome/Safari) */
   display: none;
 }
+
+/* ─── Playground card scrollbars — clearly visible inside any card. */
+.lys-card-body,
+.lys-card-body * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.20) transparent;
+}
+.lys-card-body::-webkit-scrollbar,
+.lys-card-body *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.lys-card-body::-webkit-scrollbar-track,
+.lys-card-body *::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lys-card-body::-webkit-scrollbar-thumb,
+.lys-card-body *::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.18);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.lys-card-body::-webkit-scrollbar-thumb:hover,
+.lys-card-body *::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.32);
+  background-clip: content-box;
+}

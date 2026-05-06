@@ -61,7 +61,7 @@ export function ConnectionStatusCard(p: Props) {
   return (
     <div style={{
       width: "100%", height: "100%", display: "flex", flexDirection: "column",
-      background: "var(--lys-bg-2, #ffffff)", overflow: "hidden", padding: 10, gap: 8,
+      background: "var(--lys-bg-2, #ffffff)", overflow: "auto", padding: 10, gap: 8,
     }}>
       <Row icon={p.connected ? Wifi : WifiOff} color={p.connected ? "#10b981" : "#dc2626"}
            label="WebSocket"

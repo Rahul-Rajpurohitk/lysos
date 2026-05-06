@@ -272,10 +272,12 @@ export function PlaygroundGroup(p: Props) {
                   </span>
                 </div>
                 {/* Body — inner card components manage their own internal scroll
-                    via flex:1 + overflow:auto on their list/content area. We
-                    keep overflow:hidden here so we don't double-scroll. */}
+                    via flex:1 + overflow:auto on their list/content area.
+                    The .lys-card-body class enables visible scrollbar styling
+                    so users can see the scroll affordance (default macOS thin
+                    scrollbars are nearly invisible). */}
                 {!cardCollapsed && (
-                  <div style={{
+                  <div className="lys-card-body" style={{
                     flex: 1, minHeight: 0,
                     overflow: "hidden",
                     position: "relative",
