@@ -43,6 +43,16 @@ interface ChatPanelProps {
     parentMessageId: string;
     threadId: string;
   }) => void;
+  // ---- W4 explain → right-pane artifact ----
+  onArtifact?: (params: {
+    sessionId: string;
+    target: string;
+    markdown: string;
+    chunks: string[];
+    complete: boolean;
+    error?: string | null;
+    groundingCount?: number;
+  }) => void;
   // ---- multi-chat tabs (Claude.ai style) ----
   chatTabs?: ChatTab[];
   activeChatId?: string;
@@ -229,6 +239,7 @@ export function ChatPanel(p: ChatPanelProps) {
                 onLoadSmiles={p.onLoadSmiles}
                 onIngestEvent={p.onIngestEvent}
                 onReplyToAgent={p.onReplyToAgent}
+                onArtifact={p.onArtifact}
               />
             );
           })}

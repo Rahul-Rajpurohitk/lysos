@@ -311,6 +311,14 @@ class ScoreCommand(Command):
 
 
 class ExplainCommand(Command):
+    """W4 — kicks off a streaming Markdown brief on a target/drug.
+
+    Backend: POST /workbench/explain → spawns a Gemini-Pro background
+    task that streams chunks via /workbench/sessions/{id}/events. The
+    frontend's ExplainCard subscribes and pipes the chunks into the
+    right-pane ArtifactPanel.
+    """
+
     def __init__(self):
         super().__init__(
             name="explain",
@@ -320,29 +328,38 @@ class ExplainCommand(Command):
         )
 
     async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
-        name = args.strip()
-        if not name and not ctx.active_smiles:
-            return CommandResult(error="Provide a drug name or set an active candidate.")
+        target = args.strip() or (ctx.active_target or "")
+        if not target:
+            return CommandResult(error="Provide a target/drug or set an active target. Try `/explain mecA` or `/explain cefiderocol`.")
+
         try:
-            from workspace.tools.knowledge.explain_mechanism import explain_mechanism
-            r = explain_mechanism(
-                smiles=ctx.active_smiles or "",
-                drug_name=name or None,
-            )
-            md = (
-                f"### {name or 'Candidate'} — {r.inferred_class}\n"
-                f"_(source: {r.source})_\n\n"
-                f"**Mechanism**: {r.mechanism_narrative}\n\n"
-            )
-            if r.spectrum:
-                md += f"**Spectrum**: {r.spectrum}\n\n"
-            if r.indications:
-                md += f"**Indications**: {r.indications}\n\n"
-            if r.resistance_concerns:
-                md += "**Resistance concerns**:\n" + "\n".join(f"- {c}" for c in r.resistance_concerns)
-            return CommandResult(output=md, data=r.model_dump())
+            from api.workbench import workbench_explain, ExplainRequest
+        except ImportError as exc:
+            return CommandResult(error=f"explain route not available: {exc}")
+
+        try:
+            resp = await workbench_explain(ExplainRequest(target=target))
         except Exception as exc:  # noqa: BLE001
-            return CommandResult(error=f"explain failed: {exc}")
+            return CommandResult(error=f"explain start failed: {exc}")
+
+        line = (
+            f"explain session started for **{target}** — "
+            f"{resp.grounding_count} grounding entries, streaming to artifact pane"
+        )
+        return CommandResult(
+            output=line,
+            data={
+                "session_id": resp.session_id,
+                "target": resp.target,
+                "sse_url": resp.sse_url,
+                "status": resp.status,
+                "grounding_count": resp.grounding_count,
+            },
+            follow_ups=[
+                "/design <pathogen>  (start a session targeting this)",
+                "/similar  (find related antibiotics)",
+            ],
+        )
 
 
 class SimilarCommand(Command):

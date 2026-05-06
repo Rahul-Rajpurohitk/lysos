@@ -22,6 +22,7 @@ import { agentColor } from "./AgentAvatar";
 import { InlineSmilesCard } from "./InlineSmilesCard";
 import { RewardCard } from "./RewardCard";
 import { DesignSessionCard } from "./DesignSessionCard";
+import { ExplainCard } from "./ExplainCard";
 
 export interface ChatMsg {
   id?: string;
@@ -71,17 +72,28 @@ interface MessageRowProps {
     parentMessageId: string;
     threadId: string;
   }) => void;
+  /** W4: pipe streaming explain markdown into the right-pane artifact panel. */
+  onArtifact?: (params: {
+    sessionId: string;
+    target: string;
+    markdown: string;
+    chunks: string[];
+    complete: boolean;
+    error?: string | null;
+    groundingCount?: number;
+  }) => void;
 }
 
 const REPLYABLE_AGENTS = new Set(["designer", "critic", "editor", "strategist", "orchestrator"]);
 
-export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onReplyToAgent }: MessageRowProps) {
+export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onReplyToAgent, onArtifact }: MessageRowProps) {
   if (msg.type === "candidate_added") return <CandidateRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "mol_edit") return <EditRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "state_change") return <StateRow msg={msg} />;
   // Structured chat cards from slash commands (/score, /design, /explain, …)
   if (msg.card_kind === "score" && msg.data) return <RewardCard msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.card_kind === "design_session" && msg.data) return <DesignSessionCard msg={msg} onIngestEvent={onIngestEvent} />;
+  if (msg.card_kind === "explain_session" && msg.data) return <ExplainCard msg={msg} onArtifact={onArtifact} />;
 
   const agent = msg.agent ?? msg.type ?? "system";
   const color = agentColor(agent);

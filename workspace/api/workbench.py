@@ -456,6 +456,289 @@ async def workbench_design(req: DesignRequest) -> DesignResponse:
 
 
 # ---------------------------------------------------------------------------
+# W4 — Explain (target/drug → markdown brief streamed to right pane).
+#
+# Grounded against the local pharma corpus:
+#   - data/synthetic/named_drug_examples.jsonl  (387 deep drug profiles)
+#   - data/synthetic/pharma_qa_layer.jsonl      (872 Q/A pairs)
+# Top-K matched entries are concatenated into the LLM prompt so the
+# generated brief is grounded in real curated knowledge instead of
+# the model's prior. LLM is Gemini 2.5 Pro until Lysos-Gemma is
+# deployed (then swap via LYSOS_AUTOTITLE_BACKEND-style env, see
+# docs/SAAS_HARNESS.md §8.5).
+# ---------------------------------------------------------------------------
+
+
+class ExplainRequest(BaseModel):
+    target: str = Field(..., description="Drug name, target protein, or mechanism (e.g. 'cefiderocol', 'mecA', 'ribosome 50S')")
+    style: Literal["full", "brief"] = "full"
+
+
+class ExplainResponse(BaseModel):
+    session_id: str
+    target: str
+    sse_url: str
+    status: str
+    grounding_count: int
+
+
+_PHARMA_GROUND_INDEX: list[dict] = []
+
+
+def _load_pharma_ground() -> list[dict]:
+    """One-shot indexer — reads named_drug_examples.jsonl into memory.
+
+    Each entry: {"drug": str, "prompt": str, "response": str, "task": str}.
+    Cheap (387 rows × ~5KB ≈ 2MB), so we keep it resident.
+    """
+    global _PHARMA_GROUND_INDEX
+    if _PHARMA_GROUND_INDEX:
+        return _PHARMA_GROUND_INDEX
+    out: list[dict] = []
+    p = _WORKSPACE.parent / "data" / "synthetic" / "named_drug_examples.jsonl"
+    if p.exists():
+        with p.open() as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except Exception:  # noqa: BLE001
+                    continue
+                # Pull the drug name out of the prompt's "Drug: …" line
+                prompt = (e.get("prompt") or "")
+                drug = ""
+                for ln in prompt.splitlines():
+                    if ln.strip().lower().startswith("drug:"):
+                        drug = ln.split(":", 1)[1].strip().split("—")[0].split("(")[0].strip()
+                        break
+                out.append({
+                    "drug": drug,
+                    "prompt": prompt[:600],
+                    "response": (e.get("response") or "")[:3500],
+                    "task": e.get("task", ""),
+                })
+    # Also include pharma_qa pairs as compact grounding
+    p2 = _WORKSPACE.parent / "data" / "synthetic" / "pharma_qa_layer.jsonl"
+    if p2.exists():
+        with p2.open() as f:
+            for line in f:
+                try:
+                    e = json.loads(line)
+                except Exception:
+                    continue
+                msgs = e.get("messages") or []
+                if len(msgs) < 2:
+                    continue
+                out.append({
+                    "drug": e.get("drug", ""),
+                    "prompt": msgs[0].get("content", "")[:300],
+                    "response": msgs[1].get("content", "")[:1200],
+                    "task": e.get("question_type", "qa"),
+                })
+    _PHARMA_GROUND_INDEX = out
+    log.info("pharma grounding loaded: %d entries", len(out))
+    return out
+
+
+def _ground_for(target: str, k: int = 3) -> list[dict]:
+    """Tiny BM25-style scorer — case-insensitive substring + drug-name boost."""
+    idx = _load_pharma_ground()
+    q = target.lower().strip()
+    if not q:
+        return []
+    scored: list[tuple[float, dict]] = []
+    for e in idx:
+        drug = (e.get("drug") or "").lower()
+        prompt = (e.get("prompt") or "").lower()
+        resp = (e.get("response") or "").lower()
+        s = 0.0
+        if q in drug:
+            s += 5.0
+        if q == drug:
+            s += 5.0
+        s += 1.5 * prompt.count(q)
+        s += 0.5 * resp.count(q)
+        if s > 0:
+            scored.append((s, e))
+    scored.sort(key=lambda x: -x[0])
+    return [e for _, e in scored[:k]]
+
+
+_EXPLAIN_PROMPT = """You are the Lysos Strategist agent. Produce a structured Markdown brief on the requested target/drug for an antibiotic-design workbench. Use ONLY the grounding context below for facts; if the grounding is empty for some sections, mark them "(no curated source — model best-effort)".
+
+Requested target: {target}
+
+Grounding context (top-{k} matched entries from the curated pharma corpus):
+---
+{grounding}
+---
+
+Output sections (in this order, with these exact `##` headers):
+
+## Mechanism
+2-4 sentence explanation of how the drug acts OR what the target does in pathogen biology.
+
+## Spectrum
+Bulleted: which pathogens this affects (or for a target, which pathogens express it).
+
+## Resistance landscape
+Bulleted: known escape mechanisms, mutations, clinical prevalence if known.
+
+## First-line drugs / standard of care
+Bulleted: current drugs in this class / for this indication, with one-sentence status (FDA-approved year, key liability).
+
+## Design implications for Lysos
+3-5 sentence guidance: what should a new molecule for this target accomplish? What pharmacophores / scaffolds matter? Which liabilities to avoid?
+
+Constraints:
+- Stay under 800 words total.
+- No introductory preamble; jump straight into ## Mechanism.
+- Inline citations as [grounding-N] when a fact comes from a specific entry, where N is the 1-based index in the grounding list.
+- Plain Markdown — no HTML.
+"""
+
+
+@router.post("/explain", response_model=ExplainResponse)
+async def workbench_explain(req: ExplainRequest) -> ExplainResponse:
+    """Kicks off a streaming Markdown brief on a target/drug.
+
+    Frontend subscribes to /workbench/sessions/{id}/events (the existing
+    SSE bus) and renders chunks into the right-pane ArtifactPanel.
+    """
+    sid = "explain-" + uuid.uuid4().hex[:10]
+
+    # Materialize a minimal WorkbenchState so the SSE stream_events route
+    # works (it gates on `session_id in _sessions`). We use mode="design"
+    # because state.py's WorkbenchState only knows the three modes.
+    state = WorkbenchState(
+        session_id=sid,
+        target_pathogen="MRSA",
+        mode="design",
+        autonomy="copilot",
+    )
+    _sessions[sid] = state
+    queue = _get_or_create_queue(sid)
+
+    # Pull grounding now (fast, in-memory)
+    ground = _ground_for(req.target, k=3)
+
+    async def runner() -> None:
+        # Header event so the frontend mounts the artifact pane
+        await queue.put({
+            "type": "explain_start",
+            "data": {"target": req.target, "session_id": sid,
+                     "grounding_count": len(ground)},
+        })
+
+        # Build the grounded prompt
+        if ground:
+            pieces = []
+            for i, g in enumerate(ground, 1):
+                pieces.append(
+                    f"[grounding-{i}] drug={g.get('drug','?')} "
+                    f"task={g.get('task','?')}\nprompt: {g.get('prompt','')[:500]}\n"
+                    f"response: {g.get('response','')[:2000]}"
+                )
+            grounding_text = "\n\n".join(pieces)
+        else:
+            grounding_text = "(no curated grounding matched; rely on model knowledge with explicit uncertainty markers)"
+
+        prompt = _EXPLAIN_PROMPT.format(
+            target=req.target,
+            k=len(ground),
+            grounding=grounding_text,
+        )
+
+        # Call Gemini 2.5 Pro via direct REST. We don't use streaming
+        # endpoint — instead we get the full response then chunk-publish
+        # to the SSE bus so the frontend animates the markdown filling
+        # in section-by-section.
+        try:
+            import os as _os
+            import httpx
+            gemini_key = _os.getenv("GEMINI_API_KEY")
+            if not gemini_key:
+                raise RuntimeError("GEMINI_API_KEY not set")
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{_os.getenv('LYSOS_EXPLAIN_GEMINI_MODEL', 'gemini-2.5-pro')}:generateContent"
+            )
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "maxOutputTokens": 4096,
+                    "temperature": 0.3,
+                    "responseMimeType": "text/plain",
+                    "thinkingConfig": {
+                        "thinkingBudget": int(_os.getenv("LYSOS_EXPLAIN_THINKING", "1024")),
+                        "includeThoughts": False,
+                    },
+                },
+            }
+            async with httpx.AsyncClient(timeout=60.0) as cx:
+                r = await cx.post(
+                    url,
+                    headers={"x-goog-api-key": gemini_key,
+                             "Content-Type": "application/json"},
+                    json=payload,
+                )
+            if r.status_code != 200:
+                raise RuntimeError(f"gemini http {r.status_code}: {r.text[:200]}")
+            d = r.json()
+            cands = d.get("candidates") or []
+            md = ""
+            if cands:
+                parts = (cands[0].get("content") or {}).get("parts") or []
+                if parts:
+                    md = (parts[0].get("text") or "").strip()
+            if not md:
+                raise RuntimeError("empty LLM response")
+
+            # Chunk-publish: split on ## headers so each section streams in
+            # as a discrete event. Frontend assembles them into one md doc.
+            chunks: list[str] = []
+            cur = ""
+            for line in md.splitlines(keepends=True):
+                if line.lstrip().startswith("## ") and cur:
+                    chunks.append(cur)
+                    cur = ""
+                cur += line
+            if cur:
+                chunks.append(cur)
+
+            for i, chunk in enumerate(chunks):
+                await queue.put({
+                    "type": "explain_chunk",
+                    "data": {"session_id": sid, "chunk": chunk,
+                             "index": i, "total": len(chunks)},
+                })
+                # Tiny inter-chunk pause so the frontend animates
+                await asyncio.sleep(0.06)
+
+            await queue.put({
+                "type": "explain_complete",
+                "data": {"session_id": sid, "target": req.target,
+                         "n_chunks": len(chunks),
+                         "grounding_count": len(ground)},
+            })
+        except Exception as exc:  # noqa: BLE001
+            log.exception("explain session %s failed", sid)
+            await queue.put({"type": "explain_error",
+                             "data": {"session_id": sid, "error": str(exc)[:300]}})
+        finally:
+            await queue.put(None)
+
+    asyncio.create_task(runner())
+
+    return ExplainResponse(
+        session_id=sid,
+        target=req.target,
+        sse_url=f"/workbench/sessions/{sid}/events",
+        status="running",
+        grounding_count=len(ground),
+    )
+
+
+# ---------------------------------------------------------------------------
 # W2 — Score a molecule (deterministic, no agent debate).
 # ---------------------------------------------------------------------------
 

@@ -20,6 +20,7 @@ import { ParetoPanel } from "./panels/ParetoPanel";
 import { SynthPanel } from "./panels/SynthPanel";
 import { LineagePanel } from "./panels/LineagePanel";
 import { GraphPanel } from "./panels/GraphPanel";
+import { ArtifactPanel, type ArtifactDoc } from "./panels/ArtifactPanel";
 import { CandidateList } from "./components/CandidateList";
 import type { Pathogen } from "./components/TopHeader";
 import { useAutoTitle, ensureUniqueTitle } from "./hooks/useAutoTitle";
@@ -69,7 +70,7 @@ interface Constraint {
   label: string;
 }
 
-const RIGHT_TABS = ["Radar", "Pareto", "Synth", "Graph", "Lineage"] as const;
+const RIGHT_TABS = ["Radar", "Pareto", "Synth", "Graph", "Lineage", "Artifact"] as const;
 type RightTab = (typeof RIGHT_TABS)[number];
 
 export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
@@ -139,6 +140,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   });
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [activeTab, setActiveTab] = useState<RightTab>("Radar");
+  // W4: artifact doc populated by streaming /explain markdown chunks.
+  const [artifactDoc, setArtifactDoc] = useState<ArtifactDoc>(() => ({
+    session_id: "artifact",
+    active_smiles: null,
+    active_target: null,
+    active_score: null,
+    blocks: [],
+  }));
   const [mechanismOpen, setMechanismOpen] = useState(false);
   const [activeSubAgents, setActiveSubAgents] = useState<string[]>([]);
   const [currentIter, setCurrentIter] = useState(0);
@@ -543,6 +552,29 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 // and become rows in the chat timeline.
                 setEvents((p) => [...p, ev as any]);
               }}
+              onArtifact={(p) => {
+                // W4: streaming /explain markdown chunks replace the active
+                // markdown_text block in artifactDoc, and we auto-switch the
+                // right-pane tab to "Artifact" on the first chunk so the user
+                // sees the brief filling in live.
+                setArtifactDoc((doc) => ({
+                  ...doc,
+                  session_id: p.sessionId,
+                  active_target: p.target,
+                  blocks: [
+                    {
+                      kind: "markdown_text" as const,
+                      text: p.markdown,
+                      source: `explain · ${p.target}${
+                        p.groundingCount ? ` · ${p.groundingCount} grounding entries` : ""
+                      }${p.complete ? "" : " · streaming"}${p.error ? ` · error: ${p.error}` : ""}`,
+                    },
+                  ],
+                }));
+                if (p.chunks.length === 1 && !p.complete) {
+                  setActiveTab("Artifact");
+                }
+              }}
               onReplyToAgent={async ({ text, targetAgent, parentMessageId, threadId }) => {
                 // Echo the user's reply into the timeline (threaded)
                 setEvents((p) => [...p, {
@@ -806,26 +838,35 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
           <Allotment.Pane minSize={240} preferredSize={300}>
             <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--lys-bg-2)" }}>
               <TabStrip tabs={RIGHT_TABS} active={activeTab} onChange={setActiveTab} />
-              <div style={{ flex: 1, overflow: "auto", padding: 12, color: "var(--lys-text-dim)" }}>
-                <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--lys-text-faint)", marginBottom: 8 }}>
-                  {activeTab}
+              {activeTab === "Artifact" ? (
+                /* Full-bleed Markdown brief from /explain. ArtifactPanel
+                 * owns its own header + scroll, so we don't wrap it in
+                 * the standard tab-content padded container. */
+                <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                  <ArtifactPanel doc={artifactDoc} />
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                  {activeTab === "Radar" && (
-                    <RadarPanel
-                      current={lastScores}
-                      best={bestScores}
-                      weights={REWARD_WEIGHTS}
-                    />
-                  )}
-                  {activeTab === "Pareto" && <ParetoPanel candidates={paretoRows} />}
-                  {activeTab === "Synth" && <SynthPanel apiBase={apiBase} smiles={currentSmiles} />}
-                  {activeTab === "Graph" && <GraphPanel pathogen={selectedPathogen} apiBase={apiBase} />}
-                  {activeTab === "Lineage" && (
-                    <LineagePanel edits={molEdits} candidates={candEvents} />
-                  )}
+              ) : (
+                <div style={{ flex: 1, overflow: "auto", padding: 12, color: "var(--lys-text-dim)" }}>
+                  <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--lys-text-faint)", marginBottom: 8 }}>
+                    {activeTab}
+                  </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.5 }}>
+                    {activeTab === "Radar" && (
+                      <RadarPanel
+                        current={lastScores}
+                        best={bestScores}
+                        weights={REWARD_WEIGHTS}
+                      />
+                    )}
+                    {activeTab === "Pareto" && <ParetoPanel candidates={paretoRows} />}
+                    {activeTab === "Synth" && <SynthPanel apiBase={apiBase} smiles={currentSmiles} />}
+                    {activeTab === "Graph" && <GraphPanel pathogen={selectedPathogen} apiBase={apiBase} />}
+                    {activeTab === "Lineage" && (
+                      <LineagePanel edits={molEdits} candidates={candEvents} />
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
               <CandidateList items={paretoRows} />
             </div>
           </Allotment.Pane>
