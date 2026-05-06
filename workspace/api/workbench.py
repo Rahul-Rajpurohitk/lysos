@@ -1692,6 +1692,14 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
     mol = Chem.MolFromSmiles(req.smiles)
     if mol is None:
         raise HTTPException(422, f"unparseable SMILES: {req.smiles}")
+    # Kekulize first so we can edit aromatic structures cleanly. Aromatic
+    # bonds + atoms have implicit valence rules that break when atoms are
+    # removed/disconnected; kekulizing converts to explicit single/double
+    # bonds which RWMol can edit safely.
+    try:
+        Chem.Kekulize(mol, clearAromaticFlags=True)
+    except Exception:  # noqa: BLE001
+        pass
     rw = Chem.RWMol(mol)
 
     ELEMENTS = {"C": 6, "N": 7, "O": 8, "F": 9, "S": 16, "Cl": 17, "Br": 35, "P": 15, "H": 1}
@@ -1799,11 +1807,24 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
     else:
         raise HTTPException(422, f"unknown op: {req.op}")
 
-    # Sanitize — return error if violates valence
+    # Sanitize — return error if violates valence.
+    # If first sanitize fails because of stale aromatic flags on now-
+    # broken rings, clear all aromatic flags and retry. RDKit will
+    # re-aromatize during sanitize where chemically appropriate.
     try:
         Chem.SanitizeMol(rw)
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(422, f"chemistry violation: {exc}")
+        first_err = str(exc)
+        try:
+            for atom in rw.GetAtoms():
+                atom.SetIsAromatic(False)
+            for bond in rw.GetBonds():
+                bond.SetIsAromatic(False)
+                if bond.GetBondType() == Chem.BondType.AROMATIC:
+                    bond.SetBondType(Chem.BondType.SINGLE)
+            Chem.SanitizeMol(rw)
+        except Exception as exc2:  # noqa: BLE001
+            raise HTTPException(422, f"chemistry violation: {first_err} (retry: {exc2})")
 
     new_smiles = Chem.MolToSmiles(rw, canonical=True)
     return {
