@@ -12,7 +12,7 @@
  * share visual identity.
  */
 import { useEffect, useRef, useState, ReactNode } from "react";
-import { Move, Minimize2, Maximize2, Beaker, Target, Brain, BookOpen, Library as LibraryIcon, ChevronDown } from "lucide-react";
+import { Move, Minimize2, Maximize2, Beaker, Target, Brain, BookOpen, Library as LibraryIcon, ChevronDown, Activity } from "lucide-react";
 
 import type { WindowCategory, Viewport } from "./PlaygroundCanvas";
 
@@ -50,6 +50,7 @@ const ICONS: Record<WindowCategory, any> = {
   Agents:    Brain,
   Knowledge: BookOpen,
   Library:   LibraryIcon,
+  Live:      Activity,
 };
 
 const COLORS: Record<WindowCategory, string> = {
@@ -58,6 +59,7 @@ const COLORS: Record<WindowCategory, string> = {
   Agents:    "#8b5cf6",
   Knowledge: "#3b82f6",
   Library:   "#64748b",
+  Live:      "#dc2626",
 };
 
 const SNAP = 8;

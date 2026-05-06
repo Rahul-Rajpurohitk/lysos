@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Allotment } from "allotment";
 import "allotment/dist/style.css";
 
@@ -35,6 +35,8 @@ import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindo
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
 import { LiveAtomsCard } from "./playground/LiveAtomsCard";
 import { ScaffoldPickerCard } from "./playground/ScaffoldPickerCard";
+import { EditLogCard } from "./playground/EditLogCard";
+import { ConnectionStatusCard } from "./playground/ConnectionStatusCard";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -181,10 +183,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Each group is draggable + resizable. Cards inside each group are
   // arranged in a 2-col grid (size=2 for full-row cards).
   const DEFAULT_GROUP_LAYOUT: Record<string, GroupLayout> = {
-    "chem":      { x: 16,  y: 16,  w: 720, h: 760, z: 1 },
-    "scoring":   { x: 752, y: 16,  w: 460, h: 380, z: 1 },
-    "agents":    { x: 752, y: 412, w: 460, h: 360, z: 1 },
-    "knowledge": { x: 16,  y: 792, w: 1196, h: 360, z: 1, collapsed: true },
+    "chem":      { x: 16,  y: 16,  w: 720, h: 920, z: 1 },
+    "scoring":   { x: 752, y: 16,  w: 460, h: 360, z: 1 },
+    "agents":    { x: 752, y: 392, w: 460, h: 280, z: 1 },
+    "live":      { x: 752, y: 688, w: 460, h: 380, z: 1 },
+    "knowledge": { x: 16,  y: 952, w: 1196, h: 360, z: 1, collapsed: true },
   };
   const [playgroundGroupLayouts, setPlaygroundGroupLayouts] = useState<Record<string, Record<string, GroupLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
@@ -205,6 +208,74 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // to all canvas windows. The connection is permanent for the tab; chat
   // tab switches re-key the hook (handled by activeChatId in the deps).
   const livePlayground = useLivePlayground(activeChatId, apiBase);
+
+  // ── Real DB-backed molecule state ──────────────────────────────────
+  // Every time the user picks a scaffold OR applies an edit, we POST to
+  // /workbench/playground/sessions/{sid}/molecule which materializes the
+  // SMILES into Molecule + Atom + Bond rows in SQLite + broadcasts a
+  // molecule.created event on the playground bus.
+  // currentMoleculeId is the live "head" molecule id; LiveAtomsCard reads
+  // its full state via /molecule/{mid}/state.
+  const [currentMoleculeId, setCurrentMoleculeId] = useState<string | null>(null);
+  const [editLog, setEditLog] = useState<any[]>([]);
+
+  /** Load a SMILES into the playground store + canvas state. Used by
+   *  scaffold picker, agent SMILES emissions, and post-edit refresh. */
+  const loadSmilesIntoCanvas = useCallback(async (
+    smi: string,
+    opts: { createdBy?: string; parentId?: string | null; logLabel?: string } = {}
+  ) => {
+    if (!smi || !activeChatId) return null;
+    try {
+      const r = await fetch(`${apiBase}/workbench/playground/sessions/${activeChatId}/molecule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          smiles: smi,
+          parent_id: opts.parentId ?? currentMoleculeId,
+          created_by: opts.createdBy ?? "user",
+        }),
+      });
+      if (!r.ok) return null;
+      const d = await r.json();
+      if (d.molecule_id) {
+        setCurrentMoleculeId(d.molecule_id);
+        // Echo into the chat events stream so the radar + agent trace + chat panel update
+        const label = opts.logLabel ?? "[load]";
+        setEvents((p) => [
+          ...p,
+          { type: "agent_message", ts: Date.now()/1000, agent: opts.createdBy ?? "user",
+            content: `${label} ${smi}` } as any,
+          { type: "candidate_added", ts: Date.now()/1000, smiles: smi,
+            composite: 0, agent: opts.createdBy ?? "user" } as any,
+        ]);
+      }
+      return d.molecule_id;
+    } catch {
+      return null;
+    }
+  }, [activeChatId, apiBase, currentMoleculeId]);
+
+  /** Refresh the recent edit log from /sessions/{sid}/edits — drives the
+   *  Edit-log card so the user sees every persisted MoleculeEdit row. */
+  const refreshEditLog = useCallback(async () => {
+    if (!activeChatId) return;
+    try {
+      const r = await fetch(`${apiBase}/workbench/playground/sessions/${activeChatId}/edits?limit=40`);
+      if (!r.ok) return;
+      const d = await r.json();
+      setEditLog(d.edits ?? []);
+    } catch { /* */ }
+  }, [activeChatId, apiBase]);
+  // Refresh edit log whenever a new edit lands (via WS)
+  useEffect(() => {
+    if (!livePlayground.latest) return;
+    const ev = livePlayground.latest;
+    if (ev.event === "edit.applied" || ev.event === "molecule.created") {
+      refreshEditLog();
+    }
+  }, [livePlayground.latest, refreshEditLog]);
+  useEffect(() => { refreshEditLog(); }, [refreshEditLog]);
 
   // Hover-prediction state: when the user hovers an atom, we POST to
   // /workbench/playground/predict-edit and show a ghost polygon on the
@@ -914,13 +985,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       <ScaffoldPickerCard
                         apiBase={apiBase}
                         onLoadSmiles={(smi, name) => {
-                          setEvents((p) => [
-                            ...p,
-                            { type: "agent_message", ts: Date.now()/1000, agent: "user",
-                              content: `[load template ${name ?? ""}] ${smi}` } as any,
-                            { type: "candidate_added", ts: Date.now()/1000, smiles: smi,
-                              composite: 0, agent: "user" } as any,
-                          ]);
+                          // REAL backend round-trip: materialize → SQLite Atoms/Bonds → bus broadcast
+                          loadSmilesIntoCanvas(smi, {
+                            createdBy: "user",
+                            parentId: null,
+                            logLabel: `[template · ${name ?? ""}]`,
+                          });
                         }}
                       /> },
                     { id: "3d", title: "3D molecule theater · drag-edit", size: 2, body:
@@ -932,13 +1002,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           const opLabel = op?.kind === "swap" ? `→${op.element}`
                             : op?.kind === "methyl" ? "+CH₃"
                             : op?.kind === "break" ? "✂ bond" : "edit";
-                          setEvents((p) => [
-                            ...p,
-                            { type: "agent_message", ts: Date.now()/1000, agent: "user",
-                              content: `[edit ${opLabel}] ${newSmi}` } as any,
-                            { type: "candidate_added", ts: Date.now()/1000, smiles: newSmi,
-                              composite: 0, agent: "user" } as any,
-                          ]);
+                          loadSmilesIntoCanvas(newSmi, {
+                            createdBy: "user",
+                            parentId: currentMoleculeId,
+                            logLabel: `[3D edit ${opLabel}]`,
+                          });
                         }}
                       /> },
                     { id: "2d", title: "2D atom builder · click any atom", body:
@@ -961,24 +1029,20 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           }
                         }}
                         onMoleculeEdit={(newSmi, edit) => {
-                          setEvents((p) => [
-                            ...p,
-                            { type: "agent_message", ts: Date.now()/1000, agent: "user",
-                              content: `[2D edit ${edit.label} @ atom ${edit.atom_idx}] ${newSmi}` } as any,
-                            { type: "candidate_added", ts: Date.now()/1000, smiles: newSmi,
-                              composite: 0, agent: "user" } as any,
-                          ]);
+                          loadSmilesIntoCanvas(newSmi, {
+                            createdBy: "user",
+                            parentId: currentMoleculeId,
+                            logLabel: `[2D edit ${edit.label} @${edit.atom_idx}]`,
+                          });
                         }}
                       /> },
-                    { id: "atoms", title: "Live atoms · CRUD", body:
+                    { id: "atoms", title: "Live atoms · CRUD · DB-backed", body:
                       <LiveAtomsCard
                         apiBase={apiBase}
-                        moleculeId={null}
+                        moleculeId={currentMoleculeId}
                         smiles={currentSmiles}
                         onApplyEdit={async (edit) => {
                           if (!currentSmiles) return;
-                          // Apply via the existing /molecule/edit endpoint, then
-                          // bubble the new SMILES into the chat events stream.
                           try {
                             const body: any = { smiles: currentSmiles };
                             if (edit.kind === "swap_element") {
@@ -999,13 +1063,13 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                             if (d.smiles) {
                               const opLabel = edit.kind === "swap_element"
                                 ? `→${edit.new_element}` : "+CH₃";
-                              setEvents((p) => [
-                                ...p,
-                                { type: "agent_message", ts: Date.now()/1000, agent: "user",
-                                  content: `[atom-list ${opLabel} @${edit.atom_idx}] ${d.smiles}` } as any,
-                                { type: "candidate_added", ts: Date.now()/1000, smiles: d.smiles,
-                                  composite: 0, agent: "user" } as any,
-                              ]);
+                              // Persist to SQLite via the playground store (creates
+                              // new Molecule + Atoms + Bonds rows + MoleculeEdit log)
+                              await loadSmilesIntoCanvas(d.smiles, {
+                                createdBy: "user",
+                                parentId: currentMoleculeId,
+                                logLabel: `[atom-list ${opLabel} @${edit.atom_idx}]`,
+                              });
                             }
                           } catch {/* */}
                         }}
@@ -1046,6 +1110,33 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   cards: [
                     { id: "trace", title: "Reasoning trace · 4 specialists", size: 2, body:
                       <AgentReasoningTraceWindow events={events as any[]} /> },
+                  ],
+                },
+                {
+                  id: "live",
+                  category: "Live",
+                  cards: [
+                    { id: "status", title: "System health · WS · DB · jobs", size: 2, body:
+                      <ConnectionStatusCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        connected={livePlayground.connected}
+                        cursorCount={Object.keys(livePlayground.cursors).length}
+                        recentEditCount={editLog.length}
+                        lastEventTs={livePlayground.latest?.ts}
+                      /> },
+                    { id: "editlog", title: "Edit log · sqlite · live", size: 2, body:
+                      <EditLogCard
+                        edits={editLog}
+                        onRefresh={refreshEditLog}
+                        onLoadSmiles={(smi) => {
+                          loadSmilesIntoCanvas(smi, {
+                            createdBy: "user",
+                            parentId: currentMoleculeId,
+                            logLabel: "[edit-log replay]",
+                          });
+                        }}
+                      /> },
                   ],
                 },
                 {

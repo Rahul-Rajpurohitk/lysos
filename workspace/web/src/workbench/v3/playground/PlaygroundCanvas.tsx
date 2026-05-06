@@ -39,7 +39,7 @@ export interface Viewport {
   zoom: number;
 }
 
-export type WindowCategory = "Chemistry" | "Scoring" | "Agents" | "Knowledge" | "Library";
+export type WindowCategory = "Chemistry" | "Scoring" | "Agents" | "Knowledge" | "Library" | "Live";
 
 export interface WindowSpec {
   title: string;
@@ -83,6 +83,7 @@ export const CATEGORY_COLOR: Record<WindowCategory, string> = {
   Agents:    "#8b5cf6",   // violet
   Knowledge: "#3b82f6",   // blue
   Library:   "#64748b",   // slate
+  Live:      "#dc2626",   // red — system / DB / events
 };
 
 const MIN_ZOOM = 0.3;

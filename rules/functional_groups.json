@@ -1,0 +1,200 @@
+[
+  {
+    "name": "hydroxyl",
+    "label": "+OH",
+    "smarts": "[OX2H]",
+    "attach_smiles_part": "O",
+    "category": "polar",
+    "effect": "↑ solubility, ↑ HBD count; can be oxidized by CYP",
+    "examples": ["aspirin (salicylate OH)", "morphine"]
+  },
+  {
+    "name": "methyl",
+    "label": "+CH3",
+    "smarts": "[CH3]",
+    "attach_smiles_part": "C",
+    "category": "alkyl",
+    "effect": "↑ lipophilicity; minor steric block",
+    "examples": ["methadone", "amphetamine"]
+  },
+  {
+    "name": "amine_primary",
+    "label": "+NH2",
+    "smarts": "[NX3H2]",
+    "attach_smiles_part": "N",
+    "category": "polar-basic",
+    "effect": "↑ solubility, basic at physiological pH (protonated NH3+); H-bond donor",
+    "examples": ["amoxicillin (4-amino)", "amphetamine"]
+  },
+  {
+    "name": "amine_secondary",
+    "label": "+NHR",
+    "smarts": "[NX3H1]",
+    "attach_smiles_part": "N(C)",
+    "category": "polar-basic",
+    "effect": "Basic, less H-donating than primary; common in opioids",
+    "examples": ["morphine", "atenolol"]
+  },
+  {
+    "name": "amine_tertiary",
+    "label": "+NR2",
+    "smarts": "[NX3]([#6])([#6])[#6]",
+    "attach_smiles_part": "N(C)C",
+    "category": "polar-basic",
+    "effect": "Basic, ↑ logP, no H-donor",
+    "examples": ["ciprofloxacin (piperazine N)", "diphenhydramine"]
+  },
+  {
+    "name": "carboxyl",
+    "label": "+COOH",
+    "smarts": "C(=O)[OX2H]",
+    "attach_smiles_part": "C(=O)O",
+    "category": "polar-acidic",
+    "effect": "Acidic (pKa ~4.5), deprotonated at pH 7; ↑ solubility, ↓ permeability",
+    "examples": ["aspirin", "ibuprofen", "fluoroquinolones"]
+  },
+  {
+    "name": "amide",
+    "label": "+C(=O)NH",
+    "smarts": "C(=O)N",
+    "attach_smiles_part": "C(=O)N",
+    "category": "polar",
+    "effect": "Stable peptide-like linkage, modest H-bonding",
+    "examples": ["paracetamol", "linezolid", "all peptides"]
+  },
+  {
+    "name": "ester",
+    "label": "+C(=O)O",
+    "smarts": "C(=O)O[#6]",
+    "attach_smiles_part": "C(=O)OC",
+    "category": "polar",
+    "effect": "Hydrolyzed by esterases (often a prodrug strategy)",
+    "examples": ["aspirin (acetyl ester)", "cocaine"]
+  },
+  {
+    "name": "sulfonamide",
+    "label": "+SO2NH2",
+    "smarts": "S(=O)(=O)N",
+    "attach_smiles_part": "S(=O)(=O)N",
+    "category": "polar-acidic",
+    "effect": "Mildly acidic NH; classical antibacterial pharmacophore (sulfonamide drugs)",
+    "examples": ["sulfamethoxazole", "celecoxib"]
+  },
+  {
+    "name": "fluorine",
+    "label": "+F",
+    "smarts": "[F]",
+    "attach_smiles_part": "F",
+    "category": "halogen",
+    "effect": "↑ metabolic stability (blocks CYP oxidation), ↑ membrane permeability, ↓ pKa of nearby groups",
+    "examples": ["fluoroquinolones (C6-F)", "atorvastatin", "linezolid"]
+  },
+  {
+    "name": "chlorine",
+    "label": "+Cl",
+    "smarts": "[Cl]",
+    "attach_smiles_part": "Cl",
+    "category": "halogen",
+    "effect": "↑ lipophilicity, ↑ metabolic stability, larger steric block than F",
+    "examples": ["chloramphenicol", "chlorpromazine"]
+  },
+  {
+    "name": "trifluoromethyl",
+    "label": "+CF3",
+    "smarts": "C(F)(F)F",
+    "attach_smiles_part": "C(F)(F)F",
+    "category": "halogen-alkyl",
+    "effect": "Dramatic ↑ in lipophilicity + metabolic stability; common in modern drugs",
+    "examples": ["efavirenz", "fluoxetine", "celecoxib"]
+  },
+  {
+    "name": "cyano",
+    "label": "+CN",
+    "smarts": "C#N",
+    "attach_smiles_part": "C#N",
+    "category": "polar",
+    "effect": "Strong electron-withdrawing, H-bond acceptor; can be a metabolic warhead",
+    "examples": ["citalopram", "atazanavir"]
+  },
+  {
+    "name": "nitro",
+    "label": "+NO2",
+    "smarts": "[N+](=O)[O-]",
+    "attach_smiles_part": "[N+](=O)[O-]",
+    "category": "structural-alert",
+    "effect": "Common in nitroimidazole antibiotics (metronidazole) but also a PAINS/toxicophore alert in many contexts",
+    "examples": ["metronidazole", "nitrofurantoin"]
+  },
+  {
+    "name": "phosphate",
+    "label": "+PO3H2",
+    "smarts": "P(=O)(O)O",
+    "attach_smiles_part": "P(=O)(O)O",
+    "category": "polar-acidic",
+    "effect": "Highly polar, anionic; mimics nucleotide phosphate (nucleoside analogs)",
+    "examples": ["fosfomycin", "tenofovir"]
+  },
+  {
+    "name": "methoxy",
+    "label": "+OCH3",
+    "smarts": "[OX2][CH3]",
+    "attach_smiles_part": "OC",
+    "category": "polar",
+    "effect": "H-bond acceptor; ↑ lipophilicity vs OH; common in cephamycins (7α-OMe)",
+    "examples": ["cefoxitin", "linezolid (3-fluorophenyl-OMe)"]
+  },
+  {
+    "name": "boronic_acid",
+    "label": "+B(OH)2",
+    "smarts": "[B](O)(O)",
+    "attach_smiles_part": "B(O)O",
+    "category": "covalent-warhead",
+    "effect": "Reversible covalent inhibitor of serine proteases / β-lactamases",
+    "examples": ["bortezomib", "vaborbactam (β-lactamase inhibitor)"]
+  },
+  {
+    "name": "morpholine",
+    "label": "+morpholino",
+    "smarts": "N1CCOCC1",
+    "attach_smiles_part": "N1CCOCC1",
+    "category": "ring-amine",
+    "effect": "Modest base, ↑ solubility, common solubilizing tail",
+    "examples": ["linezolid", "gefitinib"]
+  },
+  {
+    "name": "piperazine",
+    "label": "+piperazinyl",
+    "smarts": "N1CCNCC1",
+    "attach_smiles_part": "N1CCNCC1",
+    "category": "ring-amine",
+    "effect": "Diamine, basic; widely used solubility/H-bond handle",
+    "examples": ["ciprofloxacin", "imatinib"]
+  },
+  {
+    "name": "guanidine",
+    "label": "+guanidine",
+    "smarts": "N=C(N)N",
+    "attach_smiles_part": "NC(=N)N",
+    "category": "polar-basic",
+    "effect": "Strongly basic (pKa ~13); used in arginine-mimetic drugs",
+    "examples": ["streptomycin (guanidine)", "metformin"]
+  },
+  {
+    "name": "tetrazole",
+    "label": "+tetrazole",
+    "smarts": "c1nnn[nH]1",
+    "attach_smiles_part": "c1nnn[nH]1",
+    "category": "carboxyl-bioisostere",
+    "effect": "Bioisostere of -COOH (similar pKa, ↑ membrane permeability)",
+    "examples": ["losartan", "valsartan"]
+  },
+  {
+    "name": "siderophore_catechol",
+    "label": "+catechol",
+    "smarts": "c1ccc(O)c(O)c1",
+    "attach_smiles_part": "c1ccc(O)c(O)c1",
+    "category": "uptake-vector",
+    "effect": "Iron-chelating catechol — TonB-dependent uptake into Gram-negatives (cefiderocol Trojan-horse strategy)",
+    "examples": ["cefiderocol"]
+  }
+]

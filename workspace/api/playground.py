@@ -98,8 +98,12 @@ class CreateMolRequest(BaseModel):
 
 @router.post("/sessions/{sid}/molecule")
 async def upsert_session_molecule(sid: str, req: CreateMolRequest) -> dict[str, Any]:
-    """Materialize a SMILES → Molecule + Atoms + Bonds, persist, broadcast
-    a `molecule.created` event so all subscribers update their views."""
+    """Materialize a SMILES → Molecule + Atoms + Bonds, persist, append a
+    MoleculeEdit row to the session's event log, and broadcast a
+    `molecule.created` event so all WS subscribers update their views.
+    """
+    import time as _t
+    import uuid as _uuid
     store = get_store()
     try:
         mol, atoms, bonds = materialize_from_smiles(
@@ -109,6 +113,28 @@ async def upsert_session_molecule(sid: str, req: CreateMolRequest) -> dict[str, 
         raise HTTPException(422, f"materialize failed: {exc}")
     store.create_session(sid, "anonymous", "MRSA")
     store.upsert_molecule(mol, atoms, bonds)
+    # Append-only edit log row so the UI's EditLog card shows it.
+    actor_kind = "agent" if (req.created_by or "").lower() in ("designer", "critic", "editor", "strategist") else "user"
+    op_kind = "propose" if not req.parent_id else "edit"
+    from workspace.playground.store import MoleculeEdit
+    store.append_edit(MoleculeEdit(
+        id="ed_" + _uuid.uuid4().hex[:12],
+        ts=_t.time(),
+        session_id=sid,
+        parent_molecule_id=req.parent_id,
+        child_molecule_id=mol.id,
+        actor=req.created_by or "user",
+        actor_kind=actor_kind,
+        op=op_kind,
+        atom_idx=None,
+        bond_idx=None,
+        params={"role": req.role},
+        result_smiles=mol.canonical_smiles,
+        composite_before=None,
+        composite_after=None,
+        delta=None,
+        client_op_id=None,
+    ))
     bus = get_bus()
     bus.publish(sid, {
         "event": "molecule.created",
