@@ -22,6 +22,7 @@
  */
 import { useEffect, useRef, useState, ReactNode } from "react";
 import { Maximize2, Minimize2, X as IconX, Move } from "lucide-react";
+import { PlaygroundGroup, type GroupLayout, type CardSpec } from "./PlaygroundGroup";
 
 export interface WindowLayout {
   x: number;
@@ -49,16 +50,29 @@ export interface WindowSpec {
   tone?: string;
 }
 
+export interface GroupSpec {
+  id: string;
+  category: WindowCategory;
+  cards: CardSpec[];
+}
+
 interface PlaygroundCanvasProps {
-  layout: Record<string, WindowLayout>;
+  // Legacy single-window layout (kept for backward compat — empty in groups mode)
+  layout?: Record<string, WindowLayout>;
+  windows?: Record<string, WindowSpec>;
+  onLayoutChange?: (id: string, next: WindowLayout) => void;
+
   viewport: Viewport;
-  onLayoutChange: (id: string, next: WindowLayout) => void;
   onViewportChange: (v: Viewport) => void;
-  /** id → rendered window spec (title, category, body). */
-  windows: Record<string, WindowSpec>;
   onClose?: (id: string) => void;
   onFocus?: (id: string) => void;
   toolbar?: ReactNode;
+
+  // NEW: groups model — preferred. If set, the canvas renders groups
+  // (not free-floating windows). Each group holds multiple cards.
+  groupLayout?: Record<string, GroupLayout>;
+  groups?: GroupSpec[];
+  onGroupLayoutChange?: (id: string, next: GroupLayout) => void;
 }
 
 // Category → accent color. The canvas uses this for the title-bar dot
@@ -80,39 +94,63 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
   const [panning, setPanning] = useState(false);
   const panStart = useRef<{ mx: number; my: number; pan: { x: number; y: number } } | null>(null);
 
-  // Wheel pan + cmd-wheel zoom
+  // Wheel pan + cmd-wheel zoom — RAF-throttled for 60fps smoothness.
+  // We accumulate deltas in refs and flush once per frame instead of
+  // calling setState on every wheel tick (was the source of the lag).
+  const wheelDeltaRef = useRef<{ x: number; y: number; zoomFactor: number; cx: number; cy: number } | null>(null);
+  const rafIdRef = useRef<number | null>(null);
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      if (e.metaKey || e.ctrlKey) {
-        e.preventDefault();
-        const rect = el.getBoundingClientRect();
-        const cx = e.clientX - rect.left;
-        const cy = e.clientY - rect.top;
-        const next = clamp(p.viewport.zoom * (1 - e.deltaY * 0.0015), MIN_ZOOM, MAX_ZOOM);
-        // Anchor zoom at cursor: re-aim pan so cursor stays put
-        const k = next / p.viewport.zoom;
+
+    const flush = () => {
+      rafIdRef.current = null;
+      const acc = wheelDeltaRef.current;
+      if (!acc) return;
+      wheelDeltaRef.current = null;
+      const v = p.viewport;
+      if (acc.zoomFactor !== 1) {
+        const next = clamp(v.zoom * acc.zoomFactor, MIN_ZOOM, MAX_ZOOM);
+        const k = next / v.zoom;
         p.onViewportChange({
           zoom: next,
           pan: {
-            x: cx - (cx - p.viewport.pan.x) * k,
-            y: cy - (cy - p.viewport.pan.y) * k,
+            x: acc.cx - (acc.cx - v.pan.x) * k,
+            y: acc.cy - (acc.cy - v.pan.y) * k,
           },
         });
-      } else {
-        e.preventDefault();
+      } else if (acc.x !== 0 || acc.y !== 0) {
         p.onViewportChange({
-          ...p.viewport,
-          pan: {
-            x: p.viewport.pan.x - e.deltaX,
-            y: p.viewport.pan.y - e.deltaY,
-          },
+          ...v,
+          pan: { x: v.pan.x - acc.x, y: v.pan.y - acc.y },
         });
       }
     };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      const acc = wheelDeltaRef.current ?? { x: 0, y: 0, zoomFactor: 1, cx, cy };
+      acc.cx = cx; acc.cy = cy;
+      if (e.metaKey || e.ctrlKey) {
+        // Multiplicative zoom factor accumulates exponentially — feels smooth
+        acc.zoomFactor *= (1 - e.deltaY * 0.0015);
+      } else {
+        acc.x += e.deltaX;
+        acc.y += e.deltaY;
+      }
+      wheelDeltaRef.current = acc;
+      if (rafIdRef.current == null) {
+        rafIdRef.current = requestAnimationFrame(flush);
+      }
+    };
     el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+    };
   }, [p.viewport, p.onViewportChange]);
 
   // Keyboard shortcuts
@@ -124,13 +162,15 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "1") {
         e.preventDefault();
-        // Fit-to-windows: compute bounding box, zoom to fit
-        const visible = Object.values(p.layout).filter((l) => l.visible);
-        if (!visible.length) return;
-        const minX = Math.min(...visible.map((l) => l.x));
-        const minY = Math.min(...visible.map((l) => l.y));
-        const maxX = Math.max(...visible.map((l) => l.x + l.w));
-        const maxY = Math.max(...visible.map((l) => l.y + l.h));
+        // Fit-to-content: union of visible windows + groups bounding boxes
+        const wins = p.layout ? Object.values(p.layout).filter((l) => l.visible) : [];
+        const grps = p.groupLayout ? Object.values(p.groupLayout) : [];
+        const all: Array<{ x: number; y: number; w: number; h: number }> = [...wins, ...grps];
+        if (!all.length) return;
+        const minX = Math.min(...all.map((l) => l.x));
+        const minY = Math.min(...all.map((l) => l.y));
+        const maxX = Math.max(...all.map((l) => l.x + l.w));
+        const maxY = Math.max(...all.map((l) => l.y + l.h));
         const el = stageRef.current;
         if (!el) return;
         const r = el.getBoundingClientRect();
@@ -204,22 +244,43 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
         cursor: panning ? "grabbing" : "default",
       }}
     >
-      {/* The transformed inner stage — windows live in canvas-space coords */}
+      {/* GPU-accelerated transform layer — translate3d + will-change so
+          the compositor handles pan/zoom without touching layout. */}
       <div
         style={{
           position: "absolute",
           left: 0,
           top: 0,
-          transform: `translate(${p.viewport.pan.x}px, ${p.viewport.pan.y}px) scale(${p.viewport.zoom})`,
+          transform: `translate3d(${p.viewport.pan.x}px, ${p.viewport.pan.y}px, 0) scale(${p.viewport.zoom})`,
           transformOrigin: "0 0",
+          willChange: "transform",
           width: "100%",
           height: "100%",
           pointerEvents: "none", // children opt-in
         }}
       >
-        {Object.entries(p.layout).map(([id, l]) => {
+        {/* Groups mode (preferred): each group is a colored container with cards inside. */}
+        {p.groups && p.groupLayout && p.onGroupLayoutChange && p.groups.map((g) => {
+          const layout = p.groupLayout![g.id];
+          if (!layout) return null;
+          return (
+            <PlaygroundGroup
+              key={g.id}
+              id={g.id}
+              category={g.category}
+              cards={g.cards}
+              layout={layout}
+              viewport={p.viewport}
+              onChange={(next) => p.onGroupLayoutChange!(g.id, next)}
+              onFocus={p.onFocus ? () => p.onFocus!(g.id) : undefined}
+            />
+          );
+        })}
+
+        {/* Legacy free-floating windows mode — falls through if no groups */}
+        {!p.groups && p.layout && p.windows && p.onLayoutChange && Object.entries(p.layout).map(([id, l]) => {
           if (!l.visible) return null;
-          const win = p.windows[id];
+          const win = p.windows![id];
           if (!win) return null;
           return (
             <PlaygroundWindow
@@ -230,7 +291,7 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
               title={win.title}
               category={win.category}
               tone={win.tone ?? (win.category ? CATEGORY_COLOR[win.category] : undefined)}
-              onChange={(next) => p.onLayoutChange(id, next)}
+              onChange={(next) => p.onLayoutChange!(id, next)}
               onClose={p.onClose ? () => p.onClose!(id) : undefined}
               onFocus={p.onFocus ? () => p.onFocus!(id) : undefined}
             >

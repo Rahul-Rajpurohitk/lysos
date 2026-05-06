@@ -33,6 +33,9 @@ import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
+import { LiveAtomsCard } from "./playground/LiveAtomsCard";
+import type { GroupLayout } from "./playground/PlaygroundGroup";
+void {} as unknown as WindowLayout;
 import { CandidateList as _CandidateList } from "./components/CandidateList";
 void _CandidateList;
 import type { Pathogen } from "./components/TopHeader";
@@ -167,28 +170,28 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Default layout sized for a ~1100px-wide right pane. All windows live
   // in canvas coords and are draggable/resizable. Persists per-chat-tab
   // via localStorage (key = lysos.playground.<chatId>).
-  // Default playground layout — sized for the new strict 2-pane chat|playground
-  // split. With chat at 35% and playground at 65% of a 1920px-wide window,
-  // the playground area lands around 1180px wide. Two-column window
-  // arrangement with categorized groupings:
-  //   Left col   : Chemistry (3D + 2D)        — emerald
-  //   Right col  : Scoring + Agents           — amber + violet
-  //   Below      : Artifact (Knowledge)       — blue, hidden until /explain
-  const DEFAULT_LAYOUT: Record<string, WindowLayout> = {
-    "3d":     { x: 16,  y: 16,  w: 600, h: 380, z: 1, visible: true },
-    "2d":     { x: 16,  y: 412, w: 600, h: 360, z: 1, visible: true },
-    "radar":  { x: 632, y: 16,  w: 420, h: 380, z: 1, visible: true },
-    "agents": { x: 632, y: 412, w: 600, h: 360, z: 1, visible: true },
-    "artifact": { x: 16, y: 788, w: 1216, h: 320, z: 1, visible: false },
+  // ─── Playground GROUPS layout ─────────────────────────────────────────
+  // Right-pane is now a categorized whiteboard. Four group containers:
+  //   CHEMISTRY (emerald)  — 3D theater · 2D atom builder · live atoms
+  //   SCORING (amber)      — reward radar
+  //   AGENTS (violet)      — designer/critic/editor/strategist trace
+  //   KNOWLEDGE (blue)     — artifact pane (only visible after /explain)
+  // Each group is draggable + resizable. Cards inside each group are
+  // arranged in a 2-col grid (size=2 for full-row cards).
+  const DEFAULT_GROUP_LAYOUT: Record<string, GroupLayout> = {
+    "chem":      { x: 16,  y: 16,  w: 720, h: 760, z: 1 },
+    "scoring":   { x: 752, y: 16,  w: 460, h: 380, z: 1 },
+    "agents":    { x: 752, y: 412, w: 460, h: 360, z: 1 },
+    "knowledge": { x: 16,  y: 792, w: 1196, h: 360, z: 1, collapsed: true },
   };
-  const [playgroundLayouts, setPlaygroundLayouts] = useState<Record<string, Record<string, WindowLayout>>>({});
+  const [playgroundGroupLayouts, setPlaygroundGroupLayouts] = useState<Record<string, Record<string, GroupLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
-  const playLayout = playgroundLayouts[activeChatId] ?? DEFAULT_LAYOUT;
+  const playGroupLayout = playgroundGroupLayouts[activeChatId] ?? DEFAULT_GROUP_LAYOUT;
   const playViewport = playgroundViewports[activeChatId] ?? { pan: { x: 0, y: 0 }, zoom: 1 };
-  function setPlayLayoutItem(id: string, next: WindowLayout) {
-    setPlaygroundLayouts((m) => ({
+  function setPlayGroupLayoutItem(id: string, next: GroupLayout) {
+    setPlaygroundGroupLayouts((m) => ({
       ...m,
-      [activeChatId]: { ...(m[activeChatId] ?? DEFAULT_LAYOUT), [id]: next },
+      [activeChatId]: { ...(m[activeChatId] ?? DEFAULT_GROUP_LAYOUT), [id]: next },
     }));
   }
   function setPlayViewport(v: Viewport) {
@@ -201,7 +204,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       const raw = localStorage.getItem(`lysos.playground.${activeChatId}`);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.layout) setPlaygroundLayouts((m) => ({ ...m, [activeChatId]: parsed.layout }));
+        if (parsed.groupLayout) setPlaygroundGroupLayouts((m) => ({ ...m, [activeChatId]: parsed.groupLayout }));
         if (parsed.viewport) setPlaygroundViewports((m) => ({ ...m, [activeChatId]: parsed.viewport }));
       }
     } catch { /* ignore */ }
@@ -213,12 +216,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       try {
         localStorage.setItem(
           `lysos.playground.${activeChatId}`,
-          JSON.stringify({ layout: playLayout, viewport: playViewport }),
+          JSON.stringify({ groupLayout: playGroupLayout, viewport: playViewport }),
         );
       } catch { /* quota / disabled */ }
     }, 500);
     return () => clearTimeout(t);
-  }, [activeChatId, playLayout, playViewport]);
+  }, [activeChatId, playGroupLayout, playViewport]);
   const [mechanismOpen, setMechanismOpen] = useState(false);
   void mechanismOpen; void setMechanismOpen; // legacy: middle pane removed; mechanism opens inline now
   const [activeSubAgents, setActiveSubAgents] = useState<string[]>([]);
@@ -836,16 +839,137 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               top-right, Agent trace bottom-right. Per-chat-tab layouts. */}
           <Allotment.Pane minSize={360} preferredSize={760}>
             <PlaygroundCanvas
-              layout={playLayout}
               viewport={playViewport}
-              onLayoutChange={setPlayLayoutItem}
               onViewportChange={setPlayViewport}
-              onClose={(id) => setPlayLayoutItem(id, { ...playLayout[id], visible: false })}
               onFocus={(id) => {
-                // Focus = bump z-order
-                const maxZ = Math.max(...Object.values(playLayout).map((l) => l.z));
-                setPlayLayoutItem(id, { ...playLayout[id], z: maxZ + 1 });
+                const maxZ = Math.max(...Object.values(playGroupLayout).map((l) => l.z));
+                setPlayGroupLayoutItem(id, { ...playGroupLayout[id], z: maxZ + 1 });
               }}
+              groupLayout={playGroupLayout}
+              onGroupLayoutChange={setPlayGroupLayoutItem}
+              groups={[
+                {
+                  id: "chem",
+                  category: "Chemistry",
+                  cards: [
+                    { id: "3d", title: "3D molecule theater · drag-edit", size: 2, body:
+                      <Mol3DTheaterWindow
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        onMoleculeEdit={(newSmi, op) => {
+                          const opLabel = op?.kind === "swap" ? `→${op.element}`
+                            : op?.kind === "methyl" ? "+CH₃"
+                            : op?.kind === "break" ? "✂ bond" : "edit";
+                          setEvents((p) => [
+                            ...p,
+                            { type: "agent_message", ts: Date.now()/1000, agent: "user",
+                              content: `[edit ${opLabel}] ${newSmi}` } as any,
+                            { type: "candidate_added", ts: Date.now()/1000, smiles: newSmi,
+                              composite: 0, agent: "user" } as any,
+                          ]);
+                        }}
+                      /> },
+                    { id: "2d", title: "2D atom builder · click any atom", body:
+                      <Mol2DBuilderWindow
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        onMoleculeEdit={(newSmi, edit) => {
+                          setEvents((p) => [
+                            ...p,
+                            { type: "agent_message", ts: Date.now()/1000, agent: "user",
+                              content: `[2D edit ${edit.label} @ atom ${edit.atom_idx}] ${newSmi}` } as any,
+                            { type: "candidate_added", ts: Date.now()/1000, smiles: newSmi,
+                              composite: 0, agent: "user" } as any,
+                          ]);
+                        }}
+                      /> },
+                    { id: "atoms", title: "Live atoms · CRUD", body:
+                      <LiveAtomsCard
+                        apiBase={apiBase}
+                        moleculeId={null}
+                        smiles={currentSmiles}
+                        onApplyEdit={async (edit) => {
+                          if (!currentSmiles) return;
+                          // Apply via the existing /molecule/edit endpoint, then
+                          // bubble the new SMILES into the chat events stream.
+                          try {
+                            const body: any = { smiles: currentSmiles };
+                            if (edit.kind === "swap_element") {
+                              body.op = "swap_element";
+                              body.atom_index = edit.atom_idx;
+                              body.new_element = edit.new_element;
+                            } else if (edit.kind === "add_methyl") {
+                              body.op = "add_methyl_at";
+                              body.atom_index = edit.atom_idx;
+                            } else { return; }
+                            const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(body),
+                            });
+                            if (!r.ok) return;
+                            const d = await r.json();
+                            if (d.smiles) {
+                              const opLabel = edit.kind === "swap_element"
+                                ? `→${edit.new_element}` : "+CH₃";
+                              setEvents((p) => [
+                                ...p,
+                                { type: "agent_message", ts: Date.now()/1000, agent: "user",
+                                  content: `[atom-list ${opLabel} @${edit.atom_idx}] ${d.smiles}` } as any,
+                                { type: "candidate_added", ts: Date.now()/1000, smiles: d.smiles,
+                                  composite: 0, agent: "user" } as any,
+                              ]);
+                            }
+                          } catch {/* */}
+                        }}
+                      /> },
+                  ],
+                },
+                {
+                  id: "scoring",
+                  category: "Scoring",
+                  cards: [
+                    { id: "radar", title: "Reward radar · live", size: 2, body:
+                      <RewardRadarWindow
+                        current={lastScores ?? {}}
+                        best={bestScores ?? {}}
+                        weights={REWARD_WEIGHTS}
+                        history={(() => {
+                          const h: Record<string, number[]> = {};
+                          for (const e of events as any[]) {
+                            if (e.type !== "candidate_added") continue;
+                            const s = (e.scores ?? e.data?.scores) as Record<string, number> | undefined;
+                            if (!s) continue;
+                            for (const [k, v] of Object.entries(s)) {
+                              if (typeof v !== "number") continue;
+                              if (!h[k]) h[k] = [];
+                              h[k].push(v);
+                            }
+                          }
+                          return h;
+                        })()}
+                      /> },
+                  ],
+                },
+                {
+                  id: "agents",
+                  category: "Agents",
+                  cards: [
+                    { id: "trace", title: "Reasoning trace · 4 specialists", size: 2, body:
+                      <AgentReasoningTraceWindow events={events as any[]} /> },
+                  ],
+                },
+                {
+                  id: "knowledge",
+                  category: "Knowledge",
+                  cards: [
+                    { id: "artifact", title: "Artifact · /explain output", size: 2, body:
+                      <ArtifactPanel doc={artifactDoc} /> },
+                  ],
+                },
+              ]}
               windows={{
                 "3d": {
                   title: "3D molecule theater",
