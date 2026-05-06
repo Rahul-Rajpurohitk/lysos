@@ -443,30 +443,47 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         )}
         <span style={{ color: "var(--lys-text-dim)" }}>click → edit · shift-click → multi-select</span>
       </div>
-      <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
-        {svg
-          ? <div ref={svgHostRef} style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }} />
-          : (
+      {/* Body row: SVG viewer (flex 1) + atoms rail (260 px).
+          position: relative so the popover + multi-select toolbar (children
+          with position: absolute) anchor here. */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "row", overflow: "hidden", minHeight: 0, position: "relative" }}>
+        {/* SVG area — molecule scales to fit, never scrolls, never clips */}
+        <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
+          {svg
+            ? <div ref={svgHostRef} style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }} />
+            : (
+              <div style={{
+                color: "var(--lys-text-faint)", fontSize: 11,
+                fontFamily: "var(--lys-font-mono)", padding: 12, textAlign: "center",
+              }}>
+                {smiles ? "rendering…" : "no candidate yet · pick a scaffold"}
+              </div>
+            )}
+          {error && (
             <div style={{
-              color: "var(--lys-text-faint)",
-              fontSize: 11,
-              fontFamily: "var(--lys-font-mono)",
-              padding: 12,
-              textAlign: "center",
-            }}>
-              {smiles
-                ? "rendering…"
-                : "no candidate yet · run /design <pathogen> or pick one"}
-            </div>
+              position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
+              fontSize: 10, color: "#dc2626", fontFamily: "var(--lys-font-mono)",
+              background: "rgba(255,255,255,0.95)", padding: "2px 6px", borderRadius: 4,
+            }}>{error}</div>
           )}
-        {error && (
-          <div style={{
-            position: "absolute",
-            bottom: 6, left: "50%", transform: "translateX(-50%)",
-            fontSize: 10, color: "#dc2626", fontFamily: "var(--lys-font-mono)",
-            background: "rgba(255,255,255,0.95)", padding: "2px 6px", borderRadius: 4,
-          }}>{error}</div>
-        )}
+        </div>
+        {/* Atoms rail — embedded list of all atoms with element + valence + edit chips */}
+        <AtomsRail
+          apiBase={apiBase}
+          smiles={smiles}
+          selected={selected}
+          hoverIdx={null}
+          onSelectAtom={(idx) => {
+            // Sync selection — clicking an atom row in the rail toggles
+            // the selection set, mirroring shift-click on the SVG.
+            setSelected((cur) => {
+              const next = new Set(cur);
+              if (next.has(idx)) next.delete(idx); else next.add(idx);
+              return next;
+            });
+          }}
+          onHoverAtom={(idx) => onCursorHover?.(idx)}
+        />
         {pop && smiles && (
           <div data-chem-pop style={{ position: "absolute", left: pop.x, top: pop.y, zIndex: 100 }}>
             <ChemKnowledgeCard
@@ -560,6 +577,181 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </button>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   AtomsRail — embedded list of atoms inside the 2D builder.
+   Replaces the standalone "Live atoms · CRUD" card.
+
+   Each row: idx · element badge · valence · aromatic chip · ring chip.
+   Click row → toggles selection in the SVG (mirrors shift-click).
+   Hover row → fires onHoverAtom which broadcasts cursor presence.
+   ───────────────────────────────────────────────────────────────────── */
+interface AtomsRailProps {
+  apiBase: string;
+  smiles: string | null;
+  selected: Set<number>;
+  hoverIdx: number | null;
+  onSelectAtom: (idx: number) => void;
+  onHoverAtom: (idx: number | null) => void;
+}
+
+interface AtomRow {
+  idx: number;
+  element: string;
+  is_aromatic: boolean;
+  in_ring: boolean;
+  ring_size: number;
+  n_hydrogens: number;
+  formal_charge: number;
+  n_neighbors: number;
+}
+
+function AtomsRail(p: AtomsRailProps) {
+  const [atoms, setAtoms] = useState<AtomRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!p.smiles) { setAtoms([]); return; }
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const b64 = smilesToB64(p.smiles!);
+        // Get atom count from the 2D endpoint, then fetch each atom in parallel
+        const r = await fetch(`${p.apiBase}/workbench/molecule/2d/${b64}?w=200&h=200`);
+        if (!r.ok) { setAtoms([]); return; }
+        const meta = await r.json();
+        const n = meta.n_atoms ?? 0;
+        // Parallel atom fetches — much faster than sequential
+        const promises = Array.from({ length: n }, (_, i) =>
+          fetch(`${p.apiBase}/workbench/chem/atom/${b64}/${i}`)
+            .then((ar) => ar.ok ? ar.json() : null)
+            .catch(() => null));
+        const results = await Promise.all(promises);
+        if (cancelled) return;
+        const rows: AtomRow[] = results.map((a, i) => a ? ({
+          idx: i,
+          element: a.element,
+          is_aromatic: a.is_aromatic,
+          in_ring: a.in_ring,
+          ring_size: a.ring_size,
+          n_hydrogens: a.n_hydrogens,
+          formal_charge: a.formal_charge,
+          n_neighbors: (a.neighbors || []).length,
+        }) : null).filter((x): x is AtomRow => x !== null);
+        if (!cancelled) setAtoms(rows);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [p.smiles, p.apiBase]);
+
+  const ELEMENT_COLOR: Record<string, string> = {
+    C: "#374151", N: "#2563eb", O: "#dc2626", S: "#ca8a04",
+    F: "#16a34a", Cl: "#16a34a", Br: "#9a3412", I: "#7c3aed",
+    P: "#ea580c", H: "#9ca3af",
+  };
+
+  return (
+    <div style={{
+      width: 260, flexShrink: 0,
+      borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+      background: "var(--lys-bg, #fafafa)",
+      display: "flex", flexDirection: "column",
+      overflow: "hidden",
+    }}>
+      <div style={{
+        padding: "5px 8px",
+        fontSize: 9, fontFamily: "var(--lys-font-mono)",
+        color: "var(--lys-text-faint)",
+        letterSpacing: "0.06em", textTransform: "uppercase",
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+        display: "flex", alignItems: "center", gap: 6,
+      }}>
+        <span>atoms</span>
+        <span style={{ fontFamily: "inherit", color: "#10b981", fontWeight: 700 }}>
+          {atoms.length}
+        </span>
+      </div>
+      <div className="lys-card-body" style={{ flex: 1, overflow: "auto" }}>
+        {!p.smiles && (
+          <div style={{
+            padding: "16px 10px", textAlign: "center",
+            fontSize: 10, color: "var(--lys-text-faint)",
+            fontFamily: "var(--lys-font-mono)",
+          }}>no candidate</div>
+        )}
+        {p.smiles && loading && atoms.length === 0 && (
+          <div style={{ padding: "16px 10px", textAlign: "center",
+            fontSize: 10, color: "var(--lys-text-faint)",
+            fontFamily: "var(--lys-font-mono)" }}>loading atoms…</div>
+        )}
+        {atoms.map((a) => {
+          const c = ELEMENT_COLOR[a.element] ?? "#374151";
+          const isSelected = p.selected.has(a.idx);
+          const isHover = p.hoverIdx === a.idx;
+          return (
+            <div key={a.idx}
+              onClick={() => p.onSelectAtom(a.idx)}
+              onMouseEnter={() => p.onHoverAtom(a.idx)}
+              onMouseLeave={() => p.onHoverAtom(null)}
+              style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "4px 8px",
+                borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.03))",
+                borderLeft: isSelected ? `3px solid #f59e0b` : "3px solid transparent",
+                background: isSelected ? "rgba(245,158,11,0.08)"
+                          : isHover ? "rgba(0,0,0,0.03)" : "transparent",
+                cursor: "pointer",
+                fontSize: 10,
+                fontFamily: "var(--lys-font-mono)",
+              }}>
+              <span style={{
+                fontSize: 8.5, color: "var(--lys-text-faint)",
+                minWidth: 16, textAlign: "right",
+              }}>{a.idx}</span>
+              <span style={{
+                width: 18, height: 18, borderRadius: "50%",
+                background: c, color: "white",
+                display: "grid", placeItems: "center",
+                fontSize: 9.5, fontWeight: 700,
+              }}>{a.element}</span>
+              {a.n_hydrogens > 0 && (
+                <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5 }}>H{a.n_hydrogens}</span>
+              )}
+              {a.is_aromatic && (
+                <span style={{
+                  fontSize: 7.5, padding: "0 3px", borderRadius: 2,
+                  background: "rgba(168,85,247,0.10)", color: "#a855f7",
+                  fontWeight: 700, letterSpacing: "0.04em",
+                }}>arom</span>
+              )}
+              {a.in_ring && (
+                <span style={{
+                  fontSize: 7.5, padding: "0 3px", borderRadius: 2,
+                  background: "rgba(8,145,178,0.10)", color: "#0891b2",
+                  fontWeight: 700,
+                }}>r{a.ring_size}</span>
+              )}
+              {a.formal_charge !== 0 && (
+                <span style={{
+                  fontSize: 7.5, padding: "0 3px", borderRadius: 2,
+                  background: "rgba(220,38,38,0.10)", color: "#dc2626",
+                  fontWeight: 700,
+                }}>{a.formal_charge > 0 ? "+" : ""}{a.formal_charge}</span>
+              )}
+              <span style={{ flex: 1 }} />
+              <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5 }}>
+                ↔{a.n_neighbors}
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

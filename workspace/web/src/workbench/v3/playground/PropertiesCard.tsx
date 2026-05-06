@@ -15,7 +15,7 @@
  * Auto-refreshes whenever the SMILES prop changes.
  */
 import { useEffect, useState } from "react";
-import { FlaskConical, AlertTriangle, CheckCircle2, RefreshCw } from "lucide-react";
+import { FlaskConical, RefreshCw } from "lucide-react";
 
 interface MolProps {
   smiles: string;
@@ -125,106 +125,93 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
         onRefresh={refresh}
         loading={loading}
       />
-      <div style={{ flex: 1, overflow: "auto", padding: 8, display: "flex",
-        flexDirection: "column", gap: 8 }}>
+      <div style={{ flex: 1, overflow: "auto", padding: 6, display: "flex",
+        flexDirection: "column", gap: 5 }}>
 
-        {/* HERO: 4 big tiles */}
+        {/* HERO row — 4 inline mini-tiles, single horizontal strip */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4 }}>
-          <Tile label="MW" value={data.molecular_weight.toFixed(0)} unit="Da"
+          <MiniTile label="MW" value={data.molecular_weight.toFixed(0)} unit="Da"
             color={data.molecular_weight < 500 ? "#10b981" : "#d97706"} />
-          <Tile label="logP" value={data.logp.toFixed(2)} unit=""
+          <MiniTile label="logP" value={data.logp.toFixed(2)} unit=""
             color={data.logp < 5 && data.logp > -2 ? "#10b981" : "#d97706"} />
-          <Tile label="TPSA" value={data.tpsa.toFixed(0)} unit="Å²"
+          <MiniTile label="TPSA" value={data.tpsa.toFixed(0)} unit="Å²"
             color={data.tpsa <= 140 ? "#10b981" : "#d97706"} />
-          <Tile label="QED" value={data.qed.toFixed(2)} unit=""
+          <MiniTile label="QED" value={data.qed.toFixed(2)} unit=""
             color={data.qed >= 0.67 ? "#10b981" : data.qed >= 0.4 ? "#d97706" : "#dc2626"} />
         </div>
 
-        {/* LIPINSKI Ro5 */}
-        <Section title={`lipinski Ro5 · ${data.lipinski_pass ? "PASS" : `${data.lipinski_violations} viol`}`}
-                 iconColor={data.lipinski_pass ? "#10b981" : "#d97706"}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 3 }}>
-            {lipChecks.map((c) => (
-              <RuleCheck key={c.name} {...c} />
+        {/* Rules row — Lipinski + Veber as inline chips */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+          <RulePill label="Lipinski" pass={data.lipinski_pass} sub={data.lipinski_pass ? "pass" : `${data.lipinski_violations} viol`} />
+          <RulePill label="Veber" pass={data.veber_pass} sub={data.veber_pass ? "pass" : "fail"} />
+          {lipChecks.map((c) => (
+            <InlineRuleCheck key={c.name} {...c} />
+          ))}
+        </div>
+
+        {/* Composition row — element pills + ring/fsp3/charge inline */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+          {Object.entries(data.element_counts).map(([sym, n]) => {
+            const c = ELEMENT_COLOR[sym] ?? "#374151";
+            return (
+              <span key={sym} style={{
+                padding: "1px 6px", borderRadius: 999,
+                background: `${c}10`, border: `1px solid ${c}30`,
+                fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+              }}>
+                <span style={{ fontWeight: 700, color: c }}>{sym}</span>
+                <span style={{ color: "var(--lys-text-faint)" }}>·{n}</span>
+              </span>
+            );
+          })}
+          <span style={{ width: 1, height: 14, background: "var(--lys-border-faint, rgba(0,0,0,0.08))", margin: "0 2px" }} />
+          <InlineStat label="rings" value={`${data.n_rings}/${data.n_aromatic_rings}ar`} />
+          <InlineStat label="fsp3" value={data.fsp3.toFixed(2)} />
+          <InlineStat label="charge" value={data.formal_charge === 0 ? "0" : String(data.formal_charge)} />
+          <InlineStat label="rot" value={String(data.n_rotatable_bonds)} />
+        </div>
+
+        {/* Drug-class detector — only renders when matches exist */}
+        {data.detected_classes.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
+            <span style={{ fontSize: 9, color: "var(--lys-text-faint)",
+              fontFamily: "var(--lys-font-mono)",
+              letterSpacing: "0.04em", textTransform: "uppercase",
+              fontWeight: 600 }}>matches</span>
+            {data.detected_classes.map((c) => (
+              <span key={c} style={{
+                padding: "1px 6px", borderRadius: 999,
+                background: "rgba(168,85,247,0.10)",
+                color: "#a855f7", fontSize: 9.5,
+                fontFamily: "var(--lys-font-mono)", fontWeight: 600,
+              }}>{c}</span>
             ))}
           </div>
-        </Section>
-
-        {/* VEBER */}
-        <Section title={`veber · ${data.veber_pass ? "PASS" : "FAIL"}`}
-                 iconColor={data.veber_pass ? "#10b981" : "#d97706"}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 3 }}>
-            <RuleCheck name="rot bonds ≤ 10" pass={data.n_rotatable_bonds <= 10}
-              value={String(data.n_rotatable_bonds)} unit="" />
-            <RuleCheck name="TPSA ≤ 140" pass={data.tpsa <= 140}
-              value={data.tpsa.toFixed(0)} unit="Å²" />
-          </div>
-        </Section>
-
-        {/* ATOM COMPOSITION */}
-        <Section title="composition" iconColor="#6366f1">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {Object.entries(data.element_counts).map(([sym, n]) => {
-              const c = ELEMENT_COLOR[sym] ?? "#374151";
-              return (
-                <div key={sym} style={{
-                  padding: "2px 7px", borderRadius: 999,
-                  background: `${c}10`, border: `1px solid ${c}30`,
-                  fontSize: 10, fontFamily: "var(--lys-font-mono)",
-                  display: "flex", alignItems: "center", gap: 3,
-                }}>
-                  <span style={{ fontWeight: 700, color: c }}>{sym}</span>
-                  <span style={{ color: "var(--lys-text-faint)" }}>×{n}</span>
-                </div>
-              );
-            })}
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 6, marginTop: 6 }}>
-            <Stat label="rings" value={`${data.n_rings} (${data.n_aromatic_rings}ar)`} />
-            <Stat label="fsp3" value={data.fsp3.toFixed(2)} />
-            <Stat label="charge" value={data.formal_charge === 0 ? "neutral" : data.formal_charge.toString()} />
-          </div>
-        </Section>
-
-        {/* DRUG-CLASS DETECTOR */}
-        {data.detected_classes.length > 0 && (
-          <Section title={`drug-class hits · ${data.detected_classes.length}`} iconColor="#a855f7">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-              {data.detected_classes.map((c) => (
-                <span key={c} style={{
-                  padding: "2px 8px", borderRadius: 999,
-                  background: "rgba(168,85,247,0.10)",
-                  color: "#a855f7", fontSize: 10,
-                  fontFamily: "var(--lys-font-mono)", fontWeight: 600,
-                }}>{c}</span>
-              ))}
-            </div>
-          </Section>
         )}
 
-        {/* IDENTIFIERS */}
-        <Section title="identifiers" iconColor="#6b7280">
-          <div style={{ fontSize: 9.5, fontFamily: "var(--lys-font-mono)", lineHeight: 1.5 }}>
-            <div style={{ display: "flex", gap: 4 }}>
-              <span style={{ color: "var(--lys-text-faint)", minWidth: 50 }}>SMILES:</span>
-              <span style={{ wordBreak: "break-all", color: "var(--lys-text-dim)" }}>{data.canonical_smiles}</span>
-            </div>
-            {data.inchi_key && (
-              <div style={{ display: "flex", gap: 4 }}>
-                <span style={{ color: "var(--lys-text-faint)", minWidth: 50 }}>InChIKey:</span>
-                <span style={{ color: "var(--lys-text-dim)" }}>{data.inchi_key}</span>
-              </div>
-            )}
-            {data.sa_score > 0 && (
-              <div style={{ display: "flex", gap: 4 }}>
-                <span style={{ color: "var(--lys-text-faint)", minWidth: 50 }}>SAscore:</span>
-                <span style={{ color: "var(--lys-text-dim)" }}>
-                  {data.sa_score.toFixed(2)} {data.sa_score < 4 ? "(easy)" : data.sa_score < 6 ? "(moderate)" : "(hard)"}
-                </span>
-              </div>
-            )}
-          </div>
-        </Section>
+        {/* Identifiers — single compact line, truncated SMILES + InChIKey */}
+        <div style={{
+          fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+          color: "var(--lys-text-dim)",
+          padding: "3px 6px", borderRadius: 4,
+          background: "var(--lys-bg-3, rgba(0,0,0,0.02))",
+          display: "flex", flexWrap: "wrap", gap: 8, alignItems: "baseline",
+        }}>
+          <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5,
+            letterSpacing: "0.04em", textTransform: "uppercase" }}>SMILES</span>
+          <span style={{ wordBreak: "break-all", flex: 1, minWidth: 0,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            color: "var(--lys-text)" }} title={data.canonical_smiles}>
+            {data.canonical_smiles}
+          </span>
+          {data.sa_score > 0 && (
+            <span style={{ flexShrink: 0, color: "var(--lys-text-faint)" }}>
+              SA <span style={{ color: data.sa_score < 4 ? "#10b981" : data.sa_score < 6 ? "#d97706" : "#dc2626", fontWeight: 600 }}>
+                {data.sa_score.toFixed(2)}
+              </span>
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -263,68 +250,76 @@ function Header({ title, iconColor, onRefresh, loading }: { title: string; iconC
   );
 }
 
-function Tile({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
+// (legacy Tile/Section/RuleCheck/Stat helpers removed — replaced by
+//  MiniTile/RulePill/InlineRuleCheck/InlineStat below for compact layout.)
+
+// Compact in-line stat (single horizontal pill style)
+function InlineStat({ label, value }: { label: string; value: string }) {
+  return (
+    <span style={{
+      padding: "1px 6px", borderRadius: 4,
+      background: "var(--lys-bg-3, rgba(0,0,0,0.02))",
+      border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+      fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+      display: "inline-flex", gap: 3, alignItems: "baseline",
+    }}>
+      <span style={{ color: "var(--lys-text-faint)", textTransform: "uppercase",
+        letterSpacing: "0.04em", fontSize: 8.5 }}>{label}</span>
+      <span style={{ color: "var(--lys-text)", fontWeight: 600 }}>{value}</span>
+    </span>
+  );
+}
+
+// Compact mini-tile for hero row (smaller than full Tile)
+function MiniTile({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
   return (
     <div style={{
-      padding: "8px 6px", borderRadius: 6,
+      padding: "5px 7px", borderRadius: 5,
       background: `${color}10`, borderLeft: `3px solid ${color}`,
-      display: "flex", flexDirection: "column", gap: 1,
+      display: "flex", flexDirection: "column", gap: 0,
     }}>
       <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
-        fontFamily: "var(--lys-font-mono)", letterSpacing: "0.06em",
-        textTransform: "uppercase" }}>{label}</div>
-      <div style={{ fontSize: 16, fontWeight: 700, color, lineHeight: 1,
+        fontFamily: "var(--lys-font-mono)", letterSpacing: "0.04em",
+        textTransform: "uppercase", lineHeight: 1.2 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color, lineHeight: 1.2,
         fontFamily: "var(--lys-font-mono)" }}>
         {value}
-        {unit && <span style={{ fontSize: 9, fontWeight: 500, color: "var(--lys-text-faint)", marginLeft: 2 }}>{unit}</span>}
+        {unit && <span style={{ fontSize: 8, fontWeight: 500,
+          color: "var(--lys-text-faint)", marginLeft: 2 }}>{unit}</span>}
       </div>
     </div>
   );
 }
 
-function Section({ title, iconColor, children }: { title: string; iconColor: string; children: React.ReactNode }) {
+// Single-line rule-pass pill
+function RulePill({ label, pass, sub }: { label: string; pass: boolean; sub?: string }) {
+  const c = pass ? "#10b981" : "#d97706";
   return (
-    <div>
-      <div style={{
-        fontSize: 9, fontFamily: "var(--lys-font-mono)",
-        color: "var(--lys-text-faint)", letterSpacing: "0.04em",
-        textTransform: "uppercase", marginBottom: 4,
-        display: "flex", alignItems: "center", gap: 4,
-        borderLeft: `2px solid ${iconColor}`, paddingLeft: 6,
-      }}>{title}</div>
-      {children}
-    </div>
-  );
-}
-
-function RuleCheck({ name, pass, value, unit }: { name: string; pass: boolean; value: string; unit: string }) {
-  const color = pass ? "#10b981" : "#d97706";
-  return (
-    <div style={{
-      padding: "3px 6px", borderRadius: 4,
-      background: `${color}10`,
-      display: "flex", alignItems: "center", gap: 4,
+    <span style={{
+      padding: "2px 7px", borderRadius: 999,
+      background: `${c}12`, border: `1px solid ${c}40`,
       fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+      color: c, fontWeight: 700,
+      display: "inline-flex", alignItems: "center", gap: 3,
     }}>
-      {pass
-        ? <CheckCircle2 size={10} style={{ color, flexShrink: 0 }} />
-        : <AlertTriangle size={10} style={{ color, flexShrink: 0 }} />}
-      <span style={{ color: "var(--lys-text-dim)", flex: 1, minWidth: 0 }}>{name}</span>
-      <span style={{ fontWeight: 700, color }}>{value}{unit}</span>
-    </div>
+      {pass ? "✓" : "⚠"} {label}
+      {sub && <span style={{ fontWeight: 500, opacity: 0.85 }}>· {sub}</span>}
+    </span>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+// Compact inline rule-check (for the 4 Lipinski rules)
+function InlineRuleCheck({ name, pass, value, unit }: { name: string; pass: boolean; value: string; unit: string }) {
+  const c = pass ? "#10b981" : "#d97706";
   return (
-    <div style={{
-      padding: "3px 6px", borderRadius: 4,
-      background: "var(--lys-bg-3, rgba(0,0,0,0.02))",
-      fontSize: 10, fontFamily: "var(--lys-font-mono)",
+    <span style={{
+      padding: "1px 6px", borderRadius: 4,
+      background: `${c}08`, border: `1px solid ${c}25`,
+      fontSize: 9, fontFamily: "var(--lys-font-mono)",
+      display: "inline-flex", alignItems: "center", gap: 3,
     }}>
-      <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
-        textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
-      <div style={{ color: "var(--lys-text)", fontWeight: 600 }}>{value}</div>
-    </div>
+      <span style={{ color: "var(--lys-text-dim)" }}>{name}</span>
+      <span style={{ color: c, fontWeight: 700 }}>{value}{unit}</span>
+    </span>
   );
 }

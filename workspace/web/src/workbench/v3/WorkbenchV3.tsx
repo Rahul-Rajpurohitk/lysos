@@ -33,7 +33,8 @@ import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
-import { LiveAtomsCard } from "./playground/LiveAtomsCard";
+// LiveAtomsCard is now embedded into Mol2DBuilderWindow as an AtomsRail
+// import { LiveAtomsCard } from "./playground/LiveAtomsCard";
 // ScaffoldPickerCard absorbed into ChemistryNavbar (sole entry point)
 import { EditLogCard } from "./playground/EditLogCard";
 import { ConnectionStatusCard } from "./playground/ConnectionStatusCard";
@@ -53,6 +54,8 @@ import { SessionTraceCard } from "./playground/SessionTraceCard";
 import { AgentActionLogCard } from "./playground/AgentActionLogCard";
 import { AgentMetricsCard } from "./playground/AgentMetricsCard";
 import { ChemistryNavbar } from "./playground/ChemistryNavbar";
+import { ChemistryTopNav } from "./playground/ChemistryTopNav";
+void ChemistryNavbar;  // keeping import in case we want to switch back
 import { KnowledgeNavbar } from "./playground/KnowledgeNavbar";
 import { ScoringNavbar } from "./playground/ScoringNavbar";
 import { AgentsNavbar } from "./playground/AgentsNavbar";
@@ -1079,21 +1082,21 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "chem",
                   category: "Chemistry",
                   cards: [
-                    // LEFT SIDEBAR — Power-BI style icon navbar with launchers,
-                    // quick scaffolds, tools, and the active pathogen swatch.
-                    { id: "chem-nav", title: "", slot: "nav", body:
-                      <ChemistryNavbar
+                    // TOP NAV — compact horizontal toolbar with all launchers,
+                    // quick scaffolds, clear, and the pathogen dropdown.
+                    { id: "chem-topnav", title: "", slot: "topnav", body:
+                      <ChemistryTopNav
                         apiBase={apiBase}
                         pathogen={selectedPathogen}
+                        onPathogenChange={setSelectedPathogen}
                         onLoadSmiles={(smi, name) => {
                           loadSmilesIntoCanvas(smi, {
                             createdBy: "user",
                             parentId: null,
-                            logLabel: `[nav · ${name}]`,
+                            logLabel: `[topnav · ${name}]`,
                           });
                         }}
                       /> },
-                    // Scaffold launcher lives in the navbar — no duplicate card.
                     { id: "3d", title: "3D molecule theater · drag-edit", expandedH: 480, body:
                       <Mol3DTheaterWindow
                         apiBase={apiBase}
@@ -1140,53 +1143,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "atoms", title: "Live atoms · CRUD · DB-backed", body:
-                      <LiveAtomsCard
-                        apiBase={apiBase}
-                        moleculeId={currentMoleculeId}
-                        smiles={currentSmiles}
-                        onApplyEdit={async (edit) => {
-                          if (!currentSmiles) return;
-                          try {
-                            const body: any = { smiles: currentSmiles };
-                            if (edit.kind === "swap_element") {
-                              body.op = "swap_element";
-                              body.atom_index = edit.atom_idx;
-                              body.new_element = edit.new_element;
-                            } else if (edit.kind === "add_methyl") {
-                              body.op = "add_methyl_at";
-                              body.atom_index = edit.atom_idx;
-                            } else { return; }
-                            const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify(body),
-                            });
-                            if (!r.ok) return;
-                            const d = await r.json();
-                            if (d.smiles) {
-                              const opLabel = edit.kind === "swap_element"
-                                ? `→${edit.new_element}` : "+CH₃";
-                              // Persist to SQLite via the playground store (creates
-                              // new Molecule + Atoms + Bonds rows + MoleculeEdit log)
-                              await loadSmilesIntoCanvas(d.smiles, {
-                                createdBy: "user",
-                                parentId: currentMoleculeId,
-                                logLabel: `[atom-list ${opLabel} @${edit.atom_idx}]`,
-                              });
-                            }
-                          } catch {/* */}
-                        }}
-                      /> },
-                    { id: "smarts", title: "SMARTS · pattern match", body:
-                      <SMARTSMatchCard
-                        apiBase={apiBase}
-                        smiles={currentSmiles}
-                        onMatchSelected={(match) => setSmartsHighlight(match ? match.atom_indices : null)}
-                      /> },
-                    { id: "properties", title: "Properties · medchem stack", expandedH: 400, body:
+                    // Live atoms list is now embedded INSIDE the 2D builder
+                    // as an atoms-rail (right side). No standalone card.
+                    { id: "properties", title: "Properties · medchem", expandedH: 220, body:
                       <PropertiesCard apiBase={apiBase} smiles={currentSmiles} /> },
-                    { id: "library", title: "Library · saved molecules", expandedH: 400, body:
+                    { id: "library", title: "Library · saved", expandedH: 220, body:
                       <MoleculeLibraryCard
                         apiBase={apiBase}
                         currentSmiles={currentSmiles}
@@ -1197,6 +1158,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                             logLabel: `[library load · ${name || "unnamed"}]`,
                           });
                         }}
+                      /> },
+                    { id: "smarts", title: "SMARTS · pattern", size: 2, expandedH: 110, body:
+                      <SMARTSMatchCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        onMatchSelected={(match) => setSmartsHighlight(match ? match.atom_indices : null)}
                       /> },
                   ],
                 },

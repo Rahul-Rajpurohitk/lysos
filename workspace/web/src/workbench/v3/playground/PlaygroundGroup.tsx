@@ -40,11 +40,12 @@ export interface CardSpec {
    *  Useful for compact dropdown-trigger cards (e.g. ScaffoldPicker = 120) or
    *  taller dashboards. Defaults to 320 (size:1) or 360 (size:2). */
   expandedH?: number;
-  /** Render this card as the LEFT navbar of the group instead of in the
-   *  cards grid. The navbar is a fixed-width vertical strip on the left,
-   *  ideal for launchers, quick chips, filters (Power BI sidebar pattern).
-   *  Only one card per group should set slot:"nav". */
-  slot?: "nav" | "main";
+  /** Render this card OUTSIDE the cards grid:
+   *    "nav"    — left vertical sidebar (~130px)
+   *    "topnav" — horizontal bar above the cards grid (~44px tall)
+   *    "main"   — default, lives in the cards grid
+   *  Only one card per group per slot type should be set. */
+  slot?: "nav" | "topnav" | "main";
 }
 
 interface Props {
@@ -182,9 +183,9 @@ export function PlaygroundGroup(p: Props) {
       }
     };
     for (const c of p.cards) {
-      // Nav cards live in the left sidebar — they don't contribute to
-      // the cards-grid height computation.
-      if (c.slot === "nav") continue;
+      // Nav cards live in the left sidebar / top bar — they don't
+      // contribute to the cards-grid height computation directly.
+      if (c.slot === "nav" || c.slot === "topnav") continue;
       const isCollapsed = collapsedCards.has(c.id);
       const cardH = isCollapsed
         ? CARD_COLLAPSED_H
@@ -201,7 +202,9 @@ export function PlaygroundGroup(p: Props) {
     }
     flushRow();
     const gaps = Math.max(0, nRows - 1) * GAP_V;
-    return HEADER_H + PADDING_V + totalRowH + gaps;
+    const hasTopNav = p.cards.some((c) => c.slot === "topnav");
+    const TOPNAV = hasTopNav ? 48 : 0;
+    return HEADER_H + TOPNAV + PADDING_V + totalRowH + gaps;
   }
 
   const naturalH = computeNaturalHeight();
@@ -296,14 +299,35 @@ export function PlaygroundGroup(p: Props) {
           The rest of the cards live in the 2-col grid. */}
       {!collapsed && (() => {
         const navCard = p.cards.find((c) => c.slot === "nav");
-        const mainCards = p.cards.filter((c) => c.slot !== "nav");
+        const topNavCard = p.cards.find((c) => c.slot === "topnav");
+        const mainCards = p.cards.filter((c) => c.slot !== "nav" && c.slot !== "topnav");
         const NAV_W = 130;
+        const TOPNAV_H = 48;
         return (
           <div style={{
             flex: 1, minHeight: 0,
-            display: "flex", flexDirection: "row",
+            display: "flex", flexDirection: "column",
             overflow: "hidden",
           }}>
+            {/* Top horizontal nav bar (above everything) */}
+            {topNavCard && (
+              <div style={{
+                height: TOPNAV_H, flexShrink: 0,
+                borderBottom: `1px solid ${tone}22`,
+                background: `${tone}05`,
+                padding: "6px 10px",
+                display: "flex", alignItems: "center", gap: 6,
+                overflowX: "auto", overflowY: "hidden",
+              }} className="lys-card-body">
+                {topNavCard.body}
+              </div>
+            )}
+            {/* Body row: optional left nav + cards grid */}
+            <div style={{
+              flex: 1, minHeight: 0,
+              display: "flex", flexDirection: "row",
+              overflow: "hidden",
+            }}>
             {navCard && (
               <div style={{
                 width: NAV_W, flexShrink: 0,
@@ -409,6 +433,7 @@ export function PlaygroundGroup(p: Props) {
               </div>
             );
           })}
+            </div>
             </div>
           </div>
         );
