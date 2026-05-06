@@ -26,9 +26,22 @@ interface Props {
   cursors?: Record<string, { actor: string; atom_idx?: number; ts: number }>;
   /** Called when the user hovers an atom — fires cursor.move + atom.hover via WS. */
   onCursorHover?: (atomIdx: number | null) => void;
-  /** Atoms to highlight in green (e.g. SMARTS pattern match results). */
+  /** Optional external highlight (rare — SMARTS match is now handled internally) */
   highlightAtoms?: number[] | null;
 }
+
+const SMARTS_PRESETS = [
+  { label: "aromatic-N", pattern: "[n]" },
+  { label: "carbonyl", pattern: "[CX3]=[OX1]" },
+  { label: "amide", pattern: "[NX3][CX3](=[OX1])" },
+  { label: "ester", pattern: "[#6][CX3](=O)O[#6]" },
+  { label: "carboxylic", pattern: "C(=O)[OH]" },
+  { label: "β-lactam", pattern: "[#7]1[#6](=O)[#6]([#6]1)" },
+  { label: "sulfonamide", pattern: "[#16](=O)(=O)[#7]" },
+  { label: "peptide", pattern: "[NX3][CX3](=O)[CX3]" },
+  { label: "halogen", pattern: "[F,Cl,Br,I]" },
+  { label: "phenol", pattern: "c[OH]" },
+];
 
 interface PopoverState {
   atomIdx: number;
@@ -93,13 +106,98 @@ const ACTOR_COLOR: Record<string, string> = {
   user: "#f59e0b",
 };
 
-export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms }: Props) {
+export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight }: Props) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [pop, setPop] = useState<PopoverState | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  // Internal SMARTS state — replaces standalone SMARTSMatchCard
+  const [smarts, setSmarts] = useState<string>("");
+  const [smartsHits, setSmartsHits] = useState<number[]>([]);
+  const [smartsError, setSmartsError] = useState<string>("");
+  const [smartsLoading, setSmartsLoading] = useState(false);
+  // Drag-to-bond state — mousedown on atom A, drag to atom B → add_bond
+  const [dragStart, setDragStart] = useState<number | null>(null);
+  const [dragHover, setDragHover] = useState<number | null>(null);
+  // Combined highlight: internal SMARTS hits OR external (from agent loop)
+  const highlightAtoms = smartsHits.length > 0 ? smartsHits : externalHighlight;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgHostRef = useRef<HTMLDivElement | null>(null);
+
+  async function runSmartsMatch(pattern: string) {
+    if (!smiles || !pattern.trim()) {
+      setSmartsHits([]);
+      setSmartsError("");
+      return;
+    }
+    setSmartsLoading(true);
+    setSmartsError("");
+    try {
+      const r = await fetch(`${apiBase}/workbench/molecule/smarts-match`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ smiles, smarts: pattern }),
+      });
+      if (!r.ok) {
+        setSmartsError(`http ${r.status}`);
+        setSmartsHits([]);
+        return;
+      }
+      const d = await r.json();
+      if (!d.valid_smarts) {
+        setSmartsError(d.error || "invalid SMARTS");
+        setSmartsHits([]);
+        return;
+      }
+      // Flatten all match indices into one set for highlighting
+      const all = new Set<number>();
+      (d.matches || []).forEach((m: { atom_indices: number[] }) =>
+        m.atom_indices.forEach((i) => all.add(i)));
+      setSmartsHits(Array.from(all));
+    } catch (e: any) {
+      setSmartsError(String(e?.message ?? e));
+      setSmartsHits([]);
+    } finally {
+      setSmartsLoading(false);
+    }
+  }
+
+  // Re-run match on SMILES change if a pattern is set
+  useEffect(() => {
+    if (smarts.trim()) runSmartsMatch(smarts);
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [smiles]);
+
+  // Drag-to-bond — mousedown on atom A, drag to atom B, mouseup → add_bond
+  async function commitDragBond(a: number, b: number) {
+    if (!smiles || a === b) return;
+    try {
+      const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          smiles, op: "add_bond", atom_index_a: a, atom_index_b: b,
+          bond_order: "single",
+        }),
+      });
+      if (!r.ok) {
+        const txt = await r.text();
+        setError(`bond ${r.status}: ${txt.slice(0, 80)}`);
+        setTimeout(() => setError(""), 2200);
+        return;
+      }
+      const d = await r.json();
+      if (d.smiles) {
+        onMoleculeEdit?.(d.smiles, {
+          op: "add_bond", atom_idx: a,
+          label: `drag-bond ${a}–${b}`,
+        });
+      }
+    } catch (e: any) {
+      setError(`drag-bond error: ${e?.message ?? e}`);
+      setTimeout(() => setError(""), 2200);
+    }
+  }
 
   // Reset selection when SMILES changes (atom indices reshuffle)
   useEffect(() => { setSelected(new Set()); }, [smiles]);
@@ -133,7 +231,17 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       const m = cls.match(/atom-(\d+)/);
       if (!m) return;
       const idx = parseInt(m[1], 10);
-      (node as HTMLElement).style.cursor = "pointer";
+      (node as HTMLElement).style.cursor = "grab";
+
+      const onMouseDown = (e: Event) => {
+        const me = e as MouseEvent;
+        if (me.shiftKey || me.button !== 0) return;
+        e.stopPropagation();
+        e.preventDefault();
+        setDragStart(idx);
+        (node as HTMLElement).style.cursor = "grabbing";
+      };
+
       const onClick = (e: Event) => {
         e.stopPropagation();
         const me = e as MouseEvent;
@@ -157,15 +265,59 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       };
       const onEnter = () => onCursorHover?.(idx);
       const onLeave = () => onCursorHover?.(null);
+      node.addEventListener("mousedown", onMouseDown);
       node.addEventListener("click", onClick);
       node.addEventListener("mouseenter", onEnter);
       node.addEventListener("mouseleave", onLeave);
+      handlers.push({ node, type: "mousedown", fn: onMouseDown });
       handlers.push({ node, type: "click", fn: onClick });
       handlers.push({ node, type: "mouseenter", fn: onEnter });
       handlers.push({ node, type: "mouseleave", fn: onLeave });
     });
     return () => handlers.forEach(({ node, type, fn }) => node.removeEventListener(type, fn));
   }, [svg, onCursorHover]);
+
+  // Drag-to-bond — global mousemove tracks which atom is under cursor;
+  // mouseup commits add_bond if started on atom A and released on atom B.
+  useEffect(() => {
+    if (dragStart == null) return;
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg") as SVGSVGElement | null;
+    if (!svgEl) return;
+    let lastHover: number | null = null;
+    const onMove = (ev: MouseEvent) => {
+      const t = document.elementFromPoint(ev.clientX, ev.clientY);
+      let foundIdx: number | null = null;
+      let n: Element | null = t;
+      while (n && n !== svgEl) {
+        const cls = n.getAttribute?.("class") || "";
+        const m = /atom-(\d+)/.exec(cls);
+        if (m) { foundIdx = parseInt(m[1], 10); break; }
+        n = n.parentElement;
+      }
+      lastHover = foundIdx;
+      setDragHover(foundIdx);
+    };
+    const onUp = () => {
+      svgEl.querySelectorAll("[class^='atom-'], [class*=' atom-']").forEach(
+        (n) => { (n as HTMLElement).style.cursor = "grab"; });
+      const a = dragStart;
+      const b = lastHover;
+      if (a != null && b != null && a !== b) {
+        void commitDragBond(a, b);
+      }
+      setDragStart(null);
+      setDragHover(null);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    /* eslint-disable-next-line react-hooks/exhaustive-deps */
+  }, [dragStart]);
 
   // Render selection rings + ghost-line preview between consecutively-selected atoms.
   // The ghost line is a dashed cyan stroke between the bbox centers of the
@@ -339,6 +491,83 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     });
   }, [highlightAtoms, svg]);
 
+  // Drag-to-bond visual overlay — cyan source ring + dashed line to current
+  // hover position + cyan target ring on the hovered atom. Animated.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg") as SVGSVGElement | null;
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-drag="1"]').forEach((n) => n.remove());
+    if (dragStart == null) return;
+    const a = svgEl.querySelector(`[class*="atom-${dragStart}"]`);
+    if (!a) return;
+    const ab = (a as SVGGraphicsElement).getBBox?.();
+    if (!ab) return;
+    const ax = ab.x + ab.width / 2;
+    const ay = ab.y + ab.height / 2;
+    // Source ring (cyan, solid)
+    const srcRing = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    srcRing.setAttribute("data-drag", "1");
+    srcRing.setAttribute("cx", String(ax));
+    srcRing.setAttribute("cy", String(ay));
+    srcRing.setAttribute("r", "12");
+    srcRing.setAttribute("fill", "rgba(6,182,212,0.15)");
+    srcRing.setAttribute("stroke", "#06b6d4");
+    srcRing.setAttribute("stroke-width", "2.5");
+    srcRing.style.pointerEvents = "none";
+    svgEl.appendChild(srcRing);
+    // Target ring + line if hovering another atom
+    if (dragHover != null && dragHover !== dragStart) {
+      const b = svgEl.querySelector(`[class*="atom-${dragHover}"]`);
+      if (b) {
+        const bb = (b as SVGGraphicsElement).getBBox?.();
+        if (bb) {
+          const bx = bb.x + bb.width / 2;
+          const by = bb.y + bb.height / 2;
+          // Target halo (green, pulsing)
+          const tgtRing = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          tgtRing.setAttribute("data-drag", "1");
+          tgtRing.setAttribute("cx", String(bx));
+          tgtRing.setAttribute("cy", String(by));
+          tgtRing.setAttribute("r", "14");
+          tgtRing.setAttribute("fill", "rgba(16,185,129,0.20)");
+          tgtRing.setAttribute("stroke", "#10b981");
+          tgtRing.setAttribute("stroke-width", "3");
+          tgtRing.style.pointerEvents = "none";
+          const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+          anim.setAttribute("attributeName", "r");
+          anim.setAttribute("values", "14;17;14");
+          anim.setAttribute("dur", "0.7s");
+          anim.setAttribute("repeatCount", "indefinite");
+          tgtRing.appendChild(anim);
+          svgEl.appendChild(tgtRing);
+          // Ghost bond line (dashed, animated)
+          const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+          line.setAttribute("data-drag", "1");
+          line.setAttribute("x1", String(ax));
+          line.setAttribute("y1", String(ay));
+          line.setAttribute("x2", String(bx));
+          line.setAttribute("y2", String(by));
+          line.setAttribute("stroke", "#10b981");
+          line.setAttribute("stroke-width", "3");
+          line.setAttribute("stroke-dasharray", "5,3");
+          line.setAttribute("stroke-linecap", "round");
+          line.setAttribute("opacity", "0.85");
+          line.style.pointerEvents = "none";
+          const lineAnim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+          lineAnim.setAttribute("attributeName", "stroke-dashoffset");
+          lineAnim.setAttribute("from", "0");
+          lineAnim.setAttribute("to", "16");
+          lineAnim.setAttribute("dur", "0.5s");
+          lineAnim.setAttribute("repeatCount", "indefinite");
+          line.appendChild(lineAnim);
+          svgEl.insertBefore(line, svgEl.firstChild);
+        }
+      }
+    }
+  }, [dragStart, dragHover, svg]);
+
   // Outside-click closes popover
   useEffect(() => {
     if (!pop) return;
@@ -441,7 +670,91 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             {selected.size} sel
           </span>
         )}
-        <span style={{ color: "var(--lys-text-dim)" }}>click → edit · shift-click → multi-select</span>
+        {dragStart != null && (
+          <span style={{ color: "#06b6d4", fontWeight: 600 }}>
+            drag → atom #{dragHover ?? "?"} to bond
+          </span>
+        )}
+        <span style={{ color: "var(--lys-text-dim)" }}>
+          drag → bond · click → edit · shift-click → select
+        </span>
+      </div>
+
+      {/* SMARTS strip — embedded inside 2D viewer (NOT a separate card).
+          Single inline row with input, match button, preset chips, and
+          live hit count. Match results highlight directly on the SVG below. */}
+      <div style={{
+        padding: "4px 8px",
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+        display: "flex", alignItems: "center", gap: 6,
+        background: "var(--lys-bg-3, rgba(0,0,0,0.015))",
+        flexWrap: "wrap", minHeight: 28,
+      }}>
+        <span style={{
+          fontSize: 9, fontFamily: "var(--lys-font-mono)",
+          color: smartsHits.length > 0 ? "#10b981" : "var(--lys-text-faint)",
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          fontWeight: 700,
+        }}>
+          SMARTS{smartsHits.length > 0 ? ` · ${smartsHits.length} hits` : ""}
+        </span>
+        <input
+          value={smarts}
+          onChange={(e) => setSmarts(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") runSmartsMatch(smarts); }}
+          placeholder="pattern · e.g. c1ccccc1 — Enter to match"
+          disabled={!smiles}
+          style={{
+            flex: 1, minWidth: 120,
+            fontSize: 10.5, fontFamily: "var(--lys-font-mono)",
+            padding: "2px 6px", borderRadius: 4,
+            border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.08))",
+            background: "var(--lys-bg-1, #ffffff)",
+            color: "var(--lys-text)",
+            outline: "none",
+          }} />
+        <button type="button"
+          onClick={() => runSmartsMatch(smarts)}
+          disabled={!smiles || !smarts || smartsLoading}
+          style={{
+            padding: "2px 9px", borderRadius: 4, fontSize: 10,
+            fontFamily: "var(--lys-font-mono)", fontWeight: 600,
+            background: "#0891b2", color: "white", border: 0,
+            cursor: smiles && smarts ? "pointer" : "not-allowed",
+            opacity: smiles && smarts ? 1 : 0.5,
+          }}>{smartsLoading ? "…" : "match"}</button>
+        {smartsHits.length > 0 && (
+          <button type="button"
+            onClick={() => { setSmarts(""); setSmartsHits([]); setSmartsError(""); }}
+            title="Clear match" style={{
+              border: 0, background: "transparent",
+              color: "var(--lys-text-faint)",
+              cursor: "pointer", padding: "2px 4px", fontSize: 11,
+            }}>✕</button>
+        )}
+        {smartsError && (
+          <span style={{ fontSize: 9, color: "#dc2626",
+            fontFamily: "var(--lys-font-mono)" }}>{smartsError}</span>
+        )}
+        {/* Inline preset chips — scrollable horizontally if too many */}
+        <div style={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
+          {SMARTS_PRESETS.map((p) => (
+            <button key={p.label} type="button"
+              onClick={() => { setSmarts(p.pattern); runSmartsMatch(p.pattern); }}
+              title={p.pattern}
+              disabled={!smiles}
+              style={{
+                fontSize: 9, padding: "1px 6px", borderRadius: 999,
+                border: `1px solid ${smarts === p.pattern ? "#0891b2" : "var(--lys-border-faint, rgba(0,0,0,0.08))"}`,
+                background: smarts === p.pattern ? "rgba(8,145,178,0.10)" : "var(--lys-bg-2, #ffffff)",
+                color: smarts === p.pattern ? "#0891b2" : "var(--lys-text-dim)",
+                cursor: smiles ? "pointer" : "not-allowed",
+                opacity: smiles ? 1 : 0.5,
+                fontFamily: "var(--lys-font-mono)",
+                fontWeight: smarts === p.pattern ? 700 : 400,
+              }}>{p.label}</button>
+          ))}
+        </div>
       </div>
       {/* Body row: SVG viewer (flex 1) + atoms rail (260 px).
           position: relative so the popover + multi-select toolbar (children
@@ -659,24 +972,33 @@ function AtomsRail(p: AtomsRailProps) {
 
   return (
     <div style={{
-      width: 260, flexShrink: 0,
+      width: 220, flexShrink: 0,
       borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
       overflow: "hidden",
     }}>
       <div style={{
-        padding: "5px 8px",
-        fontSize: 9, fontFamily: "var(--lys-font-mono)",
+        padding: "3px 8px",
+        fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
         color: "var(--lys-text-faint)",
         letterSpacing: "0.06em", textTransform: "uppercase",
         borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
         display: "flex", alignItems: "center", gap: 6,
+        minHeight: 22,
       }}>
         <span>atoms</span>
         <span style={{ fontFamily: "inherit", color: "#10b981", fontWeight: 700 }}>
           {atoms.length}
         </span>
+        {p.smiles && atoms.length > 0 && (
+          <>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 8, color: "var(--lys-text-faint)" }}>
+              click→sel · drag→bond
+            </span>
+          </>
+        )}
       </div>
       <div className="lys-card-body" style={{ flex: 1, overflow: "auto" }}>
         {!p.smiles && (
@@ -701,53 +1023,54 @@ function AtomsRail(p: AtomsRailProps) {
               onMouseEnter={() => p.onHoverAtom(a.idx)}
               onMouseLeave={() => p.onHoverAtom(null)}
               style={{
-                display: "flex", alignItems: "center", gap: 5,
-                padding: "4px 8px",
-                borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.03))",
-                borderLeft: isSelected ? `3px solid #f59e0b` : "3px solid transparent",
+                display: "flex", alignItems: "center", gap: 4,
+                padding: "2px 6px",
+                borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.025))",
+                borderLeft: isSelected ? `2px solid #f59e0b` : "2px solid transparent",
                 background: isSelected ? "rgba(245,158,11,0.08)"
-                          : isHover ? "rgba(0,0,0,0.03)" : "transparent",
+                          : isHover ? "rgba(0,0,0,0.025)" : "transparent",
                 cursor: "pointer",
-                fontSize: 10,
+                fontSize: 9.5,
                 fontFamily: "var(--lys-font-mono)",
+                minHeight: 22,
               }}>
               <span style={{
-                fontSize: 8.5, color: "var(--lys-text-faint)",
-                minWidth: 16, textAlign: "right",
+                fontSize: 8, color: "var(--lys-text-faint)",
+                minWidth: 12, textAlign: "right",
               }}>{a.idx}</span>
               <span style={{
-                width: 18, height: 18, borderRadius: "50%",
+                width: 15, height: 15, borderRadius: "50%",
                 background: c, color: "white",
                 display: "grid", placeItems: "center",
-                fontSize: 9.5, fontWeight: 700,
+                fontSize: 8.5, fontWeight: 700, flexShrink: 0,
               }}>{a.element}</span>
               {a.n_hydrogens > 0 && (
-                <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5 }}>H{a.n_hydrogens}</span>
+                <span style={{ color: "var(--lys-text-faint)", fontSize: 8 }}>H{a.n_hydrogens}</span>
               )}
               {a.is_aromatic && (
                 <span style={{
-                  fontSize: 7.5, padding: "0 3px", borderRadius: 2,
+                  fontSize: 7, padding: "0 3px", borderRadius: 2,
                   background: "rgba(168,85,247,0.10)", color: "#a855f7",
                   fontWeight: 700, letterSpacing: "0.04em",
                 }}>arom</span>
               )}
-              {a.in_ring && (
+              {a.in_ring && !a.is_aromatic && (
                 <span style={{
-                  fontSize: 7.5, padding: "0 3px", borderRadius: 2,
+                  fontSize: 7, padding: "0 3px", borderRadius: 2,
                   background: "rgba(8,145,178,0.10)", color: "#0891b2",
                   fontWeight: 700,
                 }}>r{a.ring_size}</span>
               )}
               {a.formal_charge !== 0 && (
                 <span style={{
-                  fontSize: 7.5, padding: "0 3px", borderRadius: 2,
+                  fontSize: 7, padding: "0 3px", borderRadius: 2,
                   background: "rgba(220,38,38,0.10)", color: "#dc2626",
                   fontWeight: 700,
                 }}>{a.formal_charge > 0 ? "+" : ""}{a.formal_charge}</span>
               )}
               <span style={{ flex: 1 }} />
-              <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5 }}>
-                ↔{a.n_neighbors}
+              <span style={{ color: "var(--lys-text-faint)", fontSize: 8 }}>
+                ·{a.n_neighbors}
               </span>
             </div>
           );

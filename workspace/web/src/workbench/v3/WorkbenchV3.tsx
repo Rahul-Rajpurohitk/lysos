@@ -42,7 +42,8 @@ import { StructuralAlertsCard } from "./playground/StructuralAlertsCard";
 import { ResistanceMapCard } from "./playground/ResistanceMapCard";
 import { AtomDetailCard } from "./playground/AtomDetailCard";
 import { PropertiesCard } from "./playground/PropertiesCard";
-import { SMARTSMatchCard } from "./playground/SMARTSMatchCard";
+// SMARTSMatchCard absorbed into Mol2DBuilderWindow as inline strip
+// import { SMARTSMatchCard } from "./playground/SMARTSMatchCard";
 import { MoleculeLibraryCard } from "./playground/MoleculeLibraryCard";
 import { PathogenIntelCard } from "./playground/PathogenIntelCard";
 import { AntibioticReferenceCard } from "./playground/AntibioticReferenceCard";
@@ -124,7 +125,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [hoveredAtom, setHoveredAtom] = useState<number | null>(null);
   // SMARTS match highlight — atoms returned by SMARTSMatchCard, shown as
   // green halo overlay in the 2D builder
-  const [smartsHighlight, setSmartsHighlight] = useState<number[] | null>(null);
+  const [smartsHighlight] = useState<number[] | null>(null);
   // Filter state for navbar buttons across containers
   const [drugClassFilter, setDrugClassFilter] = useState<string>("");
   const [scoringPreset, setScoringPreset] = useState<"default" | "mic" | "admet" | "novel">("default");
@@ -1159,12 +1160,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "smarts", title: "SMARTS · pattern", size: 2, expandedH: 110, body:
-                      <SMARTSMatchCard
-                        apiBase={apiBase}
-                        smiles={currentSmiles}
-                        onMatchSelected={(match) => setSmartsHighlight(match ? match.atom_indices : null)}
-                      /> },
+                    // SMARTS is now embedded INSIDE Mol2DBuilderWindow as
+                    // an inline strip — no standalone card needed.
                   ],
                 },
                 {
