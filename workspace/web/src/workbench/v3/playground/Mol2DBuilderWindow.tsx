@@ -888,16 +888,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               }
             } catch {/*noop*/}
           }}
-          onAddAtom={async () => {
+          onAddAtom={async (element?: string) => {
             if (!smiles) return;
-            // Anchor on first atom (idx 0) and add carbon — user can swap element via popover.
+            const elt = element ?? "C";
             try {
               const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   smiles, op: "add_atom_at", atom_index: 0,
-                  new_element: "C", bond_order: "single",
+                  new_element: elt, bond_order: "single",
                 }),
               });
               if (!r.ok) {
@@ -908,7 +908,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               }
               const d = await r.json();
               if (d.smiles) {
-                onMoleculeEdit?.(d.smiles, { op: "add_atom_at", atom_idx: 0, label: "+C atom" });
+                onMoleculeEdit?.(d.smiles, { op: "add_atom_at", atom_idx: 0, label: `+${elt} atom` });
               }
             } catch {/*noop*/}
           }}
@@ -1391,7 +1391,15 @@ interface AtomsRailProps {
   onSelectAtom: (idx: number) => void;
   onHoverAtom: (idx: number | null) => void;
   onDeleteAtom?: (idx: number) => void;
-  onAddAtom?: () => void;
+  onAddAtom?: (element?: string) => void;
+}
+
+interface ElementInfo {
+  sym: string;
+  Z: number;
+  valences: number[];
+  name: string;
+  group: string;
 }
 
 interface AtomRow {
@@ -1408,6 +1416,52 @@ interface AtomRow {
 function AtomsRail(p: AtomsRailProps) {
   const [atoms, setAtoms] = useState<AtomRow[]>([]);
   const [loading, setLoading] = useState(false);
+  const [palette, setPalette] = useState<ElementInfo[]>([]);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [palettePos, setPalettePos] = useState<{ left: number; top: number } | null>(null);
+  const addBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // Fetch element palette once — backend is source of truth
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(`${p.apiBase}/workbench/chem/elements`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled && Array.isArray(d.elements)) setPalette(d.elements);
+      } catch {/*noop*/}
+    })();
+    return () => { cancelled = true; };
+  }, [p.apiBase]);
+
+  // Position the palette popover anchored under the + button
+  useEffect(() => {
+    if (!paletteOpen) { setPalettePos(null); return; }
+    const update = () => {
+      if (!addBtnRef.current) return;
+      const r = addBtnRef.current.getBoundingClientRect();
+      setPalettePos({ left: r.right - 320, top: r.bottom + 4 });
+    };
+    update();
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (t && t.closest && t.closest("[data-element-pop]")) return;
+      if (addBtnRef.current && t && addBtnRef.current.contains(t as Node)) return;
+      setPaletteOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPaletteOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [paletteOpen]);
 
   useEffect(() => {
     if (!p.smiles) { setAtoms([]); return; }
@@ -1477,12 +1531,15 @@ function AtomsRail(p: AtomsRailProps) {
         </span>
         <span style={{ flex: 1 }} />
         {p.smiles && p.onAddAtom && (
-          <button type="button" onClick={p.onAddAtom}
-            title="Add a new atom (carbon by default)"
+          <button type="button"
+            ref={addBtnRef}
+            onClick={() => setPaletteOpen((o) => !o)}
+            title="Add a new atom · pick element"
             style={{
               border: 0, background: "transparent",
               cursor: "pointer", padding: "1px 4px",
-              color: "#10b981", fontSize: 13, fontWeight: 700, lineHeight: 1,
+              color: paletteOpen ? "#059669" : "#10b981",
+              fontSize: 13, fontWeight: 700, lineHeight: 1,
             }}>+</button>
         )}
       </div>
@@ -1576,6 +1633,83 @@ function AtomsRail(p: AtomsRailProps) {
           );
         })}
       </div>
+      {paletteOpen && palettePos && palette.length > 0 && createPortal(
+        <div data-element-pop style={{
+          position: "fixed", left: palettePos.left, top: palettePos.top,
+          width: 320, maxHeight: "60vh",
+          background: "var(--lys-bg-2, #ffffff)",
+          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+          borderRadius: 10,
+          boxShadow: "0 14px 40px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.10)",
+          zIndex: 5000, display: "flex", flexDirection: "column",
+          overflow: "hidden", fontFamily: "var(--lys-font-body)",
+        }}>
+          <div style={{ padding: "8px 10px",
+            borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+            display: "flex", alignItems: "center", gap: 6,
+            background: "var(--lys-bg, #fafafa)" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)" }}>
+              ⚛ Add atom
+            </span>
+            <span style={{ fontSize: 9.5, color: "var(--lys-text-faint)",
+              fontFamily: "var(--lys-font-mono)" }}>
+              · {palette.length} elements · attaches to atom 0 with single bond
+            </span>
+            <span style={{ flex: 1 }} />
+            <button type="button" onClick={() => setPaletteOpen(false)}
+              style={{ border: 0, background: "transparent", cursor: "pointer",
+                padding: 4, color: "var(--lys-text-faint)" }}>✕</button>
+          </div>
+          <div style={{ padding: 8, overflow: "auto",
+            display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 4 }}>
+            {palette.map((el) => {
+              const groupColor: Record<string, string> = {
+                "halogen": "#16a34a",
+                "alkali": "#a855f7",
+                "alkaline-earth": "#c084fc",
+                "transition": "#0891b2",
+                "post-transition": "#06b6d4",
+                "metalloid": "#ca8a04",
+                "nonmetal": "#374151",
+              };
+              const c = groupColor[el.group] ?? "#6b7280";
+              return (
+                <button key={el.sym} type="button"
+                  onClick={() => { p.onAddAtom?.(el.sym); setPaletteOpen(false); }}
+                  title={`${el.name} · Z=${el.Z} · valence ${el.valences.join("/")}`}
+                  style={{
+                    aspectRatio: "1 / 1",
+                    border: `1px solid ${c}40`,
+                    background: `${c}10`,
+                    color: c,
+                    borderRadius: 6,
+                    fontFamily: "var(--lys-font-mono)",
+                    fontWeight: 700, fontSize: 11,
+                    cursor: "pointer",
+                    display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center",
+                    gap: 1, padding: 0,
+                    transition: "background 0.12s, transform 0.12s",
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = `${c}25`;
+                    (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.06)";
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLButtonElement).style.background = `${c}10`;
+                    (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.0)";
+                  }}>
+                  <span style={{ fontSize: 8, opacity: 0.7, lineHeight: 1 }}>{el.Z}</span>
+                  <span style={{ lineHeight: 1 }}>{el.sym}</span>
+                  <span style={{ fontSize: 7, opacity: 0.6, lineHeight: 1,
+                    fontFamily: "var(--lys-font-body)", fontWeight: 500 }}>
+                    {el.valences[0]}{el.valences.length > 1 ? "+" : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>, document.body)}
     </div>
   );
 }

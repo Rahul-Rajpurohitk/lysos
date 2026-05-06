@@ -11,7 +11,7 @@ import logging
 import sys
 import uuid
 from pathlib import Path
-from typing import Any, AsyncIterator, Literal, Optional
+from typing import Any, AsyncIterator, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
@@ -631,6 +631,57 @@ def _decode_smiles_b64(smiles_b64: str) -> str:
     if pad:
         raw = raw + (b"=" * pad)
     return base64.urlsafe_b64decode(raw).decode()
+
+
+@router.get("/chem/elements")
+async def chem_elements_palette() -> Dict[str, Any]:
+    """Element palette supported by /molecule/edit. Returns symbol → metadata
+    (atomic number, common valences, name, group). The frontend uses this
+    to render the periodic-table dropdown for swap_element / add_atom_at,
+    so the palette stays in sync with the backend automatically."""
+    # symbol → (atomic_number, common_valences, full_name, group)
+    PALETTE: List[Dict[str, Any]] = [
+        # H + group 1/2 + p-block essentials
+        {"sym": "H",  "Z": 1,  "valences": [1],     "name": "Hydrogen",  "group": "nonmetal"},
+        {"sym": "Li", "Z": 3,  "valences": [1],     "name": "Lithium",   "group": "alkali"},
+        {"sym": "Be", "Z": 4,  "valences": [2],     "name": "Beryllium", "group": "alkaline-earth"},
+        {"sym": "B",  "Z": 5,  "valences": [3],     "name": "Boron",     "group": "metalloid"},
+        {"sym": "C",  "Z": 6,  "valences": [4],     "name": "Carbon",    "group": "nonmetal"},
+        {"sym": "N",  "Z": 7,  "valences": [3, 5],  "name": "Nitrogen",  "group": "nonmetal"},
+        {"sym": "O",  "Z": 8,  "valences": [2],     "name": "Oxygen",    "group": "nonmetal"},
+        {"sym": "F",  "Z": 9,  "valences": [1],     "name": "Fluorine",  "group": "halogen"},
+        {"sym": "Na", "Z": 11, "valences": [1],     "name": "Sodium",    "group": "alkali"},
+        {"sym": "Mg", "Z": 12, "valences": [2],     "name": "Magnesium", "group": "alkaline-earth"},
+        {"sym": "Al", "Z": 13, "valences": [3],     "name": "Aluminum",  "group": "post-transition"},
+        {"sym": "Si", "Z": 14, "valences": [4],     "name": "Silicon",   "group": "metalloid"},
+        {"sym": "P",  "Z": 15, "valences": [3, 5],  "name": "Phosphorus","group": "nonmetal"},
+        {"sym": "S",  "Z": 16, "valences": [2, 4, 6], "name": "Sulfur",  "group": "nonmetal"},
+        {"sym": "Cl", "Z": 17, "valences": [1, 3, 5, 7], "name": "Chlorine", "group": "halogen"},
+        {"sym": "K",  "Z": 19, "valences": [1],     "name": "Potassium", "group": "alkali"},
+        {"sym": "Ca", "Z": 20, "valences": [2],     "name": "Calcium",   "group": "alkaline-earth"},
+        # Drug-relevant transition metals
+        {"sym": "Ti", "Z": 22, "valences": [4],     "name": "Titanium",  "group": "transition"},
+        {"sym": "V",  "Z": 23, "valences": [3, 5],  "name": "Vanadium",  "group": "transition"},
+        {"sym": "Cr", "Z": 24, "valences": [3, 6],  "name": "Chromium",  "group": "transition"},
+        {"sym": "Mn", "Z": 25, "valences": [2, 4, 7], "name": "Manganese","group": "transition"},
+        {"sym": "Fe", "Z": 26, "valences": [2, 3],  "name": "Iron",      "group": "transition"},
+        {"sym": "Co", "Z": 27, "valences": [2, 3],  "name": "Cobalt",    "group": "transition"},
+        {"sym": "Ni", "Z": 28, "valences": [2],     "name": "Nickel",    "group": "transition"},
+        {"sym": "Cu", "Z": 29, "valences": [1, 2],  "name": "Copper",    "group": "transition"},
+        {"sym": "Zn", "Z": 30, "valences": [2],     "name": "Zinc",      "group": "transition"},
+        {"sym": "As", "Z": 33, "valences": [3, 5],  "name": "Arsenic",   "group": "metalloid"},
+        {"sym": "Se", "Z": 34, "valences": [2, 4, 6], "name": "Selenium","group": "nonmetal"},
+        {"sym": "Br", "Z": 35, "valences": [1, 3, 5], "name": "Bromine", "group": "halogen"},
+        {"sym": "Mo", "Z": 42, "valences": [4, 6],  "name": "Molybdenum","group": "transition"},
+        {"sym": "Ru", "Z": 44, "valences": [2, 3],  "name": "Ruthenium", "group": "transition"},
+        {"sym": "Pd", "Z": 46, "valences": [2],     "name": "Palladium", "group": "transition"},
+        {"sym": "Ag", "Z": 47, "valences": [1],     "name": "Silver",    "group": "transition"},
+        {"sym": "I",  "Z": 53, "valences": [1, 3, 5, 7], "name": "Iodine","group": "halogen"},
+        {"sym": "Pt", "Z": 78, "valences": [2, 4],  "name": "Platinum",  "group": "transition"},
+        {"sym": "Au", "Z": 79, "valences": [1, 3],  "name": "Gold",      "group": "transition"},
+        {"sym": "Hg", "Z": 80, "valences": [1, 2],  "name": "Mercury",   "group": "transition"},
+    ]
+    return {"elements": PALETTE, "count": len(PALETTE)}
 
 
 @router.get("/chem/atom/{smiles_b64}/{atom_idx}", response_model=AtomContextResponse)
@@ -1702,7 +1753,23 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
         pass
     rw = Chem.RWMol(mol)
 
-    ELEMENTS = {"C": 6, "N": 7, "O": 8, "F": 9, "S": 16, "Cl": 17, "Br": 35, "P": 15, "H": 1}
+    # Expanded periodic-table coverage. Drug-relevant subset (CHNOPS + halogens
+    # + boron/silicon for protected synthons + selenium for SeMet + transition
+    # metals seen in metallodrugs + alkali/alkaline earth counter-ions).
+    ELEMENTS = {
+        "H": 1,  "He": 2,
+        "Li": 3, "Be": 4, "B": 5,  "C": 6,  "N": 7,  "O": 8,  "F": 9,  "Ne": 10,
+        "Na": 11, "Mg": 12, "Al": 13, "Si": 14, "P": 15, "S": 16, "Cl": 17, "Ar": 18,
+        "K": 19, "Ca": 20,
+        # First-row transition metals (metallodrugs, cofactors)
+        "Ti": 22, "V": 23, "Cr": 24, "Mn": 25, "Fe": 26, "Co": 27,
+        "Ni": 28, "Cu": 29, "Zn": 30,
+        # Heavier halogens / metalloids / pharma metals
+        "As": 33, "Se": 34, "Br": 35,
+        "Mo": 42, "Ru": 44, "Rh": 45, "Pd": 46, "Ag": 47, "Cd": 48,
+        "I": 53,
+        "Pt": 78, "Au": 79, "Hg": 80,
+    }
     BOND_ORDERS = {
         "single": Chem.BondType.SINGLE,
         "double": Chem.BondType.DOUBLE,
