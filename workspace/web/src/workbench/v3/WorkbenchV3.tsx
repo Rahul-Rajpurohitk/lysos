@@ -8,12 +8,14 @@ import { TightComposer } from "./components/chat/TightComposer";
 // chrome that violated the single-navbar mandate. The play/seek/speed
 // controls migrate inline elsewhere if needed.
 // import { IterationStrip } from "./components/IterationStrip";
-import { DragEditChips } from "./components/DragEditChips";
+import { DragEditChips as _DragEditChips } from "./components/DragEditChips";
+void _DragEditChips;
 import { TabStrip as _TabStrip } from "./components/TabStrip";
 void _TabStrip;
-import { Mol2D } from "./components/Mol2D";
-import { Mol3D } from "./components/Mol3D";
-import { MechanismPanel } from "./components/MechanismPanel";
+import { Mol2D as _Mol2D } from "./components/Mol2D";
+import { Mol3D as _Mol3D } from "./components/Mol3D";
+import { MechanismPanel as _MechanismPanel } from "./components/MechanismPanel";
+void _Mol2D; void _Mol3D; void _MechanismPanel;
 import { OnboardingHero } from "./components/OnboardingHero";
 import { ChatPanel } from "./components/chat/ChatPanel";
 // Legacy panels (kept around for the Library/replay mode + chat-card cards)
@@ -165,12 +167,19 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Default layout sized for a ~1100px-wide right pane. All windows live
   // in canvas coords and are draggable/resizable. Persists per-chat-tab
   // via localStorage (key = lysos.playground.<chatId>).
+  // Default playground layout — sized for the new strict 2-pane chat|playground
+  // split. With chat at 35% and playground at 65% of a 1920px-wide window,
+  // the playground area lands around 1180px wide. Two-column window
+  // arrangement with categorized groupings:
+  //   Left col   : Chemistry (3D + 2D)        — emerald
+  //   Right col  : Scoring + Agents           — amber + violet
+  //   Below      : Artifact (Knowledge)       — blue, hidden until /explain
   const DEFAULT_LAYOUT: Record<string, WindowLayout> = {
-    "3d":     { x: 16,  y: 16,  w: 540, h: 360, z: 1, visible: true },
-    "2d":     { x: 16,  y: 392, w: 540, h: 320, z: 1, visible: true },
-    "radar":  { x: 572, y: 16,  w: 360, h: 360, z: 1, visible: true },
-    "agents": { x: 572, y: 392, w: 540, h: 280, z: 1, visible: true },
-    "artifact": { x: 16, y: 728, w: 1100, h: 280, z: 1, visible: false },
+    "3d":     { x: 16,  y: 16,  w: 600, h: 380, z: 1, visible: true },
+    "2d":     { x: 16,  y: 412, w: 600, h: 360, z: 1, visible: true },
+    "radar":  { x: 632, y: 16,  w: 420, h: 380, z: 1, visible: true },
+    "agents": { x: 632, y: 412, w: 600, h: 360, z: 1, visible: true },
+    "artifact": { x: 16, y: 788, w: 1216, h: 320, z: 1, visible: false },
   };
   const [playgroundLayouts, setPlaygroundLayouts] = useState<Record<string, Record<string, WindowLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
@@ -211,6 +220,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     return () => clearTimeout(t);
   }, [activeChatId, playLayout, playViewport]);
   const [mechanismOpen, setMechanismOpen] = useState(false);
+  void mechanismOpen; void setMechanismOpen; // legacy: middle pane removed; mechanism opens inline now
   const [activeSubAgents, setActiveSubAgents] = useState<string[]>([]);
   const [currentIter, setCurrentIter] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -528,7 +538,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
           Removed second-row chrome per redesign — keep only one navbar. */}
 
       <div className="lys-body">
-        <Allotment defaultSizes={[38, 38, 24]}>
+        {/* Strict 2-pane layout: chat left (35%), playground right (65%).
+            Middle pane (legacy 3D + 2D + drag-chips + mechanism) was
+            collapsed into the playground as windows per user direction. */}
+        <Allotment defaultSizes={[35, 65]}>
           {/* CHAT */}
           <Allotment.Pane minSize={340} preferredSize={480}>
             <ChatPanel
@@ -817,144 +830,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
             />
           </Allotment.Pane>
 
-          {/* 3D + 2D */}
-          <Allotment.Pane minSize={320} preferredSize={460}>
-            <Allotment vertical defaultSizes={[60, 40]}>
-              <Allotment.Pane minSize={180}>
-                <Mol3D
-                  apiBase={apiBase}
-                  smiles={currentSmiles}
-                  pathogen={selectedPathogen}
-                  onMoleculeEdit={(newSmiles, op) => {
-                    // Drag-edit chemistry → bubble the new SMILES into the
-                    // chat as a candidate event. Agents read the candidate
-                    // stream and debate the user's edit.
-                    const opLabel =
-                      op.kind === "swap" ? `→${op.element}`
-                      : op.kind === "methyl" ? "+CH₃"
-                      : "✂ bond";
-                    setEvents((p) => [
-                      ...p,
-                      {
-                        type: "agent_message",
-                        ts: Date.now() / 1000,
-                        agent: "user",
-                        content: `[edit ${opLabel}] ${newSmiles}`,
-                      } as any,
-                      {
-                        type: "candidate_added",
-                        ts: Date.now() / 1000,
-                        smiles: newSmiles,
-                        composite: 0,
-                        agent: "user",
-                      } as any,
-                    ]);
-                  }}
-                />
-              </Allotment.Pane>
-              <Allotment.Pane minSize={260} preferredSize={300}>
-                <div style={{
-                  height: "100%",
-                  display: "flex",
-                  flexDirection: "column",
-                  background: "var(--lys-bg)",
-                  position: "relative",
-                  overflow: "hidden",
-                }}>
-                  <div style={{
-                    padding: "8px 12px",
-                    fontSize: 11,
-                    color: "var(--lys-text-faint)",
-                    letterSpacing: "0.1em",
-                    textTransform: "uppercase",
-                    borderBottom: "1px solid var(--lys-border)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}>
-                    <span>2D structure · drag chips onto atoms</span>
-                    <button
-                      onClick={() => setMechanismOpen(true)}
-                      disabled={!currentSmiles}
-                      style={{
-                        background: currentSmiles ? "var(--lys-accent-soft)" : "transparent",
-                        border: "1px solid rgba(16, 185, 129, 0.45)",
-                        color: "#047857",
-                        padding: "3px 10px",
-                        borderRadius: 999,
-                        fontSize: 11,
-                        cursor: currentSmiles ? "pointer" : "not-allowed",
-                        opacity: currentSmiles ? 1 : 0.4,
-                        fontFamily: "inherit",
-                        fontWeight: 500,
-                      }}
-                    >
-                      🧠 Mechanism
-                    </button>
-                  </div>
-                  <Mol2D apiBase={apiBase} smiles={currentSmiles} />
-                  <MechanismPanel
-                    apiBase={apiBase}
-                    smiles={currentSmiles}
-                    target={selectedPathogen}
-                    open={mechanismOpen}
-                    onClose={() => setMechanismOpen(false)}
-                  />
-                  <DragEditChips
-                    apiBase={apiBase}
-                    currentSmiles={currentSmiles}
-                    pathogen={selectedPathogen}
-                    onTransformResult={(payload) => {
-                      if (payload?.ok) {
-                        const ts = Date.now() / 1000;
-                        // Emit both the mol_edit event (for the lineage
-                        // tree) and a score event (so the radar updates).
-                        setEvents((p) => [
-                          ...p,
-                          {
-                            type: "mol_edit",
-                            ts,
-                            parent: payload.parent,
-                            candidate: payload.candidate,
-                            delta: payload.delta,
-                            agent: "editor",
-                          },
-                          ...(payload.candidate_scores
-                            ? [{
-                                type: "score" as const,
-                                ts,
-                                smiles: payload.candidate,
-                                scores: payload.candidate_scores,
-                                composite: Object.entries(payload.candidate_scores).reduce(
-                                  (sum, [k, v]: [string, any]) =>
-                                    sum + (REWARD_WEIGHTS[k] ?? 0) * v,
-                                  0
-                                ),
-                              }]
-                            : []),
-                          ...(payload.candidate_scores
-                            ? [{
-                                type: "candidate_added" as const,
-                                ts,
-                                smiles: payload.candidate,
-                                scores: payload.candidate_scores,
-                                composite: Object.entries(payload.candidate_scores).reduce(
-                                  (sum, [k, v]: [string, any]) =>
-                                    sum + (REWARD_WEIGHTS[k] ?? 0) * v,
-                                  0
-                                ),
-                              }]
-                            : []),
-                        ]);
-                      }
-                    }}
-                  />
-                </div>
-              </Allotment.Pane>
-            </Allotment>
-          </Allotment.Pane>
-
-          {/* RIGHT — Playground canvas (replaces tab strip).
+          {/* RIGHT — Playground canvas (the only non-chat surface).
               Infinite zoomable whiteboard with floating, draggable, resizable
               windows. Default layout: 3D top-left, 2D bottom-left, Radar
               top-right, Agent trace bottom-right. Per-chat-tab layouts. */}
@@ -973,7 +849,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               windows={{
                 "3d": {
                   title: "3D molecule theater",
-                  tone: "var(--lys-accent)",
+                  category: "Chemistry",
                   body: <Mol3DTheaterWindow
                     apiBase={apiBase}
                     smiles={currentSmiles}
@@ -996,7 +872,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 },
                 "2d": {
                   title: "2D atom builder · click any atom",
-                  tone: "#3b82f6",
+                  category: "Chemistry",
                   body: <Mol2DBuilderWindow
                     apiBase={apiBase}
                     smiles={currentSmiles}
@@ -1014,7 +890,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 },
                 "radar": {
                   title: "Reward radar · live",
-                  tone: "var(--lys-accent)",
+                  category: "Scoring",
                   body: <RewardRadarWindow
                     current={lastScores ?? {}}
                     best={bestScores ?? {}}
@@ -1038,12 +914,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 },
                 "agents": {
                   title: "Agent reasoning trace",
-                  tone: "#8b5cf6",
+                  category: "Agents",
                   body: <AgentReasoningTraceWindow events={events as any[]} />,
                 },
                 "artifact": {
                   title: "Artifact · /explain",
-                  tone: "#3b82f6",
+                  category: "Knowledge",
                   body: <ArtifactPanel doc={artifactDoc} />,
                 },
               }}

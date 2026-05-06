@@ -38,17 +38,38 @@ export interface Viewport {
   zoom: number;
 }
 
+export type WindowCategory = "Chemistry" | "Scoring" | "Agents" | "Knowledge" | "Library";
+
+export interface WindowSpec {
+  title: string;
+  body: ReactNode;
+  /** Category label shown next to the title; drives the color accent. */
+  category?: WindowCategory;
+  /** Optional explicit color override (otherwise derived from category). */
+  tone?: string;
+}
+
 interface PlaygroundCanvasProps {
   layout: Record<string, WindowLayout>;
   viewport: Viewport;
   onLayoutChange: (id: string, next: WindowLayout) => void;
   onViewportChange: (v: Viewport) => void;
-  /** id → rendered React node (window body). Window chrome is added by the canvas. */
-  windows: Record<string, { title: string; body: ReactNode; tone?: string }>;
+  /** id → rendered window spec (title, category, body). */
+  windows: Record<string, WindowSpec>;
   onClose?: (id: string) => void;
   onFocus?: (id: string) => void;
   toolbar?: ReactNode;
 }
+
+// Category → accent color. The canvas uses this for the title-bar dot
+// and the category pill, giving each surface a clear group identity.
+export const CATEGORY_COLOR: Record<WindowCategory, string> = {
+  Chemistry: "#10b981",   // emerald
+  Scoring:   "#d97706",   // amber
+  Agents:    "#8b5cf6",   // violet
+  Knowledge: "#3b82f6",   // blue
+  Library:   "#64748b",   // slate
+};
 
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 2.5;
@@ -207,7 +228,8 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
               layout={l}
               viewport={p.viewport}
               title={win.title}
-              tone={win.tone}
+              category={win.category}
+              tone={win.tone ?? (win.category ? CATEGORY_COLOR[win.category] : undefined)}
               onChange={(next) => p.onLayoutChange(id, next)}
               onClose={p.onClose ? () => p.onClose!(id) : undefined}
               onFocus={p.onFocus ? () => p.onFocus!(id) : undefined}
@@ -272,6 +294,7 @@ interface PlaygroundWindowProps {
   layout: WindowLayout;
   viewport: Viewport;
   title: string;
+  category?: WindowCategory;
   tone?: string;
   children: ReactNode;
   onChange: (next: WindowLayout) => void;
@@ -356,11 +379,13 @@ function PlaygroundWindow(p: PlaygroundWindowProps) {
         p.onFocus?.();
       }}
     >
-      {/* Title bar — drag handle */}
+      {/* Title bar — drag handle. Left edge is a 3px tone bar that reads
+          as a category color stripe (chemistry green / scoring amber /
+          agents violet / knowledge blue / library slate). */}
       <div
         onMouseDown={startDrag}
         style={{
-          height: 28,
+          height: 30,
           display: "flex",
           alignItems: "center",
           gap: 6,
@@ -374,15 +399,43 @@ function PlaygroundWindow(p: PlaygroundWindowProps) {
           color: "var(--lys-text-faint)",
           letterSpacing: "0.06em",
           textTransform: "uppercase",
+          position: "relative",
         }}
       >
-        <Move size={10} style={{ color: p.tone ?? "var(--lys-text-faint)", flexShrink: 0 }} />
+        {/* Tone stripe along the very left edge of the title bar */}
+        <span style={{
+          position: "absolute",
+          left: 0, top: 0, bottom: 0,
+          width: 3,
+          background: p.tone ?? "var(--lys-text-faint)",
+        }} />
+        <Move size={10} style={{ color: p.tone ?? "var(--lys-text-faint)", flexShrink: 0, marginLeft: 4 }} />
+        {p.category && (
+          <span style={{
+            fontSize: 8.5,
+            fontWeight: 700,
+            padding: "1px 6px",
+            borderRadius: 3,
+            background: `${p.tone}18`,
+            color: p.tone,
+            letterSpacing: "0.08em",
+            flexShrink: 0,
+          }}>
+            {p.category}
+          </span>
+        )}
         <span style={{
           flex: 1,
           minWidth: 0,
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
+          color: "var(--lys-text-dim)",
+          textTransform: "none",
+          letterSpacing: 0,
+          fontFamily: "var(--lys-font-body)",
+          fontSize: 11,
+          fontWeight: 500,
         }}>
           {p.title}
         </span>
