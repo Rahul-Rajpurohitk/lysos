@@ -40,6 +40,9 @@ import { ConnectionStatusCard } from "./playground/ConnectionStatusCard";
 import { StructuralAlertsCard } from "./playground/StructuralAlertsCard";
 import { ResistanceMapCard } from "./playground/ResistanceMapCard";
 import { AtomDetailCard } from "./playground/AtomDetailCard";
+import { PropertiesCard } from "./playground/PropertiesCard";
+import { SMARTSMatchCard } from "./playground/SMARTSMatchCard";
+import { MoleculeLibraryCard } from "./playground/MoleculeLibraryCard";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -102,6 +105,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [selectedPathogen, setSelectedPathogen] = useState("MRSA");
   // Hovered atom from 2D builder — drives the AtomDetailCard inspector
   const [hoveredAtom, setHoveredAtom] = useState<number | null>(null);
+  // SMARTS match highlight — atoms returned by SMARTSMatchCard, shown as
+  // green halo overlay in the 2D builder
+  const [smartsHighlight, setSmartsHighlight] = useState<number[] | null>(null);
   const [mode, setMode] = useState<"Design" | "Discover" | "Repair" | "Robustify">("Design");
   const [autonomy, setAutonomy] = useState<"Co-pilot" | "Auto" | "Manual">("Co-pilot");
   const [iters, setIters] = useState(4);
@@ -1020,6 +1026,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         smiles={currentSmiles}
                         pathogen={selectedPathogen}
                         cursors={livePlayground.cursors}
+                        highlightAtoms={smartsHighlight}
                         onCursorHover={(atomIdx) => {
                           // Lift hovered atom up so AtomDetailCard can render its context
                           setHoveredAtom(atomIdx);
@@ -1079,6 +1086,26 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                               });
                             }
                           } catch {/* */}
+                        }}
+                      /> },
+                    { id: "properties", title: "Properties · medchem stack", size: 2, body:
+                      <PropertiesCard apiBase={apiBase} smiles={currentSmiles} /> },
+                    { id: "smarts", title: "SMARTS · pattern match", body:
+                      <SMARTSMatchCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        onMatchSelected={(match) => setSmartsHighlight(match ? match.atom_indices : null)}
+                      /> },
+                    { id: "library", title: "Library · saved molecules", size: 2, body:
+                      <MoleculeLibraryCard
+                        apiBase={apiBase}
+                        currentSmiles={currentSmiles}
+                        onLoad={(smi, name) => {
+                          loadSmilesIntoCanvas(smi, {
+                            createdBy: "user",
+                            parentId: null,
+                            logLabel: `[library load · ${name || "unnamed"}]`,
+                          });
                         }}
                       /> },
                   ],

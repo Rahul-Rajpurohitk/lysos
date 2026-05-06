@@ -26,6 +26,8 @@ interface Props {
   cursors?: Record<string, { actor: string; atom_idx?: number; ts: number }>;
   /** Called when the user hovers an atom — fires cursor.move + atom.hover via WS. */
   onCursorHover?: (atomIdx: number | null) => void;
+  /** Atoms to highlight in green (e.g. SMARTS pattern match results). */
+  highlightAtoms?: number[] | null;
 }
 
 interface PopoverState {
@@ -69,7 +71,7 @@ const ACTOR_COLOR: Record<string, string> = {
   user: "#f59e0b",
 };
 
-export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover }: Props) {
+export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms }: Props) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [pop, setPop] = useState<PopoverState | null>(null);
@@ -277,6 +279,43 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       svgEl.appendChild(label);
     }
   }, [cursors, svg]);
+
+  // SMARTS pattern match overlay — green pulse halos on matched atoms.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-smarts="1"]').forEach((n) => n.remove());
+    if (!highlightAtoms || highlightAtoms.length === 0) return;
+    highlightAtoms.forEach((idx) => {
+      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
+      if (!target) return;
+      const bbox = (target as SVGGraphicsElement).getBBox?.();
+      if (!bbox) return;
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("data-smarts", "1");
+      ring.setAttribute("cx", String(cx));
+      ring.setAttribute("cy", String(cy));
+      ring.setAttribute("r", "12");
+      ring.setAttribute("fill", "rgba(16,185,129,0.18)");
+      ring.setAttribute("stroke", "#10b981");
+      ring.setAttribute("stroke-width", "2.5");
+      ring.style.pointerEvents = "none";
+      // Pulse animation
+      const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      anim.setAttribute("attributeName", "r");
+      anim.setAttribute("from", "12");
+      anim.setAttribute("to", "16");
+      anim.setAttribute("dur", "1.1s");
+      anim.setAttribute("repeatCount", "indefinite");
+      anim.setAttribute("values", "12;16;12");
+      ring.appendChild(anim);
+      svgEl.appendChild(ring);
+    });
+  }, [highlightAtoms, svg]);
 
   // Outside-click closes popover
   useEffect(() => {

@@ -1870,3 +1870,397 @@ async def list_pathogens() -> dict:
             "common_syndromes": result.get("common_syndromes", []),
         })
     return {"pathogens": out}
+
+
+# ===========================================================================
+# CHEMISTRY DASHBOARD — properties, SMARTS search, library CRUD
+# ===========================================================================
+# These power the Chemistry container's full-stack mini-app:
+#   GET  /molecule/properties?smiles=...      — Lipinski Ro5 + QED + descriptors
+#   POST /molecule/smarts-match {smiles, smarts} — SMARTS pattern → matched atoms
+#   GET  /library/molecules                    — list saved molecules (persistent)
+#   POST /library/molecules                    — save current candidate to library
+#   DELETE /library/molecules/{id}             — remove from library
+#   GET  /library/tags                         — distinct tags for filter chips
+
+
+class MoleculeProperties(BaseModel):
+    smiles: str
+    canonical_smiles: str
+    inchi_key: str
+    n_atoms: int
+    n_heavy_atoms: int
+    n_bonds: int
+    n_rings: int
+    n_aromatic_rings: int
+    n_rotatable_bonds: int
+    # Lipinski's Rule of 5
+    molecular_weight: float
+    logp: float
+    h_bond_donors: int
+    h_bond_acceptors: int
+    lipinski_violations: int
+    lipinski_pass: bool
+    # Drug-likeness
+    qed: float                          # 0-1, 0.67+ is "drug-like"
+    sa_score: float                     # 1-10, lower = easier to synthesize
+    tpsa: float                         # topological polar surface area, Å²
+    fsp3: float                         # fraction sp3 (saturation, 0-1)
+    formal_charge: int
+    # Atom-level breakdown
+    element_counts: dict[str, int]
+    # Veber rules (orally bioavailable)
+    veber_pass: bool
+    # Drug class hint (if matches a SMARTS template)
+    detected_classes: list[str]
+
+
+@router.get("/molecule/properties", response_model=MoleculeProperties)
+async def molecule_properties(smiles: str) -> MoleculeProperties:
+    """Compute the full medchem property stack for a SMILES via RDKit.
+    Returns Lipinski/Veber rules, QED, SA score, TPSA, fsp3, descriptors."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem, Descriptors, Crippen, QED, rdMolDescriptors, Lipinski
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {smiles}")
+
+    canonical = Chem.MolToSmiles(mol, canonical=True)
+    inchi_key = Chem.MolToInchiKey(mol) if Chem.MolToInchi(mol) else ""
+
+    mw = float(Descriptors.MolWt(mol))
+    logp = float(Crippen.MolLogP(mol))
+    hbd = int(Lipinski.NumHDonors(mol))
+    hba = int(Lipinski.NumHAcceptors(mol))
+    rot_bonds = int(Lipinski.NumRotatableBonds(mol))
+    tpsa = float(rdMolDescriptors.CalcTPSA(mol))
+    fsp3 = float(rdMolDescriptors.CalcFractionCSP3(mol))
+    qed_val = float(QED.qed(mol))
+
+    # SA Score requires the contributed module — graceful fallback if missing
+    sa_score = 0.0
+    try:
+        from rdkit.Chem import RDConfig
+        import os as _os
+        import sys as _sys
+        sa_path = _os.path.join(RDConfig.RDContribDir, "SA_Score")
+        if sa_path not in _sys.path:
+            _sys.path.append(sa_path)
+        import sascorer  # type: ignore[import]
+        sa_score = float(sascorer.calculateScore(mol))
+    except Exception:
+        pass
+
+    # Lipinski Ro5 — count violations
+    violations = sum([mw > 500, logp > 5, hbd > 5, hba > 10])
+    lipinski_pass = violations <= 1
+
+    # Veber: rotatable bonds <= 10 AND TPSA <= 140
+    veber_pass = rot_bonds <= 10 and tpsa <= 140
+
+    # Element counts
+    elements: dict[str, int] = {}
+    for atom in mol.GetAtoms():
+        sym = atom.GetSymbol()
+        elements[sym] = elements.get(sym, 0) + 1
+
+    # Drug-class hints via SMARTS
+    DRUG_CLASS_SMARTS = {
+        "β-lactam": "[#7]1[#6](=O)[#6]([#6]1)",
+        "quinolone-core": "c1ccc2c(c1)c(=O)c(C(=O)O)cn2",
+        "macrolide-large-ring": "[#6]1[#6][#6][#6][#6][#6][#6][#6][#6][#6][#6][#6][#6][#6]1",
+        "aminoglycoside": "C1OCC(N)C(O)C1O",
+        "peptide-bond": "[NX3][CX3](=O)[CX3]",
+        "tetracycline-core": "c1ccc2c(c1)C(=O)c1c(O)cccc1C2=O",
+        "sulfonamide": "[#16](=O)(=O)[#7]",
+        "penicillin-thiazolidine": "[#6]1[#16][#6]([#6])[#7]2[#6](=O)[#6]12",
+        "imidazole": "c1ncnc1",
+        "fluoroquinolone-substruct": "c1cc2c(cc1F)c(=O)c(C(=O)O)cn2",
+    }
+    detected: list[str] = []
+    for cls, smt in DRUG_CLASS_SMARTS.items():
+        try:
+            patt = Chem.MolFromSmarts(smt)
+            if patt and mol.HasSubstructMatch(patt):
+                detected.append(cls)
+        except Exception:
+            pass
+
+    return MoleculeProperties(
+        smiles=smiles,
+        canonical_smiles=canonical,
+        inchi_key=inchi_key,
+        n_atoms=mol.GetNumAtoms(),
+        n_heavy_atoms=mol.GetNumHeavyAtoms(),
+        n_bonds=mol.GetNumBonds(),
+        n_rings=int(rdMolDescriptors.CalcNumRings(mol)),
+        n_aromatic_rings=int(rdMolDescriptors.CalcNumAromaticRings(mol)),
+        n_rotatable_bonds=rot_bonds,
+        molecular_weight=mw,
+        logp=logp,
+        h_bond_donors=hbd,
+        h_bond_acceptors=hba,
+        lipinski_violations=violations,
+        lipinski_pass=lipinski_pass,
+        qed=qed_val,
+        sa_score=sa_score,
+        tpsa=tpsa,
+        fsp3=fsp3,
+        formal_charge=Chem.GetFormalCharge(mol),
+        element_counts=elements,
+        veber_pass=veber_pass,
+        detected_classes=detected,
+    )
+
+
+class SMARTSMatchRequest(BaseModel):
+    smiles: str
+    smarts: str
+
+
+class SMARTSMatch(BaseModel):
+    atom_indices: list[int]
+    bond_indices: list[int]
+
+
+class SMARTSMatchResponse(BaseModel):
+    smiles: str
+    smarts: str
+    n_matches: int
+    matches: list[SMARTSMatch]
+    valid_smarts: bool
+    error: str = ""
+
+
+@router.post("/molecule/smarts-match", response_model=SMARTSMatchResponse)
+async def molecule_smarts_match(req: SMARTSMatchRequest) -> SMARTSMatchResponse:
+    """Find all SMARTS pattern matches in a SMILES. Returns matched atom +
+    bond indices for highlighting in the 2D viewer."""
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+
+    mol = Chem.MolFromSmiles(req.smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {req.smiles}")
+
+    pat = Chem.MolFromSmarts(req.smarts)
+    if pat is None:
+        return SMARTSMatchResponse(
+            smiles=req.smiles, smarts=req.smarts,
+            n_matches=0, matches=[], valid_smarts=False,
+            error=f"invalid SMARTS: {req.smarts}",
+        )
+
+    raw_matches = mol.GetSubstructMatches(pat, useChirality=False)
+    out: list[SMARTSMatch] = []
+    for m in raw_matches:
+        # Get bond indices touching ONLY pairs within the match
+        bonds: list[int] = []
+        atom_set = set(m)
+        for b in mol.GetBonds():
+            if b.GetBeginAtomIdx() in atom_set and b.GetEndAtomIdx() in atom_set:
+                bonds.append(b.GetIdx())
+        out.append(SMARTSMatch(atom_indices=list(m), bond_indices=bonds))
+
+    return SMARTSMatchResponse(
+        smiles=req.smiles, smarts=req.smarts,
+        n_matches=len(out), matches=out, valid_smarts=True,
+    )
+
+
+# --- Library CRUD ----------------------------------------------------------
+# Persists user-saved molecules in a SQLite table. Survives restarts.
+# Stored in the same DB the playground store uses for sessions.
+import sqlite3 as _sql_lib  # noqa: E402
+import json as _json_lib  # noqa: E402
+import time as _time_lib  # noqa: E402
+from pathlib import Path as _PathLib  # noqa: E402
+
+_LIB_DB = _PathLib("workspace/data/molecule_library.db")
+
+
+def _lib_conn() -> _sql_lib.Connection:
+    _LIB_DB.parent.mkdir(parents=True, exist_ok=True)
+    conn = _sql_lib.connect(str(_LIB_DB))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS library_molecules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            smiles TEXT NOT NULL,
+            canonical_smiles TEXT NOT NULL,
+            inchi_key TEXT,
+            name TEXT,
+            tags TEXT,
+            note TEXT,
+            qed REAL,
+            mw REAL,
+            logp REAL,
+            tpsa REAL,
+            n_heavy_atoms INTEGER,
+            lipinski_pass INTEGER,
+            created_at REAL,
+            updated_at REAL
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lib_inchi ON library_molecules(inchi_key)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_lib_canon ON library_molecules(canonical_smiles)")
+    return conn
+
+
+class LibraryEntry(BaseModel):
+    id: int
+    smiles: str
+    canonical_smiles: str
+    inchi_key: str = ""
+    name: str = ""
+    tags: list[str] = []
+    note: str = ""
+    qed: float = 0.0
+    mw: float = 0.0
+    logp: float = 0.0
+    tpsa: float = 0.0
+    n_heavy_atoms: int = 0
+    lipinski_pass: bool = False
+    created_at: float = 0.0
+    updated_at: float = 0.0
+
+
+class LibrarySaveRequest(BaseModel):
+    smiles: str
+    name: str = ""
+    tags: list[str] = []
+    note: str = ""
+
+
+@router.get("/library/molecules")
+async def library_list(
+    tag: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = 100,
+) -> dict:
+    """List saved molecules. Filter by tag or substring search across name/note/SMILES."""
+    conn = _lib_conn()
+    sql = "SELECT id, smiles, canonical_smiles, inchi_key, name, tags, note, qed, mw, logp, tpsa, n_heavy_atoms, lipinski_pass, created_at, updated_at FROM library_molecules"
+    params: list = []
+    where: list[str] = []
+    if tag:
+        where.append("tags LIKE ?")
+        params.append(f"%\"{tag}\"%")
+    if q:
+        where.append("(name LIKE ? OR note LIKE ? OR smiles LIKE ?)")
+        params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY updated_at DESC LIMIT ?"
+    params.append(limit)
+    rows = conn.execute(sql, params).fetchall()
+    out: list[LibraryEntry] = []
+    for r in rows:
+        try:
+            tags_list = _json_lib.loads(r[5] or "[]")
+        except Exception:
+            tags_list = []
+        out.append(LibraryEntry(
+            id=r[0], smiles=r[1], canonical_smiles=r[2], inchi_key=r[3] or "",
+            name=r[4] or "", tags=tags_list, note=r[6] or "",
+            qed=r[7] or 0.0, mw=r[8] or 0.0, logp=r[9] or 0.0, tpsa=r[10] or 0.0,
+            n_heavy_atoms=r[11] or 0, lipinski_pass=bool(r[12]),
+            created_at=r[13] or 0.0, updated_at=r[14] or 0.0,
+        ))
+    conn.close()
+    return {"entries": [e.model_dump() for e in out], "total": len(out)}
+
+
+@router.post("/library/molecules")
+async def library_save(req: LibrarySaveRequest) -> dict:
+    """Save a molecule to the persistent library. Auto-computes properties.
+    Idempotent on canonical SMILES — duplicates update name/tags/note."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import Descriptors, Crippen, QED, rdMolDescriptors, Lipinski
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    mol = Chem.MolFromSmiles(req.smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {req.smiles}")
+    canonical = Chem.MolToSmiles(mol, canonical=True)
+    inchi = Chem.MolToInchiKey(mol) if Chem.MolToInchi(mol) else ""
+    mw = float(Descriptors.MolWt(mol))
+    logp = float(Crippen.MolLogP(mol))
+    tpsa = float(rdMolDescriptors.CalcTPSA(mol))
+    qed_val = float(QED.qed(mol))
+    hbd = int(Lipinski.NumHDonors(mol))
+    hba = int(Lipinski.NumHAcceptors(mol))
+    violations = sum([mw > 500, logp > 5, hbd > 5, hba > 10])
+
+    now = _time_lib.time()
+    tags_json = _json_lib.dumps(req.tags)
+    conn = _lib_conn()
+    # Upsert by canonical
+    existing = conn.execute(
+        "SELECT id FROM library_molecules WHERE canonical_smiles=? LIMIT 1",
+        (canonical,),
+    ).fetchone()
+    if existing:
+        conn.execute("""
+            UPDATE library_molecules
+            SET name=?, tags=?, note=?, updated_at=?,
+                qed=?, mw=?, logp=?, tpsa=?, n_heavy_atoms=?, lipinski_pass=?
+            WHERE id=?
+        """, (
+            req.name, tags_json, req.note, now,
+            qed_val, mw, logp, tpsa, mol.GetNumHeavyAtoms(),
+            1 if violations <= 1 else 0,
+            existing[0],
+        ))
+        new_id = existing[0]
+        action = "updated"
+    else:
+        cur = conn.execute("""
+            INSERT INTO library_molecules
+            (smiles, canonical_smiles, inchi_key, name, tags, note, qed, mw, logp, tpsa,
+             n_heavy_atoms, lipinski_pass, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            req.smiles, canonical, inchi, req.name, tags_json, req.note,
+            qed_val, mw, logp, tpsa, mol.GetNumHeavyAtoms(),
+            1 if violations <= 1 else 0,
+            now, now,
+        ))
+        new_id = cur.lastrowid
+        action = "created"
+    conn.commit()
+    conn.close()
+    return {"id": new_id, "action": action, "canonical_smiles": canonical}
+
+
+@router.delete("/library/molecules/{mol_id}")
+async def library_delete(mol_id: int) -> dict:
+    conn = _lib_conn()
+    conn.execute("DELETE FROM library_molecules WHERE id=?", (mol_id,))
+    conn.commit()
+    conn.close()
+    return {"deleted": mol_id}
+
+
+@router.get("/library/tags")
+async def library_tags() -> dict:
+    """Distinct tags across the library, with counts."""
+    conn = _lib_conn()
+    rows = conn.execute("SELECT tags FROM library_molecules").fetchall()
+    counts: dict[str, int] = {}
+    for r in rows:
+        try:
+            for t in _json_lib.loads(r[0] or "[]"):
+                counts[t] = counts.get(t, 0) + 1
+        except Exception:
+            pass
+    sorted_tags = sorted(counts.items(), key=lambda x: -x[1])
+    conn.close()
+    return {"tags": [{"tag": t, "count": c} for t, c in sorted_tags]}
