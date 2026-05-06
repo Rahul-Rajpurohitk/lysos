@@ -42,7 +42,10 @@ function smilesToB64(s: string): string {
 }
 
 /** Safely inject an SVG string into a host element using DOMParser.
- *  This avoids dangerouslySetInnerHTML and strips any inline scripts. */
+ *  This avoids dangerouslySetInnerHTML and strips any inline scripts.
+ *  ALSO: forces width/height to 100% with preserveAspectRatio so the
+ *  SVG scales to fit the host (RDKit serves at fixed 480×340; we let
+ *  the viewBox handle responsive scaling). */
 function injectSvgSafely(host: HTMLElement, svgText: string): SVGSVGElement | null {
   host.innerHTML = ""; // clear via property assign — no parsing
   if (!svgText) return null;
@@ -58,6 +61,14 @@ function injectSvgSafely(host: HTMLElement, svgText: string): SVGSVGElement | nu
       if (attr.name.startsWith("on")) el.removeAttribute(attr.name);
     }
   });
+  // Force responsive scaling — clear fixed pixel dimensions, set 100%/100%
+  // so the SVG scales to fit the host element. The viewBox (set by RDKit)
+  // preserves the structure.
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "100%");
+  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+  (svg as unknown as SVGSVGElement).style.maxWidth = "100%";
+  (svg as unknown as SVGSVGElement).style.maxHeight = "100%";
   host.appendChild(svg);
   return svg as unknown as SVGSVGElement;
 }
@@ -421,9 +432,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         )}
         <span style={{ color: "var(--lys-text-dim)" }}>click → edit · shift-click → multi-select</span>
       </div>
-      <div style={{ flex: 1, position: "relative", overflow: "auto", display: "grid", placeItems: "center" }}>
+      <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
         {svg
-          ? <div ref={svgHostRef} style={{ width: "100%", height: "100%", display: "grid", placeItems: "center" }} />
+          ? <div ref={svgHostRef} style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }} />
           : (
             <div style={{
               color: "var(--lys-text-faint)",

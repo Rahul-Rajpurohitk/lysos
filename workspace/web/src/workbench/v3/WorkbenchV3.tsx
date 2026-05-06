@@ -52,6 +52,7 @@ import { AgentRosterCard } from "./playground/AgentRosterCard";
 import { SessionTraceCard } from "./playground/SessionTraceCard";
 import { AgentActionLogCard } from "./playground/AgentActionLogCard";
 import { AgentMetricsCard } from "./playground/AgentMetricsCard";
+import { ChemistryNavbar } from "./playground/ChemistryNavbar";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -1066,11 +1067,27 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "chem",
                   category: "Chemistry",
                   cards: [
+                    // LEFT SIDEBAR — Power-BI style icon navbar with launchers,
+                    // quick scaffolds, tools, and the active pathogen swatch.
+                    { id: "chem-nav", title: "", slot: "nav", body:
+                      <ChemistryNavbar
+                        apiBase={apiBase}
+                        pathogen={selectedPathogen}
+                        onLoadSmiles={(smi, name) => {
+                          loadSmilesIntoCanvas(smi, {
+                            createdBy: "user",
+                            parentId: null,
+                            logLabel: `[nav · ${name}]`,
+                          });
+                        }}
+                      /> },
+                    // Scaffold launcher (full dropdown with search) — kept as
+                    // a top-row card for advanced users; quick picks live in
+                    // the navbar above.
                     { id: "scaffold", title: "Start from · scaffold dropdown", size: 2, expandedH: 130, body:
                       <ScaffoldPickerCard
                         apiBase={apiBase}
                         onLoadSmiles={(smi, name) => {
-                          // REAL backend round-trip: materialize → SQLite Atoms/Bonds → bus broadcast
                           loadSmilesIntoCanvas(smi, {
                             createdBy: "user",
                             parentId: null,

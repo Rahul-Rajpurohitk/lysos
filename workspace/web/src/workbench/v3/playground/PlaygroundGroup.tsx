@@ -40,6 +40,11 @@ export interface CardSpec {
    *  Useful for compact dropdown-trigger cards (e.g. ScaffoldPicker = 120) or
    *  taller dashboards. Defaults to 320 (size:1) or 360 (size:2). */
   expandedH?: number;
+  /** Render this card as the LEFT navbar of the group instead of in the
+   *  cards grid. The navbar is a fixed-width vertical strip on the left,
+   *  ideal for launchers, quick chips, filters (Power BI sidebar pattern).
+   *  Only one card per group should set slot:"nav". */
+  slot?: "nav" | "main";
 }
 
 interface Props {
@@ -159,6 +164,9 @@ export function PlaygroundGroup(p: Props) {
       }
     };
     for (const c of p.cards) {
+      // Nav cards live in the left sidebar — they don't contribute to
+      // the cards-grid height computation.
+      if (c.slot === "nav") continue;
       const isCollapsed = collapsedCards.has(c.id);
       const cardH = isCollapsed
         ? CARD_COLLAPSED_H
@@ -264,24 +272,42 @@ export function PlaygroundGroup(p: Props) {
         </button>
       </div>
 
-      {/* Cards container — 2-col flex grid.
-          alignContent: "start" parks free space at the bottom rather than
-          distributing it between rows. Default gridAutoRows: auto respects
-          each card's explicit height (28 collapsed, 320–360 expanded) so
-          the inner list area inside each card has its own scroll boundary
-          that's smaller than the content — forcing internal scroll. */}
-      {!collapsed && (
-        <div style={{
-          flex: 1,
-          minHeight: 0,
-          padding: 8,
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          alignContent: "start",
-          gap: 8,
-          overflow: "auto",
-        }}>
-          {p.cards.map((c) => {
+      {/* Body — split into NAV slot (left sidebar, fixed width) and the
+          MAIN cards grid. If a card has slot:"nav", it renders inside
+          the navbar strip with no chrome (no header, no collapse).
+          The rest of the cards live in the 2-col grid. */}
+      {!collapsed && (() => {
+        const navCard = p.cards.find((c) => c.slot === "nav");
+        const mainCards = p.cards.filter((c) => c.slot !== "nav");
+        const NAV_W = 96;
+        return (
+          <div style={{
+            flex: 1, minHeight: 0,
+            display: "flex", flexDirection: "row",
+            overflow: "hidden",
+          }}>
+            {navCard && (
+              <div style={{
+                width: NAV_W, flexShrink: 0,
+                borderRight: `1px solid ${tone}22`,
+                background: `${tone}05`,
+                padding: "8px 6px",
+                display: "flex", flexDirection: "column", gap: 6,
+                overflow: "auto",
+              }} className="lys-card-body">
+                {navCard.body}
+              </div>
+            )}
+            <div style={{
+              flex: 1, minHeight: 0,
+              padding: 8,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              alignContent: "start",
+              gap: 8,
+              overflow: "auto",
+            }}>
+          {mainCards.map((c) => {
             const cardCollapsed = collapsedCards.has(c.id);
             // Fixed height when expanded → guarantees the inner list has a
             // scroll boundary even if the current content fits.
@@ -365,8 +391,10 @@ export function PlaygroundGroup(p: Props) {
               </div>
             );
           })}
-        </div>
-      )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Resize corner */}
       {!collapsed && (
