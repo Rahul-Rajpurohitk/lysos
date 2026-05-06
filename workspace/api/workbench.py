@@ -621,14 +621,26 @@ def _sar_lookup(element: str, neighborhood_smiles: str, target: Optional[str]) -
     return out
 
 
+def _decode_smiles_b64(smiles_b64: str) -> str:
+    """Decode URL-safe base64 SMILES, restoring missing padding.
+    Frontend strips `=` for cleaner URLs (per RFC 4648 §5); we have to
+    add it back before calling urlsafe_b64decode (which is strict)."""
+    import base64
+    raw = smiles_b64.encode("ascii")
+    pad = (-len(raw)) % 4
+    if pad:
+        raw = raw + (b"=" * pad)
+    return base64.urlsafe_b64decode(raw).decode()
+
+
 @router.get("/chem/atom/{smiles_b64}/{atom_idx}", response_model=AtomContextResponse)
 async def chem_atom_context(smiles_b64: str, atom_idx: int,
                              target: Optional[str] = None) -> AtomContextResponse:
     """SMILES is base64-urlsafe encoded to dodge URL-special-chars
-    (ring bonds, slashes, etc.) — frontend wraps with btoa(smi)."""
-    import base64
+    (ring bonds, slashes, etc.) — frontend wraps with btoa(smi).
+    Padding `=` is stripped client-side; _decode_smiles_b64 restores it."""
     try:
-        smiles = base64.urlsafe_b64decode(smiles_b64.encode()).decode()
+        smiles = _decode_smiles_b64(smiles_b64)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(422, f"smiles base64 decode failed: {exc}")
 
@@ -735,9 +747,8 @@ async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340) -> dict:
     """Render a 2D structure as SVG with atom indices. Frontend uses this
     in the 2D Builder window; on click, the SVG already knows which atom
     index was hit (RDKit emits class="atom-N" on each atom)."""
-    import base64
     try:
-        smiles = base64.urlsafe_b64decode(smiles_b64.encode()).decode()
+        smiles = _decode_smiles_b64(smiles_b64)
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(422, f"smiles decode failed: {exc}")
     try:
