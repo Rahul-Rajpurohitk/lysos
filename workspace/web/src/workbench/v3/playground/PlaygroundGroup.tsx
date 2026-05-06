@@ -23,6 +23,10 @@ export interface GroupLayout {
   h: number;
   z: number;
   collapsed?: boolean;
+  /** When true, layout.h is ignored and the group auto-sizes to fit
+   *  ALL its cards (no internal scroll). Set to false the moment the
+   *  user manually drags the resize handle. */
+  autoFit?: boolean;
 }
 
 export interface CardSpec {
@@ -110,6 +114,9 @@ export function PlaygroundGroup(p: Props) {
           ...start.current.layout,
           w: Math.max(280, snap(start.current.layout.w + dx)),
           h: Math.max(180, snap(start.current.layout.h + dy)),
+          // User explicitly resized → opt out of auto-fit so future card
+          // collapses/expands don't override their chosen height.
+          autoFit: false,
         });
       }
     };
@@ -124,16 +131,59 @@ export function PlaygroundGroup(p: Props) {
 
   const collapsed = !!p.layout.collapsed;
   const HEADER_H = 30;
-  // When ALL cards are collapsed, auto-shrink the group to a tight pile
-  // so 6+ collapsed pills don't leave 600px of empty space below them.
-  // Each collapsed card = 28px tall + 8px gap. Cards laid out in a 2-col
-  // grid → ceil(N/2) rows. Plus 8px padding × 2 + 30px group header.
+  const PADDING_V = 16;          // 8 top + 8 bottom inside cards grid
+  const GAP_V = 8;               // gap between rows
+  const CARD_COLLAPSED_H = 28;
+  const CARD_EXPANDED_H_S1 = 320;  // size:1 card
+  const CARD_EXPANDED_H_S2 = 360;  // size:2 (full-row) card
+
+  // Simulate CSS-grid placement (2 cols, default row flow) to compute the
+  // total natural height that fits ALL cards without internal scroll.
+  // Walks cards in order, places size:1 cards in col 1 then col 2, and
+  // size:2 cards in their own full row (wrapping if col 2 is occupied).
+  function computeNaturalHeight(): number {
+    let totalRowH = 0;
+    let currentRowH = 0;          // tallest card in current half-row pair
+    let colsUsed = 0;             // 0, 1, or 2
+    let nRows = 0;
+    const flushRow = () => {
+      if (colsUsed > 0) {
+        totalRowH += currentRowH;
+        nRows++;
+        currentRowH = 0;
+        colsUsed = 0;
+      }
+    };
+    for (const c of p.cards) {
+      const isCollapsed = collapsedCards.has(c.id);
+      const cardH = isCollapsed
+        ? CARD_COLLAPSED_H
+        : (c.size === 2 ? CARD_EXPANDED_H_S2 : CARD_EXPANDED_H_S1);
+      if (c.size === 2) {
+        flushRow();              // size:2 always starts a fresh row
+        totalRowH += cardH;
+        nRows++;
+      } else {
+        if (colsUsed === 2) flushRow();
+        currentRowH = Math.max(currentRowH, cardH);
+        colsUsed++;
+      }
+    }
+    flushRow();
+    const gaps = Math.max(0, nRows - 1) * GAP_V;
+    return HEADER_H + PADDING_V + totalRowH + gaps;
+  }
+
   const allCardsCollapsed = !collapsed && p.cards.length > 0
     && p.cards.every((c) => collapsedCards.has(c.id));
-  const tightHeight = HEADER_H + 16 + Math.ceil(p.cards.length / 2) * (28 + 8);
+  const naturalH = computeNaturalHeight();
+  // autoFit = true (default) → auto-fit to natural height that shows ALL
+  //                            cards without internal scroll.
+  // autoFit = false           → user manually resized, respect their h.
+  const autoFit = p.layout.autoFit !== false;
   const effectiveH = collapsed
     ? HEADER_H
-    : (allCardsCollapsed ? tightHeight : p.layout.h);
+    : (autoFit ? naturalH : p.layout.h);
 
   return (
     <div style={{

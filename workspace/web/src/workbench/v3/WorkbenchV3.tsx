@@ -202,12 +202,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   //   KNOWLEDGE (blue)     — artifact pane (only visible after /explain)
   // Each group is draggable + resizable. Cards inside each group are
   // arranged in a 2-col grid (size=2 for full-row cards).
+  // h here is a fallback only — autoFit:true means the group will compute
+  // its actual height from its cards (one row pair = 320px, full-row
+  // size:2 cards = 360px, plus header + padding + gaps). Containers
+  // start at sensible (x, y, w) anchors and auto-grow vertically.
   const DEFAULT_GROUP_LAYOUT: Record<string, GroupLayout> = {
-    "chem":      { x: 16,  y: 16,  w: 720, h: 920, z: 1 },
-    "scoring":   { x: 752, y: 16,  w: 460, h: 360, z: 1 },
-    "agents":    { x: 752, y: 392, w: 460, h: 280, z: 1 },
-    "live":      { x: 752, y: 688, w: 460, h: 380, z: 1 },
-    "knowledge": { x: 16,  y: 952, w: 1196, h: 480, z: 1 },
+    "chem":      { x: 16,  y: 16,   w: 720,  h: 920, z: 1, autoFit: true },
+    "scoring":   { x: 752, y: 16,   w: 580,  h: 360, z: 1, autoFit: true },
+    "agents":    { x: 752, y: 800,  w: 580,  h: 280, z: 1, autoFit: true },
+    "live":      { x: 16,  y: 1700, w: 580,  h: 380, z: 1, autoFit: true },
+    "knowledge": { x: 16,  y: 2100, w: 1316, h: 480, z: 1, autoFit: true },
   };
   const [playgroundGroupLayouts, setPlaygroundGroupLayouts] = useState<Record<string, Record<string, GroupLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
