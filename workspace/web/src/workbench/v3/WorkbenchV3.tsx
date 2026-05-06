@@ -255,8 +255,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           target_pathogen: selectedPathogen,
-          mode: mode.toLowerCase(),
-          autonomy: autonomy.toLowerCase().replace("-", "_"),
+          // Backend Literal accepts "design" | "red_team" | "compare" only.
+          // Frontend has more labels (Discover/Repair/Robustify); clamp.
+          mode: ({ design: "design", discover: "design", repair: "design",
+                   robustify: "design" } as Record<string, string>)
+                   [mode.toLowerCase()] ?? "design",
+          // Backend Literal expects "auto" | "copilot" | "manual" (no dash, no underscore).
+          // Frontend label is "Co-pilot" — strip the dash, don't replace.
+          autonomy: autonomy.toLowerCase().replace("-", ""),
           constraints: constraints.map((c) => ({ type: "raw", field: "note", value: c.label })),
           max_iterations: iters,
         }),
