@@ -24,6 +24,7 @@ import { RewardCard } from "./RewardCard";
 import { DesignSessionCard } from "./DesignSessionCard";
 import { ExplainCard } from "./ExplainCard";
 import { ScaffoldTreeCard } from "./ScaffoldTreeCard";
+import { StressTestCard } from "./StressTestCard";
 
 export interface ChatMsg {
   id?: string;
@@ -96,6 +97,7 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onRepl
   if (msg.card_kind === "design_session" && msg.data) return <DesignSessionCard msg={msg} onIngestEvent={onIngestEvent} />;
   if (msg.card_kind === "explain_session" && msg.data) return <ExplainCard msg={msg} onArtifact={onArtifact} />;
   if (msg.card_kind === "sar" && msg.data) return <ScaffoldTreeCard msg={msg} onLoadSmiles={onLoadSmiles} />;
+  if (msg.card_kind === "stress" && msg.data) return <StressTestCard msg={msg} onLoadSmiles={onLoadSmiles} />;
 
   const agent = msg.agent ?? msg.type ?? "system";
   const color = agentColor(agent);

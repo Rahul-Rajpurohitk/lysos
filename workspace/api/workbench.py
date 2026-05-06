@@ -456,6 +456,169 @@ async def workbench_design(req: DesignRequest) -> DesignResponse:
 
 
 # ---------------------------------------------------------------------------
+# W5 — Stress-test (adversarial Critic + structured failure modes).
+#
+# Sends the candidate to a Gemini-Pro Critic agent with an adversarial
+# prompt that returns a JSON list of attack vectors:
+#   [{ mode, severity, why_fails, mitigation }]
+# Each attack documents a way the molecule could fail clinically/ATC: PK
+# liabilities, β-lactamase hydrolysis, structural alerts, resistance
+# escape, etc. Frontend renders as a list of severity-coded chips.
+# ---------------------------------------------------------------------------
+
+
+class StressTestRequest(BaseModel):
+    smiles: str = Field(..., description="Candidate SMILES to red-team")
+    target_pathogen: str = "MRSA"
+    max_attacks: int = Field(6, ge=1, le=12)
+
+
+class StressAttack(BaseModel):
+    mode: str
+    severity: Literal["high", "medium", "low"]
+    why_fails: str
+    mitigation: str = ""
+    smiles_variant: str = ""        # optional adversarial variant
+
+
+class StressTestResponse(BaseModel):
+    smiles: str
+    target_pathogen: str
+    summary: str
+    attacks: list[StressAttack]
+    model: str
+    elapsed_ms: int
+
+
+_STRESS_PROMPT = """You are the Lysos Critic agent. Red-team the candidate molecule below — find every way it could FAIL as an antibiotic clinically. Return STRUCTURED JSON only, no prose.
+
+Candidate SMILES: {smiles}
+Target pathogen: {target_pathogen}
+
+Return JSON with this exact shape:
+{{
+  "summary": "<2-sentence verdict on overall fitness>",
+  "attacks": [
+    {{
+      "mode": "<short label, e.g. 'KPC β-lactamase hydrolysis'>",
+      "severity": "high" | "medium" | "low",
+      "why_fails": "<1-3 sentences explaining the failure mode>",
+      "mitigation": "<1-2 sentences on how a designer could fix it>",
+      "smiles_variant": "<optional: a known scaffold the designer could pivot to; can be empty>"
+    }},
+    ...
+  ]
+}}
+
+Constraints:
+- Return at most {max_attacks} distinct attacks.
+- Severity reflects clinical likelihood × impact, not just "is this possible".
+- Cover diverse modes: PK/ADMET, resistance enzymes (KPC/NDM/OXA, mecA, vanA),
+  efflux, structural alerts (PAINS), bioavailability, hERG, hepatotoxicity,
+  spectrum gaps. Don't repeat the same axis twice.
+- ONLY emit the JSON object. No markdown fences, no ```json, no prefix.
+"""
+
+
+@router.post("/stress", response_model=StressTestResponse)
+async def workbench_stress(req: StressTestRequest) -> StressTestResponse:
+    """Adversarial Critic — returns a structured list of failure modes."""
+    import time as _t
+    t0 = _t.perf_counter()
+
+    prompt = _STRESS_PROMPT.format(
+        smiles=req.smiles,
+        target_pathogen=req.target_pathogen,
+        max_attacks=req.max_attacks,
+    )
+
+    summary = ""
+    attacks: list[StressAttack] = []
+    model_used = "fallback"
+
+    # Gemini 2.5 Pro REST (same tier as auto-title / explain)
+    import os as _os
+    gemini_key = _os.getenv("GEMINI_API_KEY")
+    if gemini_key:
+        try:
+            import httpx
+            url = (
+                "https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{_os.getenv('LYSOS_STRESS_GEMINI_MODEL', 'gemini-2.5-pro')}:generateContent"
+            )
+            payload = {
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "maxOutputTokens": 3072,
+                    "temperature": 0.4,
+                    "responseMimeType": "application/json",
+                    "thinkingConfig": {"thinkingBudget": 1024, "includeThoughts": False},
+                },
+            }
+            async with httpx.AsyncClient(timeout=45.0) as cx:
+                r = await cx.post(
+                    url,
+                    headers={"x-goog-api-key": gemini_key,
+                             "Content-Type": "application/json"},
+                    json=payload,
+                )
+            if r.status_code != 200:
+                raise RuntimeError(f"http {r.status_code}: {r.text[:200]}")
+            d = r.json()
+            cands = d.get("candidates") or []
+            raw = ""
+            if cands:
+                parts = (cands[0].get("content") or {}).get("parts") or []
+                if parts:
+                    raw = (parts[0].get("text") or "").strip()
+            if not raw:
+                raise RuntimeError("empty LLM response")
+            # Strip any accidental fencing
+            if raw.startswith("```"):
+                raw = raw.strip("`")
+                if raw.lower().startswith("json"):
+                    raw = raw[4:].lstrip()
+            parsed = json.loads(raw)
+            summary = (parsed.get("summary") or "").strip()
+            for a in (parsed.get("attacks") or [])[: req.max_attacks]:
+                sev = (a.get("severity") or "medium").lower()
+                if sev not in ("high", "medium", "low"):
+                    sev = "medium"
+                attacks.append(StressAttack(
+                    mode=(a.get("mode") or "?").strip()[:80],
+                    severity=sev,  # type: ignore[arg-type]
+                    why_fails=(a.get("why_fails") or "").strip()[:600],
+                    mitigation=(a.get("mitigation") or "").strip()[:400],
+                    smiles_variant=(a.get("smiles_variant") or "").strip(),
+                ))
+            model_used = "gemini"
+        except Exception as exc:  # noqa: BLE001
+            log.warning("stress-test Gemini failed: %s", exc)
+
+    # Fallback heuristic — at least give the user something
+    if not attacks:
+        summary = (
+            "LLM Critic unavailable. Using heuristic fallback — review composite "
+            "axes manually for low-scoring components and consult /score breakdown."
+        )
+        attacks = [StressAttack(
+            mode="Heuristic-only mode",
+            severity="medium",
+            why_fails="No LLM grounding available. Run /score to see component-level liabilities.",
+            mitigation="Configure GEMINI_API_KEY (or LysosEndpoint) and retry.",
+        )]
+
+    return StressTestResponse(
+        smiles=req.smiles,
+        target_pathogen=req.target_pathogen,
+        summary=summary,
+        attacks=attacks,
+        model=model_used,
+        elapsed_ms=int((_t.perf_counter() - t0) * 1000),
+    )
+
+
+# ---------------------------------------------------------------------------
 # W3 — SAR exploration (parent SMILES → k mutants + score deltas).
 #
 # Generates structurally-related variants via RDKit transforms, scores each

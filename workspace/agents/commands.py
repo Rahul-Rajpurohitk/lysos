@@ -435,6 +435,55 @@ class BranchCommand(Command):
         )
 
 
+class StressCommand(Command):
+    """W5 — adversarial Critic on the active candidate."""
+    def __init__(self):
+        super().__init__(
+            name="stress",
+            description="Adversarial Critic — list failure modes",
+            type=CommandType.LOCAL,
+            argument_hint="[smiles]",
+            aliases=["redteam", "rt"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        smi = args.strip() or ctx.active_smiles
+        if not smi:
+            return CommandResult(error="Provide a SMILES or set an active candidate first.")
+        try:
+            from api.workbench import workbench_stress, StressTestRequest
+        except ImportError as exc:
+            return CommandResult(error=f"stress route not available: {exc}")
+        try:
+            resp = await workbench_stress(StressTestRequest(
+                smiles=smi,
+                target_pathogen=ctx.active_target or "MRSA",
+                max_attacks=6,
+            ))
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"stress test failed: {exc}")
+        n_high = sum(1 for a in resp.attacks if a.severity == "high")
+        line = (
+            f"red-team complete · {len(resp.attacks)} attacks "
+            f"({n_high} high-severity) · {resp.elapsed_ms}ms · model={resp.model}"
+        )
+        return CommandResult(
+            output=line,
+            data={
+                "smiles": resp.smiles,
+                "target_pathogen": resp.target_pathogen,
+                "summary": resp.summary,
+                "attacks": [a.model_dump() for a in resp.attacks],
+                "model": resp.model,
+                "elapsed_ms": resp.elapsed_ms,
+            },
+            follow_ups=[
+                "/score <smiles>  (rescore the candidate)",
+                "/sar  (try mutating to fix the worst attack)",
+            ],
+        )
+
+
 class SARCommand(Command):
     """W3 — expand the active candidate into k mutants and score each."""
     def __init__(self):
@@ -766,6 +815,7 @@ def create_default_registry() -> CommandRegistry:
         SimilarCommand(),
         ScaffoldHopCommand(),
         ResistanceCommand(),
+        StressCommand(),
         SARCommand(),
         RunCommand(),
         BranchCommand(),
