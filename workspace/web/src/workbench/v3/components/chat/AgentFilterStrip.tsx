@@ -31,9 +31,9 @@ export function AgentFilterStrip(p: AgentFilterStripProps) {
       display: "flex",
       alignItems: "center",
       gap: 0,
-      padding: "0 16px",
-      height: 32,
-      borderBottom: "1px solid var(--lys-border)",
+      padding: "0 8px",
+      height: 24,
+      borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
       overflowX: "auto",
       flexShrink: 0,
     }}>

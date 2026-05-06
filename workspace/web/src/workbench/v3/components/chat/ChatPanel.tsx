@@ -115,13 +115,13 @@ export function ChatPanel(p: ChatPanelProps) {
           Left: live iter + composite pill (the metric that matters).
           Right: replay badge + Stream/Columns toggle. */}
       <div style={{
-        height: 32,
+        height: 26,
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
-        gap: 8,
-        padding: "0 12px",
-        borderBottom: "1px solid var(--lys-border)",
+        gap: 6,
+        padding: "0 8px",
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
       }}>
         {(p.currentIter && p.totalIters) ? (
           <span style={{

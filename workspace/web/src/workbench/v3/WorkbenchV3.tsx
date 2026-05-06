@@ -4,7 +4,10 @@ import "allotment/dist/style.css";
 
 import { TopHeader } from "./components/TopHeader";
 import { TightComposer } from "./components/chat/TightComposer";
-import { IterationStrip } from "./components/IterationStrip";
+// IterationStrip removed from primary layout per redesign — was a 2nd-row
+// chrome that violated the single-navbar mandate. The play/seek/speed
+// controls migrate inline elsewhere if needed.
+// import { IterationStrip } from "./components/IterationStrip";
 import { DragEditChips } from "./components/DragEditChips";
 import { TabStrip } from "./components/TabStrip";
 import { Mol2D } from "./components/Mol2D";
@@ -87,7 +90,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [activeSubAgents, setActiveSubAgents] = useState<string[]>([]);
   const [currentIter, setCurrentIter] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [speed, setSpeed] = useState<1 | 2 | 4>(1);
+  // Replay speed state — IterationStrip removed from primary layout but
+  // kept for future inline render. setSpeed will reactivate when the
+  // play/seek/speed control returns inline somewhere.
+  const [speed] = useState<1 | 2 | 4>(1);
+  void speed;
   const [composite, setComposite] = useState<number | null>(null);
   const [paretoCount, setParetoCount] = useState(0);
   const [resistanceCount, setResistanceCount] = useState(0);
@@ -158,6 +165,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     };
   }, [isPlaying, replayEvents, replayIdx, speed]);
 
+  // loadReplay() — referenced only by the (now-removed) IterationStrip
+  // play button. Re-wire when the inline replay control returns.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async function loadReplay() {
     if (!sessionId) return;
     const r = await fetch(`${apiBase}/workbench/sandbox/trace/${sessionId}`);
@@ -169,6 +179,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     setCurrentIter(0);
     setIsPlaying(true);
   }
+  void loadReplay;
 
   async function startSession() {
     setEvents([]);
@@ -270,6 +281,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     );
   }, [events]);
 
+  // iterCompositeMap fed the (now-removed) IterationStrip's per-iter
+  // composite bars. Will reactivate when an inline replay control returns.
   const iterCompositeMap = useMemo(() => {
     const m: Record<number, number> = {};
     for (const e of events) {
@@ -279,6 +292,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     }
     return m;
   }, [events]);
+  void iterCompositeMap;
 
   const currentSmiles = useMemo(() => {
     for (let i = events.length - 1; i >= 0; i--) {
@@ -375,25 +389,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         sessionId={sessionId}
       />
 
-      <IterationStrip
-        totalIters={iters}
-        currentIter={currentIter}
-        iterCompositeMap={iterCompositeMap}
-        isPlaying={isPlaying}
-        onPlayPause={() => {
-          if (!isPlaying && !replayEvents && !isRunning && sessionId) {
-            // No live run, no replay loaded yet — kick off replay from disk
-            loadReplay();
-          } else {
-            setIsPlaying((p) => !p);
-          }
-        }}
-        onPrev={() => setCurrentIter((n) => Math.max(1, n - 1))}
-        onNext={() => setCurrentIter((n) => Math.min(iters, n + 1))}
-        onSeek={(n) => setCurrentIter(n)}
-        speed={speed}
-        onSpeedChange={setSpeed}
-      />
+      {/* IterationStrip moved into a thin hairline below the body bar.
+          Removed second-row chrome per redesign — keep only one navbar. */}
 
       <div className="lys-body">
         <Allotment defaultSizes={[38, 38, 24]}>

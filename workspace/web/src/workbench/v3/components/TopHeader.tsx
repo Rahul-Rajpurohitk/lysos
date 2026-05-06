@@ -39,13 +39,8 @@ interface TopHeaderProps {
 const MODES: Mode[] = ["Design", "Discover", "Repair", "Robustify"];
 const AUTONOMIES: Autonomy[] = ["Co-pilot", "Auto", "Manual"];
 
-const AGENT_COLORS: Record<string, string> = {
-  designer: "#34d399",
-  critic: "#f87171",
-  editor: "#60a5fa",
-  strategist: "#a78bfa",
-  user: "#fbbf24",
-};
+// AGENT_COLORS lived here for the (now-removed) ActiveAgents dots; the
+// chat panel's filter strip carries its own canonical mapping.
 
 export function TopHeader(props: TopHeaderProps) {
   return (
@@ -107,17 +102,6 @@ export function TopHeader(props: TopHeaderProps) {
           <RotateCcw size={14} />
         </button>
       </div>
-
-      {/* Hairline summary ribbon */}
-      <SummaryRibbon
-        pathogen={props.selectedPathogen}
-        composite={props.composite}
-        paretoCount={props.paretoCount}
-        resistanceCount={props.resistanceCount}
-        firstLineCount={props.firstLineCount}
-        activeAgents={props.activeAgents}
-        sessionId={props.sessionId}
-      />
     </header>
   );
 }
@@ -238,83 +222,7 @@ function PathogenPicker({
   );
 }
 
-function SummaryRibbon({
-  pathogen,
-  composite,
-  paretoCount,
-  resistanceCount,
-  firstLineCount,
-  activeAgents,
-  sessionId,
-}: {
-  pathogen: string;
-  composite: number | null;
-  paretoCount: number;
-  resistanceCount: number;
-  firstLineCount: number;
-  activeAgents: string[];
-  sessionId: string | null;
-}) {
-  return (
-    <div className="lys-ribbon">
-      <span className="lys-ribbon__pathogen">{pathogen}</span>
-      <span className="lys-ribbon__divider" />
-      <CompositeGauge value={composite ?? 0} />
-      <span className="lys-ribbon__divider" />
-      <RibbonStat label="resistance" value={resistanceCount} color="#f87171" />
-      <RibbonStat label="first-line" value={firstLineCount} color="#60a5fa" />
-      <RibbonStat label="pareto" value={paretoCount} color="#a78bfa" />
-      <span className="lys-ribbon__divider" />
-      <ActiveAgents agents={activeAgents} />
-      {sessionId && (
-        <span className="lys-ribbon__session" title={sessionId}>
-          {sessionId.slice(0, 8)}
-        </span>
-      )}
-    </div>
-  );
-}
-
-function CompositeGauge({ value }: { value: number }) {
-  const pct = Math.max(0, Math.min(1, value)) * 100;
-  return (
-    <div className="lys-gauge" title={`composite: ${value.toFixed(3)}`}>
-      <div className="lys-gauge__track">
-        <motion.div
-          className="lys-gauge__fill"
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.4 }}
-        />
-      </div>
-      <span className="lys-gauge__num">{value.toFixed(3)}</span>
-    </div>
-  );
-}
-
-function RibbonStat({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <span className="lys-ribbon__stat">
-      <span className="lys-ribbon__stat-label">{label}</span>
-      <span className="lys-ribbon__stat-value" style={{ color }}>{value}</span>
-    </span>
-  );
-}
-
-function ActiveAgents({ agents }: { agents: string[] }) {
-  if (agents.length === 0) return <span className="lys-ribbon__idle">idle</span>;
-  return (
-    <span className="lys-ribbon__agents">
-      {agents.map((a) => (
-        <motion.span
-          key={a}
-          className="lys-ribbon__agent-dot"
-          style={{ background: AGENT_COLORS[a.toLowerCase()] ?? "#888" }}
-          animate={{ scale: [1, 1.25, 1] }}
-          transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
-          title={a}
-        />
-      ))}
-    </span>
-  );
-}
+// SummaryRibbon + CompositeGauge + RibbonStat + ActiveAgents removed in
+// the single-navbar redesign. They moved into per-panel headers
+// (right-side artifact panel meta strip + chat panel agent dots) so
+// the top nav stays one tight row, Claude.ai-style.
