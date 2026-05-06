@@ -131,7 +131,15 @@ export function PlaygroundGroup(p: Props) {
       display: "flex",
       flexDirection: "column",
       pointerEvents: "auto",
-      boxShadow: "0 6px 18px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04)",
+      boxShadow: dragging
+        ? "0 18px 36px rgba(15,23,42,0.18), 0 4px 8px rgba(15,23,42,0.08)"
+        : "0 6px 18px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04)",
+      // Force a fresh stacking context so internal cards/popovers cannot
+      // escape the group's z bracket and bleed into other overlapping groups.
+      isolation: "isolate",
+      contain: "layout paint",
+      transform: dragging ? "scale(1.005)" : "none",
+      transition: dragging ? "transform 80ms ease, box-shadow 80ms ease" : "transform 120ms ease, box-shadow 120ms ease",
     }}
     onMouseDown={(e) => { e.stopPropagation(); p.onFocus?.(); }}
     >
@@ -205,7 +213,9 @@ export function PlaygroundGroup(p: Props) {
                 overflow: "hidden",
                 display: "flex",
                 flexDirection: "column",
-                minHeight: 200,
+                minHeight: 240,
+                maxHeight: 480,  // cap individual card height so 7-card groups stay scrollable
+                isolation: "isolate",  // each card has its own stacking context
               }}
             >
               <div style={{

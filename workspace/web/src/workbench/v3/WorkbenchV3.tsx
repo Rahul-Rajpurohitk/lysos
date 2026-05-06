@@ -622,6 +622,27 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     return best?.scores ?? null;
   }, [events]);
 
+  // ── AUTO-LOAD DEFAULT CANDIDATE — when a session opens with no candidate,
+  // seed it with Benzene so every card has data immediately. Avoids the
+  // "everything looks empty / broken" first-impression. Once user picks a
+  // real scaffold or runs /design, this effect short-circuits because
+  // currentSmiles becomes non-null.
+  const autoLoadedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (!activeChatId || currentSmiles) return;
+    if (autoLoadedFor.current === activeChatId) return;
+    autoLoadedFor.current = activeChatId;
+    // Stagger the auto-load slightly so the WS session is ready first
+    const t = setTimeout(() => {
+      loadSmilesIntoCanvas("c1ccccc1", {
+        createdBy: "system",
+        parentId: null,
+        logLabel: "[default · benzene]",
+      });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [activeChatId, currentSmiles, loadSmilesIntoCanvas]);
+
   // ── AUTO-SCORE — when currentSmiles changes and there's no score for it,
   // fire /score asynchronously + inject the result into the events stream.
   // This makes the Scoring container's 4 cards (Radar, Breakdown, Toxicity,

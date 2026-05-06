@@ -62,27 +62,35 @@ export function ScaffoldPickerCard({ apiBase, onLoadSmiles }: Props) {
       <div style={{
         padding: "5px 10px",
         borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-        display: "flex", alignItems: "center", gap: 6,
+        display: "flex", alignItems: "center", gap: 6, flexWrap: "nowrap",
         fontSize: 9.5,
         fontFamily: "var(--lys-font-mono)",
         color: "var(--lys-text-faint)",
         letterSpacing: "0.06em",
         textTransform: "uppercase",
+        minHeight: 26,
       }}>
-        <Sparkles size={11} />
-        <span>start from · {filtered.length}/{scaffolds.length}</span>
-        <span style={{ flex: 1 }} />
-        <Search size={10} />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="search…"
-          style={{
-            border: 0, background: "transparent", outline: 0,
-            font: "inherit", textTransform: "none", letterSpacing: 0,
-            color: "var(--lys-text)", width: 90,
-          }}
-        />
+        <Sparkles size={11} style={{ flexShrink: 0 }} />
+        <span style={{ flexShrink: 0 }}>{filtered.length}/{scaffolds.length}</span>
+        <div style={{
+          flex: 1, display: "flex", alignItems: "center", gap: 4,
+          padding: "2px 6px", borderRadius: 4,
+          background: "var(--lys-bg-3, rgba(0,0,0,0.03))",
+          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+          minWidth: 0,
+        }}>
+          <Search size={10} style={{ flexShrink: 0, color: "var(--lys-text-faint)" }} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="search scaffolds…"
+            style={{
+              border: 0, background: "transparent", outline: 0,
+              font: "inherit", textTransform: "none", letterSpacing: 0,
+              color: "var(--lys-text)", flex: 1, minWidth: 0,
+            }}
+          />
+        </div>
       </div>
       <div style={{ flex: 1, overflow: "auto", padding: 6 }}>
         {loading && <div style={{ color: "var(--lys-text-faint)", fontSize: 10.5, padding: 8 }}>loading…</div>}
