@@ -18,14 +18,12 @@ import { AgentFilterStrip } from "./AgentFilterStrip";
 import { MessageRow, ChatMsg } from "./MessageRow";
 import { IterationDivider } from "./IterationDivider";
 import { TypingIndicator } from "./TypingIndicator";
-import { MultiAgentColumns } from "../MultiAgentColumns";
 
 interface ChatPanelProps {
   events: ChatMsg[];
   isRunning: boolean;
   showOnboarding: React.ReactNode;
   composer: React.ReactNode;
-  modeToggle: React.ReactNode;
   totalMsgs: number;
   composite?: number | null;
   currentIter?: number;
@@ -34,8 +32,6 @@ interface ChatPanelProps {
   onLoadSmiles: (smi: string) => void;
   subAgents: string[];
   onToggleSubAgent: (id: string) => void;
-  /** "Stream" = single-column timeline; "Columns" = per-agent columns */
-  chatMode?: "Stream" | "Columns";
 }
 
 export function ChatPanel(p: ChatPanelProps) {
@@ -156,7 +152,6 @@ export function ChatPanel(p: ChatPanelProps) {
         )}
         <span style={{ flex: 1 }} />
         {p.replayBadge}
-        {p.modeToggle}
       </div>
 
       <AgentFilterStrip
@@ -176,23 +171,16 @@ export function ChatPanel(p: ChatPanelProps) {
           flex: 1,
           overflowY: "auto",
           position: "relative",
-          padding: p.chatMode === "Columns" ? "8px 8px" : "12px 16px",
+          padding: "12px 16px",
           display: "flex",
           flexDirection: "column",
-          gap: p.chatMode === "Columns" ? 0 : 12,
+          gap: 12,
           scrollBehavior: "smooth",
         }}
       >
         {p.totalMsgs === 0 && p.showOnboarding}
 
-        {p.chatMode === "Columns" ? (
-          // Multi-agent column view — one column per agent, parallel debate.
-          <MultiAgentColumns
-            events={p.events as unknown as any[]}
-            agents={["designer", "critic", "editor", "strategist"]}
-          />
-        ) : (
-          filtered.map((row, i) => {
+        {filtered.map((row, i) => {
             if (row.kind === "iter_divider") {
               return (
                 <IterationDivider
@@ -212,16 +200,15 @@ export function ChatPanel(p: ChatPanelProps) {
                 onLoadSmiles={p.onLoadSmiles}
               />
             );
-          })
-        )}
+          })}
 
-        {p.isRunning && lastAgent && p.chatMode !== "Columns" && (
+        {p.isRunning && lastAgent && (
           <AnimatePresence>
             <TypingIndicator agent={lastAgent} label={`${lastAgent} is reasoning…`} />
           </AnimatePresence>
         )}
 
-        {!autoScroll && p.chatMode !== "Columns" && (
+        {!autoScroll && (
           <button
             onClick={jumpToLatest}
             style={{

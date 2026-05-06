@@ -84,7 +84,6 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [isRunning, setIsRunning] = useState(false);
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [constraints, setConstraints] = useState<Constraint[]>([]);
-  const [chatMode, setChatMode] = useState<"Stream" | "Columns">("Stream");
   const [activeTab, setActiveTab] = useState<RightTab>("Radar");
   const [mechanismOpen, setMechanismOpen] = useState(false);
   const [activeSubAgents, setActiveSubAgents] = useState<string[]>([]);
@@ -400,7 +399,6 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               events={events as any}
               isRunning={isRunning}
               totalMsgs={messages.length}
-              chatMode={chatMode}
               showOnboarding={
                 <OnboardingHero
                   apiBase={apiBase}
@@ -424,22 +422,6 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     if (!isRunning) startSession();
                   }}
                 />
-              }
-              modeToggle={
-                <div className="lys-chat__mode-toggle">
-                  <button
-                    className={chatMode === "Stream" ? "active" : ""}
-                    onClick={() => setChatMode("Stream")}
-                  >
-                    Stream
-                  </button>
-                  <button
-                    className={chatMode === "Columns" ? "active" : ""}
-                    onClick={() => setChatMode("Columns")}
-                  >
-                    Columns
-                  </button>
-                </div>
               }
               composer={
                 <TightComposer
