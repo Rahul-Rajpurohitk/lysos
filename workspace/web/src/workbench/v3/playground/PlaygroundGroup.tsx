@@ -119,14 +119,32 @@ export function PlaygroundGroup(p: Props) {
           y: snap(start.current.layout.y + dy),
         });
       } else if (resizing) {
-        p.onChange({
-          ...start.current.layout,
-          w: Math.max(280, snap(start.current.layout.w + dx)),
-          h: Math.max(180, snap(start.current.layout.h + dy)),
-          // User explicitly resized → opt out of auto-fit so future card
-          // collapses/expands don't override their chosen height.
-          autoFit: false,
-        });
+        const proposedW = Math.max(280, snap(start.current.layout.w + dx));
+        const proposedH = Math.max(180, snap(start.current.layout.h + dy));
+        const wasAutoFit = start.current.layout.autoFit !== false;
+        // In autoFit mode, the rendered height = naturalH. Letting the user
+        // drag h LARGER than naturalH would just create empty whitespace
+        // below the cards (no content to fill it). So:
+        //   - drag h SMALLER than naturalH → autoFit:false, engage internal
+        //     scroll on the cards grid
+        //   - drag h LARGER than naturalH (or equal) → keep autoFit:true,
+        //     ignore the height change (only width updates)
+        if (wasAutoFit && proposedH >= naturalH - 4) {
+          // Width-only resize, height stays bound by naturalH
+          p.onChange({
+            ...start.current.layout,
+            w: proposedW,
+            // keep current h (will be ignored anyway by effectiveH while autoFit)
+            autoFit: true,
+          });
+        } else {
+          p.onChange({
+            ...start.current.layout,
+            w: proposedW,
+            h: proposedH,
+            autoFit: false,
+          });
+        }
       }
     };
     const onUp = () => { setDragging(false); setResizing(false); start.current = null; };

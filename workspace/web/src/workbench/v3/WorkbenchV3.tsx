@@ -53,6 +53,10 @@ import { SessionTraceCard } from "./playground/SessionTraceCard";
 import { AgentActionLogCard } from "./playground/AgentActionLogCard";
 import { AgentMetricsCard } from "./playground/AgentMetricsCard";
 import { ChemistryNavbar } from "./playground/ChemistryNavbar";
+import { KnowledgeNavbar } from "./playground/KnowledgeNavbar";
+import { ScoringNavbar } from "./playground/ScoringNavbar";
+import { AgentsNavbar } from "./playground/AgentsNavbar";
+import { LiveNavbar } from "./playground/LiveNavbar";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -118,6 +122,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // SMARTS match highlight — atoms returned by SMARTSMatchCard, shown as
   // green halo overlay in the 2D builder
   const [smartsHighlight, setSmartsHighlight] = useState<number[] | null>(null);
+  // Filter state for navbar buttons across containers
+  const [drugClassFilter, setDrugClassFilter] = useState<string>("");
+  const [scoringPreset, setScoringPreset] = useState<"default" | "mic" | "admet" | "novel">("default");
+  const [scoringEmphasis, setScoringEmphasis] = useState<"radar" | "bars" | "tox" | "sim">("radar");
+  const [agentFilter, setAgentFilter] = useState<string>("");
+  const [actionFilter, setActionFilter] = useState<string>("");
+  const [eventKindFilter, setEventKindFilter] = useState<string>("");
+  void drugClassFilter; void scoringPreset; void scoringEmphasis; void agentFilter; void actionFilter; void eventKindFilter;
   const [mode, setMode] = useState<"Design" | "Discover" | "Repair" | "Robustify">("Design");
   const [autonomy, setAutonomy] = useState<"Co-pilot" | "Auto" | "Manual">("Co-pilot");
   const [iters, setIters] = useState(4);
@@ -1205,6 +1217,13 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "scoring",
                   category: "Scoring",
                   cards: [
+                    { id: "scoring-nav", title: "", slot: "nav", body:
+                      <ScoringNavbar
+                        preset={scoringPreset}
+                        onPresetChange={setScoringPreset}
+                        emphasis={scoringEmphasis}
+                        onEmphasisChange={setScoringEmphasis}
+                      /> },
                     { id: "radar", title: "Reward radar · live", size: 2, body:
                       <RewardRadarWindow
                         current={lastScores ?? {}}
@@ -1254,6 +1273,13 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "agents",
                   category: "Agents",
                   cards: [
+                    { id: "agents-nav", title: "", slot: "nav", body:
+                      <AgentsNavbar
+                        agentFilter={agentFilter}
+                        onAgentChange={setAgentFilter}
+                        actionFilter={actionFilter}
+                        onActionChange={setActionFilter}
+                      /> },
                     { id: "trace", title: "Reasoning trace · 4 specialists", size: 2, body:
                       <AgentReasoningTraceWindow events={events as any[]} /> },
                     { id: "roster", title: "Agent roster · live state", size: 2, body:
@@ -1268,6 +1294,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "live",
                   category: "Live",
                   cards: [
+                    { id: "live-nav", title: "", slot: "nav", body:
+                      <LiveNavbar
+                        eventKindFilter={eventKindFilter}
+                        onEventKindChange={setEventKindFilter}
+                      /> },
                     { id: "status", title: "System health · WS · DB · jobs", size: 2, body:
                       <ConnectionStatusCard
                         apiBase={apiBase}
@@ -1297,6 +1328,13 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "knowledge",
                   category: "Knowledge",
                   cards: [
+                    { id: "knowledge-nav", title: "", slot: "nav", body:
+                      <KnowledgeNavbar
+                        pathogen={selectedPathogen}
+                        onPathogenChange={setSelectedPathogen}
+                        drugClassFilter={drugClassFilter}
+                        onDrugClassChange={setDrugClassFilter}
+                      /> },
                     { id: "pathogen-intel", title: "Pathogen intel · profile", body:
                       <PathogenIntelCard apiBase={apiBase} pathogen={selectedPathogen} /> },
                     { id: "antibiotic-ref", title: "Antibiotic reference · canonical corpus", size: 2, body:
