@@ -435,6 +435,57 @@ class BranchCommand(Command):
         )
 
 
+class CompareCommand(Command):
+    """W6 — score N SMILES side-by-side."""
+    def __init__(self):
+        super().__init__(
+            name="compare",
+            description="Score N candidates side-by-side",
+            type=CommandType.LOCAL,
+            argument_hint="<smi1> <smi2> [smi3 …]",
+            aliases=["cmp"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        # Accept space-, comma-, or newline-separated SMILES
+        import re
+        toks = [t.strip() for t in re.split(r"[\s,]+", args.strip()) if t.strip()]
+        if len(toks) < 2:
+            return CommandResult(error="Need at least 2 SMILES. Try `/compare CCO O=C(O)C`.")
+        if len(toks) > 8:
+            return CommandResult(error=f"Max 8 candidates per /compare (got {len(toks)}).")
+        try:
+            from api.workbench import workbench_compare, CompareRequest
+        except ImportError as exc:
+            return CommandResult(error=f"compare route not available: {exc}")
+        try:
+            resp = await workbench_compare(CompareRequest(
+                smiles=toks,
+                target_pathogen=ctx.active_target or "MRSA",
+            ))
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"compare failed: {exc}")
+        ranked = [e for e in resp.entries if not e.error]
+        if ranked:
+            top = max(ranked, key=lambda e: e.composite)
+            line = (
+                f"compared {len(resp.entries)} candidates · best: "
+                f"`{top.smiles}` (composite {top.composite:.3f}) · "
+                f"{resp.elapsed_ms}ms"
+            )
+        else:
+            line = f"compared {len(resp.entries)} candidates · all errored · {resp.elapsed_ms}ms"
+        return CommandResult(
+            output=line,
+            data={
+                "target_pathogen": resp.target_pathogen,
+                "entries": [e.model_dump() for e in resp.entries],
+                "component_winners": resp.component_winners,
+                "elapsed_ms": resp.elapsed_ms,
+            },
+        )
+
+
 class StressCommand(Command):
     """W5 — adversarial Critic on the active candidate."""
     def __init__(self):
@@ -817,6 +868,7 @@ def create_default_registry() -> CommandRegistry:
         ResistanceCommand(),
         StressCommand(),
         SARCommand(),
+        CompareCommand(),
         RunCommand(),
         BranchCommand(),
         SetTargetCommand(),

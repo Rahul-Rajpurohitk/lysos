@@ -456,6 +456,91 @@ async def workbench_design(req: DesignRequest) -> DesignResponse:
 
 
 # ---------------------------------------------------------------------------
+# W6 — Compare N candidates side-by-side.
+#
+# Scores each candidate on the same 12-axis stack and returns the
+# breakdowns + a winner-by-component matrix. Frontend renders as a
+# comparison table with per-component bars.
+# ---------------------------------------------------------------------------
+
+
+class CompareRequest(BaseModel):
+    smiles: list[str] = Field(..., min_length=2, max_length=8)
+    target_pathogen: str = "MRSA"
+
+
+class CompareEntry(BaseModel):
+    smiles: str
+    composite: float = 0.0
+    weakest: str = ""
+    strongest: str = ""
+    components: list[dict] = []
+    rank: int = 0
+    error: str = ""
+
+
+class CompareResponse(BaseModel):
+    target_pathogen: str
+    entries: list[CompareEntry]
+    component_winners: dict[str, str]   # component_name -> smiles of best entry
+    elapsed_ms: int
+
+
+@router.post("/compare", response_model=CompareResponse)
+async def workbench_compare(req: CompareRequest) -> CompareResponse:
+    import time as _t
+    t0 = _t.perf_counter()
+
+    try:
+        from tools.scoring.score_molecule import score_molecule
+    except ImportError as exc:
+        raise HTTPException(503, f"scoring not available: {exc}")
+
+    entries: list[CompareEntry] = []
+    for smi in req.smiles:
+        try:
+            br = score_molecule(smiles=smi, target_pathogen=req.target_pathogen)
+            d = br.model_dump()
+            entries.append(CompareEntry(
+                smiles=smi,
+                composite=d["composite"],
+                weakest=d.get("weakest", ""),
+                strongest=d.get("strongest", ""),
+                components=d.get("components", []),
+            ))
+        except Exception as exc:  # noqa: BLE001
+            entries.append(CompareEntry(smiles=smi, error=str(exc)[:200]))
+
+    # Rank by composite (errored entries get rank -1)
+    valid = [e for e in entries if not e.error]
+    valid.sort(key=lambda e: -e.composite)
+    for i, e in enumerate(valid, 1):
+        e.rank = i
+
+    # Component-wise winners
+    winners: dict[str, str] = {}
+    if valid:
+        all_components = {c["name"] for e in valid for c in e.components}
+        for comp_name in all_components:
+            best_e = None
+            best_v = -1.0
+            for e in valid:
+                v = next((c["value"] for c in e.components if c["name"] == comp_name), -1.0)
+                if v > best_v:
+                    best_v = v
+                    best_e = e
+            if best_e:
+                winners[comp_name] = best_e.smiles
+
+    return CompareResponse(
+        target_pathogen=req.target_pathogen,
+        entries=entries,
+        component_winners=winners,
+        elapsed_ms=int((_t.perf_counter() - t0) * 1000),
+    )
+
+
+# ---------------------------------------------------------------------------
 # W5 — Stress-test (adversarial Critic + structured failure modes).
 #
 # Sends the candidate to a Gemini-Pro Critic agent with an adversarial

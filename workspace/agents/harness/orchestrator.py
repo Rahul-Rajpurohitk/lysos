@@ -177,6 +177,8 @@ class Harness:
                 card_kind = "sar"
             elif head in ("stress", "redteam", "rt") and result.data and result.data.get("attacks"):
                 card_kind = "stress"
+            elif head in ("compare", "cmp") and result.data and result.data.get("entries"):
+                card_kind = "compare"
 
             return HarnessResponse(
                 session_id=session.session_id,
