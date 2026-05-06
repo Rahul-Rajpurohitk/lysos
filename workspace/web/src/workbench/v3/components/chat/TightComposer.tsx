@@ -32,7 +32,17 @@ interface TightComposerProps {
   onIntervene: (kind: "constraint" | "directive", payload: any) => void;
   constraints: Constraint[];
   onRemoveConstraint: (id: string) => void;
+  /** When true, render a starter-prompt chip strip above the input.
+   *  Auto-hides once the user has sent the first message. */
+  chatEmpty?: boolean;
 }
+
+const STARTER_PROMPTS: { label: string; prompt: string }[] = [
+  { label: "/design β-lactam for MRSA", prompt: "/design β-lactam for MRSA that escapes mecA" },
+  { label: "/score a candidate",        prompt: "/score CCO" },
+  { label: "/explain a target",         prompt: "/explain mecA / PBP2a" },
+  { label: "/spectrum macrolide",       prompt: "/spectrum macrolide for MRSA + VRE" },
+];
 
 export function TightComposer(p: TightComposerProps) {
   const [text, setText] = useState("");
@@ -161,6 +171,50 @@ export function TightComposer(p: TightComposerProps) {
                 <X size={11} />
               </button>
             </span>
+          ))}
+        </div>
+      )}
+
+      {/* Starter-prompt chip strip — only on first paint of an empty chat.
+          Each chip pre-fills the textarea so the user can edit before sending.
+          This is the discovery surface for the 17-command palette. */}
+      {p.chatEmpty && !p.isRunning && p.constraints.length === 0 && (
+        <div style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 5,
+          marginBottom: 6,
+        }}>
+          {STARTER_PROMPTS.map((s) => (
+            <button
+              key={s.label}
+              type="button"
+              onClick={() => {
+                setText(s.prompt);
+                requestAnimationFrame(() => taRef.current?.focus());
+              }}
+              style={{
+                padding: "3px 9px",
+                fontSize: 11,
+                fontFamily: "var(--lys-font-mono)",
+                color: "var(--lys-text-dim)",
+                background: "var(--lys-bg-hover, rgba(0,0,0,0.04))",
+                border: 0,
+                borderRadius: 999,
+                cursor: "pointer",
+                transition: "background 0.12s, color 0.12s",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "rgba(16, 185, 129, 0.10)";
+                e.currentTarget.style.color = "var(--lys-accent)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "var(--lys-bg-hover, rgba(0,0,0,0.04))";
+                e.currentTarget.style.color = "var(--lys-text-dim)";
+              }}
+            >
+              {s.label}
+            </button>
           ))}
         </div>
       )}

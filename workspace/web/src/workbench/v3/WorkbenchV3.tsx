@@ -404,7 +404,25 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               showOnboarding={
                 <OnboardingHero
                   apiBase={apiBase}
-                  onPickPathogen={(code) => setSelectedPathogen(code)}
+                  onPickPathogen={(code) => {
+                    // Pick-pathogen → first-design loop:
+                    //  1. set the global pathogen target (drives 3D viewer)
+                    //  2. inject a synthetic user message ("/design <code>")
+                    //  3. spin the agents — Designer reads the slash command
+                    //     and produces the first candidate, Critic chimes in.
+                    setSelectedPathogen(code);
+                    const tag = code.toLowerCase();
+                    setEvents((p) => [
+                      ...p,
+                      {
+                        type: "agent_message",
+                        ts: Date.now() / 1000,
+                        agent: "user",
+                        content: `/design ${tag}`,
+                      } as any,
+                    ]);
+                    if (!isRunning) startSession();
+                  }}
                 />
               }
               modeToggle={
@@ -426,6 +444,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               composer={
                 <TightComposer
                   isRunning={isRunning}
+                  chatEmpty={messages.length === 0}
                   onSend={(t: string) => {
                     setEvents((p) => [...p, { type: "agent_message", ts: Date.now() / 1000, agent: "user", content: t }]);
                     if (!isRunning) startSession();
@@ -485,6 +504,31 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   apiBase={apiBase}
                   smiles={currentSmiles}
                   pathogen={selectedPathogen}
+                  onMoleculeEdit={(newSmiles, op) => {
+                    // Drag-edit chemistry → bubble the new SMILES into the
+                    // chat as a candidate event. Agents read the candidate
+                    // stream and debate the user's edit.
+                    const opLabel =
+                      op.kind === "swap" ? `→${op.element}`
+                      : op.kind === "methyl" ? "+CH₃"
+                      : "✂ bond";
+                    setEvents((p) => [
+                      ...p,
+                      {
+                        type: "agent_message",
+                        ts: Date.now() / 1000,
+                        agent: "user",
+                        content: `[edit ${opLabel}] ${newSmiles}`,
+                      } as any,
+                      {
+                        type: "candidate_added",
+                        ts: Date.now() / 1000,
+                        smiles: newSmiles,
+                        composite: 0,
+                        agent: "user",
+                      } as any,
+                    ]);
+                  }}
                 />
               </Allotment.Pane>
               <Allotment.Pane minSize={260} preferredSize={300}>

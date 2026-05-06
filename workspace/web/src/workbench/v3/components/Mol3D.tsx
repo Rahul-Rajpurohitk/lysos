@@ -8,7 +8,26 @@ interface Mol3DProps {
   apiBase: string;
   smiles: string | null;
   pathogen: string;
+  /** When the user clicks an atom on the ligand AND has an edit-op armed,
+   *  Mol3D POSTs to /workbench/molecule/edit and bubbles the new canonical
+   *  SMILES upward via this callback. WorkbenchV3 then injects it as a
+   *  `candidate_added` event so the agents debate the user's edit.  */
+  onMoleculeEdit?: (newSmiles: string, op: EditOp) => void;
 }
+
+type EditOp =
+  | { kind: "swap"; element: string }
+  | { kind: "methyl" }
+  | { kind: "break" };
+
+const ARMED_OPS: { id: string; label: string; op: EditOp }[] = [
+  { id: "swap-N",  label: "→N",   op: { kind: "swap", element: "N" } },
+  { id: "swap-O",  label: "→O",   op: { kind: "swap", element: "O" } },
+  { id: "swap-F",  label: "→F",   op: { kind: "swap", element: "F" } },
+  { id: "swap-Cl", label: "→Cl",  op: { kind: "swap", element: "Cl" } },
+  { id: "methyl",  label: "+CH₃", op: { kind: "methyl" } },
+  { id: "break",   label: "✂ bond", op: { kind: "break" } },
+];
 
 type Representation = "Cartoon" | "Surface" | "Sticks" | "Spheres";
 
@@ -24,7 +43,7 @@ const PATHOGEN_PDB: Record<string, string> = {
   NGono: "3FIH",
 };
 
-export function Mol3D({ apiBase, smiles, pathogen }: Mol3DProps) {
+export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit }: Mol3DProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const stageObj = useRef<any>(null);
   const proteinComp = useRef<any>(null);
@@ -36,8 +55,11 @@ export function Mol3D({ apiBase, smiles, pathogen }: Mol3DProps) {
   const [spin, setSpin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pdb, setPdb] = useState<string>(PATHOGEN_PDB[pathogen] ?? "5DPX");
+  const [armedOpId, setArmedOpId] = useState<string | null>(null);
+  const armedOpRef = useRef<EditOp | null>(null);
+  const [editStatus, setEditStatus] = useState<string | null>(null);
 
-  // Initialize stage
+  // Initialize stage + wire pick handler for drag-edit chemistry.
   useEffect(() => {
     if (!stageRef.current) return;
     let stage: any = null;
@@ -50,6 +72,23 @@ export function Mol3D({ apiBase, smiles, pathogen }: Mol3DProps) {
         });
         stageObj.current = stage;
         stage.setSpin(spin);
+
+        // Click-to-edit: when an op is armed AND the user clicks an atom on
+        // the ligand component, POST /workbench/molecule/edit and bubble the
+        // new canonical SMILES up. NGL's PickingProxy resolves click → atom.
+        stage.signals.clicked.add((pick: any) => {
+          const op = armedOpRef.current;
+          if (!op || !smilesRef.current) return;
+          // Only accept clicks on the ligand component (not the protein)
+          if (!pick || !pick.atom || !ligandComp.current) return;
+          if (pick.component !== ligandComp.current) {
+            setEditStatus("click on the ligand atoms only");
+            setTimeout(() => setEditStatus(null), 1500);
+            return;
+          }
+          const atomIdx = pick.atom.index;
+          handleAtomEdit(op, atomIdx, pick.bond?.index);
+        });
       } catch (e: any) {
         setError(`NGL init failed: ${e.message}`);
       }
@@ -58,6 +97,64 @@ export function Mol3D({ apiBase, smiles, pathogen }: Mol3DProps) {
       if (stage) stage.dispose();
     };
   }, []);
+
+  // Keep a ref to current SMILES so the click handler (closed over at stage
+  // init time) always reads the latest value.
+  const smilesRef = useRef<string | null>(smiles);
+  useEffect(() => { smilesRef.current = smiles; }, [smiles]);
+
+  // Apply an edit op to the ligand. POSTs to the backend RDKit editor.
+  async function handleAtomEdit(op: EditOp, atomIdx: number, bondIdx?: number) {
+    const cur = smilesRef.current;
+    if (!cur) return;
+    setEditStatus(`editing: ${describeOp(op)} on atom ${atomIdx}…`);
+    try {
+      const body: any = { smiles: cur };
+      if (op.kind === "swap") {
+        body.op = "swap_element";
+        body.atom_index = atomIdx;
+        body.new_element = op.element;
+      } else if (op.kind === "methyl") {
+        body.op = "add_methyl_at";
+        body.atom_index = atomIdx;
+      } else if (op.kind === "break") {
+        if (bondIdx == null) {
+          setEditStatus("click on a bond, not an atom, to break");
+          setTimeout(() => setEditStatus(null), 1500);
+          return;
+        }
+        body.op = "break_bond";
+        body.bond_index = bondIdx;
+      }
+      const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        setEditStatus(`reject: ${err.slice(0, 60)}`);
+        setTimeout(() => setEditStatus(null), 2200);
+        return;
+      }
+      const d = await r.json();
+      setEditStatus(`✓ ${cur} → ${d.smiles}`);
+      setTimeout(() => setEditStatus(null), 2000);
+      onMoleculeEdit?.(d.smiles, op);
+      // Disarm after a successful edit — user re-arms for the next edit.
+      setArmedOpId(null);
+      armedOpRef.current = null;
+    } catch (e: any) {
+      setEditStatus(`error: ${e.message}`);
+      setTimeout(() => setEditStatus(null), 2000);
+    }
+  }
+
+  function describeOp(op: EditOp): string {
+    if (op.kind === "swap") return `→${op.element}`;
+    if (op.kind === "methyl") return "+CH₃";
+    return "✂ bond";
+  }
 
   // Update PDB when pathogen changes
   useEffect(() => {
@@ -171,6 +268,58 @@ export function Mol3D({ apiBase, smiles, pathogen }: Mol3DProps) {
           {smiles ?? "—"}
         </span>
         <div style={{ flex: 1 }} />
+
+        {/* Drag-edit chemistry palette: arm an op then click a ligand atom.
+            Greyed out until a SMILES is loaded. */}
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          marginRight: 6,
+          padding: "0 4px",
+          opacity: smiles ? 1 : 0.45,
+        }} aria-disabled={!smiles}>
+          {ARMED_OPS.map((o) => {
+            const active = armedOpId === o.id;
+            return (
+              <button
+                key={o.id}
+                disabled={!smiles}
+                onClick={() => {
+                  if (active) {
+                    setArmedOpId(null);
+                    armedOpRef.current = null;
+                  } else {
+                    setArmedOpId(o.id);
+                    armedOpRef.current = o.op;
+                    setEditStatus(`armed: ${o.label}. Click a ligand atom.`);
+                  }
+                }}
+                title={`${o.label} — click to arm, then click a ligand atom`}
+                style={{
+                  border: 0,
+                  background: active ? "var(--lys-accent)" : "transparent",
+                  color: active ? "white" : "var(--lys-text-dim)",
+                  fontFamily: "var(--lys-font-mono)",
+                  fontSize: 10.5,
+                  padding: "3px 6px",
+                  borderRadius: 5,
+                  cursor: smiles ? "pointer" : "not-allowed",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+                onMouseEnter={(e) => {
+                  if (!active && smiles) e.currentTarget.style.background = "var(--lys-bg-hover, rgba(0,0,0,0.05))";
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) e.currentTarget.style.background = "transparent";
+                }}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+
         <RepSelect value={representation} onChange={setRepresentation} />
         <ToggleBtn icon={<Grid3x3 size={11} />} label="Wireframe" active={wireframe} onClick={() => setWireframe((w) => !w)} />
         <ToggleBtn icon={pocketOnly ? <Eye size={11} /> : <EyeOff size={11} />} label="Pocket" active={pocketOnly} onClick={() => setPocketOnly((p) => !p)} />
@@ -184,6 +333,7 @@ export function Mol3D({ apiBase, smiles, pathogen }: Mol3DProps) {
         minHeight: 200,
         position: "relative",
         background: "var(--lys-bg-2)",
+        cursor: armedOpId ? "crosshair" : "default",
       }}>
         {error && (
           <div style={{
@@ -196,6 +346,27 @@ export function Mol3D({ apiBase, smiles, pathogen }: Mol3DProps) {
             textAlign: "center",
           }}>
             {error}
+          </div>
+        )}
+        {editStatus && (
+          <div style={{
+            position: "absolute",
+            bottom: 10,
+            left: "50%",
+            transform: "translateX(-50%)",
+            padding: "4px 10px",
+            background: "rgba(15, 23, 42, 0.88)",
+            color: "white",
+            fontSize: 11,
+            fontFamily: "var(--lys-font-mono)",
+            borderRadius: 6,
+            pointerEvents: "none",
+            maxWidth: "90%",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}>
+            {editStatus}
           </div>
         )}
       </div>
