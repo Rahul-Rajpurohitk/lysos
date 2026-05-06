@@ -173,6 +173,8 @@ class Harness:
                 card_kind = "design_session"
             elif head == "explain" and result.data and result.data.get("session_id"):
                 card_kind = "explain_session"
+            elif head in ("sar", "expand") and result.data and result.data.get("children"):
+                card_kind = "sar"
 
             return HarnessResponse(
                 session_id=session.session_id,

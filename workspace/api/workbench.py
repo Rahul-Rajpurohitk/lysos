@@ -456,6 +456,204 @@ async def workbench_design(req: DesignRequest) -> DesignResponse:
 
 
 # ---------------------------------------------------------------------------
+# W3 — SAR exploration (parent SMILES → k mutants + score deltas).
+#
+# Generates structurally-related variants via RDKit transforms, scores each
+# with the same 12-axis reward stack as W2, computes delta vs parent.
+# Frontend renders as a tree card with click-to-load semantics.
+#
+# Per SAAS_HARNESS §6 W3: "Designer mutates, Editor validates, Critic
+# challenges drift." Phase-1 ships the deterministic substrate (transforms +
+# scoring); the agent debate layer can wrap this later by routing each
+# accepted child back through /design.
+# ---------------------------------------------------------------------------
+
+
+class SARExpandRequest(BaseModel):
+    parent_smiles: str = Field(..., description="Starting candidate SMILES")
+    k: int = Field(5, ge=1, le=20, description="Number of mutant children to generate")
+    target_pathogen: str = "MRSA"
+    ops: list[str] = Field(
+        default_factory=lambda: [
+            "swap_N", "swap_O", "swap_F", "add_methyl",
+            "add_hydroxyl", "add_fluorine_aromatic", "add_chlorine_aromatic",
+        ],
+        description="Allowed transform ops (cycled for k mutants)",
+    )
+
+
+class SARChild(BaseModel):
+    smiles: str
+    op: str
+    op_label: str               # human-readable e.g. "C→N at idx 4"
+    composite: float
+    delta_vs_parent: float      # composite - parent_composite
+    weakest: str = ""
+    strongest: str = ""
+    components: list[dict] = []
+    error: str = ""
+
+
+class SARExpandResponse(BaseModel):
+    parent: dict                # full RewardBreakdown
+    children: list[SARChild]
+    n_proposed: int             # how many ops we tried (some may have failed)
+    n_accepted: int             # how many produced a valid scored mutant
+    elapsed_ms: int
+
+
+def _apply_transform(smiles: str, op: str, atom_idx: int) -> tuple[str, str]:
+    """Try one structural mutation. Returns (new_smiles, label) or raises."""
+    from rdkit import Chem
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError("unparseable SMILES")
+    rw = Chem.RWMol(mol)
+    n = rw.GetNumAtoms()
+    if atom_idx < 0 or atom_idx >= n:
+        raise ValueError("atom_idx out of range")
+    atom = rw.GetAtomWithIdx(atom_idx)
+    elt = atom.GetSymbol()
+
+    label = ""
+    if op == "swap_N":
+        if elt == "N":
+            raise ValueError("already N")
+        atom.SetAtomicNum(7)
+        label = f"{elt}→N at idx {atom_idx}"
+    elif op == "swap_O":
+        if elt == "O" or atom.GetIsAromatic():
+            raise ValueError("not a useful swap target")
+        atom.SetAtomicNum(8)
+        label = f"{elt}→O at idx {atom_idx}"
+    elif op == "swap_F":
+        if elt == "F" or atom.GetTotalNumHs() == 0:
+            raise ValueError("not a useful swap target")
+        atom.SetAtomicNum(9)
+        label = f"{elt}→F at idx {atom_idx}"
+    elif op == "add_methyl":
+        if atom.GetTotalNumHs() == 0:
+            raise ValueError("no H to replace")
+        c = rw.AddAtom(Chem.Atom(6))
+        rw.AddBond(atom_idx, c, Chem.BondType.SINGLE)
+        label = f"+CH₃ at idx {atom_idx}"
+    elif op == "add_hydroxyl":
+        if atom.GetTotalNumHs() == 0:
+            raise ValueError("no H to replace")
+        o = rw.AddAtom(Chem.Atom(8))
+        rw.AddBond(atom_idx, o, Chem.BondType.SINGLE)
+        label = f"+OH at idx {atom_idx}"
+    elif op == "add_fluorine_aromatic":
+        if not atom.GetIsAromatic() or atom.GetTotalNumHs() == 0:
+            raise ValueError("not aromatic-H position")
+        f = rw.AddAtom(Chem.Atom(9))
+        rw.AddBond(atom_idx, f, Chem.BondType.SINGLE)
+        label = f"+F (aromatic) at idx {atom_idx}"
+    elif op == "add_chlorine_aromatic":
+        if not atom.GetIsAromatic() or atom.GetTotalNumHs() == 0:
+            raise ValueError("not aromatic-H position")
+        cl = rw.AddAtom(Chem.Atom(17))
+        rw.AddBond(atom_idx, cl, Chem.BondType.SINGLE)
+        label = f"+Cl (aromatic) at idx {atom_idx}"
+    else:
+        raise ValueError(f"unknown op: {op}")
+
+    Chem.SanitizeMol(rw)
+    out = Chem.MolToSmiles(rw, canonical=True)
+    return out, label
+
+
+def _score(smiles: str, target: str) -> "RewardBreakdown":  # type: ignore[name-defined]
+    from tools.scoring.score_molecule import score_molecule
+    return score_molecule(smiles=smiles, target_pathogen=target)
+
+
+@router.post("/sar/expand", response_model=SARExpandResponse)
+async def workbench_sar_expand(req: SARExpandRequest) -> SARExpandResponse:
+    """Expand a parent SMILES into k structurally-related mutants + score
+    each. Returns a tree-shaped response the frontend renders as a SAR
+    tree card with click-to-load semantics on every child.
+    """
+    import time as _t
+    t0 = _t.perf_counter()
+
+    try:
+        from rdkit import Chem
+        parent_mol = Chem.MolFromSmiles(req.parent_smiles)
+        if parent_mol is None:
+            raise HTTPException(422, f"parent SMILES unparseable: {req.parent_smiles}")
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+
+    # Score parent first — anchor for delta computation
+    try:
+        parent_breakdown = _score(req.parent_smiles, req.target_pathogen)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, f"parent score failed: {exc}")
+    parent_dict = parent_breakdown.model_dump()
+    parent_composite = parent_dict["composite"]
+
+    # Generate k mutants — cycle through ops, try each at a random atom
+    import random
+    rng = random.Random(0xC0FFEE)
+    n_atoms = parent_mol.GetNumAtoms()
+    candidates_seen: set[str] = {req.parent_smiles}
+    children: list[SARChild] = []
+    n_proposed = 0
+    op_cycle = req.ops or ["swap_N", "add_methyl", "add_hydroxyl"]
+
+    # Try up to k * 3 attempts to land k accepted mutants
+    max_attempts = req.k * 4
+    attempts = 0
+    while len(children) < req.k and attempts < max_attempts:
+        attempts += 1
+        op = op_cycle[attempts % len(op_cycle)]
+        atom_idx = rng.randrange(n_atoms)
+        n_proposed += 1
+        try:
+            new_smi, label = _apply_transform(req.parent_smiles, op, atom_idx)
+        except Exception:
+            continue
+        if new_smi in candidates_seen:
+            continue
+        candidates_seen.add(new_smi)
+        try:
+            br = _score(new_smi, req.target_pathogen)
+            d = br.model_dump()
+            children.append(SARChild(
+                smiles=new_smi,
+                op=op,
+                op_label=label,
+                composite=d["composite"],
+                delta_vs_parent=d["composite"] - parent_composite,
+                weakest=d.get("weakest", ""),
+                strongest=d.get("strongest", ""),
+                components=d.get("components", []),
+            ))
+        except Exception as exc:  # noqa: BLE001
+            children.append(SARChild(
+                smiles=new_smi,
+                op=op,
+                op_label=label,
+                composite=0.0,
+                delta_vs_parent=-parent_composite,
+                error=str(exc)[:120],
+            ))
+
+    # Sort children by delta (best improvements first)
+    children.sort(key=lambda c: -c.delta_vs_parent)
+
+    return SARExpandResponse(
+        parent=parent_dict,
+        children=children,
+        n_proposed=n_proposed,
+        n_accepted=len([c for c in children if not c.error]),
+        elapsed_ms=int((_t.perf_counter() - t0) * 1000),
+    )
+
+
+# ---------------------------------------------------------------------------
 # HuggingScience dataset registry — exposes which external science datasets
 # are available (and which have been fetched to local parquet) so the agent
 # + frontend can discover them. Updated by scripts/fetch_huggingscience.py.

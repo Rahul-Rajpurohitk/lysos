@@ -435,6 +435,61 @@ class BranchCommand(Command):
         )
 
 
+class SARCommand(Command):
+    """W3 — expand the active candidate into k mutants and score each."""
+    def __init__(self):
+        super().__init__(
+            name="sar",
+            description="Expand parent → k mutants + score deltas",
+            type=CommandType.LOCAL,
+            argument_hint="[k=5]",
+            aliases=["expand"],
+            requires_smiles=True,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        # Parse "k=N" or just "N"
+        k = 5
+        s = args.strip()
+        if s:
+            try:
+                k = int(s.split("=")[-1])
+            except Exception:
+                k = 5
+        try:
+            from api.workbench import workbench_sar_expand, SARExpandRequest
+        except ImportError as exc:
+            return CommandResult(error=f"sar route not available: {exc}")
+        try:
+            resp = await workbench_sar_expand(SARExpandRequest(
+                parent_smiles=ctx.active_smiles or "",
+                k=k,
+                target_pathogen=ctx.active_target or "MRSA",
+            ))
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"sar expand failed: {exc}")
+        line = (
+            f"SAR expansion: parent composite "
+            f"**{resp.parent.get('composite', 0):.3f}** → "
+            f"{resp.n_accepted}/{resp.k if hasattr(resp,'k') else len(resp.children)} mutants scored "
+            f"({resp.elapsed_ms}ms)"
+        )
+        return CommandResult(
+            output=line,
+            data={
+                "parent": resp.parent,
+                "children": [c.model_dump() for c in resp.children],
+                "n_accepted": resp.n_accepted,
+                "n_proposed": resp.n_proposed,
+                "elapsed_ms": resp.elapsed_ms,
+            },
+            follow_ups=[
+                "/score <smiles>  (rescore one of the mutants)",
+                "/branch <smiles>  (stress-test a mutant)",
+            ],
+        )
+
+
 class ScaffoldHopCommand(Command):
     def __init__(self):
         super().__init__(
@@ -711,6 +766,7 @@ def create_default_registry() -> CommandRegistry:
         SimilarCommand(),
         ScaffoldHopCommand(),
         ResistanceCommand(),
+        SARCommand(),
         RunCommand(),
         BranchCommand(),
         SetTargetCommand(),
