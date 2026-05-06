@@ -35,6 +35,7 @@ import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindo
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
 import { LiveAtomsCard } from "./playground/LiveAtomsCard";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
+import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
 import { CandidateList as _CandidateList } from "./components/CandidateList";
 void _CandidateList;
@@ -197,6 +198,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   function setPlayViewport(v: Viewport) {
     setPlaygroundViewports((m) => ({ ...m, [activeChatId]: v }));
   }
+
+  // Live playground WebSocket — one connection per active chat tab.
+  // Other actors' cursors + applied edits stream through this and propagate
+  // to all canvas windows. The connection is permanent for the tab; chat
+  // tab switches re-key the hook (handled by activeChatId in the deps).
+  const livePlayground = useLivePlayground(activeChatId, apiBase);
   // Load saved layouts from localStorage on mount per chat
   useEffect(() => {
     if (!activeChatId) return;
@@ -875,6 +882,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         apiBase={apiBase}
                         smiles={currentSmiles}
                         pathogen={selectedPathogen}
+                        cursors={livePlayground.cursors}
+                        onCursorHover={(atomIdx) => {
+                          if (atomIdx != null) {
+                            livePlayground.sendCursor({ actor: "user", atom_idx: atomIdx });
+                            livePlayground.sendHover({
+                              actor: "user", atom_idx: atomIdx,
+                              smiles: currentSmiles ?? undefined,
+                            });
+                          }
+                        }}
                         onMoleculeEdit={(newSmi, edit) => {
                           setEvents((p) => [
                             ...p,

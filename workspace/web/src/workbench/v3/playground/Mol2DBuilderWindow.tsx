@@ -21,6 +21,11 @@ interface Props {
   smiles: string | null;
   pathogen: string;
   onMoleculeEdit?: (newSmiles: string, edit: { op: string; atom_idx: number; label: string }) => void;
+  /** Other actors' cursors keyed by actor name (designer/critic/editor/strategist).
+   *  Each cursor has a target atom_idx — we render a colored halo on that atom. */
+  cursors?: Record<string, { actor: string; atom_idx?: number; ts: number }>;
+  /** Called when the user hovers an atom — fires cursor.move + atom.hover via WS. */
+  onCursorHover?: (atomIdx: number | null) => void;
 }
 
 interface PopoverState {
@@ -55,7 +60,16 @@ function injectSvgSafely(host: HTMLElement, svgText: string): SVGSVGElement | nu
   return svg as unknown as SVGSVGElement;
 }
 
-export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit }: Props) {
+// Per-actor halo color (matches AgentAvatar palette).
+const ACTOR_COLOR: Record<string, string> = {
+  designer: "#10b981",
+  critic: "#ef4444",
+  editor: "#3b82f6",
+  strategist: "#8b5cf6",
+  user: "#f59e0b",
+};
+
+export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover }: Props) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
   const [pop, setPop] = useState<PopoverState | null>(null);
@@ -78,21 +92,21 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit }
     return () => { cancelled = true; };
   }, [smiles, apiBase]);
 
-  // Inject SVG safely + wire atom-click handlers
+  // Inject SVG safely + wire atom-click + atom-hover handlers
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
     const root = injectSvgSafely(host, svg);
     if (!root) return;
     const atoms = root.querySelectorAll("[class^='atom-'], [class*=' atom-']");
-    const handlers: Array<{ node: Element; fn: (e: Event) => void }> = [];
+    const handlers: Array<{ node: Element; type: string; fn: (e: Event) => void }> = [];
     atoms.forEach((node) => {
       const cls = node.getAttribute("class") || "";
       const m = cls.match(/atom-(\d+)/);
       if (!m) return;
       const idx = parseInt(m[1], 10);
       (node as HTMLElement).style.cursor = "pointer";
-      const fn = (e: Event) => {
+      const onClick = (e: Event) => {
         e.stopPropagation();
         const me = e as MouseEvent;
         const rect = containerRef.current?.getBoundingClientRect();
@@ -103,11 +117,60 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit }
           y: Math.max(8, Math.min(me.clientY - rect.top, rect.height - 220)),
         });
       };
-      node.addEventListener("click", fn);
-      handlers.push({ node, fn });
+      const onEnter = () => onCursorHover?.(idx);
+      const onLeave = () => onCursorHover?.(null);
+      node.addEventListener("click", onClick);
+      node.addEventListener("mouseenter", onEnter);
+      node.addEventListener("mouseleave", onLeave);
+      handlers.push({ node, type: "click", fn: onClick });
+      handlers.push({ node, type: "mouseenter", fn: onEnter });
+      handlers.push({ node, type: "mouseleave", fn: onLeave });
     });
-    return () => handlers.forEach(({ node, fn }) => node.removeEventListener("click", fn));
-  }, [svg]);
+    return () => handlers.forEach(({ node, type, fn }) => node.removeEventListener(type, fn));
+  }, [svg, onCursorHover]);
+
+  // Apply cursor halos for non-self actors. Each cursors[actor].atom_idx
+  // gets a colored ring drawn over its atom group via SVG <circle>.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host || !cursors) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    // Clean previous halo overlays
+    svgEl.querySelectorAll('[data-halo="1"]').forEach((n) => n.remove());
+    for (const [actor, cur] of Object.entries(cursors)) {
+      if (cur.atom_idx == null) continue;
+      const target = svgEl.querySelector(`[class*="atom-${cur.atom_idx}"]`);
+      if (!target) continue;
+      const bbox = (target as SVGGraphicsElement).getBBox?.();
+      if (!bbox) continue;
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      const color = ACTOR_COLOR[actor.toLowerCase()] ?? "#9ca3af";
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("data-halo", "1");
+      ring.setAttribute("cx", String(cx));
+      ring.setAttribute("cy", String(cy));
+      ring.setAttribute("r", "12");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", color);
+      ring.setAttribute("stroke-width", "2");
+      ring.setAttribute("opacity", "0.7");
+      ring.style.pointerEvents = "none";
+      svgEl.appendChild(ring);
+      // Small label tag next to the halo
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("data-halo", "1");
+      label.setAttribute("x", String(cx + 14));
+      label.setAttribute("y", String(cy - 8));
+      label.setAttribute("font-size", "9");
+      label.setAttribute("font-family", "SF Mono, monospace");
+      label.setAttribute("fill", color);
+      label.style.pointerEvents = "none";
+      label.textContent = actor;
+      svgEl.appendChild(label);
+    }
+  }, [cursors, svg]);
 
   // Outside-click closes popover
   useEffect(() => {
