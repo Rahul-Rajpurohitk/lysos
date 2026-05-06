@@ -516,6 +516,51 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 // and become rows in the chat timeline.
                 setEvents((p) => [...p, ev as any]);
               }}
+              onReplyToAgent={async ({ text, targetAgent, parentMessageId, threadId }) => {
+                // Echo the user's reply into the timeline (threaded)
+                setEvents((p) => [...p, {
+                  type: "agent_message",
+                  ts: Date.now() / 1000,
+                  agent: "user",
+                  content: text,
+                  thread_id: threadId,
+                  parent_message_id: parentMessageId,
+                  reply_agent: targetAgent,
+                } as any]);
+                try {
+                  const r = await fetch(`${apiBase}/api/chat`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      session_id: activeChatId,
+                      text,
+                      reply_to_agent: targetAgent,
+                      parent_message_id: parentMessageId,
+                      thread_id: threadId,
+                    }),
+                  });
+                  const d = await r.json();
+                  setEvents((p) => [...p, {
+                    type: "agent_message",
+                    ts: Date.now() / 1000,
+                    agent: d.reply_agent ?? targetAgent,
+                    content: d.text ?? d.error ?? "",
+                    card_kind: d.card_kind ?? undefined,
+                    data: d.data ?? undefined,
+                    thread_id: threadId,
+                    parent_message_id: parentMessageId,
+                    reply_agent: targetAgent,
+                  } as any]);
+                } catch (exc: any) {
+                  setEvents((p) => [...p, {
+                    type: "agent_message",
+                    ts: Date.now() / 1000,
+                    agent: "system",
+                    content: `reply network error: ${exc?.message ?? exc}`,
+                    thread_id: threadId,
+                  } as any]);
+                }
+              }}
               composite={composite}
               currentIter={currentIter}
               totalIters={iters}

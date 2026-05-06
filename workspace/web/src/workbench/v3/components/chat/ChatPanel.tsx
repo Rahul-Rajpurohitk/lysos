@@ -36,6 +36,13 @@ interface ChatPanelProps {
   /** Card-level SSE subscriptions push streamed events here so the global
    *  timeline renders them as individual rows. Wired by WorkbenchV3. */
   onIngestEvent?: (event: ChatMsg) => void;
+  // ---- agent message tagging (#91) ----
+  onReplyToAgent?: (params: {
+    text: string;
+    targetAgent: string;
+    parentMessageId: string;
+    threadId: string;
+  }) => void;
   // ---- multi-chat tabs (Claude.ai style) ----
   chatTabs?: ChatTab[];
   activeChatId?: string;
@@ -221,6 +228,7 @@ export function ChatPanel(p: ChatPanelProps) {
                 toolCalls={row.toolCalls}
                 onLoadSmiles={p.onLoadSmiles}
                 onIngestEvent={p.onIngestEvent}
+                onReplyToAgent={p.onReplyToAgent}
               />
             );
           })}

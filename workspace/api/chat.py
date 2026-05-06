@@ -84,6 +84,27 @@ class ChatRequest(BaseModel):
     session_id: str = Field(..., description="Stable session identifier")
     user_id: str = Field("anonymous", description="User identifier")
     text: str = Field(..., description="User message (slash or free)")
+    # ---- Agent message tagging / per-agent reply (W1++) ----
+    reply_to_agent: Optional[str] = Field(
+        None,
+        description=(
+            "If set, route this message to ONLY this specialist agent's "
+            "prompt budget instead of the full Designer→Critic→Editor "
+            "→Strategist debate. Values: designer / critic / editor / "
+            "strategist / orchestrator."
+        ),
+    )
+    parent_message_id: Optional[str] = Field(
+        None,
+        description="The agent message this reply is anchored to (for threading).",
+    )
+    thread_id: Optional[str] = Field(
+        None,
+        description=(
+            "Logical thread id. New replies inherit the parent's thread_id; "
+            "the main timeline uses thread_id=null."
+        ),
+    )
 
 
 class ChatResponse(BaseModel):
@@ -97,6 +118,11 @@ class ChatResponse(BaseModel):
     follow_ups: list[str] = []
     elapsed_ms: int = 0
     events: list[dict] = []
+    # Threading echoes back so the frontend can attach the reply to the
+    # right parent and visualize the side-thread.
+    parent_message_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    reply_agent: Optional[str] = None
 
 
 class CommandSpec(BaseModel):
@@ -179,6 +205,15 @@ async def chat(req: ChatRequest) -> ChatResponse:
         sandbox=sess,
         settings=sess.meta.settings,
     )
+    # Threading metadata flows into the harness via the SessionState
+    # settings dict (not a structural state field — keeps the harness
+    # contract small).
+    if req.reply_to_agent:
+        state.settings["reply_to_agent"] = req.reply_to_agent
+    if req.parent_message_id:
+        state.settings["parent_message_id"] = req.parent_message_id
+    if req.thread_id:
+        state.settings["thread_id"] = req.thread_id
 
     harness = _harness_singleton()
     resp = await harness.handle_message(state, req.text)
@@ -202,6 +237,9 @@ async def chat(req: ChatRequest) -> ChatResponse:
         follow_ups=resp.follow_ups,
         elapsed_ms=resp.elapsed_ms,
         events=resp.events,
+        parent_message_id=req.parent_message_id,
+        thread_id=req.thread_id,
+        reply_agent=req.reply_to_agent,
     )
 
 

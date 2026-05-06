@@ -102,6 +102,35 @@ class Harness:
         trace("message.received", session_id=session.session_id,
               user_id=session.user_id, text=user_text)
 
+        # ---- Orchestrator awareness ---------------------------------
+        # The Orchestrator is always-aware: every user message hits the
+        # ledger first, and the routing decision (debate vs single-agent
+        # vs meta) is taken with the full session history available.
+        try:
+            from ..orchestrator_agent import get_orchestrator
+            orch = get_orchestrator()
+        except Exception:  # noqa: BLE001
+            orch = None
+        if orch is not None:
+            orch.ingest(session.session_id, {
+                "type": "agent_message", "agent": "user",
+                "data": {"content": user_text},
+                "thread_id": session.settings.get("thread_id"),
+            })
+            reply_to = session.settings.get("reply_to_agent")
+            mode, target_agent = orch.route_dispatch_intent(user_text, reply_to)
+            trace("orchestrator.route", mode=mode, target=target_agent)
+            # Meta question shortcut — no slash needed when reply_to is "orchestrator"
+            if mode == "orchestrator":
+                ans = orch.answer_meta(session.session_id, user_text)
+                return HarnessResponse(
+                    session_id=session.session_id,
+                    message_id=msg_id,
+                    text=ans,
+                    events=events,
+                    elapsed_ms=int((time.perf_counter() - t0) * 1000),
+                )
+
         # ---- phase 1: resolve ----
         text = user_text.strip()
         is_slash = text.startswith("/")

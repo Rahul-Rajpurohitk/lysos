@@ -17,7 +17,7 @@
  */
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronRight, Star, ArrowRight, Flag, Wrench, BrainCircuit } from "lucide-react";
+import { ChevronRight, Star, ArrowRight, Flag, Wrench, BrainCircuit, Reply, X as IconX, ArrowUp } from "lucide-react";
 import { agentColor } from "./AgentAvatar";
 import { InlineSmilesCard } from "./InlineSmilesCard";
 import { RewardCard } from "./RewardCard";
@@ -50,6 +50,10 @@ export interface ChatMsg {
   // structured chat-card payloads (W2+)
   card_kind?: string;
   data?: Record<string, any>;
+  // ---- threading / agent-tagging (#91) ----
+  thread_id?: string;
+  parent_message_id?: string;
+  reply_agent?: string;
 }
 
 interface MessageRowProps {
@@ -59,9 +63,19 @@ interface MessageRowProps {
   /** Push a streamed event (from a card's SSE subscription) into the
    *  parent chat-events array so MessageRow renders it as a row. */
   onIngestEvent?: (event: ChatMsg) => void;
+  /** Send a reply scoped to a specific agent. Triggered from the
+   *  hover-reveal "↩ Reply to <agent>" action (#91 threading). */
+  onReplyToAgent?: (params: {
+    text: string;
+    targetAgent: string;
+    parentMessageId: string;
+    threadId: string;
+  }) => void;
 }
 
-export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent }: MessageRowProps) {
+const REPLYABLE_AGENTS = new Set(["designer", "critic", "editor", "strategist", "orchestrator"]);
+
+export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onReplyToAgent }: MessageRowProps) {
   if (msg.type === "candidate_added") return <CandidateRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "mol_edit") return <EditRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "state_change") return <StateRow msg={msg} />;
@@ -72,17 +86,25 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent }: Mess
   const agent = msg.agent ?? msg.type ?? "system";
   const color = agentColor(agent);
   const { body, embeddedSmiles } = parseBody(msg.content ?? "");
+  const canReply = !!onReplyToAgent && REPLYABLE_AGENTS.has(agent.toLowerCase());
+  const isThreadedReply = !!msg.thread_id && !!msg.parent_message_id;
+  const [hover, setHover] = useState(false);
+  const [replyOpen, setReplyOpen] = useState(false);
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.18, ease: "easeOut" }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
       style={{
         position: "relative",
         paddingLeft: 12,
         // 3px colored bar = role indicator, no avatar required.
         borderLeft: `3px solid ${color}`,
+        // Threaded replies indent so they read as a side-thread.
+        marginLeft: isThreadedReply ? 22 : 0,
       }}
     >
       <div style={{
@@ -110,7 +132,51 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent }: Mess
             iter {msg.iteration}
           </span>
         )}
+        {isThreadedReply && msg.reply_agent && (
+          <span style={{
+            fontSize: 9.5,
+            fontFamily: "var(--lys-font-mono)",
+            color: "var(--lys-text-faint)",
+            background: "var(--lys-surface-2)",
+            padding: "1px 5px",
+            borderRadius: 3,
+          }}>
+            ↩ thread → {msg.reply_agent}
+          </span>
+        )}
         <span style={{ flex: 1 }} />
+        {canReply && hover && !replyOpen && (
+          <button
+            type="button"
+            onClick={() => setReplyOpen(true)}
+            title={`Reply to ${agent} only (parallel thread)`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              border: 0,
+              background: "transparent",
+              color: "var(--lys-text-faint)",
+              fontFamily: "inherit",
+              fontSize: 10.5,
+              padding: "1px 5px",
+              borderRadius: 3,
+              cursor: "pointer",
+              transition: "background 0.12s, color 0.12s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--lys-bg-hover, rgba(0,0,0,0.05))";
+              e.currentTarget.style.color = color;
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+              e.currentTarget.style.color = "var(--lys-text-faint)";
+            }}
+          >
+            <Reply size={10} />
+            Reply to {agent}
+          </button>
+        )}
         <span style={{
           fontFamily: "var(--lys-font-mono)",
           color: "var(--lys-text-faint)",
@@ -161,9 +227,128 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent }: Mess
           {msg.model && <span> · {msg.model}</span>}
         </div>
       )}
+      {replyOpen && canReply && (
+        <InlineReplyComposer
+          agent={agent}
+          color={color}
+          onSubmit={(text) => {
+            onReplyToAgent?.({
+              text,
+              targetAgent: agent.toLowerCase(),
+              parentMessageId: msg.id ?? `${msg.ts}-${agent}`,
+              threadId: msg.thread_id ?? `t-${msg.id ?? msg.ts}`,
+            });
+            setReplyOpen(false);
+          }}
+          onCancel={() => setReplyOpen(false)}
+        />
+      )}
     </motion.div>
   );
 }
+
+// ── Inline reply composer (parallel-thread mini-input) ───────────────
+
+function InlineReplyComposer({ agent, color, onSubmit, onCancel }: {
+  agent: string;
+  color: string;
+  onSubmit: (text: string) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState("");
+  return (
+    <div style={{
+      marginTop: 6,
+      display: "flex",
+      alignItems: "flex-end",
+      gap: 6,
+      padding: "6px 8px",
+      background: "var(--lys-surface-2)",
+      border: `1px solid ${color}33`,
+      borderRadius: 6,
+    }}>
+      <span style={{
+        fontSize: 9.5,
+        fontFamily: "var(--lys-font-mono)",
+        color,
+        fontWeight: 600,
+        flexShrink: 0,
+        marginBottom: 4,
+      }}>
+        ↩ {agent}
+      </span>
+      <textarea
+        autoFocus
+        rows={1}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            const t = text.trim();
+            if (t) onSubmit(t);
+          }
+          if (e.key === "Escape") onCancel();
+        }}
+        placeholder={`Reply to ${agent} only…`}
+        style={{
+          flex: 1,
+          border: 0,
+          outline: 0,
+          background: "transparent",
+          fontFamily: "inherit",
+          fontSize: 12,
+          color: "var(--lys-text)",
+          resize: "none",
+          padding: 0,
+        }}
+      />
+      <button
+        type="button"
+        onClick={onCancel}
+        title="Cancel (Esc)"
+        style={{
+          display: "grid",
+          placeItems: "center",
+          width: 22,
+          height: 22,
+          border: 0,
+          background: "transparent",
+          color: "var(--lys-text-faint)",
+          borderRadius: 4,
+          cursor: "pointer",
+          flexShrink: 0,
+        }}
+      >
+        <IconX size={11} />
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          const t = text.trim();
+          if (t) onSubmit(t);
+        }}
+        disabled={!text.trim()}
+        title={`Send to ${agent} (↵)`}
+        style={{
+          display: "grid",
+          placeItems: "center",
+          width: 22,
+          height: 22,
+          border: 0,
+          background: text.trim() ? "var(--lys-text)" : "var(--lys-surface-2)",
+          color: text.trim() ? "white" : "var(--lys-text-faint)",
+          borderRadius: 4,
+          cursor: text.trim() ? "pointer" : "default",
+          flexShrink: 0,
+        }}
+      >
+        <ArrowUp size={11} />
+      </button>
+    </div>
+  );
+}
+
 
 // ── Specialized row variants ─────────────────────────────────────────
 
