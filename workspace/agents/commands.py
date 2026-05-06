@@ -1,0 +1,467 @@
+"""Slash command framework — extensible chat command system.
+
+Pattern lifted from ATLAS (atlas/agent/commands.py) which itself follows
+Claude Code's `/commands/` structure. Adapted for Lysos's drug-design
+domain: every command maps to a skill in SKILLS.md.
+
+Three command types:
+- LOCAL: executes locally, returns result directly (e.g. /score, /edit)
+- PROMPT: sends to LLM with specific tool constraints (e.g. /design)
+- SYSTEM: internal session ops (e.g. /clear, /run, /branch)
+
+Each command:
+- name, aliases, description, argument_hint
+- type (LOCAL / PROMPT / SYSTEM)
+- is_enabled(ctx) check
+- execute(args, ctx) → CommandResult
+
+The registry is consumed by:
+- Chat composer ("/" → autocomplete picker filtered by typed prefix)
+- Server route POST /api/commands/exec (for direct invocation)
+- Help renderer (/help → produces a markdown table of available commands)
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Optional
+
+log = logging.getLogger("workbench.agents.commands")
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+# ---------------------------------------------------------------------------
+# Types
+# ---------------------------------------------------------------------------
+
+class CommandType(str, Enum):
+    LOCAL = "local"      # Runs in-process, returns result directly to user
+    PROMPT = "prompt"    # Sends to LLM with tool constraints
+    SYSTEM = "system"    # Session-level (clear, run, branch, save)
+
+
+@dataclass
+class CommandResult:
+    """What every command returns."""
+    output: str = ""                    # markdown to render in chat
+    error: str = ""                     # set if execution failed
+    data: dict[str, Any] = field(default_factory=dict)    # structured payload
+    artifact: Optional[dict] = None     # opt: scene/cell artifact for right panel
+    should_send_to_llm: bool = False    # PROMPT-type sets this True
+    follow_ups: list[str] = field(default_factory=list)   # next-action suggestions
+
+
+@dataclass
+class CommandContext:
+    """Runtime context passed to every command."""
+    session_id: str
+    user_id: str
+    active_smiles: Optional[str] = None     # currently-selected candidate
+    active_target: Optional[str] = None     # currently-selected pathogen/target
+    sandbox: Any = None                     # SandboxRuntime ref
+    llm: Any = None                         # LLMEndpoint ref
+    settings: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Base + Registry
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Command:
+    name: str
+    description: str
+    type: CommandType = CommandType.LOCAL
+    argument_hint: str = ""
+    aliases: list[str] = field(default_factory=list)
+    requires_smiles: bool = False           # gate: needs an active candidate
+    requires_target: bool = False           # gate: needs a target
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        raise NotImplementedError(f"Command '{self.name}' has no execute()")
+
+    def is_enabled(self, ctx: CommandContext) -> tuple[bool, str]:
+        if self.requires_smiles and not ctx.active_smiles:
+            return False, f"/{self.name} needs an active candidate. Try /design or /paste-smiles first."
+        if self.requires_target and not ctx.active_target:
+            return False, f"/{self.name} needs a target pathogen. Try /set-target <pathogen>."
+        return True, ""
+
+
+class CommandRegistry:
+    """In-memory registry. Built once at server startup from create_default_registry()."""
+
+    def __init__(self):
+        self._by_name: dict[str, Command] = {}
+
+    def register(self, cmd: Command) -> None:
+        if cmd.name in self._by_name:
+            raise ValueError(f"command name '{cmd.name}' already registered")
+        self._by_name[cmd.name] = cmd
+        for alias in cmd.aliases:
+            if alias in self._by_name:
+                raise ValueError(f"alias '{alias}' collides")
+            self._by_name[alias] = cmd
+
+    def get(self, name: str) -> Optional[Command]:
+        return self._by_name.get(name.lstrip("/"))
+
+    def search(self, prefix: str = "") -> list[Command]:
+        prefix = prefix.lstrip("/")
+        seen: set[str] = set()
+        out: list[Command] = []
+        for name, cmd in self._by_name.items():
+            if cmd.name in seen:
+                continue
+            if name.startswith(prefix):
+                out.append(cmd)
+                seen.add(cmd.name)
+        return sorted(out, key=lambda c: c.name)
+
+    def all(self) -> list[Command]:
+        return self.search("")
+
+
+# ---------------------------------------------------------------------------
+# Built-in commands
+# ---------------------------------------------------------------------------
+
+class HelpCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="help", description="Show available skills",
+            type=CommandType.SYSTEM, aliases=["?", "skills"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        skills_md = REPO_ROOT / "SKILLS.md"
+        if skills_md.exists():
+            content = skills_md.read_text()
+        else:
+            content = "_SKILLS.md missing._"
+        return CommandResult(output=content, data={"skills_md_path": str(skills_md)})
+
+
+class ClearCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="clear", description="Clear the active session",
+            type=CommandType.SYSTEM,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        return CommandResult(
+            output="Session cleared. Active candidate + sandbox state wiped.",
+            data={"action": "clear_session", "session_id": ctx.session_id},
+        )
+
+
+class DesignCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="design",
+            description="Propose new candidate molecules for a target",
+            type=CommandType.PROMPT,
+            argument_hint="<pathogen|target> [--n 8] [--from-paper <ref>]",
+            aliases=["d"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        target = args.strip() or ctx.active_target or "MRSA"
+        return CommandResult(
+            output="",
+            should_send_to_llm=True,
+            data={
+                "skill": "propose_pocket_aware",
+                "args": {"target": target, "n_candidates": 8},
+                "tool_hint": ["propose_pocket_aware", "score_molecule"],
+                "system_prompt_addendum": (
+                    f"You are designing antibiotic candidates for {target}. "
+                    "Use /propose first to seed, then /score to rank. "
+                    "Cite the pocket class you're targeting."
+                ),
+            },
+        )
+
+
+class EditCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="edit",
+            description="Apply a deterministic structural transformation",
+            type=CommandType.LOCAL,
+            argument_hint="<op>  (add_hydroxyl, add_fluorine, swap_chloro_to_fluoro, ring_close, ...)",
+            aliases=["e"],
+            requires_smiles=True,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        op = args.strip()
+        if not op:
+            return CommandResult(error="Usage: /edit <op>. See /help for ops.")
+        # Lazy import — sandbox dispatches the actual tool
+        try:
+            from workspace.tools.generative.transform_structure import transform_structure
+            r = transform_structure(smiles=ctx.active_smiles, op=op)
+            if not r.success:
+                return CommandResult(error=r.note or "transform failed", data=r.model_dump())
+            products_md = "\n".join(f"- `{p}`" for p in r.products)
+            return CommandResult(
+                output=(
+                    f"**{op}** on `{ctx.active_smiles}`\n\n"
+                    f"_{r.op_rationale}_\n\n"
+                    f"Products:\n{products_md}"
+                ),
+                data=r.model_dump(),
+                follow_ups=[f"/score {p}" for p in r.products[:2]],
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"edit failed: {exc}")
+
+
+class ScoreCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="score",
+            description="Run the 12-component reward stack on a SMILES",
+            type=CommandType.LOCAL,
+            argument_hint="[smiles]  (defaults to active candidate)",
+            requires_smiles=False,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        smiles = args.strip() or ctx.active_smiles
+        if not smiles:
+            return CommandResult(error="No SMILES provided + no active candidate.")
+        try:
+            from workspace.tools.scoring.score_molecule import score_molecule
+            r = score_molecule(smiles=smiles, target_pathogen=ctx.active_target or "MRSA")
+            return CommandResult(
+                output=f"`{smiles}` composite={r.composite:.3f}",
+                data=r.model_dump() if hasattr(r, "model_dump") else dict(r),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"score failed: {exc}")
+
+
+class ExplainCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="explain",
+            description="Mechanism + spectrum + resistance for a named drug or candidate",
+            type=CommandType.LOCAL,
+            argument_hint="<drug_name>  (lookup pharma_lookup first)",
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        name = args.strip()
+        if not name and not ctx.active_smiles:
+            return CommandResult(error="Provide a drug name or set an active candidate.")
+        try:
+            from workspace.tools.knowledge.explain_mechanism import explain_mechanism
+            r = explain_mechanism(
+                smiles=ctx.active_smiles or "",
+                drug_name=name or None,
+            )
+            md = (
+                f"### {name or 'Candidate'} — {r.inferred_class}\n"
+                f"_(source: {r.source})_\n\n"
+                f"**Mechanism**: {r.mechanism_narrative}\n\n"
+            )
+            if r.spectrum:
+                md += f"**Spectrum**: {r.spectrum}\n\n"
+            if r.indications:
+                md += f"**Indications**: {r.indications}\n\n"
+            if r.resistance_concerns:
+                md += "**Resistance concerns**:\n" + "\n".join(f"- {c}" for c in r.resistance_concerns)
+            return CommandResult(output=md, data=r.model_dump())
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"explain failed: {exc}")
+
+
+class SimilarCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="similar",
+            description="Top-K similar known antibiotics (Gemini Embedding 2 cosine)",
+            type=CommandType.LOCAL,
+            argument_hint="[k=5]",
+            aliases=["sim"],
+            requires_smiles=True,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        k = 5
+        try:
+            if args.strip():
+                k = int(args.strip())
+        except ValueError:
+            pass
+        try:
+            from workspace.tools.scoring.find_similar_drugs import find_similar_drugs
+            r = find_similar_drugs(smiles=ctx.active_smiles, k=k)
+            md = f"### Top-{k} similar drugs\n\n_{r.interpretation}_\n\n"
+            md += "| Rank | Drug | Sim | Class |\n|---|---|---|---|\n"
+            for i, m in enumerate(r.matches, 1):
+                md += f"| {i} | {m.name} | {m.similarity:.3f} | {m.drug_class or '—'} |\n"
+            return CommandResult(output=md, data=r.model_dump())
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"similar failed: {exc}")
+
+
+class RunCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="run",
+            description="Execute a Python cell in the sandbox",
+            type=CommandType.SYSTEM,
+            argument_hint="<python code>",
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        if not args.strip():
+            return CommandResult(error="Usage: /run <python>")
+        if ctx.sandbox is None:
+            return CommandResult(error="Sandbox not attached to this session.")
+        try:
+            cell = await ctx.sandbox.run_cell(args)
+            return CommandResult(
+                output=f"```\n{cell.stdout}\n```",
+                data={"cell_id": cell.cell_id, "stderr": cell.stderr,
+                      "elapsed_ms": cell.elapsed_ms},
+                artifact={"kind": "sandbox_cell", "cell": cell.to_dict()},
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"sandbox error: {exc}")
+
+
+class BranchCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="branch",
+            description="Fork the active candidate as a new design lineage",
+            type=CommandType.SYSTEM,
+            argument_hint="<branch hint>",
+            requires_smiles=True,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        return CommandResult(
+            output=f"Branched at `{ctx.active_smiles}` — hint: _{args or 'unspecified'}_",
+            data={"action": "branch", "from_smiles": ctx.active_smiles, "hint": args},
+        )
+
+
+class ScaffoldHopCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="scaffold-hop",
+            description="Bioisosteric scaffold replacement",
+            type=CommandType.LOCAL,
+            argument_hint="[n=5]",
+            aliases=["hop"],
+            requires_smiles=True,
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        n = 5
+        try:
+            if args.strip():
+                n = int(args.strip())
+        except ValueError:
+            pass
+        try:
+            from workspace.tools.generative.scaffold_hop import scaffold_hop
+            r = scaffold_hop(smiles=ctx.active_smiles, n_alternatives=n)
+            return CommandResult(
+                output=f"Scaffold-hop on `{ctx.active_smiles}` returned {len(r.alternatives)} options.",
+                data=r.model_dump() if hasattr(r, "model_dump") else dict(r),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"scaffold-hop failed: {exc}")
+
+
+class ResistanceCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="resistance",
+            description="Pathogen resistome + escape probability",
+            type=CommandType.LOCAL,
+            argument_hint="<pathogen>",
+            aliases=["res"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        pathogen = args.strip() or ctx.active_target
+        if not pathogen:
+            return CommandResult(error="Usage: /resistance <pathogen>")
+        try:
+            from workspace.tools.amr.get_pathogen_resistome import get_pathogen_resistome
+            r = get_pathogen_resistome(pathogen=pathogen)
+            return CommandResult(
+                output=f"Resistome for {pathogen}: {len(r.resistance_genes)} genes",
+                data=r.model_dump() if hasattr(r, "model_dump") else dict(r),
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"resistance lookup failed: {exc}")
+
+
+class SetTargetCommand(Command):
+    def __init__(self):
+        super().__init__(
+            name="set-target",
+            description="Set the active target pathogen for the session",
+            type=CommandType.SYSTEM,
+            argument_hint="<pathogen>",
+            aliases=["target"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        pathogen = args.strip()
+        if not pathogen:
+            return CommandResult(error="Usage: /set-target <pathogen>")
+        return CommandResult(
+            output=f"Active target: **{pathogen}**",
+            data={"action": "set_target", "target": pathogen},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Default registry
+# ---------------------------------------------------------------------------
+
+def create_default_registry() -> CommandRegistry:
+    """Build the production registry. Add new commands here."""
+    r = CommandRegistry()
+    for cmd in [
+        HelpCommand(),
+        ClearCommand(),
+        DesignCommand(),
+        EditCommand(),
+        ScoreCommand(),
+        ExplainCommand(),
+        SimilarCommand(),
+        ScaffoldHopCommand(),
+        ResistanceCommand(),
+        RunCommand(),
+        BranchCommand(),
+        SetTargetCommand(),
+    ]:
+        r.register(cmd)
+    return r
+
+
+# Module-level singleton (built once)
+DEFAULT_REGISTRY: Optional[CommandRegistry] = None
+
+
+def get_registry() -> CommandRegistry:
+    global DEFAULT_REGISTRY
+    if DEFAULT_REGISTRY is None:
+        DEFAULT_REGISTRY = create_default_registry()
+    return DEFAULT_REGISTRY

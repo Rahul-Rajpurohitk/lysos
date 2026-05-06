@@ -86,6 +86,15 @@ CLASS_MECHANISMS: dict[str, str] = {
 class ExplainInput(BaseModel):
     smiles: str = Field(..., description="Candidate SMILES")
     target: Optional[str] = Field(None, description="Optional target hint (PDB ID or pathogen)")
+    drug_name: Optional[str] = Field(
+        None,
+        description=(
+            "Optional drug name. If provided AND matches one of the 218 "
+            "Gemini-2.5-Pro-enriched named antibiotics, returns the "
+            "clinical-grade per-drug mechanism / spectrum / resistance_escape "
+            "instead of the class-level fallback."
+        ),
+    )
 
 
 class Explanation(BaseModel):
@@ -93,21 +102,50 @@ class Explanation(BaseModel):
     inferred_class: str
     mechanism_narrative: str
     resistance_concerns: list[str] = []
+    spectrum: Optional[str] = None
+    indications: Optional[str] = None
+    source: str = "class_template"  # "pharma_lookup" if from Gemini Pro enrichment
 
 
 @tool(
     description=(
-        "Generate a plain-English mechanism-of-action narrative for a candidate. "
-        "Combines drug-class inference (RDKit substructure) with curated class "
-        "mechanism descriptions. Used by the Designer's MoA panel."
+        "Generate a plain-English mechanism-of-action narrative. If the drug "
+        "name is provided and matches one of the 218 enriched named "
+        "antibiotics (Gemini 2.5 Pro pharmacology), returns the clinical-grade "
+        "per-drug mechanism + spectrum + indications + resistance_escape. "
+        "Otherwise infers drug class from SMILES substructure and returns the "
+        "class-level template. Used by the Designer's MoA panel."
     ),
     category="knowledge",
     input_model=ExplainInput,
     output_model=Explanation,
     expected_duration_ms=20,
-    tags=("knowledge", "moa", "explainability"),
+    tags=("knowledge", "moa", "explainability", "pharma_lookup"),
 )
-def explain_mechanism(smiles: str, target: Optional[str] = None) -> Explanation:
+def explain_mechanism(smiles: str, target: Optional[str] = None,
+                      drug_name: Optional[str] = None) -> Explanation:
+    # 1) If we have a drug name, try the per-drug Gemini Pro enrichment first.
+    if drug_name:
+        try:
+            from src.embeddings.pharma_lookup import lookup as _pharma_lookup
+            card = _pharma_lookup(drug_name)
+        except Exception:  # noqa: BLE001
+            card = None
+        if card and card.get("mechanism"):
+            return Explanation(
+                smiles=smiles,
+                inferred_class=drug_name.lower().replace(" ", "_"),
+                mechanism_narrative=card["mechanism"],
+                resistance_concerns=[
+                    s.strip() for s in (card.get("resistance_escape") or "").split(";")
+                    if s.strip()
+                ],
+                spectrum=card.get("spectrum"),
+                indications=card.get("indications"),
+                source="pharma_lookup",
+            )
+
+    # 2) Fall back to class-level template
     from ..amr.check_resistance_genes import _infer_drug_class
     cls = _infer_drug_class(smiles) or "default"
     narrative = CLASS_MECHANISMS.get(cls, CLASS_MECHANISMS["default"])
@@ -133,4 +171,5 @@ def explain_mechanism(smiles: str, target: Optional[str] = None) -> Explanation:
         inferred_class=cls,
         mechanism_narrative=narrative,
         resistance_concerns=concerns,
+        source="class_template",
     )
