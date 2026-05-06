@@ -34,7 +34,7 @@ import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
 import { LiveAtomsCard } from "./playground/LiveAtomsCard";
-import { ScaffoldPickerCard } from "./playground/ScaffoldPickerCard";
+// ScaffoldPickerCard absorbed into ChemistryNavbar (sole entry point)
 import { EditLogCard } from "./playground/EditLogCard";
 import { ConnectionStatusCard } from "./playground/ConnectionStatusCard";
 import { StructuralAlertsCard } from "./playground/StructuralAlertsCard";
