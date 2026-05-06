@@ -174,8 +174,6 @@ export function PlaygroundGroup(p: Props) {
     return HEADER_H + PADDING_V + totalRowH + gaps;
   }
 
-  const allCardsCollapsed = !collapsed && p.cards.length > 0
-    && p.cards.every((c) => collapsedCards.has(c.id));
   const naturalH = computeNaturalHeight();
   // autoFit = true (default) → auto-fit to natural height that shows ALL
   //                            cards without internal scroll.
