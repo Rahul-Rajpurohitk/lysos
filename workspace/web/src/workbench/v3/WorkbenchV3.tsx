@@ -50,6 +50,8 @@ import { SimilarityCard } from "./playground/SimilarityCard";
 import { ScoreBreakdownCard } from "./playground/ScoreBreakdownCard";
 import { AgentRosterCard } from "./playground/AgentRosterCard";
 import { SessionTraceCard } from "./playground/SessionTraceCard";
+import { AgentActionLogCard } from "./playground/AgentActionLogCard";
+import { AgentMetricsCard } from "./playground/AgentMetricsCard";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -614,8 +616,49 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         }
       }
     }
+    // Auto-score side effect: if currentSmiles changes and we don't have
+    // scores for it yet, fire /score and inject into events. Debounced via
+    // last-scored-smiles tracking to avoid double-fire on rapid edits.
     return best?.scores ?? null;
   }, [events]);
+
+  // ── AUTO-SCORE — when currentSmiles changes and there's no score for it,
+  // fire /score asynchronously + inject the result into the events stream.
+  // This makes the Scoring container's 4 cards (Radar, Breakdown, Toxicity,
+  // Similarity) populate live across the whole workbench without the user
+  // having to type /score manually.
+  const lastAutoScoredRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!currentSmiles || !activeChatId) return;
+    if (lastAutoScoredRef.current === currentSmiles) return;
+    if (lastScores) return;  // already scored from agent path
+    lastAutoScoredRef.current = currentSmiles;
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`${apiBase}/workbench/score`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ smiles: currentSmiles, target_pathogen: selectedPathogen }),
+        });
+        if (!r.ok) return;
+        const d = await r.json();
+        const scores: Record<string, number> = {};
+        if (d.components) {
+          for (const [k, v] of Object.entries(d.components)) {
+            // components is {axis: {value, weight, contribution}}
+            const obj = v as any;
+            scores[k] = typeof obj === "number" ? obj : (obj?.value ?? 0);
+          }
+        }
+        const composite = typeof d.composite === "number" ? d.composite : 0;
+        setEvents((prev) => [
+          ...prev,
+          { type: "score", ts: Date.now()/1000, smiles: currentSmiles, scores, composite } as any,
+        ]);
+      } catch {/*noop*/}
+    }, 700);  // 700ms debounce — protects against rapid SMILES edits
+    return () => clearTimeout(t);
+  }, [currentSmiles, activeChatId, selectedPathogen, apiBase, lastScores]);
 
   // legacy: paretoRows / molEdits / candEvents fed the old TabStrip panels.
   // Now derived for future Pareto/Lineage windows on the canvas.
@@ -1174,6 +1217,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       <AgentReasoningTraceWindow events={events as any[]} /> },
                     { id: "roster", title: "Agent roster · live state", size: 2, body:
                       <AgentRosterCard apiBase={apiBase} sessionId={activeChatId} /> },
+                    { id: "metrics", title: "Agent metrics · KPIs per role", size: 2, body:
+                      <AgentMetricsCard apiBase={apiBase} sessionId={activeChatId} /> },
+                    { id: "actionlog", title: "Action log · DB-backed history", size: 2, body:
+                      <AgentActionLogCard apiBase={apiBase} sessionId={activeChatId} /> },
                   ],
                 },
                 {

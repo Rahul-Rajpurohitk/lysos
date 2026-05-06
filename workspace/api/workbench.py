@@ -2700,6 +2700,123 @@ async def session_timeline(sid: str, limit: int = 200) -> dict:
 # AGENT ROSTER — per-agent state + recent actions for the Agents container
 # ===========================================================================
 
+@router.get("/sessions/{sid}/agent-actions")
+async def session_agent_actions(
+    sid: str,
+    agent: Optional[str] = None,
+    action_type: Optional[str] = None,
+    q: Optional[str] = None,
+    since_ts: float = 0.0,
+    limit: int = 200,
+) -> dict:
+    """Filterable agent action log for the session.
+
+    Query params:
+      agent       — filter by agent_name (designer/critic/editor/strategist/orchestrator)
+      action_type — filter by action_type (propose/critique/edit/decide/...)
+      q           — substring search across message_text
+      since_ts    — only actions after this unix timestamp
+      limit       — max rows (default 200)
+
+    Each row: id, ts, agent_name, action_type, target_molecule_id,
+    target_atom_idx, message_text, confidence, references (parsed json)."""
+    from workspace.playground.store import get_store as _get_store
+    store = _get_store()
+    actions = store.list_actions(sid, since_ts=since_ts, limit=limit * 2)  # over-fetch then filter
+    needle = (q or "").lower().strip()
+    filtered: list[dict] = []
+    for a in actions:
+        if agent and (a.get("agent_name") or "").lower() != agent.lower():
+            continue
+        if action_type and (a.get("action_type") or "").lower() != action_type.lower():
+            continue
+        if needle:
+            hay = (a.get("message_text") or "").lower()
+            if needle not in hay:
+                continue
+        # Parse references_json once
+        try:
+            refs = _json_lib.loads(a.get("references_json") or a.get("references") or "{}")
+        except Exception:
+            refs = {}
+        filtered.append({
+            "id": a.get("id"),
+            "ts": a.get("ts"),
+            "agent_name": a.get("agent_name") or "",
+            "action_type": a.get("action_type") or "",
+            "target_molecule_id": a.get("target_molecule_id"),
+            "target_atom_idx": a.get("target_atom_idx"),
+            "message_text": a.get("message_text") or "",
+            "confidence": a.get("confidence") or 0.0,
+            "references": refs,
+        })
+        if len(filtered) >= limit:
+            break
+    # Distinct values for chip filters
+    distinct_agents = sorted({(a.get("agent_name") or "").lower() for a in actions if a.get("agent_name")})
+    distinct_types = sorted({(a.get("action_type") or "").lower() for a in actions if a.get("action_type")})
+    return {
+        "session": sid,
+        "n": len(filtered),
+        "actions": filtered,
+        "distinct_agents": [a for a in distinct_agents if a],
+        "distinct_action_types": [t for t in distinct_types if t],
+    }
+
+
+@router.get("/sessions/{sid}/agent-metrics")
+async def session_agent_metrics(sid: str) -> dict:
+    """Per-agent performance KPIs:
+       - n_actions
+       - actions_per_hour (over span of session)
+       - avg_confidence
+       - last_ts
+       - action_type breakdown
+       - distinct_target_molecules touched
+    """
+    from workspace.playground.store import get_store as _get_store
+    store = _get_store()
+    actions = store.list_actions(sid, limit=5000)
+    if not actions:
+        return {"session": sid, "agents": [], "total_actions": 0, "duration_h": 0.0}
+    ts_min = min((a.get("ts") or 0) for a in actions)
+    ts_max = max((a.get("ts") or 0) for a in actions)
+    span_hours = max(1e-6, (ts_max - ts_min) / 3600.0)
+    AGENTS = ["designer", "critic", "editor", "strategist", "orchestrator"]
+    metrics = []
+    for ag in AGENTS:
+        ag_acts = [a for a in actions if (a.get("agent_name") or "").lower() == ag]
+        if not ag_acts:
+            metrics.append({
+                "agent": ag, "n_actions": 0, "actions_per_hour": 0.0,
+                "avg_confidence": 0.0, "last_ts": None,
+                "action_type_breakdown": {}, "n_distinct_molecules": 0,
+            })
+            continue
+        confs = [a.get("confidence") or 0.0 for a in ag_acts if a.get("confidence")]
+        avg_conf = sum(confs) / len(confs) if confs else 0.0
+        type_breakdown: dict[str, int] = {}
+        for a in ag_acts:
+            t = a.get("action_type") or "unknown"
+            type_breakdown[t] = type_breakdown.get(t, 0) + 1
+        mols = {a.get("target_molecule_id") for a in ag_acts if a.get("target_molecule_id")}
+        metrics.append({
+            "agent": ag,
+            "n_actions": len(ag_acts),
+            "actions_per_hour": round(len(ag_acts) / span_hours, 2),
+            "avg_confidence": round(avg_conf, 3),
+            "last_ts": ag_acts[-1].get("ts"),
+            "action_type_breakdown": type_breakdown,
+            "n_distinct_molecules": len(mols),
+        })
+    return {
+        "session": sid,
+        "agents": metrics,
+        "total_actions": len(actions),
+        "duration_h": round(span_hours, 3),
+    }
+
+
 @router.get("/sessions/{sid}/agent-roster")
 async def session_agent_roster(sid: str) -> dict:
     """Per-agent breakdown for the session.
