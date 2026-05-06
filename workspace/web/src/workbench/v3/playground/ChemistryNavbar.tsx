@@ -36,11 +36,11 @@ interface Scaffold {
 
 // Curated quick-pick set — must match scaffold names from /scaffolds endpoint
 const QUICK_PICKS = [
-  { name: "Benzene",            label: "Bnz",  symbol: "⌬" },
-  { name: "β-Lactam (penam core)", label: "β-L",  symbol: "□" },
-  { name: "Pyridine",           label: "Pyr",  symbol: "⬡" },
-  { name: "Imidazole",          label: "Imd",  symbol: "⬠" },
-  { name: "Cyclohexane",        label: "Cyc",  symbol: "⬢" },
+  { name: "Benzene",            label: "Benzene",      sub: "6-ring", symbol: "⌬" },
+  { name: "β-Lactam (penam core)", label: "β-Lactam",  sub: "penicillin",  symbol: "□" },
+  { name: "Pyridine",           label: "Pyridine",     sub: "6-ring + N", symbol: "⬡" },
+  { name: "Imidazole",          label: "Imidazole",    sub: "5-ring + 2N", symbol: "⬠" },
+  { name: "Cyclohexane",        label: "Cyclohex.",    sub: "saturated", symbol: "⬢" },
 ];
 
 export function ChemistryNavbar({ apiBase, pathogen, onLoadSmiles, onClearCanvas }: Props) {
@@ -64,30 +64,27 @@ export function ChemistryNavbar({ apiBase, pathogen, onLoadSmiles, onClearCanvas
       fontFamily: "var(--lys-font-mono)",
     }}>
       {/* Section: launcher */}
-      <NavSectionHeader icon={<Sparkles size={9} />} label="LOAD" />
+      <NavSectionHeader icon={<Sparkles size={10} />} label="Library" />
       <NavButton
-        icon={<Sparkles size={14} style={{ color: "#10b981" }} />}
-        label="scaffold"
-        sub={`${scaffolds.length}`}
-        title="Open the full scaffold dropdown — listed below in the cards grid"
-        onClick={() => {
-          // Scroll to / focus the scaffold launcher card. For now, no-op:
-          // the existing card has its own opener. This pure-icon version
-          // is a hint; user can also click directly on the card body.
-        }}
+        icon={<Sparkles size={15} style={{ color: "#10b981" }} />}
+        label="All scaffolds"
+        sub={`${scaffolds.length} starting points`}
+        title="Open the full scaffold library with search — listed below in the cards grid"
+        onClick={() => {}}
         accent="#10b981"
       />
 
-      {/* Section: quick picks */}
-      <NavSectionHeader icon={<RefreshCw size={9} />} label="QUICK" />
+      {/* Section: quick picks — top molecular scaffolds */}
+      <NavSectionHeader icon={<RefreshCw size={10} />} label="Quick load" />
       {QUICK_PICKS.map((q) => {
         const found = scaffolds.find((s) => s.name === q.name);
         return (
           <NavButton
             key={q.name}
-            icon={<span style={{ fontSize: 14, lineHeight: 1, fontFamily: "ui-monospace, monospace" }}>{q.symbol}</span>}
+            icon={<span style={{ fontSize: 16, lineHeight: 1, fontFamily: "ui-monospace, monospace" }}>{q.symbol}</span>}
             label={q.label}
-            title={q.name + (found ? ` · ${found.smiles}` : "")}
+            sub={q.sub}
+            title={q.name + (found ? ` · ${found.smiles}` : " (loading...)")}
             disabled={!found}
             onClick={() => pick(q.name)}
             accent="#0891b2"
@@ -96,32 +93,33 @@ export function ChemistryNavbar({ apiBase, pathogen, onLoadSmiles, onClearCanvas
       })}
 
       {/* Section: tools */}
-      <NavSectionHeader icon={<Trash2 size={9} />} label="TOOLS" />
+      <NavSectionHeader icon={<Trash2 size={10} />} label="Tools" />
       <NavButton
-        icon={<Trash2 size={13} style={{ color: "#dc2626" }} />}
-        label="clear"
-        title="Clear current candidate from canvas"
+        icon={<Trash2 size={14} style={{ color: "#dc2626" }} />}
+        label="Clear canvas"
+        title="Remove the current molecule from the workspace"
         onClick={() => onClearCanvas?.()}
         accent="#dc2626"
       />
 
-      {/* Section: pathogen context */}
-      <NavSectionHeader icon={<Bug size={9} />} label="PATH." />
-      <div title={`Active pathogen: ${pathogen}`}
+      {/* Section: pathogen context (shown but not editable here — change in Knowledge nav) */}
+      <NavSectionHeader icon={<Bug size={10} />} label="Target pathogen" />
+      <div title={`Currently designing for: ${pathogen}`}
         style={{
           display: "flex", flexDirection: "column",
-          alignItems: "center", gap: 2,
-          padding: "5px 4px",
+          alignItems: "center", gap: 3,
+          padding: "6px 4px",
           borderRadius: 5,
           background: "rgba(220,38,38,0.06)",
           border: "1px solid rgba(220,38,38,0.18)",
           fontFamily: "var(--lys-font-mono)",
         }}>
-        <Bug size={13} style={{ color: "#dc2626" }} />
+        <Bug size={14} style={{ color: "#dc2626" }} />
         <span style={{
-          fontSize: 8.5, fontWeight: 700,
-          color: "#dc2626", letterSpacing: "0.04em",
+          fontSize: 10, fontWeight: 700,
+          color: "#dc2626", letterSpacing: "0.02em",
         }}>{pathogen}</span>
+        <span style={{ fontSize: 8, color: "var(--lys-text-faint)" }}>active target</span>
       </div>
     </div>
   );
@@ -130,14 +128,14 @@ export function ChemistryNavbar({ apiBase, pathogen, onLoadSmiles, onClearCanvas
 function NavSectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div style={{
-      display: "flex", alignItems: "center", gap: 3,
-      fontSize: 7.5, color: "var(--lys-text-faint)",
+      display: "flex", alignItems: "center", gap: 4,
+      fontSize: 9, color: "var(--lys-text-faint)",
       fontFamily: "var(--lys-font-mono)",
-      letterSpacing: "0.08em", textTransform: "uppercase",
-      padding: "3px 0 1px 0",
-      marginTop: 2,
-      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-      justifyContent: "center",
+      letterSpacing: "0.06em", textTransform: "uppercase",
+      padding: "4px 6px 2px 6px",
+      marginTop: 4,
+      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+      fontWeight: 600,
     }}>
       {icon}
       <span>{label}</span>
@@ -161,16 +159,18 @@ function NavButton({ icon, label, sub, title, onClick, disabled, accent = "#94a3
       disabled={disabled}
       title={title}
       style={{
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 2,
-        padding: "6px 4px",
-        borderRadius: 5,
-        border: "1px solid transparent",
+        display: "flex", flexDirection: "row",
+        alignItems: "center", gap: 8,
+        padding: "7px 8px",
+        borderRadius: 6,
+        border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
         background: "var(--lys-bg-2, #ffffff)",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.45 : 1,
-        fontFamily: "var(--lys-font-mono)",
+        fontFamily: "var(--lys-font-body)",
         transition: "background 100ms, border-color 100ms",
+        textAlign: "left",
+        width: "100%",
       }}
       onMouseOver={(e) => {
         if (disabled) return;
@@ -179,21 +179,29 @@ function NavButton({ icon, label, sub, title, onClick, disabled, accent = "#94a3
       }}
       onMouseOut={(e) => {
         (e.currentTarget as HTMLElement).style.background = "var(--lys-bg-2, #ffffff)";
-        (e.currentTarget as HTMLElement).style.borderColor = "transparent";
+        (e.currentTarget as HTMLElement).style.borderColor = "var(--lys-border-faint, rgba(0,0,0,0.05))";
       }}
     >
-      {icon}
       <span style={{
-        fontSize: 8.5, fontWeight: 600,
-        color: "var(--lys-text)",
-        letterSpacing: "0.02em",
-      }}>{label}</span>
-      {sub && (
+        width: 22, height: 22,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        flexShrink: 0,
+      }}>{icon}</span>
+      <span style={{ display: "flex", flexDirection: "column",
+        gap: 1, minWidth: 0, flex: 1 }}>
         <span style={{
-          fontSize: 7.5, color: "var(--lys-text-faint)",
-          fontWeight: 700,
-        }}>{sub}</span>
-      )}
+          fontSize: 11, fontWeight: 600,
+          color: "var(--lys-text)",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{label}</span>
+        {sub && (
+          <span style={{
+            fontSize: 8.5, color: "var(--lys-text-faint)",
+            fontFamily: "var(--lys-font-mono)",
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}>{sub}</span>
+        )}
+      </span>
     </button>
   );
 }

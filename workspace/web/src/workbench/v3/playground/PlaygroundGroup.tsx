@@ -297,7 +297,7 @@ export function PlaygroundGroup(p: Props) {
       {!collapsed && (() => {
         const navCard = p.cards.find((c) => c.slot === "nav");
         const mainCards = p.cards.filter((c) => c.slot !== "nav");
-        const NAV_W = 96;
+        const NAV_W = 130;
         return (
           <div style={{
             flex: 1, minHeight: 0,
