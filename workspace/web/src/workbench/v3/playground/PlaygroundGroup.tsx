@@ -231,6 +231,11 @@ export function PlaygroundGroup(p: Props) {
         }}>
           {p.cards.map((c) => {
             const cardCollapsed = collapsedCards.has(c.id);
+            // Fixed height when expanded → guarantees the inner list has a
+            // scroll boundary even if the current content fits.
+            // size:2 (full-row) cards get a taller body since they often
+            // hold richer dashboards (Properties, Library, etc.)
+            const expandedH = c.size === 2 ? 360 : 320;
             return (
               <div
                 key={c.id}
@@ -242,11 +247,9 @@ export function PlaygroundGroup(p: Props) {
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
-                  minHeight: cardCollapsed ? 28 : 240,
-                  maxHeight: cardCollapsed ? 28 : 480,
-                  height: cardCollapsed ? 28 : "auto",
+                  height: cardCollapsed ? 28 : expandedH,
                   isolation: "isolate",
-                  transition: "min-height 140ms ease, max-height 140ms ease",
+                  transition: "height 160ms ease",
                 }}
               >
                 {/* Card header — clickable to toggle collapse */}
