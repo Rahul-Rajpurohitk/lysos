@@ -43,6 +43,13 @@ import { AtomDetailCard } from "./playground/AtomDetailCard";
 import { PropertiesCard } from "./playground/PropertiesCard";
 import { SMARTSMatchCard } from "./playground/SMARTSMatchCard";
 import { MoleculeLibraryCard } from "./playground/MoleculeLibraryCard";
+import { PathogenIntelCard } from "./playground/PathogenIntelCard";
+import { AntibioticReferenceCard } from "./playground/AntibioticReferenceCard";
+import { ToxicityProfileCard } from "./playground/ToxicityProfileCard";
+import { SimilarityCard } from "./playground/SimilarityCard";
+import { ScoreBreakdownCard } from "./playground/ScoreBreakdownCard";
+import { AgentRosterCard } from "./playground/AgentRosterCard";
+import { SessionTraceCard } from "./playground/SessionTraceCard";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -1136,6 +1143,27 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           return h;
                         })()}
                       /> },
+                    { id: "breakdown", title: "Score breakdown · 12 axes", size: 2, body:
+                      <ScoreBreakdownCard
+                        scores={lastScores ?? {}}
+                        weights={REWARD_WEIGHTS}
+                        best={bestScores ?? {}}
+                      /> },
+                    { id: "toxicity", title: "Toxicity · ADME-Tox", body:
+                      <ToxicityProfileCard apiBase={apiBase} smiles={currentSmiles} /> },
+                    { id: "similarity", title: "Similarity · Tanimoto vs corpus", size: 2, body:
+                      <SimilarityCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        onLoad={(smi, name) => {
+                          loadSmilesIntoCanvas(smi, {
+                            createdBy: "user",
+                            parentId: null,
+                            logLabel: `[similarity load · ${name}]`,
+                          });
+                        }}
+                      /> },
                   ],
                 },
                 {
@@ -1144,6 +1172,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   cards: [
                     { id: "trace", title: "Reasoning trace · 4 specialists", size: 2, body:
                       <AgentReasoningTraceWindow events={events as any[]} /> },
+                    { id: "roster", title: "Agent roster · live state", size: 2, body:
+                      <AgentRosterCard apiBase={apiBase} sessionId={activeChatId} /> },
                   ],
                 },
                 {
@@ -1159,6 +1189,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         recentEditCount={editLog.length}
                         lastEventTs={livePlayground.latest?.ts}
                       /> },
+                    { id: "trace", title: "Session trace · unified timeline", size: 2, body:
+                      <SessionTraceCard apiBase={apiBase} sessionId={activeChatId} /> },
                     { id: "editlog", title: "Edit log · sqlite · live", size: 2, body:
                       <EditLogCard
                         edits={editLog}
@@ -1177,6 +1209,20 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "knowledge",
                   category: "Knowledge",
                   cards: [
+                    { id: "pathogen-intel", title: "Pathogen intel · profile", body:
+                      <PathogenIntelCard apiBase={apiBase} pathogen={selectedPathogen} /> },
+                    { id: "antibiotic-ref", title: "Antibiotic reference · canonical corpus", size: 2, body:
+                      <AntibioticReferenceCard
+                        apiBase={apiBase}
+                        pathogen={selectedPathogen}
+                        onLoad={(smi, name) => {
+                          loadSmilesIntoCanvas(smi, {
+                            createdBy: "user",
+                            parentId: null,
+                            logLabel: `[antibiotic-ref load · ${name}]`,
+                          });
+                        }}
+                      /> },
                     { id: "atom-detail", title: "Atom inspector · live (hover in 2D)", body:
                       <AtomDetailCard
                         apiBase={apiBase}

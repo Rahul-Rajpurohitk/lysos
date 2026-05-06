@@ -2264,3 +2264,463 @@ async def library_tags() -> dict:
     sorted_tags = sorted(counts.items(), key=lambda x: -x[1])
     conn.close()
     return {"tags": [{"tag": t, "count": c} for t, c in sorted_tags]}
+
+
+# ===========================================================================
+# DRUG CORPUS — 387 enriched named-drug examples + canonical antibiotics
+# ===========================================================================
+
+@router.get("/drugs")
+async def list_drugs(
+    q: Optional[str] = None,
+    task: Optional[str] = None,
+    limit: int = 50,
+) -> dict:
+    """Search/list the 387-drug enriched corpus.
+
+    Each row carries:
+       drug, prompt (truncated), response (full mechanism/spectrum/etc.),
+       task (one of drug_pathogen_reasoning, drug_mechanism_deep_dive,
+       counterfactual_design, resistance_mechanism_explanation, ...).
+
+    Query params:
+       q     — substring match in drug name OR prompt OR response
+       task  — exact task slug filter
+       limit — return at most N rows (default 50)
+    """
+    rows = _load_pharma_ground()
+    needle = (q or "").lower().strip()
+    out: list[dict] = []
+    seen_drugs: set[str] = set()
+    for r in rows:
+        if task and r.get("task", "") != task:
+            continue
+        if needle:
+            hay = (r.get("drug","") + r.get("prompt","") + r.get("response","")).lower()
+            if needle not in hay:
+                continue
+        # Dedup by drug name — return ONE row per drug (the first hit)
+        d = (r.get("drug") or "").strip()
+        if not d:
+            continue
+        if d.lower() in seen_drugs:
+            continue
+        seen_drugs.add(d.lower())
+        out.append({
+            "drug": d,
+            "task": r.get("task", ""),
+            "preview": (r.get("response") or "")[:280].replace("\n", " "),
+        })
+        if len(out) >= limit:
+            break
+    return {"total": len(out), "drugs": out}
+
+
+@router.get("/drugs/{name}")
+async def drug_profile(name: str) -> dict:
+    """Full multi-task profile for a single drug.
+    Returns ALL task-specific responses (mechanism / spectrum / SAR /
+    resistance / etc.) for that drug from the enriched corpus."""
+    rows = _load_pharma_ground()
+    needle = name.lower().strip()
+    profile: dict[str, list[dict]] = {}
+    for r in rows:
+        d = (r.get("drug") or "").lower().strip()
+        if d != needle:
+            continue
+        t = r.get("task", "unknown")
+        profile.setdefault(t, []).append({
+            "prompt": r.get("prompt", ""),
+            "response": r.get("response", ""),
+        })
+    if not profile:
+        raise HTTPException(404, f"drug not found: {name}")
+    return {
+        "drug": name,
+        "tasks_available": sorted(profile.keys()),
+        "n_entries": sum(len(v) for v in profile.values()),
+        "entries": profile,
+    }
+
+
+@router.get("/antibiotics")
+async def list_antibiotics(
+    q: Optional[str] = None,
+    pathogen: Optional[str] = None,
+    limit: int = 100,
+) -> dict:
+    """List known antibiotics from the canonical parquet
+    (data/processed/known-antibiotics-canonical.parquet).
+    Each row: name, smiles, drug_class, target_pathogens (list-of-str)."""
+    p = _WORKSPACE.parent / "data" / "processed" / "known-antibiotics-canonical.parquet"
+    if not p.exists():
+        return {"total": 0, "antibiotics": [], "error": "corpus not found"}
+    try:
+        import pandas as pd  # type: ignore[import]
+    except ImportError:
+        raise HTTPException(503, "pandas not available")
+    try:
+        df = pd.read_parquet(p)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(500, f"parquet read failed: {exc}")
+    needle = (q or "").lower().strip()
+    out: list[dict] = []
+    for _, row in df.iterrows():
+        d = row.to_dict()
+        name = str(d.get("name") or d.get("drug") or "").strip()
+        if not name:
+            continue
+        smi = str(d.get("smiles") or "").strip()
+        cls = str(d.get("drug_class") or d.get("class") or "").strip()
+        targets_field = d.get("target_pathogens", d.get("pathogens", ""))
+        if isinstance(targets_field, list):
+            targets = [str(x) for x in targets_field]
+        elif isinstance(targets_field, str):
+            targets = [t.strip() for t in targets_field.split(",") if t.strip()]
+        else:
+            targets = []
+        if needle:
+            hay = (name + " " + cls + " " + " ".join(targets)).lower()
+            if needle not in hay:
+                continue
+        if pathogen and pathogen.lower() not in [t.lower() for t in targets]:
+            continue
+        out.append({
+            "name": name,
+            "smiles": smi,
+            "drug_class": cls,
+            "target_pathogens": targets,
+        })
+        if len(out) >= limit:
+            break
+    return {"total": len(out), "antibiotics": out}
+
+
+# ===========================================================================
+# TOXICITY — QSAR-rule predictions (no model, pure RDKit + literature thresholds)
+# ===========================================================================
+
+class ToxicityProfile(BaseModel):
+    smiles: str
+    canonical_smiles: str
+    # hERG potassium-channel blockade prediction (cardiotoxicity proxy)
+    herg_risk: str           # "low" | "medium" | "high"
+    herg_score: float        # 0-1 risk
+    herg_rationale: str
+    # Hepatotoxicity proxy
+    hepatotox_risk: str
+    hepatotox_score: float
+    hepatotox_rationale: str
+    # Mutagenicity (Ames test) proxy via toxicophore SMARTS
+    ames_risk: str
+    ames_score: float
+    ames_rationale: str
+    # Skin sensitization
+    skin_sens_risk: str
+    skin_sens_rationale: str
+    # Overall ADMET-Tox composite (for ranking)
+    overall_safety_score: float   # 1.0 = clean, 0.0 = unsafe
+
+
+@router.get("/molecule/toxicity", response_model=ToxicityProfile)
+async def molecule_toxicity(smiles: str) -> ToxicityProfile:
+    """QSAR-rule based toxicity prediction. Uses literature toxicophores
+    and RDKit physicochemical thresholds. Not a substitute for actual
+    DeepTox/eToxPred models, but reliable for early-stage triage."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import Descriptors, Crippen, rdMolDescriptors
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {smiles}")
+
+    canonical = Chem.MolToSmiles(mol, canonical=True)
+    mw = float(Descriptors.MolWt(mol))
+    logp = float(Crippen.MolLogP(mol))
+    tpsa = float(rdMolDescriptors.CalcTPSA(mol))
+    n_aromatic_rings = int(rdMolDescriptors.CalcNumAromaticRings(mol))
+    n_basic_n = sum(
+        1 for atom in mol.GetAtoms()
+        if atom.GetSymbol() == "N" and atom.GetTotalNumHs() > 0
+        and not atom.GetIsAromatic() and atom.GetFormalCharge() <= 0
+    )
+
+    # ─── hERG risk: high logP + basic N + aromatic rings → blocker
+    # Aronov 2005, Cavalli 2002 thresholds
+    herg_score = 0.0
+    herg_reasons: list[str] = []
+    if logp > 3.5:
+        herg_score += 0.35
+        herg_reasons.append(f"high logP ({logp:.2f})")
+    if n_basic_n >= 1:
+        herg_score += 0.30
+        herg_reasons.append(f"basic N count {n_basic_n}")
+    if n_aromatic_rings >= 2:
+        herg_score += 0.20
+        herg_reasons.append(f"{n_aromatic_rings} aromatic rings")
+    if mw > 350 and logp > 3:
+        herg_score += 0.15
+        herg_reasons.append("MW>350 + logP>3")
+    herg_score = min(1.0, herg_score)
+    herg_risk = "high" if herg_score >= 0.6 else "medium" if herg_score >= 0.3 else "low"
+
+    # ─── Hepatotoxicity: high logP + reactive groups
+    hepa_score = 0.0
+    hepa_reasons: list[str] = []
+    HEPA_TOXICOPHORES = {
+        "thiophene":     "c1ccsc1",
+        "furan":         "c1ccoc1",
+        "p-aminophenol": "Nc1ccc(O)cc1",
+        "anilide":       "Nc1ccccc1",
+    }
+    for n, smt in HEPA_TOXICOPHORES.items():
+        try:
+            patt = Chem.MolFromSmarts(smt)
+            if patt and mol.HasSubstructMatch(patt):
+                hepa_score += 0.25
+                hepa_reasons.append(n)
+        except Exception:
+            pass
+    if logp > 5:
+        hepa_score += 0.30
+        hepa_reasons.append(f"very high logP ({logp:.2f})")
+    elif logp > 3:
+        hepa_score += 0.10
+    hepa_score = min(1.0, hepa_score)
+    hepa_risk = "high" if hepa_score >= 0.6 else "medium" if hepa_score >= 0.3 else "low"
+
+    # ─── Mutagenicity (Ames): toxicophore-based (Kazius, McCarren)
+    ames_score = 0.0
+    ames_reasons: list[str] = []
+    AMES_TOXICOPHORES = {
+        "aromatic-nitro":       "c[N+](=O)[O-]",
+        "aromatic-amine":       "c[NX3;H2]",
+        "aliphatic-halide":     "[CX4][Cl,Br,I]",
+        "epoxide":              "C1OC1",
+        "aziridine":            "C1CN1",
+        "michael-acceptor":     "[CX3]=[CX3][CX3]=[OX1]",
+        "nitroso":              "[NX2]=[OX1]",
+        "azide":                "[N-]=[N+]=N",
+        "hydrazine":            "[NX3][NX3]",
+        "peroxide":             "[OX2][OX2]",
+    }
+    for n, smt in AMES_TOXICOPHORES.items():
+        try:
+            patt = Chem.MolFromSmarts(smt)
+            if patt and mol.HasSubstructMatch(patt):
+                ames_score += 0.18
+                ames_reasons.append(n)
+        except Exception:
+            pass
+    ames_score = min(1.0, ames_score)
+    ames_risk = "high" if ames_score >= 0.5 else "medium" if ames_score >= 0.2 else "low"
+
+    # ─── Skin sensitization: reactive electrophiles
+    skin_reasons: list[str] = []
+    SKIN_TOXICOPHORES = ["[CX3](=O)[Cl,F]", "[#16](=O)(=O)[Cl]", "C=C[CX3](=O)"]
+    for smt in SKIN_TOXICOPHORES:
+        try:
+            patt = Chem.MolFromSmarts(smt)
+            if patt and mol.HasSubstructMatch(patt):
+                skin_reasons.append(smt)
+        except Exception:
+            pass
+    skin_risk = "high" if len(skin_reasons) >= 1 else "low"
+
+    # ─── Composite safety
+    overall = 1.0 - 0.4*herg_score - 0.3*hepa_score - 0.3*ames_score
+    overall = max(0.0, min(1.0, overall))
+
+    return ToxicityProfile(
+        smiles=smiles, canonical_smiles=canonical,
+        herg_risk=herg_risk, herg_score=round(herg_score, 3),
+        herg_rationale=", ".join(herg_reasons) if herg_reasons else "no hERG-flagged features",
+        hepatotox_risk=hepa_risk, hepatotox_score=round(hepa_score, 3),
+        hepatotox_rationale=", ".join(hepa_reasons) if hepa_reasons else "no hepatotoxicity flags",
+        ames_risk=ames_risk, ames_score=round(ames_score, 3),
+        ames_rationale=", ".join(ames_reasons) if ames_reasons else "no Ames toxicophores",
+        skin_sens_risk=skin_risk,
+        skin_sens_rationale=", ".join(skin_reasons) if skin_reasons else "no electrophile flags",
+        overall_safety_score=round(overall, 3),
+    )
+
+
+# ===========================================================================
+# SIMILARITY — Tanimoto vs. canonical antibiotic corpus (real-time)
+# ===========================================================================
+
+class SimilarityRequest(BaseModel):
+    smiles: str
+    top_k: int = 8
+    pathogen: Optional[str] = None     # filter corpus to drugs targeting this pathogen
+
+
+class SimilarityHit(BaseModel):
+    drug_name: str
+    smiles: str
+    drug_class: str
+    target_pathogens: list[str]
+    tanimoto: float
+    common_atoms: int
+
+
+class SimilarityResponse(BaseModel):
+    smiles: str
+    n_corpus: int
+    top: list[SimilarityHit]
+
+
+@router.post("/molecule/similarity", response_model=SimilarityResponse)
+async def molecule_similarity(req: SimilarityRequest) -> SimilarityResponse:
+    """Tanimoto similarity vs. known-antibiotics corpus.
+    Returns top-K closest known drugs with their drug class + pathogen targets.
+    Uses Morgan fingerprints (radius=2, 2048 bits) — the medchem standard."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import AllChem, DataStructs
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    try:
+        import pandas as pd  # type: ignore[import]
+    except ImportError:
+        raise HTTPException(503, "pandas not available")
+    p = _WORKSPACE.parent / "data" / "processed" / "known-antibiotics-canonical.parquet"
+    if not p.exists():
+        return SimilarityResponse(smiles=req.smiles, n_corpus=0, top=[])
+
+    query_mol = Chem.MolFromSmiles(req.smiles)
+    if query_mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {req.smiles}")
+    qfp = AllChem.GetMorganFingerprintAsBitVect(query_mol, 2, nBits=2048)
+
+    df = pd.read_parquet(p)
+    hits: list[tuple[float, dict]] = []
+    for _, row in df.iterrows():
+        d = row.to_dict()
+        smi = str(d.get("smiles") or "").strip()
+        if not smi:
+            continue
+        try:
+            cmol = Chem.MolFromSmiles(smi)
+            if cmol is None:
+                continue
+            cfp = AllChem.GetMorganFingerprintAsBitVect(cmol, 2, nBits=2048)
+            sim = float(DataStructs.TanimotoSimilarity(qfp, cfp))
+        except Exception:
+            continue
+        targets_field = d.get("target_pathogens", d.get("pathogens", ""))
+        if isinstance(targets_field, list):
+            targets = [str(x) for x in targets_field]
+        elif isinstance(targets_field, str):
+            targets = [t.strip() for t in targets_field.split(",") if t.strip()]
+        else:
+            targets = []
+        if req.pathogen and req.pathogen.lower() not in [t.lower() for t in targets]:
+            continue
+        # Approximate common atoms (heavy atoms in MCS would be better; this
+        # is a quick proxy from match count)
+        common = int(query_mol.GetNumHeavyAtoms() * sim)
+        hits.append((sim, {
+            "drug_name": str(d.get("name") or d.get("drug") or "?"),
+            "smiles": smi,
+            "drug_class": str(d.get("drug_class") or d.get("class") or ""),
+            "target_pathogens": targets,
+            "tanimoto": round(sim, 4),
+            "common_atoms": common,
+        }))
+    hits.sort(key=lambda x: -x[0])
+    top = [SimilarityHit(**h[1]) for h in hits[:req.top_k]]
+    return SimilarityResponse(smiles=req.smiles, n_corpus=len(df), top=top)
+
+
+# ===========================================================================
+# SESSION TIMELINE — unified event log for the Live container
+# ===========================================================================
+
+@router.get("/sessions/{sid}/timeline")
+async def session_timeline(sid: str, limit: int = 200) -> dict:
+    """Unified timeline: molecule edits + score snapshots + agent actions
+    for a session, sorted chronologically. Powers the Live container's
+    SessionTraceCard."""
+    from workspace.playground.store import get_store as _get_store
+    store = _get_store()
+    edits = store.list_edits(sid, limit=limit)
+    actions = store.list_actions(sid, limit=limit)
+    # Score snapshots — query directly since no list helper exists
+    snaps: list[dict] = []
+    try:
+        rows = store._q(
+            "SELECT s.* FROM score_snapshots s "
+            "JOIN molecules m ON s.molecule_id = m.id "
+            "WHERE m.session_id = ? ORDER BY s.ts DESC LIMIT ?",
+            (sid, limit),
+        ).fetchall()
+        for r in rows:
+            d = dict(r)
+            try:
+                d["components"] = _json_lib.loads(d.get("components") or "{}")
+            except Exception:
+                d["components"] = {}
+            snaps.append(d)
+    except Exception:
+        snaps = []
+
+    timeline = []
+    for e in edits:
+        actor = e.get("created_by") or e.get("actor") or "user"
+        op = e.get("op") or e.get("op_kind") or ""
+        atom_idx = e.get("target_atom_idx", e.get("atom_idx"))
+        timeline.append({
+            "ts": e.get("ts"), "kind": "edit", "actor": str(actor),
+            "summary": f"{op}{' @ atom ' + str(atom_idx) if atom_idx is not None else ''}".strip(),
+            "result_smiles": e.get("result_smiles", ""), "raw": e,
+        })
+    for s in snaps:
+        composite = s.get("composite") or 0.0
+        timeline.append({
+            "ts": s.get("ts"), "kind": "score", "actor": s.get("model_used") or "scorer",
+            "summary": f"composite = {composite:.3f}", "raw": s,
+        })
+    for a in actions:
+        ag_name = a.get("agent_name") or a.get("actor") or "agent"
+        a_type = a.get("action_type") or a.get("op") or ""
+        msg = a.get("message_text") or ""
+        timeline.append({
+            "ts": a.get("ts"), "kind": "agent", "actor": str(ag_name),
+            "summary": (msg[:120] if msg else a_type) or a_type,
+            "raw": a,
+        })
+    timeline.sort(key=lambda x: x.get("ts") or 0, reverse=True)
+    return {"session": sid, "n_events": len(timeline), "timeline": timeline[:limit]}
+
+
+# ===========================================================================
+# AGENT ROSTER — per-agent state + recent actions for the Agents container
+# ===========================================================================
+
+@router.get("/sessions/{sid}/agent-roster")
+async def session_agent_roster(sid: str) -> dict:
+    """Per-agent breakdown for the session.
+    Returns each canonical agent (Designer/Critic/Editor/Strategist/Orchestrator)
+    with action count, last-action timestamp, last summary, current state."""
+    from workspace.playground.store import get_store as _get_store
+    store = _get_store()
+    actions = store.list_actions(sid, limit=500)
+    AGENTS = ["designer", "critic", "editor", "strategist", "orchestrator"]
+    roster = []
+    for agent in AGENTS:
+        ag_actions = [a for a in actions if (a.get("agent_name") or "").lower() == agent]
+        # actions list is in chronological order (oldest first), so last entry is most recent
+        last = ag_actions[-1] if ag_actions else None
+        roster.append({
+            "actor": agent,
+            "n_actions": len(ag_actions),
+            "last_ts": last.get("ts") if last else None,
+            "last_op": (last.get("action_type") if last else "") or "",
+            "last_summary": (last.get("message_text") if last else "")[:140] if last else "",
+            "state": "active" if last else "idle",
+        })
+    return {"session": sid, "roster": roster, "total_actions": len(actions)}
+
