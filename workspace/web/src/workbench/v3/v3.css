@@ -483,8 +483,9 @@
 }
 .lys-chat__composer {
   flex: 0 0 auto;
-  /* Composer flush to the panel edges, NO divider above (per redesign) */
-  padding: 4px 0 8px;
+  /* Equal breathing room on top + sides, larger bottom margin so the
+     composer feels seated, not pinned to the screen edge. */
+  padding: 8px 10px 16px;
   border-top: 0;
   background: var(--lys-bg);
 }
