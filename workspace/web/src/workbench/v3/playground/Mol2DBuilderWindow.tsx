@@ -13,7 +13,7 @@
  *  5. Pick an attachment → POST /workbench/molecule/edit → onMoleculeEdit
  *     bubbles new SMILES up to canvas state.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChemKnowledgeCard } from "./ChemKnowledgeCard";
 
 interface Props {
@@ -170,7 +170,6 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit }
     }
   }
 
-  const headerInfo = useMemo(() => smiles ?? "(no candidate yet)", [smiles]);
 
   return (
     <div
@@ -210,8 +209,11 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit }
               fontSize: 11,
               fontFamily: "var(--lys-font-mono)",
               padding: 12,
+              textAlign: "center",
             }}>
-              {smiles ? "rendering…" : `(headerInfo: ${headerInfo})`}
+              {smiles
+                ? "rendering…"
+                : "no candidate yet · run /design <pathogen> or pick one"}
             </div>
           )}
         {error && (

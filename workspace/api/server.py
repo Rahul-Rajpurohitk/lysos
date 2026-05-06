@@ -202,6 +202,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chat router not loaded: %s", exc)
 
+# Playground — atom-level data API + live-editing WebSocket + chem rules
+try:
+    from .playground import router as playground_router
+    app.include_router(playground_router)
+    log.info("Playground routes loaded (atom-level read API + WS /workbench/playground/ws/playground/<id>)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Playground router not loaded: %s", exc)
+
 
 # ----------------------------------------------------------------------------
 # Schemas
