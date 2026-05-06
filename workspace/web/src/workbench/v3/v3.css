@@ -1366,3 +1366,13 @@
   transform: translateY(0);
   background: rgba(16, 185, 129, 0.10) !important;
 }
+
+/* Pathogen pills (small launcher in the demoted strip) */
+.lys-onb-pill:hover {
+  background: rgba(16, 185, 129, 0.18) !important;
+  transform: translateY(-1px);
+}
+.lys-onb-pill:active {
+  transform: translateY(0);
+  background: rgba(16, 185, 129, 0.25) !important;
+}

@@ -1,18 +1,14 @@
 /**
- * OnboardingHero — compact 2-col pathogen grid + visible feature row.
+ * OnboardingHero — feature-led, pathogen-demoted.
  *
- * Constraints (from user feedback):
- *  - Cards must be 2-col, not list-style — vertical space is precious
- *  - The bottom feature row must be visible without scroll on first paint
- *  - No top tag, no scroll on the new-chat surface
+ * User direction: lead with the multi-agent / reward / drag-edit / MI300X
+ * value props (the "feature thing"), demote the pathogen list to a thin
+ * inline pill strip ("pick a pathogen to start").
  *
- * Vertical budget on a 600×480 chat panel:
- *    title block      52px
- *    pathogen grid   ~210px (4 rows × ~50px + gaps)
- *    feature row     ~100px (2x2 on narrow, 4-col on wide)
- *    container pad   ~24px
- *    ──────────────
- *    total          ~386px → fits 600px area with ~200px breathing room
+ * Layout:
+ *    title block            — name + tagline
+ *    feature cards (2x2)    — borderless, bigger, with copy
+ *    pathogen pill strip    — single horizontal row, click to launch
  */
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
@@ -32,28 +28,27 @@ interface PathogenSummary {
 
 const TIER_ORDER = ["MRSA", "Mtb", "EColi-CRE", "KpneuCRE", "Abaum", "Paer", "VRE", "NGono"];
 
-interface PathogenMeta {
-  fullName: string;       // human-readable pathogen name (short form)
-  mech: string;            // primary mechanism / target
-  whoTier: "CRITICAL" | "HIGH";
-}
-
-const PATHOGEN_META: Record<string, PathogenMeta> = {
-  "MRSA":      { fullName: "S. aureus (MRSA)",          mech: "mecA · PBP2a",       whoTier: "HIGH" },
-  "Mtb":       { fullName: "M. tuberculosis (MDR)",     mech: "rpoB · katG",         whoTier: "CRITICAL" },
-  "EColi-CRE": { fullName: "E. coli (CRE)",             mech: "KPC · NDM · OXA-48",  whoTier: "CRITICAL" },
-  "KpneuCRE":  { fullName: "K. pneumoniae (CRE)",       mech: "KPC producers",       whoTier: "CRITICAL" },
-  "Abaum":     { fullName: "A. baumannii",              mech: "OXA-23/24/58",        whoTier: "CRITICAL" },
-  "Paer":      { fullName: "P. aeruginosa (MDR)",       mech: "mexAB · AmpC",       whoTier: "CRITICAL" },
-  "VRE":       { fullName: "E. faecium (VRE)",          mech: "vanA · vanB",         whoTier: "HIGH" },
-  "NGono":     { fullName: "N. gonorrhoeae",            mech: "penA · 23S rRNA",     whoTier: "HIGH" },
-};
-
 const FEATURES = [
-  { icon: <Brain size={12} />, title: "Multi-agent debate", body: "Designer · Critic · Editor · Strategist." },
-  { icon: <FlaskConical size={12} />, title: "12-component reward", body: "MIC · QED · SAscore · pose · spectrum." },
-  { icon: <Microscope size={12} />, title: "Drag-edit chemistry", body: "Click an atom; pose recomputes live." },
-  { icon: <Target size={12} />, title: "MI300X-trained policy", body: "Gemma 4 31B · TxGemma → SFT → DPO → GRPO." },
+  {
+    icon: <Brain size={14} />,
+    title: "Multi-agent debate",
+    body: "Designer drafts, Critic challenges, Editor refines, Strategist directs. Nine sub-agents on demand.",
+  },
+  {
+    icon: <FlaskConical size={14} />,
+    title: "12-component reward stack",
+    body: "MIC · QED · SAscore · hemolysis · novelty · pose · spectrum. Live radar updates per edit.",
+  },
+  {
+    icon: <Microscope size={14} />,
+    title: "Drag-edit chemistry",
+    body: "Click any atom on the 3D ligand; pose recomputes, agents debate your edit live.",
+  },
+  {
+    icon: <Target size={14} />,
+    title: "MI300X-trained policy",
+    body: "Gemma 4 31B base. 4-stage pipeline: TxGemma → AMR SFT → DPO → GRPO on real assays.",
+  },
 ];
 
 export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps) {
@@ -75,43 +70,44 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
       width: "100%",
       height: "100%",
       overflow: "hidden",
-      padding: "10px 12px 12px",
+      padding: "16px 16px 14px",
       display: "flex",
       flexDirection: "column",
-      gap: 10,
-      background: "radial-gradient(ellipse at top, rgba(16, 185, 129, 0.06), transparent 55%)",
+      gap: 16,
+      background: "radial-gradient(ellipse at top, rgba(16, 185, 129, 0.07), transparent 55%)",
     }}>
-      {/* ────────── Title block (compact) ────────── */}
+      {/* ────────── Title + tagline ────────── */}
       <motion.div
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        style={{ textAlign: "center", maxWidth: 560, margin: "0 auto" }}
+        style={{ textAlign: "center", maxWidth: 620, margin: "0 auto" }}
       >
         <h1 style={{
-          fontSize: 18,
+          fontSize: 22,
           fontWeight: 600,
           letterSpacing: "-0.02em",
           margin: 0,
-          marginBottom: 3,
+          marginBottom: 4,
           color: "var(--lys-text)",
           lineHeight: 1.15,
         }}>
           Lysos Workbench
         </h1>
         <p style={{
-          fontSize: 11,
+          fontSize: 12,
           color: "var(--lys-text-dim)",
           margin: 0,
-          lineHeight: 1.35,
+          lineHeight: 1.4,
         }}>
-          Generative drug design for AMR — pick a WHO-priority pathogen below.
+          The AI drug-design lab for antimicrobial resistance.
+          <span style={{ color: "var(--lys-text-faint)" }}>
+            {" "}4 specialist agents · 12-axis reward · MI300X-trained.
+          </span>
         </p>
       </motion.div>
 
-      {/* ────────── Pathogen grid: TIGHT 2-col — flex:1 lets it scroll on
-          truly-narrow viewports without pushing the feature row offscreen.
-          On a normal 600px chat panel, 4 rows × ~46px = 184px fits cleanly. */}
+      {/* ────────── Feature cards (2×2) — the lead content now ────────── */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -119,152 +115,107 @@ export function OnboardingHero({ apiBase, onPickPathogen }: OnboardingHeroProps)
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(2, 1fr)",
-          gap: 4,
+          gap: 8,
           maxWidth: 760,
           margin: "0 auto",
           width: "100%",
-          minHeight: 0,
         }}
       >
-        {sorted.slice(0, 8).map((p, i) => {
-          const meta = PATHOGEN_META[p.code];
-          return (
-            <motion.button
-              key={p.code}
-              initial={{ opacity: 0, y: 3 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, delay: 0.06 + i * 0.02 }}
-              onClick={() => onPickPathogen(p.code)}
-              className="lys-onb-card"
-              style={{
-                padding: "6px 8px",
-                border: 0,
-                borderRadius: 7,
-                background: "transparent",
-                textAlign: "left",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                color: "var(--lys-text)",
-                transition: "background 0.12s",
-                display: "flex",
-                flexDirection: "column",
-                gap: 1,
-                minWidth: 0,
-              }}
-            >
-              {/* Row 1: code + tier badge (justify-between) */}
-              <div style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 6,
-                justifyContent: "space-between",
-                minWidth: 0,
-              }}>
-                <span style={{
-                  fontSize: 11.5,
-                  fontWeight: 700,
-                  color: "var(--lys-accent)",
-                  fontFamily: "var(--lys-font-mono)",
-                  letterSpacing: "-0.01em",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}>{p.code}</span>
-                {meta && (
-                  <span style={{
-                    fontSize: 8,
-                    fontFamily: "var(--lys-font-mono)",
-                    letterSpacing: "0.06em",
-                    padding: "0 4px",
-                    borderRadius: 3,
-                    background: meta.whoTier === "CRITICAL"
-                      ? "rgba(239, 68, 68, 0.10)"
-                      : "rgba(245, 158, 11, 0.10)",
-                    color: meta.whoTier === "CRITICAL" ? "#b91c1c" : "#92400e",
-                    fontWeight: 600,
-                    flexShrink: 0,
-                  }}>
-                    {meta.whoTier}
-                  </span>
-                )}
-              </div>
-              {/* Row 2: full name */}
-              <div style={{
-                fontSize: 10.5,
-                color: "var(--lys-text)",
-                fontWeight: 500,
-                lineHeight: 1.25,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}>
-                {meta?.fullName ?? p.name}
-              </div>
-              {/* Row 3: mech + first-line count (mono) */}
-              <div style={{
-                fontSize: 9,
-                color: "var(--lys-text-faint)",
-                fontFamily: "var(--lys-font-mono)",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}>
-                {meta?.mech ?? ""} · {p.first_line_count} drugs
-              </div>
-            </motion.button>
-          );
-        })}
-      </motion.div>
-
-      {/* ────────── Feature row: 2x2 on narrow, 4-col on wide ────────── */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.3, delay: 0.16 }}
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(2, 1fr)",
-          gap: "8px 12px",
-          maxWidth: 760,
-          margin: "0 auto",
-          width: "100%",
-          paddingTop: 8,
-          borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
-          flexShrink: 0,
-        }}
-      >
-        {FEATURES.map((f) => (
-          <div key={f.title} style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 1,
-            minWidth: 0,
-          }}>
+        {FEATURES.map((f, i) => (
+          <motion.div
+            key={f.title}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25, delay: 0.06 + i * 0.04 }}
+            style={{
+              padding: "10px 12px",
+              borderRadius: 8,
+              background: "rgba(16, 185, 129, 0.03)",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4,
+              minWidth: 0,
+            }}
+          >
             <div style={{
               display: "flex",
               alignItems: "center",
-              gap: 5,
+              gap: 6,
               color: "var(--lys-accent)",
             }}>
               {f.icon}
               <span style={{
-                fontSize: 10.5,
+                fontSize: 12,
                 color: "var(--lys-text)",
                 fontWeight: 600,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+                letterSpacing: "-0.005em",
               }}>{f.title}</span>
             </div>
             <p style={{
-              fontSize: 10,
+              fontSize: 11,
               color: "var(--lys-text-dim)",
               margin: 0,
-              lineHeight: 1.3,
+              lineHeight: 1.4,
             }}>{f.body}</p>
-          </div>
+          </motion.div>
         ))}
       </motion.div>
+
+      {/* ────────── Pathogen pill strip — single line, demoted ────────── */}
+      {sorted.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: 0.22 }}
+          style={{
+            maxWidth: 760,
+            margin: "0 auto",
+            width: "100%",
+            paddingTop: 10,
+            borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+          }}
+        >
+          <div style={{
+            fontSize: 10,
+            color: "var(--lys-text-faint)",
+            fontFamily: "var(--lys-font-mono)",
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+          }}>
+            Pick a pathogen to start
+          </div>
+          <div style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 4,
+          }}>
+            {sorted.slice(0, 8).map((p) => (
+              <button
+                key={p.code}
+                onClick={() => onPickPathogen(p.code)}
+                className="lys-onb-pill"
+                style={{
+                  padding: "3px 9px",
+                  border: 0,
+                  borderRadius: 999,
+                  background: "rgba(16, 185, 129, 0.08)",
+                  color: "var(--lys-accent)",
+                  fontFamily: "var(--lys-font-mono)",
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.12s, transform 0.12s",
+                }}
+              >
+                {p.code}
+              </button>
+            ))}
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 }
