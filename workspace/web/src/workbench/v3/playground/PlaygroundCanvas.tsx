@@ -158,6 +158,29 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
     };
 
     const onWheel = (e: WheelEvent) => {
+      // If the wheel happens INSIDE a card body (or any scrollable element
+      // inside it), let the browser handle native scroll — don't hijack it
+      // for canvas pan/zoom. Cmd/Ctrl+wheel always zooms the canvas though.
+      if (!(e.metaKey || e.ctrlKey)) {
+        let node = e.target as HTMLElement | null;
+        while (node && node !== el) {
+          if (node.classList && node.classList.contains("lys-card-body")) {
+            // Wheel landed on a card body subtree — check if any ancestor
+            // up to this card body has a scrollable overflow that needs
+            // this scroll. If so, let native scroll proceed.
+            return;  // do NOT preventDefault, do NOT pan canvas
+          }
+          // Also early-out if any ancestor is scrollable (catches inner
+          // overflow:auto containers like ScaffoldPickerCard's list).
+          const cs = getComputedStyle(node);
+          const oy = cs.overflowY;
+          if ((oy === "auto" || oy === "scroll") &&
+              node.scrollHeight > node.clientHeight) {
+            return;
+          }
+          node = node.parentElement;
+        }
+      }
       e.preventDefault();
       const rect = el.getBoundingClientRect();
       const cx = e.clientX - rect.left;

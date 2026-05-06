@@ -213,10 +213,11 @@ export function PlaygroundGroup(p: Props) {
       </div>
 
       {/* Cards container — 2-col flex grid.
-          gridAutoRows: "min-content" forces each row to shrink to the actual
-          card height (so collapsed cards take exactly 28px instead of the
-          grid stretching them to fill available space). alignContent: "start"
-          parks free space at the bottom rather than between rows. */}
+          alignContent: "start" parks free space at the bottom rather than
+          distributing it between rows. Default gridAutoRows: auto respects
+          each card's explicit height (28 collapsed, 320–360 expanded) so
+          the inner list area inside each card has its own scroll boundary
+          that's smaller than the content — forcing internal scroll. */}
       {!collapsed && (
         <div style={{
           flex: 1,
@@ -224,7 +225,6 @@ export function PlaygroundGroup(p: Props) {
           padding: 8,
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
-          gridAutoRows: "min-content",
           alignContent: "start",
           gap: 8,
           overflow: "auto",
