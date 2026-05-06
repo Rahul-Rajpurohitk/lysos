@@ -1405,3 +1405,14 @@
   transform: translateY(0);
   background: rgba(16, 185, 129, 0.25) !important;
 }
+
+/* Hide the chat-tab strip's horizontal scrollbar — looks fat/ugly on
+   macOS and adds visual noise. Strip stays scrollable via wheel/swipe. */
+.lys-chat-tabs {
+  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;  /* IE/Edge */
+}
+.lys-chat-tabs::-webkit-scrollbar {
+  height: 0;                  /* WebKit (Chrome/Safari) */
+  display: none;
+}
