@@ -61,13 +61,15 @@ def pull_history(entity: str, project: str, run_id: str, out_dir: Path,
     print(f"[wandb] reading {full_path} from cloud …")
     run = api.run(full_path)
 
-    # Summary (final scalar values)
-    (out_dir / "summary.json").write_text(json.dumps(dict(run.summary), indent=2, default=str))
-    print(f"[ok] summary.json ({len(run.summary)} keys)")
+    # Summary (final scalar values) — newer wandb returns HTTPSummary, len() not supported
+    summary_dict = dict(run.summary._json_dict) if hasattr(run.summary, "_json_dict") else dict(run.summary)
+    (out_dir / "summary.json").write_text(json.dumps(summary_dict, indent=2, default=str))
+    print(f"[ok] summary.json ({len(summary_dict)} keys)")
 
     # Config (training hyperparams)
-    (out_dir / "config.json").write_text(json.dumps(dict(run.config), indent=2, default=str))
-    print(f"[ok] config.json ({len(run.config)} keys)")
+    config_dict = dict(run.config) if isinstance(run.config, dict) else dict(run.config._items)
+    (out_dir / "config.json").write_text(json.dumps(config_dict, indent=2, default=str))
+    print(f"[ok] config.json ({len(config_dict)} keys)")
 
     # Metadata (host, command, timing)
     md = {
