@@ -215,6 +215,72 @@ _TITLE_PROMPT = (
 )
 
 
+# ---------------------------------------------------------------------------
+# Auto-title budget + backend selection. Keep external API usage bounded
+# until the trained Lysos-Gemma is deployed and we can swap LYSOS_AUTOTITLE_
+# BACKEND="lysos".
+# ---------------------------------------------------------------------------
+
+import os as _os
+import time as _t
+
+# env-tunable knobs (set in .env or shell):
+#   LYSOS_AUTOTITLE_BACKEND       = "gemini" | "lysos" | "fallback"   (default gemini)
+#   LYSOS_AUTOTITLE_MAX_PER_DAY   = int                               (default 200)
+#   LYSOS_AUTOTITLE_MAX_PER_SESS  = int                               (default 8)
+#   LYSOS_AUTOTITLE_MIN_GAP_SEC   = int                               (default 4)
+_AUTOTITLE_BACKEND = _os.getenv("LYSOS_AUTOTITLE_BACKEND", "gemini").lower()
+_AUTOTITLE_MAX_PER_DAY = int(_os.getenv("LYSOS_AUTOTITLE_MAX_PER_DAY", "200"))
+_AUTOTITLE_MAX_PER_SESS = int(_os.getenv("LYSOS_AUTOTITLE_MAX_PER_SESS", "8"))
+_AUTOTITLE_MIN_GAP_SEC = int(_os.getenv("LYSOS_AUTOTITLE_MIN_GAP_SEC", "4"))
+
+# Process-local counters. Reset at midnight UTC (cheap heuristic — sufficient
+# for a single-process FastAPI; replace with Redis when we go multi-replica).
+_autotitle_usage: dict[str, Any] = {
+    "day_key": "",
+    "day_calls": 0,
+    "by_session": {},   # session_id -> {"calls": int, "last_ts": float}
+}
+
+
+def _autotitle_check_budget(session_id: str) -> tuple[bool, str]:
+    """Return (allowed, reason). Caller bails to fallback on (False, _)."""
+    today = _t.strftime("%Y-%m-%d", _t.gmtime())
+    if _autotitle_usage["day_key"] != today:
+        _autotitle_usage["day_key"] = today
+        _autotitle_usage["day_calls"] = 0
+        _autotitle_usage["by_session"] = {}
+
+    if _autotitle_usage["day_calls"] >= _AUTOTITLE_MAX_PER_DAY:
+        return False, f"day_cap reached ({_AUTOTITLE_MAX_PER_DAY})"
+
+    sess = _autotitle_usage["by_session"].setdefault(
+        session_id, {"calls": 0, "last_ts": 0.0}
+    )
+    if sess["calls"] >= _AUTOTITLE_MAX_PER_SESS:
+        return False, f"session_cap reached ({_AUTOTITLE_MAX_PER_SESS})"
+
+    now = _t.time()
+    if (now - sess["last_ts"]) < _AUTOTITLE_MIN_GAP_SEC:
+        return False, f"min_gap_sec ({_AUTOTITLE_MIN_GAP_SEC}s)"
+    return True, ""
+
+
+def _autotitle_record(session_id: str, source: str, elapsed_ms: int) -> None:
+    sess = _autotitle_usage["by_session"].setdefault(
+        session_id, {"calls": 0, "last_ts": 0.0}
+    )
+    sess["calls"] += 1
+    sess["last_ts"] = _t.time()
+    _autotitle_usage["day_calls"] += 1
+    log.info(
+        "auto-title src=%s sid=%s ms=%d day=%d/%d sess=%d/%d",
+        source, session_id, elapsed_ms,
+        _autotitle_usage["day_calls"], _AUTOTITLE_MAX_PER_DAY,
+        sess["calls"], _AUTOTITLE_MAX_PER_SESS,
+    )
+
+
 @router.post("/api/chat/title", response_model=ChatTitleResponse)
 async def chat_title(req: ChatTitleRequest) -> ChatTitleResponse:
     import time as _t
@@ -264,16 +330,25 @@ async def chat_title(req: ChatTitleRequest) -> ChatTitleResponse:
             fallback = " ".join(payload.split()[:6])[:50]
             break
 
-    # 3) LLM call — try a chain of cheap-and-fast backends.
-    #    Order: Gemini Flash (cheapest + reliably online if GEMINI_API_KEY
-    #    is set) → configured LysosEndpoint/Claude → fallback heuristic.
+    # 3) LLM call — bounded. If budget is exhausted (per-day, per-session,
+    #    or min-gap) we go straight to the heuristic fallback. Backend is
+    #    env-selectable so flipping to the deployed Lysos-Gemma later is
+    #    one config change.
     title = ""
     source = "fallback"
     prompt = _TITLE_PROMPT.format(transcript=transcript)
 
+    allowed, reason = _autotitle_check_budget(req.session_id)
+    if not allowed:
+        log.info("auto-title budget skip: %s (sid=%s)", reason, req.session_id)
+        # fall through to fallback heuristic only
+
     # Tier 1: Gemini Flash via direct REST (no extra dep). Cheapest +
-    # reliably online if GEMINI_API_KEY is set.
+    # reliably online if GEMINI_API_KEY is set. Only attempted when
+    # backend == "gemini" AND budget allows.
     try:
+        if not allowed or _AUTOTITLE_BACKEND != "gemini":
+            raise RuntimeError("skip-gemini")
         import os as _os
         gemini_key = _os.getenv("GEMINI_API_KEY")
         if gemini_key:
@@ -320,9 +395,11 @@ async def chat_title(req: ChatTitleRequest) -> ChatTitleResponse:
     except Exception as exc:  # noqa: BLE001
         log.debug("auto-title gemini failed: %s", exc)
 
-    # Tier 2: configured LLMEndpoint (vLLM / Claude) if Gemini didn't
-    # produce a title.
-    if not title:
+    # Tier 2: configured LLMEndpoint (vLLM / Claude / LysosEndpoint).
+    # Only attempted when backend == "lysos" AND budget allows. This is
+    # the path we'll take when the trained Lysos-Gemma is deployed: set
+    # LYSOS_AUTOTITLE_BACKEND=lysos and the Gemini call is bypassed.
+    if not title and allowed and _AUTOTITLE_BACKEND == "lysos":
         try:
             from workspace.agents.llm import get_llm
             llm = get_llm()
@@ -337,18 +414,22 @@ async def chat_title(req: ChatTitleRequest) -> ChatTitleResponse:
                 first = first.split(":", 1)[1].strip()
             if first:
                 title = first[:50]
-                source = "llm"
+                source = "lysos"
         except Exception as exc:  # noqa: BLE001
-            log.debug("auto-title fallback LLM failed: %s", exc)
+            log.debug("auto-title lysos endpoint failed: %s", exc)
 
     if not title:
         title = fallback or "New chat"
+
+    elapsed_ms = int((_t.perf_counter() - t0) * 1000)
+    if source in ("gemini", "lysos"):
+        _autotitle_record(req.session_id, source, elapsed_ms)
 
     return ChatTitleResponse(
         session_id=req.session_id,
         title=title,
         source=source,
-        elapsed_ms=int((_t.perf_counter() - t0) * 1000),
+        elapsed_ms=elapsed_ms,
     )
 
 

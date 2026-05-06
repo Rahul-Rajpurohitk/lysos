@@ -173,6 +173,51 @@ No half-shipped workflows. Each W lands fully wired or not at all.
 - Backend is FastAPI; frontend is React + Vite + Allotment; nothing else
   joins without writing it down here first
 
+## 8.5 LLM tiers — agent-tier vs utility-tier (intentional separation)
+
+The agentic system **does NOT** call Gemini or Claude for any drug-design
+decision. The trained Lysos-Gemma is the only model that ever sees a
+candidate molecule, a critic challenge, or a strategist directive.
+
+| Tier | Who | Model | Why |
+|---|---|---|---|
+| **Agent** | Designer / Critic / Editor / Strategist (graph.py) | `get_llm()` → `LysosEndpoint` → vLLM-served Gemma 4 31B (the MI300X policy) | The whole point of training |
+| **Orchestrator meta-Q&A** | "what has Critic been arguing?" / `/summary` | Pure Python from the ledger | Grounded, deterministic, free |
+| **Tools** | RDKit, Boltz-2, ADMET, sascorer, dock | Deterministic | No LLM territory |
+| **Utility** | Auto-title chat tabs only | Gemini 2.5 Flash (REST) | 500ms cheap one-shot, doesn't touch agents |
+
+### Auto-title cost controls (`workspace/api/chat.py`)
+
+Env knobs:
+- `LYSOS_AUTOTITLE_BACKEND` — `gemini` (default) | `lysos` | `fallback`
+- `LYSOS_AUTOTITLE_MAX_PER_DAY` — process-wide cap (default 200)
+- `LYSOS_AUTOTITLE_MAX_PER_SESS` — per-chat cap (default 8)
+- `LYSOS_AUTOTITLE_MIN_GAP_SEC` — min seconds between calls per session (default 4)
+
+Frontend throttles (`useAutoTitle.ts`):
+- Only the **active** chat tab triggers a call (background tabs keep stale)
+- Min 1 user message + ≥3 events since last summarization
+- 600ms debounce
+- Skipped permanently after a manual rename (`userRenamed` flag)
+
+Worst-case daily cost at 200 calls × ~1.5K input + 50 output tokens:
+~$0.025/day with Gemini Flash pricing (~$0.75/month). Realistic usage
+during a demo is < 30 calls/day → < $0.005.
+
+### Swap path (when Lysos-Gemma is deployed)
+
+1. Run vLLM with the Lysos checkpoint locally or on the demo machine
+   (or point `LYSOS_LLM_BASE_URL` to the deployed endpoint).
+2. Export `LYSOS_AUTOTITLE_BACKEND=lysos` (or set it in `.env`).
+3. Restart uvicorn. From that moment, auto-title prompts route through
+   `LysosEndpoint` instead of Gemini Flash, with the same prompt and
+   the same budget gates intact.
+4. No frontend code changes; no other backend route changes.
+
+That's the entire migration. The Gemini call site is one branch in
+chat.py guarded by `_AUTOTITLE_BACKEND == "gemini"`; flipping the env
+var bypasses it cleanly.
+
 ## 9. Out of scope (for now)
 
 - Auth/multi-tenant — single-user demo for the hackathon
