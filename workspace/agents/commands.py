@@ -435,6 +435,40 @@ class BranchCommand(Command):
         )
 
 
+class LibraryCommand(Command):
+    """W7+W8 — list past workbench sessions for replay/resume."""
+    def __init__(self):
+        super().__init__(
+            name="library",
+            description="List past sessions for replay/resume",
+            type=CommandType.LOCAL,
+            argument_hint="",
+            aliases=["lib", "sessions"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        try:
+            from api.workbench import list_sessions
+            d = await list_sessions()
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"library list failed: {exc}")
+        sessions = d.get("sessions", [])
+        if not sessions:
+            return CommandResult(
+                output="No saved sessions yet. Run `/design <pathogen>` to start one.",
+                data={"sessions": []},
+            )
+        line = f"library · {len(sessions)} session{'s' if len(sessions) != 1 else ''}"
+        return CommandResult(
+            output=line,
+            data={"sessions": sessions},
+            follow_ups=[
+                "Click a session row to replay it",
+                "/design <pathogen>  (start a new one)",
+            ],
+        )
+
+
 class CompareCommand(Command):
     """W6 — score N SMILES side-by-side."""
     def __init__(self):
@@ -869,6 +903,7 @@ def create_default_registry() -> CommandRegistry:
         StressCommand(),
         SARCommand(),
         CompareCommand(),
+        LibraryCommand(),
         RunCommand(),
         BranchCommand(),
         SetTargetCommand(),

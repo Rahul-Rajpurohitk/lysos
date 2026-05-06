@@ -552,6 +552,53 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 // and become rows in the chat timeline.
                 setEvents((p) => [...p, ev as any]);
               }}
+              onReplaySession={(p) => {
+                // W7+W8: spawn a fresh chat tab named after the session,
+                // switch to it, then open SSE on the workbench session id
+                // so its persisted events stream into the new tab.
+                const newTabId = `chat-${crypto.randomUUID().slice(0, 8)}`;
+                const title = `replay ${p.target} · ${p.sessionId.slice(0, 8)}`;
+                setChatTabs((tabs) => [...tabs, { id: newTabId, title, userRenamed: true }]);
+                setActiveChatId(newTabId);
+                // Wait one tick for the tab swap, then open SSE
+                setTimeout(() => {
+                  const url = p.sseUrl.startsWith("http")
+                    ? p.sseUrl
+                    : `${window.location.origin}${p.sseUrl}`;
+                  const es = new EventSource(url);
+                  const types = [
+                    "message", "agent_message", "candidate_added",
+                    "iteration_start", "iteration_end", "score",
+                    "tool_call_result", "tool_call_error",
+                    "session_complete", "agent_idle", "error",
+                    "intervention_queued",
+                  ];
+                  const onMsg = (ev: MessageEvent) => {
+                    try {
+                      const e = JSON.parse(ev.data ?? "{}");
+                      const chatMsg: any = {
+                        type: e.type ?? "agent_message",
+                        ts: Date.now() / 1000,
+                        agent: e.agent ?? e.data?.role,
+                        content: e.data?.content ?? e.content,
+                        iteration: e.iteration ?? e.data?.iteration,
+                        smiles: e.data?.smiles ?? e.smiles,
+                        composite: e.data?.composite ?? e.composite,
+                      };
+                      // Append directly to the events map (replay tab)
+                      setChatEventsBySid((m) => {
+                        const cur = m[newTabId] ?? [];
+                        return { ...m, [newTabId]: [...cur, chatMsg] };
+                      });
+                      if (e.type === "session_complete" || e.type === "error") {
+                        es.close();
+                      }
+                    } catch {/* ignore */}
+                  };
+                  types.forEach((t) => es.addEventListener(t, onMsg as EventListener));
+                  es.onmessage = onMsg;
+                }, 0);
+              }}
               onArtifact={(p) => {
                 // W4: streaming /explain markdown chunks replace the active
                 // markdown_text block in artifactDoc, and we auto-switch the

@@ -26,6 +26,7 @@ import { ExplainCard } from "./ExplainCard";
 import { ScaffoldTreeCard } from "./ScaffoldTreeCard";
 import { StressTestCard } from "./StressTestCard";
 import { ComparisonCard } from "./ComparisonCard";
+import { LibraryCard } from "./LibraryCard";
 
 export interface ChatMsg {
   id?: string;
@@ -85,11 +86,17 @@ interface MessageRowProps {
     error?: string | null;
     groundingCount?: number;
   }) => void;
+  /** W7+W8: open a past session in a new chat tab and replay events. */
+  onReplaySession?: (params: {
+    sessionId: string;
+    target: string;
+    sseUrl: string;
+  }) => void;
 }
 
 const REPLYABLE_AGENTS = new Set(["designer", "critic", "editor", "strategist", "orchestrator"]);
 
-export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onReplyToAgent, onArtifact }: MessageRowProps) {
+export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onReplyToAgent, onArtifact, onReplaySession }: MessageRowProps) {
   if (msg.type === "candidate_added") return <CandidateRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "mol_edit") return <EditRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "state_change") return <StateRow msg={msg} />;
@@ -100,6 +107,7 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onRepl
   if (msg.card_kind === "sar" && msg.data) return <ScaffoldTreeCard msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.card_kind === "stress" && msg.data) return <StressTestCard msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.card_kind === "compare" && msg.data) return <ComparisonCard msg={msg} onLoadSmiles={onLoadSmiles} />;
+  if (msg.card_kind === "library" && msg.data) return <LibraryCard msg={msg} onReplaySession={onReplaySession} />;
 
   const agent = msg.agent ?? msg.type ?? "system";
   const color = agentColor(agent);

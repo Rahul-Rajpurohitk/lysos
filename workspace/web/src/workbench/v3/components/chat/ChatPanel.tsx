@@ -53,6 +53,12 @@ interface ChatPanelProps {
     error?: string | null;
     groundingCount?: number;
   }) => void;
+  // ---- W7+W8: replay past session in a new tab ----
+  onReplaySession?: (params: {
+    sessionId: string;
+    target: string;
+    sseUrl: string;
+  }) => void;
   // ---- multi-chat tabs (Claude.ai style) ----
   chatTabs?: ChatTab[];
   activeChatId?: string;
@@ -240,6 +246,7 @@ export function ChatPanel(p: ChatPanelProps) {
                 onIngestEvent={p.onIngestEvent}
                 onReplyToAgent={p.onReplyToAgent}
                 onArtifact={p.onArtifact}
+                onReplaySession={p.onReplaySession}
               />
             );
           })}
