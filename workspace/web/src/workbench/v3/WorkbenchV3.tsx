@@ -400,6 +400,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               events={events as any}
               isRunning={isRunning}
               totalMsgs={messages.length}
+              chatMode={chatMode}
               showOnboarding={
                 <OnboardingHero
                   apiBase={apiBase}

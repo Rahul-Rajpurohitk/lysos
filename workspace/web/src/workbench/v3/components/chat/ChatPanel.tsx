@@ -18,6 +18,7 @@ import { AgentFilterStrip } from "./AgentFilterStrip";
 import { MessageRow, ChatMsg } from "./MessageRow";
 import { IterationDivider } from "./IterationDivider";
 import { TypingIndicator } from "./TypingIndicator";
+import { MultiAgentColumns } from "../MultiAgentColumns";
 
 interface ChatPanelProps {
   events: ChatMsg[];
@@ -33,6 +34,8 @@ interface ChatPanelProps {
   onLoadSmiles: (smi: string) => void;
   subAgents: string[];
   onToggleSubAgent: (id: string) => void;
+  /** "Stream" = single-column timeline; "Columns" = per-agent columns */
+  chatMode?: "Stream" | "Columns";
 }
 
 export function ChatPanel(p: ChatPanelProps) {
@@ -173,44 +176,52 @@ export function ChatPanel(p: ChatPanelProps) {
           flex: 1,
           overflowY: "auto",
           position: "relative",
-          padding: "12px 16px",
+          padding: p.chatMode === "Columns" ? "8px 8px" : "12px 16px",
           display: "flex",
           flexDirection: "column",
-          gap: 12,
+          gap: p.chatMode === "Columns" ? 0 : 12,
           scrollBehavior: "smooth",
         }}
       >
         {p.totalMsgs === 0 && p.showOnboarding}
 
-        {filtered.map((row, i) => {
-          if (row.kind === "iter_divider") {
+        {p.chatMode === "Columns" ? (
+          // Multi-agent column view — one column per agent, parallel debate.
+          <MultiAgentColumns
+            events={p.events as unknown as any[]}
+            agents={["designer", "critic", "editor", "strategist"]}
+          />
+        ) : (
+          filtered.map((row, i) => {
+            if (row.kind === "iter_divider") {
+              return (
+                <IterationDivider
+                  key={`div-${row.iter}`}
+                  iter={row.iter}
+                  composite={row.composite}
+                  delta={row.delta}
+                  candidatesAdded={row.candidatesAdded}
+                />
+              );
+            }
             return (
-              <IterationDivider
-                key={`div-${row.iter}`}
-                iter={row.iter}
-                composite={row.composite}
-                delta={row.delta}
-                candidatesAdded={row.candidatesAdded}
+              <MessageRow
+                key={`${row.msg.id ?? i}-${row.msg.ts}`}
+                msg={row.msg}
+                toolCalls={row.toolCalls}
+                onLoadSmiles={p.onLoadSmiles}
               />
             );
-          }
-          return (
-            <MessageRow
-              key={`${row.msg.id ?? i}-${row.msg.ts}`}
-              msg={row.msg}
-              toolCalls={row.toolCalls}
-              onLoadSmiles={p.onLoadSmiles}
-            />
-          );
-        })}
+          })
+        )}
 
-        {p.isRunning && lastAgent && (
+        {p.isRunning && lastAgent && p.chatMode !== "Columns" && (
           <AnimatePresence>
             <TypingIndicator agent={lastAgent} label={`${lastAgent} is reasoning…`} />
           </AnimatePresence>
         )}
 
-        {!autoScroll && (
+        {!autoScroll && p.chatMode !== "Columns" && (
           <button
             onClick={jumpToLatest}
             style={{

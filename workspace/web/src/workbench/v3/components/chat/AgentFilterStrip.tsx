@@ -10,7 +10,9 @@
  *    rarely need it but it's discoverable).
  *  - No avatars, no count badges in pill bubbles, no border boxes.
  */
-import { SubAgentPicker } from "../SubAgentPicker";
+// SubAgentPicker (+ button popover) removed per redesign — dead weight in
+// the new flat layout; sub-agent selection now happens via /spawn-* slash
+// commands.
 import { agentColor } from "./AgentAvatar";
 
 interface AgentFilterStripProps {
@@ -26,23 +28,23 @@ interface AgentFilterStripProps {
 const AGENTS = ["designer", "critic", "editor", "strategist", "user"];
 
 export function AgentFilterStrip(p: AgentFilterStripProps) {
+  // Show the row only when there's actually something to filter.
+  // The "all" chip + the SubAgentPicker (+) button were dead weight per
+  // user feedback — removed.
+  const hasActiveAgents = AGENTS.some((a) => (p.counts[a] ?? 0) > 0);
+  if (!hasActiveAgents) return null;
+
   return (
     <div style={{
       display: "flex",
       alignItems: "center",
-      gap: 0,
-      padding: "0 8px",
-      height: 24,
+      gap: 2,
+      padding: "0 10px",
+      height: 22,
       borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
       overflowX: "auto",
       flexShrink: 0,
     }}>
-      <FilterChip
-        label="all"
-        count={p.total}
-        active={p.active === null}
-        onClick={() => p.onSelect(null)}
-      />
       {AGENTS.map((a) => {
         const count = p.counts[a] ?? 0;
         if (count === 0) return null;
@@ -58,8 +60,6 @@ export function AgentFilterStrip(p: AgentFilterStripProps) {
           />
         );
       })}
-      <span style={{ flex: 1 }} />
-      <SubAgentPicker active={p.subAgents} onToggle={p.onToggleSubAgent} />
     </div>
   );
 }
