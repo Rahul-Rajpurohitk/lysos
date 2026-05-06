@@ -124,6 +124,16 @@ export function PlaygroundGroup(p: Props) {
 
   const collapsed = !!p.layout.collapsed;
   const HEADER_H = 30;
+  // When ALL cards are collapsed, auto-shrink the group to a tight pile
+  // so 6+ collapsed pills don't leave 600px of empty space below them.
+  // Each collapsed card = 28px tall + 8px gap. Cards laid out in a 2-col
+  // grid → ceil(N/2) rows. Plus 8px padding × 2 + 30px group header.
+  const allCardsCollapsed = !collapsed && p.cards.length > 0
+    && p.cards.every((c) => collapsedCards.has(c.id));
+  const tightHeight = HEADER_H + 16 + Math.ceil(p.cards.length / 2) * (28 + 8);
+  const effectiveH = collapsed
+    ? HEADER_H
+    : (allCardsCollapsed ? tightHeight : p.layout.h);
 
   return (
     <div style={{
@@ -131,7 +141,7 @@ export function PlaygroundGroup(p: Props) {
       left: p.layout.x,
       top: p.layout.y,
       width: p.layout.w,
-      height: collapsed ? HEADER_H : p.layout.h,
+      height: effectiveH,
       zIndex: p.layout.z,
       background: `${tone}08`,
       border: `1px solid ${tone}22`,
@@ -148,7 +158,9 @@ export function PlaygroundGroup(p: Props) {
       isolation: "isolate",
       contain: "layout paint",
       transform: dragging ? "scale(1.005)" : "none",
-      transition: dragging ? "transform 80ms ease, box-shadow 80ms ease" : "transform 120ms ease, box-shadow 120ms ease",
+      transition: dragging
+        ? "transform 80ms ease, box-shadow 80ms ease"
+        : "transform 120ms ease, box-shadow 120ms ease, height 180ms ease",
     }}
     onMouseDown={(e) => { e.stopPropagation(); p.onFocus?.(); }}
     >
@@ -200,7 +212,11 @@ export function PlaygroundGroup(p: Props) {
         </button>
       </div>
 
-      {/* Cards container — 2-col flex grid */}
+      {/* Cards container — 2-col flex grid.
+          gridAutoRows: "min-content" forces each row to shrink to the actual
+          card height (so collapsed cards take exactly 28px instead of the
+          grid stretching them to fill available space). alignContent: "start"
+          parks free space at the bottom rather than between rows. */}
       {!collapsed && (
         <div style={{
           flex: 1,
@@ -208,6 +224,8 @@ export function PlaygroundGroup(p: Props) {
           padding: 8,
           display: "grid",
           gridTemplateColumns: "1fr 1fr",
+          gridAutoRows: "min-content",
+          alignContent: "start",
           gap: 8,
           overflow: "auto",
         }}>
