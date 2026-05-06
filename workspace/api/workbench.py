@@ -421,11 +421,23 @@ async def workbench_design(req: DesignRequest) -> DesignResponse:
 
     # Spawn the loop. Mirror the start_session pattern: tracer wraps emit,
     # Postgres mirrors get/cand/tool tables, queue feeds SSE consumer.
+    # ALSO: HarnessAdapter mirrors events into the playground bus + SQLite
+    # so the canvas (3D / 2D / radar / agent-trace windows) updates live.
     from .tracing import Tracer
     _tracer = Tracer(session_id=sid, emit_fn=lambda ev: queue.put(ev))
+    try:
+        from workspace.playground import HarnessAdapter
+        _adapter = HarnessAdapter(session_id=sid, target_pathogen=req.pathogen)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("HarnessAdapter not available: %s", exc)
+        _adapter = None
 
     async def emit(ev: dict) -> None:
+        # Always go through the tracer so SSE clients keep working
         await _tracer.emit(ev)
+        # Also mirror to the playground bus + SQLite for live canvas
+        if _adapter is not None:
+            await _adapter.emit(ev)
 
     async def runner() -> None:
         try:

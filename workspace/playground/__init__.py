@@ -14,9 +14,11 @@ Public surface:
 from .store import PlaygroundStore, get_store
 from .bus import EventBus, get_bus
 from .rules import RulesEngine, get_rules
+from .harness_adapter import HarnessAdapter, chain_emits
 
 __all__ = [
     "PlaygroundStore", "get_store",
     "EventBus", "get_bus",
     "RulesEngine", "get_rules",
+    "HarnessAdapter", "chain_emits",
 ]

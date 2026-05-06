@@ -26,6 +26,11 @@ interface Props {
   weights?: Record<string, number>;
   /** Per-axis history (chronological, oldest first). */
   history: Record<string, number[]>;
+  /** Optional ghost polygon: predicted-after-edit scores. Renders dashed
+   *  when set; clears when null. Used by hover-prediction in 2D builder. */
+  predicted?: ScoreMap | null;
+  /** Optional small hint label drawn in the header (e.g. "if +F at atom 5"). */
+  predictedLabel?: string;
 }
 
 function tierColor(v: number): string {
@@ -34,7 +39,8 @@ function tierColor(v: number): string {
   return "#9ca3af";
 }
 
-export function RewardRadarWindow({ current, best, weights, history }: Props) {
+export function RewardRadarWindow({ current, best, weights, history, predicted, predictedLabel }: Props) {
+  void predictedLabel; // displayed in header subtitle (next iter polish)
   const axes = AXES.filter((a) => a in current || a in best || a in (weights ?? {}));
 
   // Radar polygon points
@@ -152,6 +158,21 @@ export function RewardRadarWindow({ current, best, weights, history }: Props) {
           stroke="var(--lys-accent)"
           strokeWidth="1.5"
         />
+        {/* predicted polygon (ghost, dashed amber) — drawn on top so it's
+            visible when hovering an atom for a hypothetical edit */}
+        {predicted && (
+          <polygon
+            points={axes.map((axis, i) => {
+              const angle = (i / axes.length) * 2 * Math.PI - Math.PI / 2;
+              const r = (predicted[axis] ?? 0) * RADIUS;
+              return `${CX + r * Math.cos(angle)},${CY + r * Math.sin(angle)}`;
+            }).join(" ")}
+            fill="rgba(217, 119, 6, 0.10)"
+            stroke="#d97706"
+            strokeWidth="1.2"
+            strokeDasharray="4 3"
+          />
+        )}
         {/* axis labels */}
         {axes.map((axis, i) => {
           const a = (i / axes.length) * 2 * Math.PI - Math.PI / 2;

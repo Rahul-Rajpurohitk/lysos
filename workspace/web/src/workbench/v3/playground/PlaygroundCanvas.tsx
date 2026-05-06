@@ -94,11 +94,34 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
   const [panning, setPanning] = useState(false);
   const panStart = useRef<{ mx: number; my: number; pan: { x: number; y: number } } | null>(null);
 
-  // Wheel pan + cmd-wheel zoom — RAF-throttled for 60fps smoothness.
-  // We accumulate deltas in refs and flush once per frame instead of
-  // calling setState on every wheel tick (was the source of the lag).
+  // Extreme-smooth wheel handling. The lag was from React reconciliation
+  // on every viewport change. New strategy:
+  //   1. Track viewport in a ref (live, mutated directly)
+  //   2. Apply transform via DOM-mutation in a RAF loop (no React rerender
+  //      while the user is scrubbing the wheel)
+  //   3. Flush to React state only when wheel quiets for 80ms
+  //
+  // Result: pan/zoom feels like a native canvas — 60fps on any input rate.
+  const liveViewportRef = useRef<Viewport>(p.viewport);
+  const transformLayerRef = useRef<HTMLDivElement | null>(null);
   const wheelDeltaRef = useRef<{ x: number; y: number; zoomFactor: number; cx: number; cy: number } | null>(null);
   const rafIdRef = useRef<number | null>(null);
+  const flushTimerRef = useRef<number | null>(null);
+
+  // Sync the ref when prop changes (e.g. cmd-0 reset, layout swap)
+  useEffect(() => {
+    liveViewportRef.current = p.viewport;
+    applyTransform();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.viewport.zoom, p.viewport.pan.x, p.viewport.pan.y]);
+
+  function applyTransform() {
+    const el = transformLayerRef.current;
+    if (!el) return;
+    const v = liveViewportRef.current;
+    el.style.transform = `translate3d(${v.pan.x}px, ${v.pan.y}px, 0) scale(${v.zoom})`;
+  }
+
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -108,23 +131,29 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
       const acc = wheelDeltaRef.current;
       if (!acc) return;
       wheelDeltaRef.current = null;
-      const v = p.viewport;
+      const v = liveViewportRef.current;
       if (acc.zoomFactor !== 1) {
         const next = clamp(v.zoom * acc.zoomFactor, MIN_ZOOM, MAX_ZOOM);
         const k = next / v.zoom;
-        p.onViewportChange({
+        liveViewportRef.current = {
           zoom: next,
           pan: {
             x: acc.cx - (acc.cx - v.pan.x) * k,
             y: acc.cy - (acc.cy - v.pan.y) * k,
           },
-        });
+        };
       } else if (acc.x !== 0 || acc.y !== 0) {
-        p.onViewportChange({
+        liveViewportRef.current = {
           ...v,
           pan: { x: v.pan.x - acc.x, y: v.pan.y - acc.y },
-        });
+        };
       }
+      applyTransform();
+      // Schedule a React-state flush after the user stops scrolling
+      if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = window.setTimeout(() => {
+        p.onViewportChange(liveViewportRef.current);
+      }, 80);
     };
 
     const onWheel = (e: WheelEvent) => {
@@ -135,7 +164,6 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
       const acc = wheelDeltaRef.current ?? { x: 0, y: 0, zoomFactor: 1, cx, cy };
       acc.cx = cx; acc.cy = cy;
       if (e.metaKey || e.ctrlKey) {
-        // Multiplicative zoom factor accumulates exponentially — feels smooth
         acc.zoomFactor *= (1 - e.deltaY * 0.0015);
       } else {
         acc.x += e.deltaX;
@@ -150,8 +178,9 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
     return () => {
       el.removeEventListener("wheel", onWheel);
       if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+      if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
     };
-  }, [p.viewport, p.onViewportChange]);
+  }, [p.onViewportChange]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -244,9 +273,11 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
         cursor: panning ? "grabbing" : "default",
       }}
     >
-      {/* GPU-accelerated transform layer — translate3d + will-change so
-          the compositor handles pan/zoom without touching layout. */}
+      {/* GPU-accelerated transform layer — translate3d + will-change.
+          DOM-mutated directly during wheel events for buttery-smooth pan/
+          zoom; React state only updates after 80ms of input quiet. */}
       <div
+        ref={transformLayerRef}
         style={{
           position: "absolute",
           left: 0,
@@ -256,7 +287,7 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
           willChange: "transform",
           width: "100%",
           height: "100%",
-          pointerEvents: "none", // children opt-in
+          pointerEvents: "none",
         }}
       >
         {/* Groups mode (preferred): each group is a colored container with cards inside. */}

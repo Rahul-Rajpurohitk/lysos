@@ -204,6 +204,56 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // to all canvas windows. The connection is permanent for the tab; chat
   // tab switches re-key the hook (handled by activeChatId in the deps).
   const livePlayground = useLivePlayground(activeChatId, apiBase);
+
+  // Hover-prediction state: when the user hovers an atom, we POST to
+  // /workbench/playground/predict-edit and show a ghost polygon on the
+  // radar. Cleared on hover-out.
+  const [predictedScores, setPredictedScores] = useState<Record<string, number> | null>(null);
+  const [predictedLabel, setPredictedLabel] = useState<string>("");
+  const predictAbortRef = useRef<AbortController | null>(null);
+  async function fetchPrediction(smi: string, atomIdx: number) {
+    predictAbortRef.current?.abort();
+    const ac = new AbortController();
+    predictAbortRef.current = ac;
+    // Choose the most "informative" hypothetical: +F (boosts lipophilicity).
+    // Future: cycle through ops, show the best-delta one.
+    try {
+      const r = await fetch(`${apiBase}/workbench/playground/predict-edit`, {
+        method: "POST",
+        signal: ac.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          smiles: smi,
+          edit: { kind: "swap_element", atom_idx: atomIdx, new_element: "F" },
+        }),
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      if (!d.ok) {
+        setPredictedScores(null);
+        setPredictedLabel("");
+        return;
+      }
+      // Score the predicted molecule via /workbench/score
+      const sr = await fetch(`${apiBase}/workbench/score`, {
+        method: "POST",
+        signal: ac.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ smiles: d.new_smiles, target_pathogen: selectedPathogen }),
+      });
+      if (!sr.ok) return;
+      const breakdown = await sr.json();
+      const scores: Record<string, number> = {};
+      for (const c of breakdown.components ?? []) scores[c.name] = c.value;
+      setPredictedScores(scores);
+      setPredictedLabel(`if →F at atom ${atomIdx}`);
+    } catch { /* aborted or transient */ }
+  }
+  function clearPrediction() {
+    predictAbortRef.current?.abort();
+    setPredictedScores(null);
+    setPredictedLabel("");
+  }
   // Load saved layouts from localStorage on mount per chat
   useEffect(() => {
     if (!activeChatId) return;
@@ -890,6 +940,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                               actor: "user", atom_idx: atomIdx,
                               smiles: currentSmiles ?? undefined,
                             });
+                            // Fire predictive scoring → ghost polygon on radar
+                            if (currentSmiles) fetchPrediction(currentSmiles, atomIdx);
+                          } else {
+                            clearPrediction();
                           }
                         }}
                         onMoleculeEdit={(newSmi, edit) => {
@@ -953,6 +1007,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         current={lastScores ?? {}}
                         best={bestScores ?? {}}
                         weights={REWARD_WEIGHTS}
+                        predicted={predictedScores}
+                        predictedLabel={predictedLabel}
                         history={(() => {
                           const h: Record<string, number[]> = {};
                           for (const e of events as any[]) {

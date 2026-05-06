@@ -141,6 +141,34 @@ async def predict_edit(req: PredictEditRequest) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Job queue — async pool for /dock /admet /conformer /retrosynth
+# ---------------------------------------------------------------------------
+
+class EnqueueJobRequest(BaseModel):
+    kind: str  # "dock" | "admet" | "conformer" | "retrosynth"
+    payload: dict[str, Any] = {}
+
+
+@router.post("/sessions/{sid}/jobs")
+async def enqueue_job(sid: str, req: EnqueueJobRequest) -> dict[str, Any]:
+    from workspace.playground.queue import get_queue
+    job_id = await get_queue().enqueue(sid, req.kind, req.payload)
+    return {"job_id": job_id, "kind": req.kind, "status": "queued"}
+
+
+@router.get("/sessions/{sid}/jobs")
+async def list_jobs(sid: str, status: Optional[str] = None) -> dict[str, Any]:
+    return {"session_id": sid, "jobs": get_store().list_jobs(sid, status=status)}
+
+
+@router.delete("/jobs/{job_id}")
+async def cancel_job(job_id: str) -> dict[str, Any]:
+    from workspace.playground.queue import get_queue
+    get_queue().cancel(job_id)
+    return {"job_id": job_id, "status": "cancelled"}
+
+
+# ---------------------------------------------------------------------------
 # WebSocket — the live editing protocol
 # ---------------------------------------------------------------------------
 
