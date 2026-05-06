@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Settings, FlaskConical, Edit3, BookOpen, Target, Layers, Shield, Terminal,
+  Sparkles,
 } from "lucide-react";
 
 export interface SlashCommand {
@@ -36,7 +37,8 @@ export type SlashCategory =
   | "scoring"
   | "structural"
   | "amr"
-  | "sandbox";
+  | "sandbox"
+  | "general";
 
 // Default registry — mirrors workspace/agents/commands.py descriptions.
 // The live registry is fetched from /api/commands/list at runtime; this
@@ -81,6 +83,7 @@ const CATEGORY_LABELS: Record<SlashCategory, string> = {
   structural: "Structural",
   amr: "AMR",
   sandbox: "Sandbox",
+  general: "General",
 };
 
 // One icon per category — visual rhythm + faster scanning than text alone.
@@ -93,7 +96,12 @@ const CATEGORY_ICON: Record<SlashCategory, React.ComponentType<any>> = {
   structural: Layers,
   amr: Shield,
   sandbox: Terminal,
+  general: Sparkles,
 };
+
+// Defensive fallback if backend ever sends a category we haven't mapped:
+// always show *something* instead of crashing the render with undefined.
+const FALLBACK_ICON = Sparkles;
 
 interface Props {
   query: string;
@@ -180,10 +188,10 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
         <kbd>esc</kbd>
       </div>
       {grouped.map(({ category, items }) => {
-        const Icon = CATEGORY_ICON[category];
+        const Icon = CATEGORY_ICON[category] ?? FALLBACK_ICON;
         return (
           <div key={category} className="lys-slash-group">
-            <div className="lys-slash-cat">{CATEGORY_LABELS[category]}</div>
+            <div className="lys-slash-cat">{CATEGORY_LABELS[category] ?? category}</div>
             {items.map((cmd) => {
               flatIdx++;
               const active = flatIdx === highlightIdx;
