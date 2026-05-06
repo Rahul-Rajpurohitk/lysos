@@ -225,11 +225,22 @@ import os as _os
 import time as _t
 
 # env-tunable knobs (set in .env or shell):
-#   LYSOS_AUTOTITLE_BACKEND       = "gemini" | "lysos" | "fallback"   (default gemini)
-#   LYSOS_AUTOTITLE_MAX_PER_DAY   = int                               (default 200)
-#   LYSOS_AUTOTITLE_MAX_PER_SESS  = int                               (default 8)
-#   LYSOS_AUTOTITLE_MIN_GAP_SEC   = int                               (default 4)
+#   LYSOS_AUTOTITLE_BACKEND        = "gemini" | "lysos" | "fallback"  (default gemini)
+#   LYSOS_AUTOTITLE_GEMINI_MODEL   = Gemini model id                   (default 2.5-pro)
+#   LYSOS_AUTOTITLE_THINKING_BUDGET= thinkingConfig.thinkingBudget     (default 512)
+#   LYSOS_AUTOTITLE_MAX_PER_DAY    = int                               (default 200)
+#   LYSOS_AUTOTITLE_MAX_PER_SESS   = int                               (default 8)
+#   LYSOS_AUTOTITLE_MIN_GAP_SEC    = int                               (default 4)
+#
+# Why 2.5-pro by default and not flash:
+#   We want dev-test parity with the deployed Lysos-Gemma (a Gemma 4
+#   31B fine-tune). 2.5-pro is the closest off-the-shelf analog in
+#   capability tier — behavior we observe during build is closer to
+#   what the trained model will produce. Flash drops to a much smaller
+#   class and would mask quality regressions during the swap.
 _AUTOTITLE_BACKEND = _os.getenv("LYSOS_AUTOTITLE_BACKEND", "gemini").lower()
+_AUTOTITLE_GEMINI_MODEL = _os.getenv("LYSOS_AUTOTITLE_GEMINI_MODEL", "gemini-2.5-pro")
+_AUTOTITLE_THINKING_BUDGET = int(_os.getenv("LYSOS_AUTOTITLE_THINKING_BUDGET", "512"))
 _AUTOTITLE_MAX_PER_DAY = int(_os.getenv("LYSOS_AUTOTITLE_MAX_PER_DAY", "200"))
 _AUTOTITLE_MAX_PER_SESS = int(_os.getenv("LYSOS_AUTOTITLE_MAX_PER_SESS", "8"))
 _AUTOTITLE_MIN_GAP_SEC = int(_os.getenv("LYSOS_AUTOTITLE_MIN_GAP_SEC", "4"))
@@ -349,24 +360,33 @@ async def chat_title(req: ChatTitleRequest) -> ChatTitleResponse:
     try:
         if not allowed or _AUTOTITLE_BACKEND != "gemini":
             raise RuntimeError("skip-gemini")
+        # Inline the model name so it's clear at the call site
+        _model_id = _AUTOTITLE_GEMINI_MODEL
         import os as _os
         gemini_key = _os.getenv("GEMINI_API_KEY")
         if gemini_key:
             import httpx  # FastAPI dep; always present
             url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                "gemini-2.5-flash:generateContent"
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{_model_id}:generateContent"
             )
+            # Reasoning model gotcha (per project memory): both 2.5-Pro
+            # and 2.5-Flash spend output tokens on thinking by default.
+            # We bump maxOutputTokens HIGH (1024) so the title isn't
+            # truncated, then bound the thinking budget so cost is
+            # predictable. For 2.5-Pro a small thinking budget (~512)
+            # produces noticeably better titles than thinking=0; for
+            # Flash, 0 is fine.
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
-                    "maxOutputTokens": 256,
+                    "maxOutputTokens": 1024,
                     "temperature": 0.4,
                     "responseMimeType": "text/plain",
-                    # Critical: 2.5-Flash burns its output budget on
-                    # thinking tokens by default, leaving 1-2 chars for
-                    # the actual title. Disable thinking for short labels.
-                    "thinkingConfig": {"thinkingBudget": 0},
+                    "thinkingConfig": {
+                        "thinkingBudget": _AUTOTITLE_THINKING_BUDGET,
+                        "includeThoughts": False,
+                    },
                 },
             }
             async with httpx.AsyncClient(timeout=8.0) as cx:
