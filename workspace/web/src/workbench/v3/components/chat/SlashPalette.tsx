@@ -1,20 +1,22 @@
 /**
- * SlashPalette — Claude-Code-style command palette.
+ * SlashPalette — Claude Code-style command palette.
  *
  * Triggered when the composer's text starts with "/". Filters as the user
- * types. Categorized by skill family (generative / knowledge / scoring /
- * structural / amr / sandbox / system). Keyboard-first: ↑/↓ navigate,
- * ↵ select, Esc dismiss.
+ * types. Categorized by skill family. Keyboard-first: ↑/↓ navigate, ↵ pick,
+ * Esc dismiss.
  *
- * Design choices:
- *  - No card backgrounds. Soft top border, generous row padding.
- *  - Category headers as small caps, muted color — visible only when 2+
- *    items in a category remain after filter.
- *  - Right-side argument hint in monospace, dimmed, only when present.
- *  - The whole palette is one column, no grids, no badges.
- *  - Renders OVER the composer, not above it (z-index 50, anchored bottom).
+ * Design (per user redesign brief):
+ *   • Tight rows (~30px), no wrapping — every command is a one-liner
+ *   • Icon column (category-coded) | mono /cmd | concise description |
+ *     mono arg hint — visually scannable like a CLI cheat sheet
+ *   • Active row: subtle bg-tint, no border (Claude.ai pattern)
+ *   • Category labels are quiet 9.5pt mono caps separators
+ *   • Footer keyboard shortcuts as kbd-pills, monospace
  */
 import { useEffect, useMemo, useState } from "react";
+import {
+  Settings, FlaskConical, Edit3, BookOpen, Target, Atom, Shield, Terminal,
+} from "lucide-react";
 
 export interface SlashCommand {
   name: string;                     // "design", "edit", ...
@@ -36,37 +38,38 @@ export type SlashCategory =
   | "amr"
   | "sandbox";
 
-// Default registry — kept in sync with workspace/agents/commands.py.
-// Order here is the display order within each category.
+// Default registry — mirrors workspace/agents/commands.py descriptions.
+// The live registry is fetched from /api/commands/list at runtime; this
+// is the offline fallback bundled with the JS chunk.
 export const DEFAULT_COMMANDS: SlashCommand[] = [
   // SYSTEM
-  { name: "help",        description: "Show available skills",                       category: "system",     aliases: ["?", "skills"] },
-  { name: "clear",       description: "Clear the active session",                    category: "system" },
-  { name: "set-target",  description: "Set the active target pathogen",              category: "system",     argument_hint: "<pathogen>",  aliases: ["target"] },
-  { name: "branch",      description: "Fork the active candidate as a new lineage",  category: "system",     argument_hint: "<hint>",       requires_smiles: true },
-  { name: "trace",       description: "Show the last N harness events",              category: "system",     argument_hint: "[n=20]" },
-  { name: "run",         description: "Execute a Python cell in the sandbox",        category: "sandbox",    argument_hint: "<python>" },
+  { name: "help",        description: "List all slash commands",                       category: "system",     aliases: ["?", "skills"] },
+  { name: "clear",       description: "Reset the chat & state",                         category: "system" },
+  { name: "set-target",  description: "Set the active target pathogen",                 category: "system",     argument_hint: "<pathogen>",      aliases: ["target"] },
+  { name: "branch",      description: "Fork the active candidate as a branch",          category: "system",     argument_hint: "<branch hint>",   requires_smiles: true },
+  { name: "trace",       description: "Show last N harness events",                     category: "system",     argument_hint: "[n=20]" },
+  { name: "run",         description: "Run a Python cell in the sandbox",               category: "sandbox",    argument_hint: "<code>" },
 
   // DESIGN
-  { name: "design",      description: "Propose new candidates for a target",         category: "design",     argument_hint: "<pathogen|target>", aliases: ["d"] },
-  { name: "scaffold-hop", description: "Bioisosteric scaffold replacement",          category: "design",     argument_hint: "[n=5]", aliases: ["hop"], requires_smiles: true },
-  { name: "edit",        description: "Apply a deterministic structural transform",  category: "edit",       argument_hint: "<op>",         aliases: ["e"], requires_smiles: true },
+  { name: "design",      description: "Start a multi-agent design session",             category: "design",     argument_hint: "<pathogen> [objective]", aliases: ["d"] },
+  { name: "scaffold-hop", description: "Bioisosteric scaffold replacements",            category: "design",     argument_hint: "[n=5]", aliases: ["hop"], requires_smiles: true },
+  { name: "edit",        description: "Apply a deterministic edit op",                  category: "edit",       argument_hint: "<op>",            aliases: ["e"], requires_smiles: true },
 
   // SCORING
-  { name: "score",       description: "Run the 12-component reward stack",           category: "scoring",    argument_hint: "[smiles]" },
-  { name: "similar",     description: "Top-K similar known antibiotics",             category: "scoring",    argument_hint: "[k=5]", aliases: ["sim"], requires_smiles: true },
-  { name: "admet",       description: "ADMET panel (TDC predictor)",                 category: "scoring",    argument_hint: "[smiles]" },
-  { name: "synth",       description: "Retrosynthesis route + cost estimate",        category: "scoring",    argument_hint: "[smiles]" },
+  { name: "score",       description: "Score with the 12-axis reward stack",            category: "scoring",    argument_hint: "[smiles]" },
+  { name: "similar",     description: "Top-K similar antibiotics (embedding)",          category: "scoring",    argument_hint: "[k=5]", aliases: ["sim"], requires_smiles: true },
+  { name: "admet",       description: "ADMET panel (A/D/M/E/T predictions)",            category: "scoring",    argument_hint: "[smiles]" },
+  { name: "synth",       description: "Retrosynthesis route + cost estimate",           category: "scoring",    argument_hint: "[smiles]" },
 
   // KNOWLEDGE
-  { name: "explain",     description: "Mechanism + spectrum + resistance",           category: "knowledge",  argument_hint: "<drug_name>" },
+  { name: "explain",     description: "Mechanism + spectrum + resistance brief",        category: "knowledge",  argument_hint: "<target|drug>" },
 
   // STRUCTURAL
-  { name: "dock",        description: "Dock active candidate against target PDB",    category: "structural", argument_hint: "[pdb_id]", aliases: ["docking"], requires_smiles: true },
-  { name: "complex",     description: "Boltz-2 3D complex pose (ipTM/pTM)",          category: "structural", argument_hint: "[pathogen]", requires_smiles: true },
+  { name: "dock",        description: "Dock candidate vs target PDB",                   category: "structural", argument_hint: "[pdb_id]", aliases: ["docking"], requires_smiles: true },
+  { name: "complex",     description: "Predict 3D complex pose (Boltz-2)",              category: "structural", argument_hint: "[pathogen]", requires_smiles: true },
 
   // AMR
-  { name: "resistance",  description: "Pathogen resistome + escape probability",     category: "amr",        argument_hint: "<pathogen>", aliases: ["res"] },
+  { name: "resistance",  description: "Resistome + escape probability",                 category: "amr",        argument_hint: "<pathogen>", aliases: ["res"] },
 ];
 
 const CATEGORY_LABELS: Record<SlashCategory, string> = {
@@ -80,16 +83,23 @@ const CATEGORY_LABELS: Record<SlashCategory, string> = {
   sandbox: "Sandbox",
 };
 
+// One icon per category — visual rhythm + faster scanning than text alone.
+const CATEGORY_ICON: Record<SlashCategory, React.ComponentType<any>> = {
+  system: Settings,
+  design: FlaskConical,
+  edit: Edit3,
+  knowledge: BookOpen,
+  scoring: Target,
+  structural: Atom,
+  amr: Shield,
+  sandbox: Terminal,
+};
+
 interface Props {
-  /** Composer's current input. We slice the leading slash off internally. */
   query: string;
-  /** Whether the palette is visible (parent toggles based on `query.startsWith("/")`) */
   open: boolean;
-  /** Called when user picks a command — parent fills the composer. */
   onPick: (cmd: SlashCommand) => void;
-  /** Called when user dismisses (Esc or click outside) */
   onClose: () => void;
-  /** Optional override (e.g. fetched from /api/commands/list) */
   commands?: SlashCommand[];
 }
 
@@ -98,7 +108,6 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
 
   const all = commands ?? DEFAULT_COMMANDS;
 
-  // Filter by stripped query (the prefix after the slash)
   const prefix = query.startsWith("/") ? query.slice(1).split(" ")[0].toLowerCase() : "";
   const filtered = useMemo(() => {
     if (!prefix) return all;
@@ -109,7 +118,6 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
     });
   }, [all, prefix]);
 
-  // Group by category, keeping the order from `filtered`
   const grouped = useMemo(() => {
     const order: SlashCategory[] = [];
     const map = new Map<SlashCategory, SlashCommand[]>();
@@ -123,12 +131,10 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
     return order.map((cat) => ({ category: cat, items: map.get(cat)! }));
   }, [filtered]);
 
-  // Reset highlight when filter changes
   useEffect(() => {
     setHighlightIdx(0);
   }, [prefix]);
 
-  // Keyboard handlers (parent should attach this to the composer textarea)
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -143,10 +149,7 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setHighlightIdx((i) => Math.max(i - 1, 0));
-      } else if (e.key === "Enter" && filtered.length) {
-        e.preventDefault();
-        onPick(filtered[highlightIdx]);
-      } else if (e.key === "Tab" && filtered.length) {
+      } else if ((e.key === "Enter" || e.key === "Tab") && filtered.length) {
         e.preventDefault();
         onPick(filtered[highlightIdx]);
       }
@@ -166,43 +169,54 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
     );
   }
 
-  // Compute flat index from grouped layout
   let flatIdx = -1;
   return (
-    <div className="lys-slash-palette" role="listbox" aria-label="Skill commands">
-      {grouped.map(({ category, items }) => (
-        <div key={category} className="lys-slash-group">
-          <div className="lys-slash-cat">{CATEGORY_LABELS[category]}</div>
-          {items.map((cmd) => {
-            flatIdx++;
-            const active = flatIdx === highlightIdx;
-            return (
-              <button
-                key={cmd.name}
-                type="button"
-                role="option"
-                aria-selected={active}
-                className={`lys-slash-row ${active ? "is-active" : ""}`}
-                onMouseDown={(e) => {
-                  // mousedown not click — fires before composer blurs
-                  e.preventDefault();
-                  onPick(cmd);
-                }}
-                onMouseEnter={() => setHighlightIdx(flatIdx)}
-              >
-                <span className="lys-slash-name">/{cmd.name}</span>
-                <span className="lys-slash-desc">{cmd.description}</span>
-                {cmd.argument_hint && (
-                  <span className="lys-slash-hint">{cmd.argument_hint}</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      ))}
-      <div className="lys-slash-foot">
-        <kbd>↑↓</kbd> navigate &nbsp; <kbd>↵</kbd> pick &nbsp; <kbd>esc</kbd> close
+    <div className="lys-slash-palette" role="listbox" aria-label="Slash commands">
+      <div className="lys-slash-head">
+        <span style={{ fontFamily: "var(--lys-font-mono)", color: "var(--lys-accent)", fontWeight: 600 }}>/</span>
+        <span style={{ flex: 1 }}>{filtered.length} command{filtered.length === 1 ? "" : "s"}</span>
+        <kbd>↑↓</kbd>
+        <kbd>↵</kbd>
+        <kbd>esc</kbd>
       </div>
+      {grouped.map(({ category, items }) => {
+        const Icon = CATEGORY_ICON[category];
+        return (
+          <div key={category} className="lys-slash-group">
+            <div className="lys-slash-cat">{CATEGORY_LABELS[category]}</div>
+            {items.map((cmd) => {
+              flatIdx++;
+              const active = flatIdx === highlightIdx;
+              return (
+                <button
+                  key={cmd.name}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  className={`lys-slash-row ${active ? "is-active" : ""}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onPick(cmd);
+                  }}
+                  onMouseEnter={() => setHighlightIdx(flatIdx)}
+                  title={cmd.aliases && cmd.aliases.length
+                    ? `aliases: ${cmd.aliases.map((a) => "/" + a).join(", ")}`
+                    : undefined}
+                >
+                  <span className="lys-slash-ico" style={{ color: active ? "var(--lys-accent)" : "var(--lys-text-faint)" }}>
+                    <Icon size={12} />
+                  </span>
+                  <span className="lys-slash-name">/{cmd.name}</span>
+                  <span className="lys-slash-desc">{cmd.description}</span>
+                  {cmd.argument_hint && (
+                    <span className="lys-slash-hint">{cmd.argument_hint}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
     </div>
   );
 }

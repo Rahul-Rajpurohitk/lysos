@@ -134,7 +134,7 @@ class CommandRegistry:
 class HelpCommand(Command):
     def __init__(self):
         super().__init__(
-            name="help", description="Show available skills",
+            name="help", description="List all slash commands",
             type=CommandType.SYSTEM, aliases=["?", "skills"],
         )
 
@@ -150,7 +150,7 @@ class HelpCommand(Command):
 class ClearCommand(Command):
     def __init__(self):
         super().__init__(
-            name="clear", description="Clear the active session",
+            name="clear", description="Reset the chat & state",
             type=CommandType.SYSTEM,
         )
 
@@ -187,9 +187,9 @@ class DesignCommand(Command):
     def __init__(self):
         super().__init__(
             name="design",
-            description="Start a multi-agent design session (Designer→Critic→Editor→Strategist)",
+            description="Start a multi-agent design session",
             type=CommandType.LOCAL,
-            argument_hint="<pathogen> [objective text]",
+            argument_hint="<pathogen> [objective]",
             aliases=["d"],
         )
 
@@ -254,9 +254,9 @@ class EditCommand(Command):
     def __init__(self):
         super().__init__(
             name="edit",
-            description="Apply a deterministic structural transformation",
+            description="Apply a deterministic edit op",
             type=CommandType.LOCAL,
-            argument_hint="<op>  (add_hydroxyl, add_fluorine, swap_chloro_to_fluoro, ring_close, ...)",
+            argument_hint="<op>",
             aliases=["e"],
             requires_smiles=True,
         )
@@ -289,9 +289,9 @@ class ScoreCommand(Command):
     def __init__(self):
         super().__init__(
             name="score",
-            description="Run the 12-component reward stack on a SMILES",
+            description="Score with the 12-axis reward stack",
             type=CommandType.LOCAL,
-            argument_hint="[smiles]  (defaults to active candidate)",
+            argument_hint="[smiles]",
             requires_smiles=False,
         )
 
@@ -314,9 +314,9 @@ class ExplainCommand(Command):
     def __init__(self):
         super().__init__(
             name="explain",
-            description="Mechanism + spectrum + resistance for a named drug or candidate",
+            description="Mechanism + spectrum + resistance brief",
             type=CommandType.LOCAL,
-            argument_hint="<drug_name>  (lookup pharma_lookup first)",
+            argument_hint="<target|drug>",
         )
 
     async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
@@ -349,7 +349,7 @@ class SimilarCommand(Command):
     def __init__(self):
         super().__init__(
             name="similar",
-            description="Top-K similar known antibiotics (Gemini Embedding 2 cosine)",
+            description="Top-K similar antibiotics (embedding)",
             type=CommandType.LOCAL,
             argument_hint="[k=5]",
             aliases=["sim"],
@@ -379,9 +379,9 @@ class RunCommand(Command):
     def __init__(self):
         super().__init__(
             name="run",
-            description="Execute a Python cell in the sandbox",
+            description="Run a Python cell in the sandbox",
             type=CommandType.SYSTEM,
-            argument_hint="<python code>",
+            argument_hint="<code>",
         )
 
     async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
@@ -405,7 +405,7 @@ class BranchCommand(Command):
     def __init__(self):
         super().__init__(
             name="branch",
-            description="Fork the active candidate as a new design lineage",
+            description="Fork the active candidate as a branch",
             type=CommandType.SYSTEM,
             argument_hint="<branch hint>",
             requires_smiles=True,
@@ -422,7 +422,7 @@ class ScaffoldHopCommand(Command):
     def __init__(self):
         super().__init__(
             name="scaffold-hop",
-            description="Bioisosteric scaffold replacement",
+            description="Bioisosteric scaffold replacements",
             type=CommandType.LOCAL,
             argument_hint="[n=5]",
             aliases=["hop"],
@@ -451,7 +451,7 @@ class ResistanceCommand(Command):
     def __init__(self):
         super().__init__(
             name="resistance",
-            description="Pathogen resistome + escape probability",
+            description="Resistome + escape probability",
             type=CommandType.LOCAL,
             argument_hint="<pathogen>",
             aliases=["res"],
@@ -476,7 +476,7 @@ class SetTargetCommand(Command):
     def __init__(self):
         super().__init__(
             name="set-target",
-            description="Set the active target pathogen for the session",
+            description="Set the active target pathogen",
             type=CommandType.SYSTEM,
             argument_hint="<pathogen>",
             aliases=["target"],
@@ -500,9 +500,9 @@ class AdmetCommand(Command):
     def __init__(self):
         super().__init__(
             name="admet",
-            description="Predict ADMET panel (absorption, distribution, metabolism, excretion, toxicity)",
+            description="ADMET panel (A/D/M/E/T predictions)",
             type=CommandType.LOCAL,
-            argument_hint="[smiles]  (defaults to active candidate)",
+            argument_hint="[smiles]",
         )
 
     async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
@@ -524,7 +524,7 @@ class SynthCommand(Command):
     def __init__(self):
         super().__init__(
             name="synth",
-            description="Retrosynthesis route + estimated cost ($/g, step count)",
+            description="Retrosynthesis route + cost estimate",
             type=CommandType.LOCAL,
             argument_hint="[smiles]",
             requires_smiles=False,
@@ -549,7 +549,7 @@ class DockCommand(Command):
     def __init__(self):
         super().__init__(
             name="dock",
-            description="Dock the active candidate against the active target's PDB",
+            description="Dock candidate vs target PDB",
             type=CommandType.LOCAL,
             argument_hint="[pdb_id]",
             aliases=["docking"],
@@ -577,9 +577,9 @@ class ComplexCommand(Command):
     def __init__(self):
         super().__init__(
             name="complex",
-            description="Predict 3D complex structure (Boltz-2 ipTM/pTM pose)",
+            description="Predict 3D complex pose (Boltz-2)",
             type=CommandType.LOCAL,
-            argument_hint="[pathogen|target_pdb]",
+            argument_hint="[pathogen]",
             requires_smiles=True,
         )
 
@@ -608,7 +608,7 @@ class TraceCommand(Command):
     def __init__(self):
         super().__init__(
             name="trace",
-            description="Show the last N harness/tool events for this session",
+            description="Show last N harness events",
             type=CommandType.SYSTEM,
             argument_hint="[n=20]",
         )
