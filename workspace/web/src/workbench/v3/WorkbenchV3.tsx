@@ -9,19 +9,30 @@ import { TightComposer } from "./components/chat/TightComposer";
 // controls migrate inline elsewhere if needed.
 // import { IterationStrip } from "./components/IterationStrip";
 import { DragEditChips } from "./components/DragEditChips";
-import { TabStrip } from "./components/TabStrip";
+import { TabStrip as _TabStrip } from "./components/TabStrip";
+void _TabStrip;
 import { Mol2D } from "./components/Mol2D";
 import { Mol3D } from "./components/Mol3D";
 import { MechanismPanel } from "./components/MechanismPanel";
 import { OnboardingHero } from "./components/OnboardingHero";
 import { ChatPanel } from "./components/chat/ChatPanel";
-import { RadarPanel } from "./panels/RadarPanel";
-import { ParetoPanel } from "./panels/ParetoPanel";
-import { SynthPanel } from "./panels/SynthPanel";
-import { LineagePanel } from "./panels/LineagePanel";
-import { GraphPanel } from "./panels/GraphPanel";
+// Legacy panels (kept around for the Library/replay mode + chat-card cards)
+// Their TS imports are referenced via `void` so the bundle still ships
+// them ready for future on-demand mounting inside the playground canvas.
+import { RadarPanel as _RadarPanel } from "./panels/RadarPanel";
+import { ParetoPanel as _ParetoPanel } from "./panels/ParetoPanel";
+import { SynthPanel as _SynthPanel } from "./panels/SynthPanel";
+import { LineagePanel as _LineagePanel } from "./panels/LineagePanel";
+import { GraphPanel as _GraphPanel } from "./panels/GraphPanel";
+void _RadarPanel; void _ParetoPanel; void _SynthPanel; void _LineagePanel; void _GraphPanel;
 import { ArtifactPanel, type ArtifactDoc } from "./panels/ArtifactPanel";
-import { CandidateList } from "./components/CandidateList";
+import { PlaygroundCanvas, type WindowLayout, type Viewport } from "./playground/PlaygroundCanvas";
+import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
+import { RewardRadarWindow } from "./playground/RewardRadarWindow";
+import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
+import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
+import { CandidateList as _CandidateList } from "./components/CandidateList";
+void _CandidateList;
 import type { Pathogen } from "./components/TopHeader";
 import { useAutoTitle, ensureUniqueTitle } from "./hooks/useAutoTitle";
 
@@ -140,6 +151,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   });
   const [constraints, setConstraints] = useState<Constraint[]>([]);
   const [activeTab, setActiveTab] = useState<RightTab>("Radar");
+  void activeTab; void setActiveTab; // legacy: tab strip removed, kept for future picker
   // W4: artifact doc populated by streaming /explain markdown chunks.
   const [artifactDoc, setArtifactDoc] = useState<ArtifactDoc>(() => ({
     session_id: "artifact",
@@ -148,6 +160,56 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     active_score: null,
     blocks: [],
   }));
+
+  // ── Playground canvas state ────────────────────────────────────────
+  // Default layout sized for a ~1100px-wide right pane. All windows live
+  // in canvas coords and are draggable/resizable. Persists per-chat-tab
+  // via localStorage (key = lysos.playground.<chatId>).
+  const DEFAULT_LAYOUT: Record<string, WindowLayout> = {
+    "3d":     { x: 16,  y: 16,  w: 540, h: 360, z: 1, visible: true },
+    "2d":     { x: 16,  y: 392, w: 540, h: 320, z: 1, visible: true },
+    "radar":  { x: 572, y: 16,  w: 360, h: 360, z: 1, visible: true },
+    "agents": { x: 572, y: 392, w: 540, h: 280, z: 1, visible: true },
+    "artifact": { x: 16, y: 728, w: 1100, h: 280, z: 1, visible: false },
+  };
+  const [playgroundLayouts, setPlaygroundLayouts] = useState<Record<string, Record<string, WindowLayout>>>({});
+  const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
+  const playLayout = playgroundLayouts[activeChatId] ?? DEFAULT_LAYOUT;
+  const playViewport = playgroundViewports[activeChatId] ?? { pan: { x: 0, y: 0 }, zoom: 1 };
+  function setPlayLayoutItem(id: string, next: WindowLayout) {
+    setPlaygroundLayouts((m) => ({
+      ...m,
+      [activeChatId]: { ...(m[activeChatId] ?? DEFAULT_LAYOUT), [id]: next },
+    }));
+  }
+  function setPlayViewport(v: Viewport) {
+    setPlaygroundViewports((m) => ({ ...m, [activeChatId]: v }));
+  }
+  // Load saved layouts from localStorage on mount per chat
+  useEffect(() => {
+    if (!activeChatId) return;
+    try {
+      const raw = localStorage.getItem(`lysos.playground.${activeChatId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed.layout) setPlaygroundLayouts((m) => ({ ...m, [activeChatId]: parsed.layout }));
+        if (parsed.viewport) setPlaygroundViewports((m) => ({ ...m, [activeChatId]: parsed.viewport }));
+      }
+    } catch { /* ignore */ }
+  }, [activeChatId]);
+  // Persist on change (debounced)
+  useEffect(() => {
+    if (!activeChatId) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          `lysos.playground.${activeChatId}`,
+          JSON.stringify({ layout: playLayout, viewport: playViewport }),
+        );
+      } catch { /* quota / disabled */ }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [activeChatId, playLayout, playViewport]);
   const [mechanismOpen, setMechanismOpen] = useState(false);
   const [activeSubAgents, setActiveSubAgents] = useState<string[]>([]);
   const [currentIter, setCurrentIter] = useState(0);
@@ -395,6 +457,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     return best?.scores ?? null;
   }, [events]);
 
+  // legacy: paretoRows / molEdits / candEvents fed the old TabStrip panels.
+  // Now derived for future Pareto/Lineage windows on the canvas.
+  // @ts-expect-error -- intentionally retained for upcoming W6 compare window
   const paretoRows = useMemo(() => {
     return events
       .filter((e) => e.type === "candidate_added" && e.smiles && e.scores)
@@ -407,6 +472,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       }));
   }, [events]);
 
+  // @ts-expect-error -- legacy panel-feeder, kept for upcoming Lineage window
   const molEdits = useMemo(
     () =>
       events
@@ -421,6 +487,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     [events]
   );
 
+  // @ts-expect-error -- legacy panel-feeder, kept for upcoming Lineage window
   const candEvents = useMemo(
     () =>
       events
@@ -887,41 +954,100 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
             </Allotment>
           </Allotment.Pane>
 
-          {/* RIGHT — analytics tabs */}
-          <Allotment.Pane minSize={240} preferredSize={300}>
-            <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "var(--lys-bg-2)" }}>
-              <TabStrip tabs={RIGHT_TABS} active={activeTab} onChange={setActiveTab} />
-              {activeTab === "Artifact" ? (
-                /* Full-bleed Markdown brief from /explain. ArtifactPanel
-                 * owns its own header + scroll, so we don't wrap it in
-                 * the standard tab-content padded container. */
-                <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-                  <ArtifactPanel doc={artifactDoc} />
-                </div>
-              ) : (
-                <div style={{ flex: 1, overflow: "auto", padding: 12, color: "var(--lys-text-dim)" }}>
-                  <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--lys-text-faint)", marginBottom: 8 }}>
-                    {activeTab}
-                  </div>
-                  <div style={{ fontSize: 13, lineHeight: 1.5 }}>
-                    {activeTab === "Radar" && (
-                      <RadarPanel
-                        current={lastScores}
-                        best={bestScores}
-                        weights={REWARD_WEIGHTS}
-                      />
-                    )}
-                    {activeTab === "Pareto" && <ParetoPanel candidates={paretoRows} />}
-                    {activeTab === "Synth" && <SynthPanel apiBase={apiBase} smiles={currentSmiles} />}
-                    {activeTab === "Graph" && <GraphPanel pathogen={selectedPathogen} apiBase={apiBase} />}
-                    {activeTab === "Lineage" && (
-                      <LineagePanel edits={molEdits} candidates={candEvents} />
-                    )}
-                  </div>
-                </div>
-              )}
-              <CandidateList items={paretoRows} />
-            </div>
+          {/* RIGHT — Playground canvas (replaces tab strip).
+              Infinite zoomable whiteboard with floating, draggable, resizable
+              windows. Default layout: 3D top-left, 2D bottom-left, Radar
+              top-right, Agent trace bottom-right. Per-chat-tab layouts. */}
+          <Allotment.Pane minSize={360} preferredSize={760}>
+            <PlaygroundCanvas
+              layout={playLayout}
+              viewport={playViewport}
+              onLayoutChange={setPlayLayoutItem}
+              onViewportChange={setPlayViewport}
+              onClose={(id) => setPlayLayoutItem(id, { ...playLayout[id], visible: false })}
+              onFocus={(id) => {
+                // Focus = bump z-order
+                const maxZ = Math.max(...Object.values(playLayout).map((l) => l.z));
+                setPlayLayoutItem(id, { ...playLayout[id], z: maxZ + 1 });
+              }}
+              windows={{
+                "3d": {
+                  title: "3D molecule theater",
+                  tone: "var(--lys-accent)",
+                  body: <Mol3DTheaterWindow
+                    apiBase={apiBase}
+                    smiles={currentSmiles}
+                    pathogen={selectedPathogen}
+                    onMoleculeEdit={(newSmi, op) => {
+                      // Same wiring as before — bubble the edit into the chat
+                      // timeline so agents debate it.
+                      const opLabel = op?.kind === "swap" ? `→${op.element}`
+                        : op?.kind === "methyl" ? "+CH₃"
+                        : op?.kind === "break" ? "✂ bond" : "edit";
+                      setEvents((p) => [
+                        ...p,
+                        { type: "agent_message", ts: Date.now()/1000, agent: "user",
+                          content: `[edit ${opLabel}] ${newSmi}` } as any,
+                        { type: "candidate_added", ts: Date.now()/1000, smiles: newSmi,
+                          composite: 0, agent: "user" } as any,
+                      ]);
+                    }}
+                  />,
+                },
+                "2d": {
+                  title: "2D atom builder · click any atom",
+                  tone: "#3b82f6",
+                  body: <Mol2DBuilderWindow
+                    apiBase={apiBase}
+                    smiles={currentSmiles}
+                    pathogen={selectedPathogen}
+                    onMoleculeEdit={(newSmi, edit) => {
+                      setEvents((p) => [
+                        ...p,
+                        { type: "agent_message", ts: Date.now()/1000, agent: "user",
+                          content: `[2D edit ${edit.label} @ atom ${edit.atom_idx}] ${newSmi}` } as any,
+                        { type: "candidate_added", ts: Date.now()/1000, smiles: newSmi,
+                          composite: 0, agent: "user" } as any,
+                      ]);
+                    }}
+                  />,
+                },
+                "radar": {
+                  title: "Reward radar · live",
+                  tone: "var(--lys-accent)",
+                  body: <RewardRadarWindow
+                    current={lastScores ?? {}}
+                    best={bestScores ?? {}}
+                    weights={REWARD_WEIGHTS}
+                    history={(() => {
+                      // Build per-axis history from candidate events
+                      const h: Record<string, number[]> = {};
+                      for (const e of events as any[]) {
+                        if (e.type !== "candidate_added") continue;
+                        const s = (e.scores ?? e.data?.scores) as Record<string, number> | undefined;
+                        if (!s) continue;
+                        for (const [k, v] of Object.entries(s)) {
+                          if (typeof v !== "number") continue;
+                          if (!h[k]) h[k] = [];
+                          h[k].push(v);
+                        }
+                      }
+                      return h;
+                    })()}
+                  />,
+                },
+                "agents": {
+                  title: "Agent reasoning trace",
+                  tone: "#8b5cf6",
+                  body: <AgentReasoningTraceWindow events={events as any[]} />,
+                },
+                "artifact": {
+                  title: "Artifact · /explain",
+                  tone: "#3b82f6",
+                  body: <ArtifactPanel doc={artifactDoc} />,
+                },
+              }}
+            />
           </Allotment.Pane>
         </Allotment>
       </div>

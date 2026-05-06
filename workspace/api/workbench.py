@@ -456,6 +456,248 @@ async def workbench_design(req: DesignRequest) -> DesignResponse:
 
 
 # ---------------------------------------------------------------------------
+# CHEM RULES ENGINE — atom-level chemistry knowledge for the playground.
+#
+# The 2D builder window calls this whenever the user clicks an atom on a
+# molecule. The agents call it as a tool to query "what can I attach
+# here?" instead of hallucinating chemistry.
+#
+# Returns: valence + neighbours + allowed_attachments[] + sar_notes[]
+# grounded in:
+#   - RDKit GetAtomWithIdx().GetTotalNumHs() / GetExplicitValence() rules
+#   - Static functional-group library (carboxyl, amine, hydroxyl, etc.)
+#   - Curated 387-drug corpus search for SAR mentions of analogous positions
+# ---------------------------------------------------------------------------
+
+
+class AllowedAttachment(BaseModel):
+    label: str                  # human-readable button text e.g. "+F"
+    op: str                     # "swap_element" | "add_methyl" | "add_functional_group"
+    new_element: Optional[str] = None
+    functional_group: Optional[str] = None
+    note: str = ""              # one-liner reason ("common SAR position")
+
+
+class AtomNeighbor(BaseModel):
+    idx: int
+    element: str
+    bond: str                   # "single" | "double" | "triple" | "aromatic"
+
+
+class SARNote(BaseModel):
+    drug: str
+    position: str
+    effect: str
+
+
+class AtomContextResponse(BaseModel):
+    smiles: str
+    atom_idx: int
+    element: str
+    formal_charge: int
+    is_aromatic: bool
+    in_ring: bool
+    ring_size: int = 0
+    explicit_valence: int
+    implicit_valence: int
+    n_hydrogens: int
+    neighbors: list[AtomNeighbor]
+    allowed_attachments: list[AllowedAttachment]
+    sar_notes: list[SARNote]
+
+
+# Functional-group quick-add palette (only attaches to atoms with free H)
+_FUNCTIONAL_GROUPS: list[dict] = [
+    {"name": "hydroxyl",   "label": "+OH",   "smiles_part": "O",     "valence_used": 1},
+    {"name": "methyl",     "label": "+CH₃",  "smiles_part": "C",     "valence_used": 1},
+    {"name": "fluorine",   "label": "+F",    "smiles_part": "F",     "valence_used": 1},
+    {"name": "chlorine",   "label": "+Cl",   "smiles_part": "Cl",    "valence_used": 1},
+    {"name": "amine",      "label": "+NH₂",  "smiles_part": "N",     "valence_used": 1},
+    {"name": "cyano",      "label": "+CN",   "smiles_part": "C#N",   "valence_used": 1},
+    {"name": "carboxyl",   "label": "+COOH", "smiles_part": "C(=O)O","valence_used": 1},
+    {"name": "methoxy",    "label": "+OCH₃", "smiles_part": "OC",    "valence_used": 1},
+    {"name": "trifluoromethyl", "label": "+CF₃", "smiles_part": "C(F)(F)F", "valence_used": 1},
+]
+
+
+def _sar_lookup(element: str, neighborhood_smiles: str, target: Optional[str]) -> list[SARNote]:
+    """Cheap text search over the 387-drug corpus for SAR mentions that
+    might apply to this atom. Returns up to 3 most-relevant notes."""
+    try:
+        idx = _load_pharma_ground()
+    except Exception:
+        return []
+    out: list[SARNote] = []
+    needle = element.lower()
+    for entry in idx:
+        resp = (entry.get("response") or "").lower()
+        if needle not in resp:
+            continue
+        # Look for nearby phrases like "C6", "+F at C6", "ortho", "para", etc.
+        import re
+        m = re.search(rf"[+\-]?{element}\s*(?:at|on)?\s*([A-Z]\d+|ortho|para|meta|C-?\d+)", resp)
+        if not m:
+            continue
+        out.append(SARNote(
+            drug=entry.get("drug", "?"),
+            position=m.group(1),
+            effect=resp[max(0, m.start()-30):m.end()+80].replace("\n", " ")[:140],
+        ))
+        if len(out) >= 3:
+            break
+    return out
+
+
+@router.get("/chem/atom/{smiles_b64}/{atom_idx}", response_model=AtomContextResponse)
+async def chem_atom_context(smiles_b64: str, atom_idx: int,
+                             target: Optional[str] = None) -> AtomContextResponse:
+    """SMILES is base64-urlsafe encoded to dodge URL-special-chars
+    (ring bonds, slashes, etc.) — frontend wraps with btoa(smi)."""
+    import base64
+    try:
+        smiles = base64.urlsafe_b64decode(smiles_b64.encode()).decode()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, f"smiles base64 decode failed: {exc}")
+
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {smiles}")
+    if atom_idx < 0 or atom_idx >= mol.GetNumAtoms():
+        raise HTTPException(422, f"atom_idx {atom_idx} out of range (0..{mol.GetNumAtoms()-1})")
+
+    atom = mol.GetAtomWithIdx(atom_idx)
+    elt = atom.GetSymbol()
+
+    # Neighbours
+    neighbors: list[AtomNeighbor] = []
+    for nb in atom.GetNeighbors():
+        bond = mol.GetBondBetweenAtoms(atom_idx, nb.GetIdx())
+        bond_type = "single"
+        if bond:
+            bt = bond.GetBondType()
+            if bt == Chem.BondType.DOUBLE:    bond_type = "double"
+            elif bt == Chem.BondType.TRIPLE:  bond_type = "triple"
+            elif bt == Chem.BondType.AROMATIC: bond_type = "aromatic"
+        neighbors.append(AtomNeighbor(
+            idx=nb.GetIdx(),
+            element=nb.GetSymbol(),
+            bond=bond_type,
+        ))
+
+    # Ring info
+    ring_info = mol.GetRingInfo()
+    in_ring = atom.IsInRing()
+    ring_size = 0
+    for ring in ring_info.AtomRings():
+        if atom_idx in ring:
+            ring_size = len(ring)
+            break
+
+    n_h = atom.GetTotalNumHs()
+    free_valence = n_h  # number of single-bond slots open
+
+    # Allowed attachments
+    allowed: list[AllowedAttachment] = []
+    if free_valence >= 1:
+        # Single-element swaps (only for atoms that aren't already that element)
+        # and only if the atom HAS free H to give up its one of its bonds (we
+        # keep this simple: same-valence single swaps).
+        for swap_elt in ("N", "O", "F", "Cl", "S"):
+            if swap_elt == elt:
+                continue
+            if elt in ("F", "Cl", "Br") and swap_elt in ("F", "Cl", "Br"):
+                allowed.append(AllowedAttachment(
+                    label=f"{elt}→{swap_elt}",
+                    op="swap_element",
+                    new_element=swap_elt,
+                    note="halogen swap",
+                ))
+            elif n_h > 0 and atom.GetTotalDegree() <= 4:
+                allowed.append(AllowedAttachment(
+                    label=f"{elt}→{swap_elt}",
+                    op="swap_element",
+                    new_element=swap_elt,
+                    note="atom-class change",
+                ))
+        # Functional-group attach (uses up 1 free H slot)
+        for fg in _FUNCTIONAL_GROUPS:
+            if fg["valence_used"] <= free_valence:
+                allowed.append(AllowedAttachment(
+                    label=fg["label"],
+                    op="add_functional_group",
+                    functional_group=fg["name"],
+                    note=("aromatic-H position" if atom.GetIsAromatic() else "free-H position"),
+                ))
+    else:
+        # Saturated atom — only break-bond is available; we mark as fully-bound.
+        pass
+
+    # SAR notes from the curated corpus
+    sar = _sar_lookup(elt, smiles, target)
+
+    return AtomContextResponse(
+        smiles=smiles,
+        atom_idx=atom_idx,
+        element=elt,
+        formal_charge=atom.GetFormalCharge(),
+        is_aromatic=atom.GetIsAromatic(),
+        in_ring=in_ring,
+        ring_size=ring_size,
+        explicit_valence=atom.GetExplicitValence(),
+        implicit_valence=atom.GetImplicitValence(),
+        n_hydrogens=n_h,
+        neighbors=neighbors,
+        allowed_attachments=allowed,
+        sar_notes=sar,
+    )
+
+
+@router.get("/molecule/2d/{smiles_b64}")
+async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340) -> dict:
+    """Render a 2D structure as SVG with atom indices. Frontend uses this
+    in the 2D Builder window; on click, the SVG already knows which atom
+    index was hit (RDKit emits class="atom-N" on each atom)."""
+    import base64
+    try:
+        smiles = base64.urlsafe_b64decode(smiles_b64.encode()).decode()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, f"smiles decode failed: {exc}")
+    try:
+        from rdkit import Chem
+        from rdkit.Chem.Draw import rdMolDraw2D
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {smiles}")
+
+    drawer = rdMolDraw2D.MolDraw2DSVG(w, h)
+    opts = drawer.drawOptions()
+    opts.addAtomIndices = True
+    opts.bondLineWidth = 2
+    opts.baseFontSize = 0.6
+    drawer.DrawMolecule(mol)
+    drawer.FinishDrawing()
+    svg = drawer.GetDrawingText()
+    # RDKit emits raw SVG with atom classes already; stash a small
+    # n_atoms hint for the frontend.
+    return {
+        "smiles": smiles,
+        "svg": svg,
+        "n_atoms": mol.GetNumAtoms(),
+        "n_bonds": mol.GetNumBonds(),
+        "w": w,
+        "h": h,
+    }
+
+
+# ---------------------------------------------------------------------------
 # W6 — Compare N candidates side-by-side.
 #
 # Scores each candidate on the same 12-axis stack and returns the
