@@ -150,11 +150,13 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
         };
       }
       applyTransform();
-      // Schedule a React-state flush after the user stops scrolling
+      // Schedule a React-state flush after the user stops scrolling.
+      // 40ms feels almost instantaneous to the user but still coalesces
+      // rapid wheel ticks into one re-render.
       if (flushTimerRef.current != null) window.clearTimeout(flushTimerRef.current);
       flushTimerRef.current = window.setTimeout(() => {
         p.onViewportChange(liveViewportRef.current);
-      }, 80);
+      }, 40);
     };
 
     const onWheel = (e: WheelEvent) => {
@@ -188,7 +190,12 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
       const acc = wheelDeltaRef.current ?? { x: 0, y: 0, zoomFactor: 1, cx, cy };
       acc.cx = cx; acc.cy = cy;
       if (e.metaKey || e.ctrlKey) {
-        acc.zoomFactor *= (1 - e.deltaY * 0.0015);
+        // Exponential zoom: factor = exp(-deltaY * 0.0007)
+        // For a typical wheel click (deltaY≈33) this gives ~2.3% per click
+        // — 2× finer than the old 5% and FEELS continuous, not stepped.
+        // Trackpad pinch sends fine deltaY (~1-2) → ~0.07-0.14% per event,
+        // so pinch zoom is silky-smooth at unit-level granularity.
+        acc.zoomFactor *= Math.exp(-e.deltaY * 0.0007);
       } else {
         acc.x += e.deltaX;
         acc.y += e.deltaY;
