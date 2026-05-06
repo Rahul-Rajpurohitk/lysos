@@ -39,6 +39,7 @@ import { EditLogCard } from "./playground/EditLogCard";
 import { ConnectionStatusCard } from "./playground/ConnectionStatusCard";
 import { StructuralAlertsCard } from "./playground/StructuralAlertsCard";
 import { ResistanceMapCard } from "./playground/ResistanceMapCard";
+import { AtomDetailCard } from "./playground/AtomDetailCard";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
 void {} as unknown as WindowLayout;
@@ -99,6 +100,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Header state
   const [pathogens, setPathogens] = useState<Pathogen[]>([]);
   const [selectedPathogen, setSelectedPathogen] = useState("MRSA");
+  // Hovered atom from 2D builder — drives the AtomDetailCard inspector
+  const [hoveredAtom, setHoveredAtom] = useState<number | null>(null);
   const [mode, setMode] = useState<"Design" | "Discover" | "Repair" | "Robustify">("Design");
   const [autonomy, setAutonomy] = useState<"Co-pilot" | "Auto" | "Manual">("Co-pilot");
   const [iters, setIters] = useState(4);
@@ -1018,6 +1021,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         pathogen={selectedPathogen}
                         cursors={livePlayground.cursors}
                         onCursorHover={(atomIdx) => {
+                          // Lift hovered atom up so AtomDetailCard can render its context
+                          setHoveredAtom(atomIdx);
                           if (atomIdx != null) {
                             livePlayground.sendCursor({ actor: "user", atom_idx: atomIdx });
                             livePlayground.sendHover({
@@ -1145,6 +1150,41 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   id: "knowledge",
                   category: "Knowledge",
                   cards: [
+                    { id: "atom-detail", title: "Atom inspector · live (hover in 2D)", body:
+                      <AtomDetailCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        atomIdx={hoveredAtom}
+                        pathogen={selectedPathogen}
+                        onApplyEdit={async (op, params) => {
+                          if (!currentSmiles || hoveredAtom == null) return;
+                          try {
+                            const body: any = { smiles: currentSmiles };
+                            if (op === "swap_element") {
+                              body.op = "swap_element";
+                              body.atom_index = hoveredAtom;
+                              body.new_element = params.new_element ?? "C";
+                            } else if (op === "add_functional_group") {
+                              body.op = "add_methyl_at";
+                              body.atom_index = hoveredAtom;
+                            } else { return; }
+                            const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify(body),
+                            });
+                            if (!r.ok) return;
+                            const d = await r.json();
+                            if (d.smiles) {
+                              await loadSmilesIntoCanvas(d.smiles, {
+                                createdBy: "user",
+                                parentId: currentMoleculeId,
+                                logLabel: `[atom-inspect ${params.label} @${hoveredAtom}]`,
+                              });
+                            }
+                          } catch {/* */}
+                        }}
+                      /> },
                     { id: "alerts", title: "Structural alerts · PAINS / toxicophores",  body:
                       <StructuralAlertsCard apiBase={apiBase} smiles={currentSmiles} /> },
                     { id: "resistance", title: `Resistance map · ${selectedPathogen}`, body:

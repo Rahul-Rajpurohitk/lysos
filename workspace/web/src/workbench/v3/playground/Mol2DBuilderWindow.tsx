@@ -143,13 +143,18 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     return () => handlers.forEach(({ node, type, fn }) => node.removeEventListener(type, fn));
   }, [svg, onCursorHover]);
 
-  // Render selection rings (shift-click multi-select for bond creation)
+  // Render selection rings + ghost-line preview between consecutively-selected atoms.
+  // The ghost line is a dashed cyan stroke between the bbox centers of the
+  // first two selected atoms — a live preview of the bond that will be drawn
+  // when the user clicks "+ single/double/triple bond" in the toolbar.
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
     const svgEl = host.querySelector("svg");
     if (!svgEl) return;
-    svgEl.querySelectorAll('[data-sel="1"]').forEach((n) => n.remove());
+    svgEl.querySelectorAll('[data-sel="1"], [data-ghost="1"]').forEach((n) => n.remove());
+
+    const centers: Array<{ idx: number; cx: number; cy: number }> = [];
     selected.forEach((idx) => {
       const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
       if (!target) return;
@@ -157,6 +162,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       if (!bbox) return;
       const cx = bbox.x + bbox.width / 2;
       const cy = bbox.y + bbox.height / 2;
+      centers.push({ idx, cx, cy });
+
+      // Selection ring
       const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       ring.setAttribute("data-sel", "1");
       ring.setAttribute("cx", String(cx));
@@ -167,7 +175,64 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       ring.setAttribute("stroke-width", "2");
       ring.style.pointerEvents = "none";
       svgEl.appendChild(ring);
+
+      // Order badge (1, 2, 3...) showing the atom's position in the bond chain
+      const badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      badge.setAttribute("data-sel", "1");
+      badge.setAttribute("x", String(cx + 12));
+      badge.setAttribute("y", String(cy - 12));
+      badge.setAttribute("font-size", "10");
+      badge.setAttribute("font-family", "SF Mono, monospace");
+      badge.setAttribute("font-weight", "700");
+      badge.setAttribute("fill", "#92400e");
+      badge.style.pointerEvents = "none";
+      badge.textContent = String(centers.length);
+      svgEl.appendChild(badge);
     });
+
+    // Ghost-line preview: connect the first two selected atoms with a dashed line
+    if (centers.length >= 2) {
+      const a = centers[0];
+      const b = centers[1];
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("data-ghost", "1");
+      line.setAttribute("x1", String(a.cx));
+      line.setAttribute("y1", String(a.cy));
+      line.setAttribute("x2", String(b.cx));
+      line.setAttribute("y2", String(b.cy));
+      line.setAttribute("stroke", "#06b6d4");          // cyan = preview
+      line.setAttribute("stroke-width", "3");
+      line.setAttribute("stroke-dasharray", "5,3");
+      line.setAttribute("stroke-linecap", "round");
+      line.setAttribute("opacity", "0.85");
+      line.style.pointerEvents = "none";
+      // Animate dasharray for "marching ants" effect
+      const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      anim.setAttribute("attributeName", "stroke-dashoffset");
+      anim.setAttribute("from", "0");
+      anim.setAttribute("to", "16");
+      anim.setAttribute("dur", "0.6s");
+      anim.setAttribute("repeatCount", "indefinite");
+      line.appendChild(anim);
+      // Insert ghost line BEFORE the rings so atoms render on top
+      svgEl.insertBefore(line, svgEl.firstChild);
+
+      // Distance label at midpoint
+      const mx = (a.cx + b.cx) / 2;
+      const my = (a.cy + b.cy) / 2;
+      const dist = Math.sqrt((b.cx - a.cx) ** 2 + (b.cy - a.cy) ** 2).toFixed(1);
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("data-ghost", "1");
+      label.setAttribute("x", String(mx));
+      label.setAttribute("y", String(my - 6));
+      label.setAttribute("font-size", "9");
+      label.setAttribute("font-family", "SF Mono, monospace");
+      label.setAttribute("fill", "#0e7490");
+      label.setAttribute("text-anchor", "middle");
+      label.style.pointerEvents = "none";
+      label.textContent = `preview · ${dist}u`;
+      svgEl.appendChild(label);
+    }
   }, [selected, svg]);
 
   // Apply cursor halos for non-self actors. Each cursors[actor].atom_idx
