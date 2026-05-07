@@ -502,16 +502,28 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       if (!map.has(bIdx) && isFinite(x2) && isFinite(y2)) map.set(bIdx, { x: x2, y: y2 });
     });
     atomPositions.current = map;
-    // 3) Map RDKit's atom-index <text> elements to their atom indices.
-    //    These are bare <text> with no class attribute and text content
-    //    that's a parseable integer ("0", "1", ...). Match each to the
-    //    closest atom in the position map within 60px so we never
-    //    misattribute a label to the wrong atom.
+    // 3) Map RDKit's atom-index <text> elements to their atom indices,
+    //    AND tag them as click targets. Without this, clicking on the
+    //    visible digit "0" (which is a bare <text> RDKit drew offset
+    //    from the geometric atom position) routes to NOTHING — my
+    //    invisible hit-circles only sit at the geometric atom corner,
+    //    not at the digit's offset position. By stamping
+    //    `data-atom-hit="N"` directly on RDKit's text, clicks on the
+    //    digit get picked up by the same delegated handler that
+    //    handles hit-circles + bond paths. ONE consistent click model.
+    //    Also sets cursor: grab so the affordance reads.
+    //    Tolerance: 60px — RDKit offsets the index 25-40 px from atom
+    //    center for visibility; 60 is generous enough to catch real
+    //    labels without misattributing a stray digit elsewhere.
     const idxMap = new Map<number, SVGTextElement>();
     svgEl.querySelectorAll<SVGTextElement>("text").forEach((t) => {
-      if (t.getAttribute("class")) return;          // skip classed text (heteroatom symbols, our badges)
-      if ((t as SVGElement).getAttribute("data-selected")) return;
-      if ((t as SVGElement).getAttribute("data-smarts")) return;
+      if (t.getAttribute("data-selected")) return;
+      if (t.getAttribute("data-smarts")) return;
+      // Allow text whose class is "note" (RDKit's atom-index style) or
+      // missing entirely — we only want to skip classed text that's
+      // already an atom symbol (atom-N) or a bond path (bond-N).
+      const cls = t.getAttribute("class") || "";
+      if (/(?:^|\s)(?:atom-|bond-)/.test(cls)) return;
       const txt = (t.textContent || "").trim();
       if (!/^\d+$/.test(txt)) return;
       const idx = parseInt(txt, 10);
@@ -522,11 +534,17 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         const tx = bbox.x + bbox.width / 2;
         const ty = bbox.y + bbox.height / 2;
         const dist = Math.hypot(tx - apos.x, ty - apos.y);
-        // Tight tolerance (60px in SVG user space) — RDKit places the
-        // index ~25-40 px from the atom center for visibility, so 60 is
-        // generous enough to catch real labels but tight enough not to
-        // accidentally match a stray digit elsewhere on the canvas.
-        if (dist <= 60) idxMap.set(idx, t);
+        if (dist <= 60) {
+          idxMap.set(idx, t);
+          // Make the digit clickable + hoverable via the same delegation.
+          t.setAttribute("data-atom-hit", String(idx));
+          (t as unknown as HTMLElement).style.cursor = "grab";
+          // Add to existing class list so drag-mouseup / atom-N selectors find it
+          const existing = t.getAttribute("class") || "";
+          if (!new RegExp(`(?:^|\\s)atom-${idx}(?:\\s|$)`).test(existing)) {
+            t.setAttribute("class", `${existing}${existing ? " " : ""}atom-${idx} atom-hit`.trim());
+          }
+        }
       } catch {/*noop*/}
     });
     atomIdxText.current = idxMap;
