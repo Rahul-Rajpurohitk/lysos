@@ -2579,6 +2579,127 @@ class ReplaceRequest(BaseModel):
     smiles: str
 
 
+# ---------------------------------------------------------------------------
+# Curated SMARTS preset catalog with categories + per-category colors.
+# Single source of truth — frontend fetches this so the SMARTS panel
+# stays consistent with the agent's smarts_match tool semantics.
+# ---------------------------------------------------------------------------
+
+SMARTS_PRESETS: list[dict] = [
+    # Antibiotic-class warheads
+    {"label": "β-lactam",          "pattern": "[#7]1[#6](=O)[#6]([#6]1)",          "category": "antibiotic-warhead"},
+    {"label": "thiazolidine",      "pattern": "C1SCNC1",                           "category": "antibiotic-warhead"},
+    {"label": "fluoroquinolone",   "pattern": "c1cc2N(C)cc(C(=O)O)c(=O)c2cc1F",    "category": "antibiotic-warhead"},
+    {"label": "aminoglycoside-NH₂","pattern": "[CH]([NH2])[CH]([OH])[CH][CH]([OH])","category": "antibiotic-warhead"},
+    {"label": "tetracycline core", "pattern": "C1=CC=C2C(=O)C3=C(C(=C(C=C3)O)O)C(=O)C2=C1","category": "antibiotic-warhead"},
+    {"label": "oxazolidinone",     "pattern": "O=C1OCCN1",                         "category": "antibiotic-warhead"},
+    # Acid / base / oxo functional groups
+    {"label": "carboxylic acid",   "pattern": "C(=O)[OH]",                          "category": "acid-base"},
+    {"label": "ester",             "pattern": "[#6][CX3](=O)O[#6]",                 "category": "acid-base"},
+    {"label": "amide",             "pattern": "[NX3][CX3](=[OX1])",                 "category": "acid-base"},
+    {"label": "peptide bond",      "pattern": "[NX3][CX3](=O)[CX3]",                "category": "acid-base"},
+    {"label": "carbonyl",          "pattern": "[CX3]=[OX1]",                        "category": "acid-base"},
+    {"label": "aldehyde",          "pattern": "[CX3H1](=O)[#6]",                    "category": "acid-base"},
+    {"label": "ketone",            "pattern": "[#6][CX3](=O)[#6]",                  "category": "acid-base"},
+    {"label": "ether",             "pattern": "[OD2]([#6])[#6]",                    "category": "acid-base"},
+    {"label": "alcohol -OH",       "pattern": "[OX2H][CX4]",                        "category": "acid-base"},
+    {"label": "phenol",            "pattern": "c[OH]",                              "category": "acid-base"},
+    {"label": "primary amine",     "pattern": "[NX3;H2;!$(NC=O)]",                  "category": "acid-base"},
+    {"label": "secondary amine",   "pattern": "[NX3;H1;!$(NC=O)]",                  "category": "acid-base"},
+    {"label": "tertiary amine",    "pattern": "[NX3;H0;!$(NC=O);!$(N=*)]",          "category": "acid-base"},
+    {"label": "thiol -SH",         "pattern": "[#16X2H]",                           "category": "acid-base"},
+    # Sulfur / phosphorus / nitrogen oxos
+    {"label": "sulfonamide",       "pattern": "[#16](=O)(=O)[#7]",                  "category": "heteroatom-oxo"},
+    {"label": "sulfonyl",          "pattern": "[#16X4](=[OX1])(=[OX1])",            "category": "heteroatom-oxo"},
+    {"label": "phosphate",         "pattern": "P(=O)(O)(O)O",                       "category": "heteroatom-oxo"},
+    {"label": "nitro",             "pattern": "[N+](=O)[O-]",                       "category": "heteroatom-oxo"},
+    {"label": "nitrile -CN",       "pattern": "C#N",                                "category": "heteroatom-oxo"},
+    {"label": "azide",             "pattern": "N=[N+]=[N-]",                        "category": "heteroatom-oxo"},
+    # Halogens
+    {"label": "halogen",           "pattern": "[F,Cl,Br,I]",                        "category": "halogen"},
+    {"label": "trifluoromethyl",   "pattern": "C(F)(F)F",                           "category": "halogen"},
+    {"label": "aryl halide",       "pattern": "[c][F,Cl,Br,I]",                     "category": "halogen"},
+    # Aromatic / heteroaryl
+    {"label": "aromatic-N",        "pattern": "[n]",                                "category": "aromatic"},
+    {"label": "benzene",           "pattern": "c1ccccc1",                           "category": "aromatic"},
+    {"label": "pyridine",          "pattern": "c1ccncc1",                           "category": "aromatic"},
+    {"label": "imidazole",         "pattern": "c1cnc[nH]1",                         "category": "aromatic"},
+    {"label": "thiazole",          "pattern": "c1cscn1",                            "category": "aromatic"},
+    {"label": "indole",            "pattern": "c1ccc2[nH]ccc2c1",                   "category": "aromatic"},
+    {"label": "quinoline",         "pattern": "c1ccc2ncccc2c1",                     "category": "aromatic"},
+    # Drug-likeness motifs
+    {"label": "Michael acceptor",  "pattern": "[#6]=[#6][CX3](=O)",                 "category": "reactivity"},
+    {"label": "epoxide",           "pattern": "C1OC1",                              "category": "reactivity"},
+    {"label": "Mannich base",      "pattern": "[NX3]C[CX4]C(=O)",                   "category": "reactivity"},
+    {"label": "guanidine",         "pattern": "NC(=N)N",                            "category": "reactivity"},
+    {"label": "urea",              "pattern": "[NX3][CX3](=[OX1])[NX3]",            "category": "reactivity"},
+]
+
+SMARTS_CATEGORY_COLOR: dict[str, str] = {
+    "antibiotic-warhead": "#10b981",   # green — flagship
+    "acid-base":          "#dc2626",   # red — ionizable / H-bond
+    "heteroatom-oxo":     "#ca8a04",   # amber — S/P/N=O
+    "halogen":            "#16a34a",   # leaf green — halogens
+    "aromatic":           "#a855f7",   # purple — aromatic systems
+    "reactivity":         "#ea580c",   # orange — reactive motifs
+}
+
+
+@router.get("/chem/smarts-presets")
+async def chem_smarts_presets() -> Dict[str, Any]:
+    """Curated SMARTS catalog with category + color. The frontend SMARTS
+    panel renders one section per category, color-keyed. Single source
+    of truth for both UI and agent skill 'smarts_match'."""
+    by_category: Dict[str, List[Dict[str, Any]]] = {}
+    for p in SMARTS_PRESETS:
+        by_category.setdefault(p["category"], []).append(p)
+    return {
+        "presets": SMARTS_PRESETS,
+        "by_category": by_category,
+        "categories": [
+            {"name": k, "color": v, "count": len(by_category.get(k, []))}
+            for k, v in SMARTS_CATEGORY_COLOR.items()
+            if k in by_category
+        ],
+        "count": len(SMARTS_PRESETS),
+    }
+
+
+# Drug-class → color map for the Library + Match panels. Same color is
+# used by every UI element keyed to a drug class so the user sees one
+# consistent visual identity for "β-lactam", "fluoroquinolone", etc.
+DRUG_CLASS_COLOR: dict[str, str] = {
+    "beta-lactam":         "#10b981",  # green
+    "fluoroquinolone":     "#2563eb",  # blue
+    "aminoglycoside":      "#ea580c",  # orange
+    "tetracycline":        "#9a3412",  # brown
+    "glycylcycline":       "#9a3412",  # same family
+    "macrolide":           "#a855f7",  # purple
+    "azalide (macrolide)": "#a855f7",
+    "glycopeptide":        "#ec4899",  # pink
+    "lipopeptide":         "#ec4899",
+    "oxazolidinone":       "#0891b2",  # teal
+    "polymyxin":           "#84cc16",  # lime
+    "nitroimidazole":      "#f59e0b",  # amber
+    "antimycobacterial":   "#7c3aed",  # violet
+    "diaminopyrimidine":   "#06b6d4",  # cyan
+    "sulfonamide":         "#06b6d4",
+    "lincosamide":         "#a855f7",
+    "rifamycin":           "#7c3aed",
+    "monobactam":          "#10b981",
+    "beta-lactamase inhibitor": "#10b981",
+    "siderophore cephalosporin": "#10b981",
+    "fluorocycline":       "#9a3412",
+}
+
+
+@router.get("/molecule/drug-class-colors")
+async def molecule_drug_class_colors() -> Dict[str, Any]:
+    """Drug-class → color map. Used by the Library panel + Match overlay
+    + any UI surface that shows a drug class. Single source of truth."""
+    return {"colors": DRUG_CLASS_COLOR}
+
+
 @router.post("/molecule/replace")
 async def molecule_replace(req: ReplaceRequest) -> Dict[str, Any]:
     """Validate a full SMILES string and return canonical form. Used by

@@ -257,27 +257,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   // Library popover state
   const [libraryOpen, setLibraryOpen] = useState(false);
   const libraryBtnRef = useRef<HTMLButtonElement | null>(null);
-  // SMARTS popover state (top-nav button → portal popover)
+  // SMARTS dock state (top-nav button → docked left-side panel)
   const [smartsOpen, setSmartsOpen] = useState(false);
-  const [smartsPopPos, setSmartsPopPos] = useState<{ left: number; top: number } | null>(null);
   const smartsBtnRef = useRef<HTMLButtonElement | null>(null);
 
-  useEffect(() => {
-    if (!smartsOpen) { setSmartsPopPos(null); return; }
-    const update = () => {
-      if (!smartsBtnRef.current) return;
-      const r = smartsBtnRef.current.getBoundingClientRect();
-      setSmartsPopPos({ left: r.left, top: r.bottom + 4 });
-    };
-    update();
-    window.addEventListener("scroll", update, true);
-    window.addEventListener("resize", update);
-    return () => {
-      window.removeEventListener("scroll", update, true);
-      window.removeEventListener("resize", update);
-    };
-  }, [smartsOpen]);
-
+  // SMARTS panel is now docked (left-flex sibling of SVG); no portal
+  // positioning needed. Click-outside / Esc still closes.
   useEffect(() => {
     if (!smartsOpen) return;
     const onDoc = (e: MouseEvent) => {
@@ -1274,10 +1259,36 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           ))}
         </div>
       </div>}
-      {/* Body row: SVG viewer (flex 1) + atoms rail (260 px).
-          position: relative so the popover + multi-select toolbar (children
-          with position: absolute) anchor here. */}
+      {/* Body row: [Library OR SMARTS dock — 360px, only when open] +
+          SVG viewer (flex 1) + atoms rail (320 px).
+          Library + SMARTS panels NO LONGER overlay the molecule. They
+          dock as left-side flex children, pushing the SVG rightward
+          when open. Closing them returns the SVG to full width. */}
       <div style={{ flex: 1, display: "flex", flexDirection: "row", overflow: "hidden", minHeight: 0, position: "relative" }}>
+        {/* Library dock — appears only when libraryOpen */}
+        {libraryOpen && onLoadFromLibrary && (
+          <LibraryDock
+            apiBase={apiBase}
+            currentSmiles={smiles}
+            onClose={() => setLibraryOpen(false)}
+            onLoad={(smi, name) => { onLoadFromLibrary(smi, name ?? ""); setLibraryOpen(false); }}
+          />
+        )}
+        {/* SMARTS dock — appears only when smartsOpen */}
+        {smartsOpen && (
+          <SmartsDock
+            apiBase={apiBase}
+            smiles={smiles}
+            smarts={smarts}
+            setSmarts={setSmarts}
+            smartsHits={smartsHits}
+            smartsLoading={smartsLoading}
+            smartsError={smartsError}
+            runSmartsMatch={runSmartsMatch}
+            clearSmarts={() => { setSmarts(""); setSmartsHits([]); setSmartsError(""); }}
+            onClose={() => setSmartsOpen(false)}
+          />
+        )}
         {/* SVG area — molecule scales to fit, never scrolls, never clips */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
           {svg
@@ -1707,115 +1718,8 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           </button>
         </div>
       )}
-      {libraryOpen && libraryBtnRef.current && onLoadFromLibrary && (
-        <LibraryPopover
-          apiBase={apiBase}
-          currentSmiles={smiles}
-          anchor={libraryBtnRef.current}
-          onClose={() => setLibraryOpen(false)}
-          onLoad={(smi, name) => { onLoadFromLibrary(smi, name); setLibraryOpen(false); }}
-        />
-      )}
-      {smartsOpen && smartsPopPos && createPortal(
-        <div data-smarts-pop style={{
-          position: "fixed", left: smartsPopPos.left, top: smartsPopPos.top,
-          width: 460, maxHeight: "60vh",
-          background: "var(--lys-bg-2, #ffffff)",
-          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
-          borderRadius: 10,
-          boxShadow: "0 14px 40px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.10)",
-          zIndex: 5000, display: "flex", flexDirection: "column",
-          overflow: "hidden", fontFamily: "var(--lys-font-body)",
-        }}>
-          <div style={{ padding: "8px 10px",
-            borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-            display: "flex", flexDirection: "column", gap: 6,
-            background: "var(--lys-bg, #fafafa)" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)" }}>
-                🔍 SMARTS{smartsHits.length > 0 ? ` · ${smartsHits.length} hits` : ""}
-              </span>
-              <span style={{ flex: 1 }} />
-              <button type="button" onClick={() => setSmartsOpen(false)}
-                style={{ border: 0, background: "transparent", cursor: "pointer",
-                  padding: 4, color: "var(--lys-text-faint)" }}>✕</button>
-            </div>
-            {/* One-line context — what is this and how does it relate to 2D */}
-            <div style={{
-              fontSize: 9.5, lineHeight: 1.35,
-              color: "var(--lys-text-faint)",
-              fontFamily: "var(--lys-font-body)",
-            }}>
-              Substructure pattern search — type a SMARTS pattern (or pick a
-              preset) to highlight matching atoms in the 2D structure. Useful
-              for spotting motifs like β-lactam, amide, halogens, aromatic rings.
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-              <input
-                value={smarts}
-                onChange={(e) => setSmarts(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") runSmartsMatch(smarts); }}
-                placeholder="pattern · e.g. c1ccccc1 — Enter to match"
-                disabled={!smiles}
-                autoFocus
-                style={{
-                  flex: 1, fontSize: 11, fontFamily: "var(--lys-font-mono)",
-                  padding: "4px 8px", borderRadius: 4,
-                  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
-                  background: "var(--lys-bg-2, #ffffff)",
-                  color: "var(--lys-text)", outline: "none",
-                }} />
-              <button type="button"
-                onClick={() => runSmartsMatch(smarts)}
-                disabled={!smiles || !smarts || smartsLoading}
-                style={{
-                  padding: "4px 11px", borderRadius: 4,
-                  fontSize: 10, fontFamily: "var(--lys-font-mono)", fontWeight: 700,
-                  background: "#0891b2", color: "white", border: 0,
-                  cursor: smiles && smarts ? "pointer" : "not-allowed",
-                  opacity: smiles && smarts ? 1 : 0.5,
-                }}>{smartsLoading ? "…" : "match"}</button>
-              {smartsHits.length > 0 && (
-                <button type="button"
-                  onClick={() => { setSmarts(""); setSmartsHits([]); setSmartsError(""); }}
-                  title="Clear match"
-                  style={{ border: 0, background: "transparent",
-                    color: "var(--lys-text-faint)",
-                    cursor: "pointer", padding: 4, fontSize: 12 }}>✕</button>
-              )}
-            </div>
-            {smartsError && (
-              <span style={{ fontSize: 9.5, color: "#dc2626",
-                fontFamily: "var(--lys-font-mono)" }}>⚠ {smartsError}</span>
-            )}
-          </div>
-          <div className="lys-card-body" style={{
-            flex: 1, overflow: "auto", padding: 8,
-            display: "flex", flexWrap: "wrap", gap: 4,
-          }}>
-            <span style={{ fontSize: 9, color: "var(--lys-text-faint)",
-              fontFamily: "var(--lys-font-mono)",
-              letterSpacing: "0.06em", textTransform: "uppercase",
-              fontWeight: 700, alignSelf: "center", marginRight: 4,
-            }}>presets</span>
-            {SMARTS_PRESETS.map((p) => (
-              <button key={p.label} type="button"
-                onClick={() => { setSmarts(p.pattern); runSmartsMatch(p.pattern); }}
-                title={p.pattern}
-                disabled={!smiles}
-                style={{
-                  fontSize: 10, padding: "3px 9px", borderRadius: 999,
-                  border: `1px solid ${smarts === p.pattern ? "#0891b2" : "var(--lys-border-faint, rgba(0,0,0,0.10))"}`,
-                  background: smarts === p.pattern ? "rgba(8,145,178,0.10)" : "var(--lys-bg-2, #ffffff)",
-                  color: smarts === p.pattern ? "#0891b2" : "var(--lys-text-dim)",
-                  cursor: smiles ? "pointer" : "not-allowed",
-                  opacity: smiles ? 1 : 0.5,
-                  fontFamily: "var(--lys-font-body)",
-                  fontWeight: smarts === p.pattern ? 700 : 500,
-                }}>{p.label}</button>
-            ))}
-          </div>
-        </div>, document.body)}
+      {/* Library + SMARTS now dock as left-flex children of body row;
+          old portal popovers removed completely. */}
     </div>
   );
 }
@@ -1837,7 +1741,9 @@ interface LibraryEntry {
   lipinski_pass: boolean;
 }
 
-function LibraryPopover({ apiBase, currentSmiles, anchor, onClose, onLoad }: {
+// Legacy LibraryPopover — replaced by LibraryDock. Kept for reference.
+// @ts-expect-error — intentionally unused; the dock replaces this.
+function LibraryPopover_legacy({ apiBase, currentSmiles, anchor, onClose, onLoad }: {
   apiBase: string;
   currentSmiles: string | null;
   anchor: HTMLElement;
@@ -3519,6 +3425,369 @@ function BuildTools(p: BuildToolsProps) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   LibraryDock — DOCKED replacement for LibraryPopover. Renders as a
+   left-flex sibling of the SVG inside the body row, so it never overlays
+   the molecule. Color-codes drug class via /molecule/drug-class-colors.
+   ───────────────────────────────────────────────────────────────────── */
+interface LibraryDockProps {
+  apiBase: string;
+  currentSmiles: string | null;
+  onClose: () => void;
+  onLoad: (smiles: string, name?: string) => void;
+}
+
+function LibraryDock(p: LibraryDockProps) {
+  const [entries, setEntries] = useState<LibraryEntry[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [activeTag, setActiveTag] = useState("");
+  const [query, setQuery] = useState("");
+  const [showSave, setShowSave] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [saveTags, setSaveTags] = useState("");
+  const [classColors, setClassColors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    fetch(`${p.apiBase}/workbench/library/molecules`)
+      .then((r) => r.ok ? r.json() : { entries: [] })
+      .then((d) => setEntries(d.entries || []))
+      .catch(() => setEntries([]));
+    fetch(`${p.apiBase}/workbench/library/tags`)
+      .then((r) => r.ok ? r.json() : { tags: [] })
+      .then((d) => setTags(d.tags || []))
+      .catch(() => setTags([]));
+    fetch(`${p.apiBase}/workbench/molecule/drug-class-colors`)
+      .then((r) => r.ok ? r.json() : { colors: {} })
+      .then((d) => setClassColors(d.colors || {}))
+      .catch(() => {/*noop*/});
+  }, [p.apiBase]);
+
+  const saveCurrent = async () => {
+    if (!p.currentSmiles) return;
+    try {
+      const r = await fetch(`${p.apiBase}/workbench/library/molecules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          smiles: p.currentSmiles,
+          name: saveName || undefined,
+          tags: saveTags ? saveTags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+        }),
+      });
+      if (r.ok) {
+        const d = await r.json();
+        setEntries((e) => [d, ...e]);
+        setSaveName(""); setSaveTags(""); setShowSave(false);
+      }
+    } catch {/*noop*/}
+  };
+
+  const filtered = entries.filter((e) => {
+    if (activeTag && !e.tags.includes(activeTag)) return false;
+    if (query) {
+      const q = query.toLowerCase();
+      if (!(e.name?.toLowerCase().includes(q) ||
+            e.smiles?.toLowerCase().includes(q) ||
+            e.tags.some((t) => t.toLowerCase().includes(q)))) return false;
+    }
+    return true;
+  });
+
+  return (
+    <div style={{
+      flex: "0 0 360px",
+      maxWidth: 360,
+      display: "flex", flexDirection: "column",
+      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      background: "var(--lys-bg-2, #ffffff)",
+      overflow: "hidden",
+      animation: "slideInLeft 0.18s ease-out",
+    }}>
+      <DockHeader title="Library" count={entries.length} icon="📚" color="#10b981" onClose={p.onClose}
+        description="Saved candidates, color-coded by drug class. Click any row to load it into the 2D viewer."
+        rightAction={p.currentSmiles ? (
+          <button type="button" onClick={() => setShowSave((s) => !s)}
+            style={{ border: 0, background: "#10b981", color: "white",
+              padding: "3px 9px", borderRadius: 4,
+              fontSize: 10, fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+              cursor: "pointer" }}>+ save</button>
+        ) : null} />
+      {showSave && p.currentSmiles && (
+        <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 4,
+          background: "rgba(16,185,129,0.06)",
+          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))" }}>
+          <input value={saveName} onChange={(e) => setSaveName(e.target.value)}
+            placeholder="name (optional)" style={popInput} />
+          <input value={saveTags} onChange={(e) => setSaveTags(e.target.value)}
+            placeholder="tags · comma-separated" style={popInput} />
+          <div style={{ display: "flex", gap: 4 }}>
+            <button type="button" onClick={saveCurrent}
+              style={{ flex: 1, padding: "3px 8px", borderRadius: 4,
+                fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                background: "#10b981", color: "white", border: 0,
+                cursor: "pointer", fontWeight: 700 }}>save</button>
+            <button type="button" onClick={() => setShowSave(false)}
+              style={{ padding: "3px 8px", borderRadius: 4,
+                fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                background: "transparent", color: "var(--lys-text-faint)",
+                border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.08))",
+                cursor: "pointer" }}>cancel</button>
+          </div>
+        </div>
+      )}
+      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 5,
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))" }}>
+        <input value={query} onChange={(e) => setQuery(e.target.value)}
+          placeholder="search · name, note, SMILES"
+          style={{ ...popInput, fontSize: 11 }} />
+        {tags.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+            <button type="button" onClick={() => setActiveTag("")}
+              style={tagChip(!activeTag, "#10b981")}>all · {entries.length}</button>
+            {tags.map((t) => {
+              const cnt = entries.filter((e) => e.tags.includes(t)).length;
+              return (
+                <button key={t} type="button"
+                  onClick={() => setActiveTag(activeTag === t ? "" : t)}
+                  style={tagChip(activeTag === t, "#10b981")}>
+                  {t} · {cnt}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {filtered.length === 0 ? (
+          <div style={{ padding: 16, textAlign: "center",
+            fontSize: 10, color: "var(--lys-text-faint)",
+            fontFamily: "var(--lys-font-body)", lineHeight: 1.5 }}>
+            {entries.length === 0
+              ? "No saved candidates yet. Save the current structure with the + save button."
+              : "No matches for your search/filter."}
+          </div>
+        ) : filtered.map((e) => {
+          // Find the drug class tag → color
+          const classTag = e.tags.find((t) => classColors[t.toLowerCase()] || classColors[t]);
+          const classColor = classTag
+            ? (classColors[classTag.toLowerCase()] ?? classColors[classTag] ?? "#6b7280")
+            : "#6b7280";
+          return (
+            <div key={e.id}
+              onClick={() => p.onLoad(e.smiles, e.name)}
+              style={{
+                padding: "6px 10px",
+                borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+                borderLeft: `3px solid ${classColor}`,
+                cursor: "pointer",
+                fontFamily: "var(--lys-font-body)",
+                background: "transparent",
+                transition: "background 0.10s",
+              }}
+              onMouseEnter={(ev) => { (ev.currentTarget as HTMLElement).style.background = `${classColor}10`; }}
+              onMouseLeave={(ev) => { (ev.currentTarget as HTMLElement).style.background = "transparent"; }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, flex: 1 }}>{e.name || "(unnamed)"}</span>
+                <span style={{ fontSize: 9, color: "var(--lys-text-faint)",
+                  fontFamily: "var(--lys-font-mono)" }}>
+                  QED <span style={{ color: e.qed >= 0.7 ? "#10b981" : e.qed >= 0.5 ? "#ca8a04" : "#dc2626", fontWeight: 700 }}>{e.qed?.toFixed(2)}</span>
+                </span>
+                <span style={{ fontSize: 9, color: "var(--lys-text-faint)",
+                  fontFamily: "var(--lys-font-mono)" }}>
+                  MW {Math.round(e.mw || 0)}
+                </span>
+              </div>
+              {e.tags.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginTop: 3 }}>
+                  {e.tags.map((t) => {
+                    const tc = classColors[t.toLowerCase()] ?? classColors[t] ?? "#6b7280";
+                    return (
+                      <span key={t} style={{
+                        fontSize: 8.5, padding: "1px 5px", borderRadius: 999,
+                        background: `${tc}15`, color: tc,
+                        fontFamily: "var(--lys-font-mono)", fontWeight: 600,
+                      }}>{t}</span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   SmartsDock — DOCKED SMARTS panel (no overlay). Categorized presets
+   with color coding fetched from /chem/smarts-presets.
+   ───────────────────────────────────────────────────────────────────── */
+interface SmartsDockProps {
+  apiBase: string;
+  smiles: string | null;
+  smarts: string;
+  setSmarts: (s: string) => void;
+  smartsHits: number[];
+  smartsLoading: boolean;
+  smartsError: string;
+  runSmartsMatch: (pattern: string) => void;
+  clearSmarts: () => void;
+  onClose: () => void;
+}
+
+interface CategorizedPresets {
+  by_category: Record<string, { label: string; pattern: string; category: string }[]>;
+  categories: { name: string; color: string; count: number }[];
+}
+
+function SmartsDock(p: SmartsDockProps) {
+  const [data, setData] = useState<CategorizedPresets | null>(null);
+
+  useEffect(() => {
+    fetch(`${p.apiBase}/workbench/chem/smarts-presets`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => d && setData(d))
+      .catch(() => {/*noop*/});
+  }, [p.apiBase]);
+
+  return (
+    <div style={{
+      flex: "0 0 360px",
+      maxWidth: 360,
+      display: "flex", flexDirection: "column",
+      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      background: "var(--lys-bg-2, #ffffff)",
+      overflow: "hidden",
+      animation: "slideInLeft 0.18s ease-out",
+    }}>
+      <DockHeader title="SMARTS" count={p.smartsHits.length} icon="🔍" color="#0891b2" onClose={p.onClose}
+        description="Substructure pattern search — type a pattern (or click a preset) to highlight matching atoms in the 2D structure."
+        rightAction={p.smartsHits.length > 0 ? (
+          <span style={{ fontSize: 10, fontFamily: "var(--lys-font-mono)",
+            color: "#10b981", fontWeight: 700,
+            padding: "1px 6px", borderRadius: 999,
+            background: "rgba(16,185,129,0.10)" }}>
+            {p.smartsHits.length} hits
+          </span>
+        ) : null} />
+      <div style={{ padding: 8, display: "flex", flexDirection: "column", gap: 5,
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))" }}>
+        <div style={{ display: "flex", gap: 4 }}>
+          <input value={p.smarts}
+            onChange={(e) => p.setSmarts(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") p.runSmartsMatch(p.smarts); }}
+            placeholder="pattern · e.g. c1ccccc1"
+            disabled={!p.smiles}
+            style={{ flex: 1, ...popInput, fontSize: 11, fontFamily: "var(--lys-font-mono)" }} />
+          <button type="button"
+            onClick={() => p.runSmartsMatch(p.smarts)}
+            disabled={!p.smiles || !p.smarts || p.smartsLoading}
+            style={{ padding: "3px 11px", borderRadius: 4,
+              fontSize: 10, fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+              background: "#0891b2", color: "white", border: 0,
+              cursor: p.smiles && p.smarts ? "pointer" : "not-allowed",
+              opacity: p.smiles && p.smarts ? 1 : 0.5 }}>
+            {p.smartsLoading ? "…" : "match"}
+          </button>
+          {p.smartsHits.length > 0 && (
+            <button type="button" onClick={p.clearSmarts}
+              title="Clear match"
+              style={{ border: 0, background: "transparent",
+                color: "var(--lys-text-faint)",
+                cursor: "pointer", padding: 4, fontSize: 12 }}>✕</button>
+          )}
+        </div>
+        {p.smartsError && (
+          <div style={{ fontSize: 9.5, color: "#dc2626",
+            fontFamily: "var(--lys-font-mono)" }}>⚠ {p.smartsError}</div>
+        )}
+      </div>
+      <div style={{ flex: 1, overflow: "auto", padding: 6 }}>
+        {data ? data.categories.map((cat) => (
+          <div key={cat.name} style={{ marginBottom: 8 }}>
+            <div style={{
+              fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+              color: cat.color, fontWeight: 700,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              padding: "3px 4px",
+            }}>
+              {cat.name.replace(/-/g, " ")} · {cat.count}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+              {(data.by_category[cat.name] || []).map((preset) => {
+                const active = p.smarts === preset.pattern;
+                return (
+                  <button key={preset.label} type="button"
+                    onClick={() => { p.setSmarts(preset.pattern); p.runSmartsMatch(preset.pattern); }}
+                    title={preset.pattern}
+                    disabled={!p.smiles}
+                    style={{
+                      fontSize: 10, padding: "2px 8px", borderRadius: 999,
+                      border: `1px solid ${active ? cat.color : `${cat.color}40`}`,
+                      background: active ? `${cat.color}20` : `${cat.color}08`,
+                      color: cat.color,
+                      fontFamily: "var(--lys-font-body)",
+                      fontWeight: active ? 700 : 500,
+                      cursor: p.smiles ? "pointer" : "not-allowed",
+                      opacity: p.smiles ? 1 : 0.5,
+                      transition: "background 0.10s",
+                    }}>{preset.label}</button>
+                );
+              })}
+            </div>
+          </div>
+        )) : (
+          <div style={{ padding: 12, textAlign: "center",
+            fontSize: 10, color: "var(--lys-text-faint)",
+            fontFamily: "var(--lys-font-mono)" }}>loading presets…</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   DockHeader — shared header chrome for left-side docks. Title + count
+   + icon + close + sub-description.
+   ───────────────────────────────────────────────────────────────────── */
+function DockHeader({ title, count, icon, color, onClose, description, rightAction }: {
+  title: string; count?: number; icon: string; color: string;
+  onClose: () => void; description?: string; rightAction?: React.ReactNode;
+}) {
+  return (
+    <div style={{
+      padding: "8px 10px",
+      borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      display: "flex", flexDirection: "column", gap: 5,
+      background: "var(--lys-bg, #fafafa)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color }}>
+          {icon} {title}
+          {typeof count === "number" && count > 0 && (
+            <span style={{ marginLeft: 4, fontFamily: "var(--lys-font-mono)",
+              fontSize: 10, opacity: 0.7 }}>· {count}</span>
+          )}
+        </span>
+        <span style={{ flex: 1 }} />
+        {rightAction}
+        <button type="button" onClick={onClose}
+          title="Close panel"
+          style={{ border: 0, background: "transparent", cursor: "pointer",
+            padding: 4, color: "var(--lys-text-faint)", fontSize: 13 }}>✕</button>
+      </div>
+      {description && (
+        <div style={{
+          fontSize: 9.5, lineHeight: 1.4,
+          color: "var(--lys-text-faint)",
+          fontFamily: "var(--lys-font-body)",
+        }}>{description}</div>
+      )}
     </div>
   );
 }

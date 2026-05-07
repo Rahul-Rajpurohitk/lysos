@@ -1444,3 +1444,10 @@
   background: rgba(0,0,0,0.32);
   background-clip: content-box;
 }
+
+/* Dock slide-in animation — used by LibraryDock + SmartsDock when they
+   open as left-flex children of the 2D viewer body. */
+@keyframes slideInLeft {
+  from { transform: translateX(-12px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
