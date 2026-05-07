@@ -221,6 +221,10 @@ const VIOLATION_TIER: Record<string, { fg: string; bg: string; border: string; i
 const VIOLATION_DEFAULT = { fg: "#dc2626", bg: "rgba(220,38,38,0.10)", border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" as const };
 
 // Per-actor halo color (matches AgentAvatar palette).
+// Per-actor color palette — kept for future use in step-trail / event
+// timeline. SVG halo overlays were removed (blinking on visual was
+// distracting); these colors now belong to text-based attribution UIs.
+// @ts-expect-error — kept for future reuse, unused in this build.
 const ACTOR_COLOR: Record<string, string> = {
   designer: "#10b981",
   critic: "#ef4444",
@@ -741,47 +745,18 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     }
   }, [selected, svg]);
 
-  // Apply cursor halos for non-self actors. Each cursors[actor].atom_idx
-  // gets a colored ring drawn over its atom group via SVG <circle>.
+  // Cursor halos REMOVED from the SVG — they were blinking continuously
+  // from the WS actor.move broadcast and made the molecule visual ugly.
+  // Actor activity (user vs agent) is now communicated through the
+  // edit-log + step trail in the right rail / properties strip, NOT
+  // by drawing on the molecule itself. The molecule visual stays clean.
   useEffect(() => {
     const host = svgHostRef.current;
-    if (!host || !cursors) return;
+    if (!host) return;
     const svgEl = host.querySelector("svg");
     if (!svgEl) return;
-    // Clean previous halo overlays
+    // Defensive sweep — strip any pre-existing halo overlays.
     svgEl.querySelectorAll('[data-halo="1"]').forEach((n) => n.remove());
-    for (const [actor, cur] of Object.entries(cursors)) {
-      if (cur.atom_idx == null) continue;
-      const target = svgEl.querySelector(`[class*="atom-${cur.atom_idx}"]`);
-      if (!target) continue;
-      const bbox = (target as SVGGraphicsElement).getBBox?.();
-      if (!bbox) continue;
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
-      const color = ACTOR_COLOR[actor.toLowerCase()] ?? "#9ca3af";
-      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      ring.setAttribute("data-halo", "1");
-      ring.setAttribute("cx", String(cx));
-      ring.setAttribute("cy", String(cy));
-      ring.setAttribute("r", "12");
-      ring.setAttribute("fill", "none");
-      ring.setAttribute("stroke", color);
-      ring.setAttribute("stroke-width", "2");
-      ring.setAttribute("opacity", "0.7");
-      ring.style.pointerEvents = "none";
-      svgEl.appendChild(ring);
-      // Small label tag next to the halo
-      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      label.setAttribute("data-halo", "1");
-      label.setAttribute("x", String(cx + 14));
-      label.setAttribute("y", String(cy - 8));
-      label.setAttribute("font-size", "9");
-      label.setAttribute("font-family", "SF Mono, monospace");
-      label.setAttribute("fill", color);
-      label.style.pointerEvents = "none";
-      label.textContent = actor;
-      svgEl.appendChild(label);
-    }
   }, [cursors, svg]);
 
   // Unified rule-violation overlay — pulse red ring on:
@@ -4059,7 +4034,12 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
       </div>
       {!collapsed && (
         <div style={{ flex: 1, overflow: "hidden",
-          display: "grid", gridTemplateColumns: "minmax(280px, 1fr) auto auto auto", gap: 0,
+          // Wider Properties column, fixed-width Build State, flexible
+          // Patterns + Closest. Total min ~960px which comfortably fits
+          // in the center column (chem 1700w − rail 320w − borders).
+          display: "grid",
+          gridTemplateColumns: "minmax(380px, 2.2fr) 150px minmax(220px, 1.4fr) minmax(240px, 1.6fr)",
+          gap: 0,
         }}>
           {/* COL 1 — wraps the existing PropertiesCard (KPI tiles) */}
           <div style={{ overflow: "auto",

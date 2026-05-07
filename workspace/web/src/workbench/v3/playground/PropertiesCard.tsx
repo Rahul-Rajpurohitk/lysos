@@ -110,11 +110,14 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
     );
   }
 
+  // Lipinski Rule of 5 criteria — clean format: NAME: VALUE (with the
+  // threshold encoded in the tooltip rather than the chip text). Avoids
+  // the awkward "MW < 500 78Da" string that previous renders produced.
   const lipChecks = [
-    { name: "MW < 500", pass: data.molecular_weight < 500, value: data.molecular_weight.toFixed(0), unit: "Da" },
-    { name: "logP < 5",  pass: data.logp < 5, value: data.logp.toFixed(2), unit: "" },
-    { name: "HBD ≤ 5",  pass: data.h_bond_donors <= 5, value: String(data.h_bond_donors), unit: "" },
-    { name: "HBA ≤ 10", pass: data.h_bond_acceptors <= 10, value: String(data.h_bond_acceptors), unit: "" },
+    { name: "MW", pass: data.molecular_weight < 500, value: data.molecular_weight.toFixed(0), unit: "Da", threshold: "< 500 Da", explain: "Molecular weight — drug-like under 500 Da" },
+    { name: "logP", pass: data.logp < 5, value: data.logp.toFixed(2), unit: "", threshold: "< 5", explain: "Partition coefficient — too high → poor solubility" },
+    { name: "HBD", pass: data.h_bond_donors <= 5, value: String(data.h_bond_donors), unit: "", threshold: "≤ 5", explain: "H-bond donors (NH, OH) — too many → low membrane permeability" },
+    { name: "HBA", pass: data.h_bond_acceptors <= 10, value: String(data.h_bond_acceptors), unit: "", threshold: "≤ 10", explain: "H-bond acceptors (N, O) — too many → low membrane permeability" },
   ];
 
   return (
@@ -308,18 +311,26 @@ function RulePill({ label, pass, sub }: { label: string; pass: boolean; sub?: st
   );
 }
 
-// Compact inline rule-check (for the 4 Lipinski rules)
-function InlineRuleCheck({ name, pass, value, unit }: { name: string; pass: boolean; value: string; unit: string }) {
+// Compact inline rule-check chip — tooltip carries the threshold + the
+// medchem-grade explanation; chip itself stays tight: NAME · VALUE · ✓/⚠.
+function InlineRuleCheck({ name, pass, value, unit, threshold, explain }: {
+  name: string; pass: boolean; value: string; unit: string;
+  threshold?: string; explain?: string;
+}) {
   const c = pass ? "#10b981" : "#d97706";
+  const title = explain
+    ? `${explain}\nThreshold: ${threshold ?? ""}\nCurrent: ${value}${unit} — ${pass ? "passes" : "violates"} Lipinski.`
+    : undefined;
   return (
-    <span style={{
-      padding: "1px 6px", borderRadius: 4,
-      background: `${c}08`, border: `1px solid ${c}25`,
-      fontSize: 9, fontFamily: "var(--lys-font-mono)",
-      display: "inline-flex", alignItems: "center", gap: 3,
+    <span title={title} style={{
+      padding: "2px 7px", borderRadius: 4,
+      background: `${c}10`, border: `1px solid ${c}30`,
+      fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+      display: "inline-flex", alignItems: "center", gap: 4,
     }}>
-      <span style={{ color: "var(--lys-text-dim)" }}>{name}</span>
+      <span style={{ color: "var(--lys-text-dim)", fontWeight: 600 }}>{name}</span>
       <span style={{ color: c, fontWeight: 700 }}>{value}{unit}</span>
+      <span style={{ color: c, fontSize: 9 }}>{pass ? "✓" : "⚠"}</span>
     </span>
   );
 }
