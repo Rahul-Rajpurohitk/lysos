@@ -574,6 +574,16 @@ class AtomContextResponse(BaseModel):
     explicit_valence: int
     implicit_valence: int
     n_hydrogens: int
+    # Richer chemistry context — added for the workbench atoms-rail redesign.
+    atomic_number: int = 0
+    atomic_mass: float = 0.0
+    hybridization: str = "unspecified"   # sp / sp2 / sp3 / sp3d / sp3d2
+    degree: int = 0                      # explicit (heavy-atom) neighbor count
+    total_degree: int = 0                # explicit + implicit-H neighbors
+    free_valence: int = 0                # remaining single-bond slots = n_H
+    is_chiral: bool = False              # chirality tag set
+    is_isotope: bool = False             # isotope mass set
+    cip_code: str = ""                   # R / S / "" if not assigned
     neighbors: list[AtomNeighbor]
     allowed_attachments: list[AllowedAttachment]
     sar_notes: list[SARNote]
@@ -776,6 +786,26 @@ async def chem_atom_context(smiles_b64: str, atom_idx: int,
     # SAR notes from the curated corpus
     sar = _sar_lookup(elt, smiles, target)
 
+    # Hybridization → human-friendly string
+    hyb_map = {
+        Chem.HybridizationType.S:    "s",
+        Chem.HybridizationType.SP:   "sp",
+        Chem.HybridizationType.SP2:  "sp²",
+        Chem.HybridizationType.SP3:  "sp³",
+        Chem.HybridizationType.SP3D: "sp³d",
+        Chem.HybridizationType.SP3D2:"sp³d²",
+    }
+    hyb_str = hyb_map.get(atom.GetHybridization(), "unspecified")
+
+    # CIP code (R/S) if assigned. Compute on a copy so we don't mutate caller mol.
+    cip = ""
+    try:
+        Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+        if atom.HasProp("_CIPCode"):
+            cip = atom.GetProp("_CIPCode")
+    except Exception:  # noqa: BLE001
+        pass
+
     return AtomContextResponse(
         smiles=smiles,
         atom_idx=atom_idx,
@@ -787,6 +817,15 @@ async def chem_atom_context(smiles_b64: str, atom_idx: int,
         explicit_valence=atom.GetExplicitValence(),
         implicit_valence=atom.GetImplicitValence(),
         n_hydrogens=n_h,
+        atomic_number=atom.GetAtomicNum(),
+        atomic_mass=round(atom.GetMass(), 3),
+        hybridization=hyb_str,
+        degree=atom.GetDegree(),
+        total_degree=atom.GetTotalDegree(),
+        free_valence=n_h,
+        is_chiral=atom.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED,
+        is_isotope=atom.GetIsotope() != 0,
+        cip_code=cip,
         neighbors=neighbors,
         allowed_attachments=allowed,
         sar_notes=sar,

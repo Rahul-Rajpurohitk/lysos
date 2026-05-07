@@ -722,24 +722,30 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         <span style={{ letterSpacing: "0.06em", textTransform: "uppercase" }}>
           2D · {pathogen}
         </span>
-        {/* Library trigger */}
+        {/* Library trigger — mutually exclusive with SMARTS popover */}
         {onLoadFromLibrary && (
           <button
             ref={libraryBtnRef}
             type="button"
-            onClick={() => setLibraryOpen((o) => !o)}
-            title="Saved molecules · search & load"
+            onClick={() => {
+              setSmartsOpen(false);  // close sibling first
+              setLibraryOpen((o) => !o);
+            }}
+            title="Library — saved candidates from prior sessions. Search by name/tag/SMILES, click any row to load it into the 2D viewer."
             style={navBtnStyle(libraryOpen, "#10b981")}>
             <span style={{ fontSize: 10, lineHeight: 1 }}>📚</span>
             <span style={{ textTransform: "none", letterSpacing: 0 }}>Library</span>
           </button>
         )}
-        {/* SMARTS trigger — same compact pattern as Library */}
+        {/* SMARTS trigger — mutually exclusive with Library popover */}
         <button
           ref={smartsBtnRef}
           type="button"
-          onClick={() => setSmartsOpen((o) => !o)}
-          title="SMARTS pattern match · highlight motifs"
+          onClick={() => {
+            setLibraryOpen(false);  // close sibling first
+            setSmartsOpen((o) => !o);
+          }}
+          title="SMARTS — substructure pattern search. Type a pattern (or pick a preset) to highlight matching atoms in the 2D structure (e.g. β-lactam ring, amide, halogen)."
           style={navBtnStyle(smartsOpen, "#0891b2")}>
           <span style={{ fontSize: 10, lineHeight: 1 }}>🔍</span>
           <span style={{ textTransform: "none", letterSpacing: 0 }}>
@@ -913,6 +919,64 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               }
             } catch {/*noop*/}
           }}
+          onSwapElement={async (idx, newElement) => {
+            if (!smiles) return;
+            try {
+              const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  smiles, op: "swap_element", atom_index: idx,
+                  new_element: newElement,
+                }),
+              });
+              if (!r.ok) {
+                const txt = await r.text();
+                setError(`swap ${r.status}: ${txt.slice(0, 80)}`);
+                setTimeout(() => setError(""), 2400);
+                return;
+              }
+              const d = await r.json();
+              if (d.smiles) {
+                onMoleculeEdit?.(d.smiles, {
+                  op: "swap_element", atom_idx: idx,
+                  label: `swap ${idx} → ${newElement}`,
+                });
+              }
+            } catch (exc: any) {
+              setError(`swap error: ${exc?.message ?? exc}`);
+              setTimeout(() => setError(""), 2200);
+            }
+          }}
+          onAddNeighbor={async (anchorIdx, element, bondOrder) => {
+            if (!smiles) return;
+            try {
+              const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  smiles, op: "add_atom_at", atom_index: anchorIdx,
+                  new_element: element, bond_order: bondOrder,
+                }),
+              });
+              if (!r.ok) {
+                const txt = await r.text();
+                setError(`neighbor ${r.status}: ${txt.slice(0, 80)}`);
+                setTimeout(() => setError(""), 2400);
+                return;
+              }
+              const d = await r.json();
+              if (d.smiles) {
+                onMoleculeEdit?.(d.smiles, {
+                  op: "add_atom_at", atom_idx: anchorIdx,
+                  label: `+${element} (${bondOrder}) on ${anchorIdx}`,
+                });
+              }
+            } catch (exc: any) {
+              setError(`neighbor error: ${exc?.message ?? exc}`);
+              setTimeout(() => setError(""), 2200);
+            }
+          }}
         />
         {pop && smiles && createPortal(
           <div data-chem-pop style={{
@@ -1054,6 +1118,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               <button type="button" onClick={() => setSmartsOpen(false)}
                 style={{ border: 0, background: "transparent", cursor: "pointer",
                   padding: 4, color: "var(--lys-text-faint)" }}>✕</button>
+            </div>
+            {/* One-line context — what is this and how does it relate to 2D */}
+            <div style={{
+              fontSize: 9.5, lineHeight: 1.35,
+              color: "var(--lys-text-faint)",
+              fontFamily: "var(--lys-font-body)",
+            }}>
+              Substructure pattern search — type a SMARTS pattern (or pick a
+              preset) to highlight matching atoms in the 2D structure. Useful
+              for spotting motifs like β-lactam, amide, halogens, aromatic rings.
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <input
@@ -1261,6 +1335,15 @@ function LibraryPopover({ apiBase, currentSmiles, anchor, onClose, onLoad }: {
             style={{ border: 0, background: "transparent", cursor: "pointer",
               padding: 4, color: "var(--lys-text-faint)" }}>✕</button>
         </div>
+        {/* One-line context — what is this and how does it relate to 2D */}
+        <div style={{
+          fontSize: 9.5, lineHeight: 1.35,
+          color: "var(--lys-text-faint)",
+          fontFamily: "var(--lys-font-body)",
+        }}>
+          Saved candidates from prior sessions. Click any row to load it
+          into the 2D viewer · save the current structure with custom tags.
+        </div>
         {showSave && currentSmiles && (
           <div style={{ display: "flex", flexDirection: "column", gap: 3,
             padding: 6, borderRadius: 4,
@@ -1399,6 +1482,8 @@ interface AtomsRailProps {
   onHoverAtom: (idx: number | null) => void;
   onDeleteAtom?: (idx: number) => void;
   onAddAtom?: (element?: string) => void;
+  onSwapElement?: (idx: number, newElement: string) => void;
+  onAddNeighbor?: (anchorIdx: number, element: string, bondOrder: "single" | "double" | "triple") => void;
 }
 
 interface ElementInfo {
@@ -1412,13 +1497,40 @@ interface ElementInfo {
 interface AtomRow {
   idx: number;
   element: string;
+  atomic_number: number;
+  atomic_mass: number;
   is_aromatic: boolean;
   in_ring: boolean;
   ring_size: number;
   n_hydrogens: number;
   formal_charge: number;
   n_neighbors: number;
+  hybridization: string;
+  degree: number;            // heavy-atom bond count
+  free_valence: number;       // open slots remaining
+  is_chiral: boolean;
+  cip_code: string;
+  bonds: { order: string; count: number }[];   // bond-order summary (single/double/triple/aromatic)
 }
+
+// Element name lookup for tooltips
+const ELEMENT_NAMES: Record<string, string> = {
+  H: "Hydrogen", C: "Carbon", N: "Nitrogen", O: "Oxygen", F: "Fluorine",
+  Cl: "Chlorine", Br: "Bromine", I: "Iodine", S: "Sulfur", P: "Phosphorus",
+  Na: "Sodium", K: "Potassium", Mg: "Magnesium", Ca: "Calcium",
+  Fe: "Iron", Cu: "Copper", Zn: "Zinc", Pt: "Platinum", Pd: "Palladium",
+  Au: "Gold", Ag: "Silver", Hg: "Mercury", As: "Arsenic", Se: "Selenium",
+  B: "Boron", Si: "Silicon", Al: "Aluminum", Ti: "Titanium", V: "Vanadium",
+  Cr: "Chromium", Mn: "Manganese", Co: "Cobalt", Ni: "Nickel",
+  Mo: "Molybdenum", Ru: "Ruthenium",
+};
+
+const BOND_GLYPH: Record<string, string> = {
+  single: "—",
+  double: "=",
+  triple: "≡",
+  aromatic: "⌬",
+};
 
 function AtomsRail(p: AtomsRailProps) {
   const [atoms, setAtoms] = useState<AtomRow[]>([]);
@@ -1477,28 +1589,45 @@ function AtomsRail(p: AtomsRailProps) {
     (async () => {
       try {
         const b64 = smilesToB64(p.smiles!);
-        // Get atom count from the 2D endpoint, then fetch each atom in parallel
         const r = await fetch(`${p.apiBase}/workbench/molecule/2d/${b64}?w=200&h=200`);
         if (!r.ok) { setAtoms([]); return; }
         const meta = await r.json();
         const n = meta.n_atoms ?? 0;
-        // Parallel atom fetches — much faster than sequential
         const promises = Array.from({ length: n }, (_, i) =>
           fetch(`${p.apiBase}/workbench/chem/atom/${b64}/${i}`)
             .then((ar) => ar.ok ? ar.json() : null)
             .catch(() => null));
         const results = await Promise.all(promises);
         if (cancelled) return;
-        const rows: AtomRow[] = results.map((a, i) => a ? ({
-          idx: i,
-          element: a.element,
-          is_aromatic: a.is_aromatic,
-          in_ring: a.in_ring,
-          ring_size: a.ring_size,
-          n_hydrogens: a.n_hydrogens,
-          formal_charge: a.formal_charge,
-          n_neighbors: (a.neighbors || []).length,
-        }) : null).filter((x): x is AtomRow => x !== null);
+        const rows: AtomRow[] = results.map((a, i) => {
+          if (!a) return null;
+          // Bond-order distribution
+          const bondMap: Record<string, number> = {};
+          for (const nb of a.neighbors || []) {
+            bondMap[nb.bond] = (bondMap[nb.bond] || 0) + 1;
+          }
+          const bonds = Object.entries(bondMap).map(([order, count]) => ({
+            order, count: count as number,
+          }));
+          return {
+            idx: i,
+            element: a.element,
+            atomic_number: a.atomic_number ?? 0,
+            atomic_mass: a.atomic_mass ?? 0,
+            is_aromatic: a.is_aromatic,
+            in_ring: a.in_ring,
+            ring_size: a.ring_size,
+            n_hydrogens: a.n_hydrogens,
+            formal_charge: a.formal_charge,
+            n_neighbors: (a.neighbors || []).length,
+            hybridization: a.hybridization ?? "",
+            degree: a.degree ?? (a.neighbors || []).length,
+            free_valence: a.free_valence ?? a.n_hydrogens,
+            is_chiral: a.is_chiral ?? false,
+            cip_code: a.cip_code ?? "",
+            bonds,
+          };
+        }).filter((x): x is AtomRow => x !== null);
         if (!cancelled) setAtoms(rows);
       } finally {
         if (!cancelled) setLoading(false);
@@ -1507,138 +1636,316 @@ function AtomsRail(p: AtomsRailProps) {
     return () => { cancelled = true; };
   }, [p.smiles, p.apiBase]);
 
+  // Filter bar — chips of unique elements present, click to filter
+  const [elementFilter, setElementFilter] = useState<string>("");
+  const uniqueElements = Array.from(new Set(atoms.map((a) => a.element)));
+  const visibleAtoms = elementFilter ? atoms.filter((a) => a.element === elementFilter) : atoms;
+
+  // Per-row inline action menu state
+  const [actionRowIdx, setActionRowIdx] = useState<number | null>(null);
+  const [actionMode, setActionMode] = useState<"swap" | "neighbor" | null>(null);
+  const [actionPos, setActionPos] = useState<{ left: number; top: number } | null>(null);
+  const [neighborBondOrder, setNeighborBondOrder] = useState<"single" | "double" | "triple">("single");
+  const actionRowRef = useRef<HTMLElement | null>(null);
+
+  const openRowAction = (idx: number, mode: "swap" | "neighbor", anchor: HTMLElement) => {
+    actionRowRef.current = anchor;
+    setActionRowIdx(idx);
+    setActionMode(mode);
+    const r = anchor.getBoundingClientRect();
+    setActionPos({ left: Math.max(8, r.right - 320), top: r.bottom + 4 });
+  };
+  useEffect(() => {
+    if (actionRowIdx == null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setActionRowIdx(null); setActionMode(null); setActionPos(null); }
+    };
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (t && t.closest && t.closest("[data-row-action-pop]")) return;
+      if (actionRowRef.current && t && actionRowRef.current.contains(t as Node)) return;
+      setActionRowIdx(null); setActionMode(null); setActionPos(null);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDoc);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDoc);
+    };
+  }, [actionRowIdx]);
+
+  // Aggregate stats summary
+  const stats = {
+    heavy: atoms.length,
+    rings: new Set(atoms.filter((a) => a.in_ring).map((a) => a.ring_size)).size > 0
+      ? atoms.filter((a) => a.in_ring).length / Math.max(1, Math.min(...atoms.filter((a) => a.in_ring).map((a) => a.ring_size) || [1]))
+      : 0,
+    aromaticAtoms: atoms.filter((a) => a.is_aromatic).length,
+    charged: atoms.filter((a) => a.formal_charge !== 0).length,
+    chiral: atoms.filter((a) => a.is_chiral).length,
+  };
+
   const ELEMENT_COLOR: Record<string, string> = {
     C: "#374151", N: "#2563eb", O: "#dc2626", S: "#ca8a04",
     F: "#16a34a", Cl: "#16a34a", Br: "#9a3412", I: "#7c3aed",
     P: "#ea580c", H: "#9ca3af",
+    Fe: "#b45309", Cu: "#c2410c", Zn: "#737373", Pt: "#475569",
+    Pd: "#475569", Au: "#ca8a04", Ag: "#71717a", Hg: "#737373",
+    As: "#7c3aed", Se: "#a16207", B: "#16a34a", Si: "#525252",
+    Na: "#a855f7", Mg: "#c084fc", Ca: "#c084fc", K: "#a855f7",
   };
 
   return (
     <div style={{
-      width: 220, flexShrink: 0,
+      width: 268, flexShrink: 0,
       borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
       overflow: "hidden",
     }}>
+      {/* Header — title + count + add. Tooltip-driven help. */}
       <div
-        title="Click row to select an atom · click × to delete · click + to add"
+        title="Atom inventory · click any row to select & highlight in 2D · hover row to see actions (swap element, add neighbor, delete)"
         style={{
-          padding: "3px 8px",
-          fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+          padding: "5px 8px 4px",
+          fontSize: 9, fontFamily: "var(--lys-font-mono)",
           color: "var(--lys-text-faint)",
           letterSpacing: "0.06em", textTransform: "uppercase",
           borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
           display: "flex", alignItems: "center", gap: 5,
-          minHeight: 24,
         }}>
-        <span>atoms</span>
-        <span style={{ fontFamily: "inherit", color: "#10b981", fontWeight: 700 }}>
-          {atoms.length}
-        </span>
+        <span style={{ fontWeight: 700 }}>atoms</span>
+        <span style={{ color: "#10b981", fontWeight: 700 }}>{atoms.length}</span>
         <span style={{ flex: 1 }} />
         {p.smiles && p.onAddAtom && (
           <button type="button"
             ref={addBtnRef}
             onClick={() => setPaletteOpen((o) => !o)}
-            title="Add a new atom · pick element"
+            title="Add new atom · pick element from periodic table"
             style={{
-              border: 0, background: "transparent",
-              cursor: "pointer", padding: "1px 4px",
+              border: `1px solid ${paletteOpen ? "#059669" : "rgba(16,185,129,0.30)"}`,
+              background: paletteOpen ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.06)",
+              cursor: "pointer", padding: "1px 8px",
               color: paletteOpen ? "#059669" : "#10b981",
-              fontSize: 13, fontWeight: 700, lineHeight: 1,
-            }}>+</button>
+              borderRadius: 4,
+              fontSize: 10, fontWeight: 700, lineHeight: 1.4,
+            }}>+ atom</button>
         )}
       </div>
+      {/* Sub-line description */}
+      <div style={{
+        padding: "3px 8px 5px",
+        fontSize: 8.5, lineHeight: 1.35,
+        color: "var(--lys-text-faint)",
+        fontFamily: "var(--lys-font-body)",
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+      }}>
+        Heavy atoms in this candidate. Click row → select. Hover → actions.
+      </div>
+      {/* Stats band — quick chemistry summary */}
+      {atoms.length > 0 && (
+        <div style={{
+          padding: "4px 8px",
+          display: "flex", flexWrap: "wrap", gap: 4,
+          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+          fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+          background: "rgba(0,0,0,0.015)",
+        }}>
+          <RailStat label="atoms" value={String(atoms.length)} color="#374151" tip="Heavy atoms (excludes implicit H)" />
+          <RailStat label="aromatic" value={String(stats.aromaticAtoms)} color="#a855f7" tip="Atoms in aromatic systems" />
+          <RailStat label="charged" value={String(stats.charged)} color="#dc2626" tip="Atoms with non-zero formal charge" />
+          {stats.chiral > 0 && (
+            <RailStat label="chiral" value={String(stats.chiral)} color="#0891b2" tip="Stereocenters with assigned chirality" />
+          )}
+        </div>
+      )}
+      {/* Element filter chips */}
+      {uniqueElements.length > 1 && (
+        <div style={{
+          padding: "4px 8px",
+          display: "flex", flexWrap: "wrap", gap: 3,
+          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+          background: "var(--lys-bg-2, #ffffff)",
+        }}>
+          <FilterChip label={`all · ${atoms.length}`} active={!elementFilter} onClick={() => setElementFilter("")} color="#6b7280" />
+          {uniqueElements.map((el) => {
+            const cnt = atoms.filter((a) => a.element === el).length;
+            return (
+              <FilterChip key={el}
+                label={`${el} · ${cnt}`}
+                active={elementFilter === el}
+                onClick={() => setElementFilter(elementFilter === el ? "" : el)}
+                color={ELEMENT_COLOR[el] ?? "#374151"}
+                tip={ELEMENT_NAMES[el] ?? el}
+              />
+            );
+          })}
+        </div>
+      )}
+      {/* Atoms list */}
       <div className="lys-card-body" style={{ flex: 1, overflow: "auto" }}>
         {!p.smiles && (
           <div style={{
-            padding: "16px 10px", textAlign: "center",
+            padding: "20px 12px", textAlign: "center",
             fontSize: 10, color: "var(--lys-text-faint)",
-            fontFamily: "var(--lys-font-mono)",
-          }}>no candidate</div>
+            fontFamily: "var(--lys-font-body)", lineHeight: 1.4,
+          }}>
+            <div style={{ fontSize: 16, marginBottom: 4, opacity: 0.4 }}>⚛</div>
+            <div style={{ fontWeight: 600 }}>No candidate yet</div>
+            <div style={{ fontSize: 9, marginTop: 3 }}>Pick a scaffold from the top nav, or load a saved molecule from Library.</div>
+          </div>
         )}
         {p.smiles && loading && atoms.length === 0 && (
           <div style={{ padding: "16px 10px", textAlign: "center",
             fontSize: 10, color: "var(--lys-text-faint)",
             fontFamily: "var(--lys-font-mono)" }}>loading atoms…</div>
         )}
-        {atoms.map((a) => {
+        {visibleAtoms.map((a) => {
           const c = ELEMENT_COLOR[a.element] ?? "#374151";
           const isSelected = p.selected.has(a.idx);
           const isHover = p.hoverIdx === a.idx;
+          const fullName = ELEMENT_NAMES[a.element] ?? a.element;
           return (
             <div key={a.idx}
+              data-row-idx={a.idx}
               onClick={() => p.onSelectAtom(a.idx)}
               onMouseEnter={() => p.onHoverAtom(a.idx)}
               onMouseLeave={() => p.onHoverAtom(null)}
+              title={`Atom ${a.idx} · ${fullName} (Z=${a.atomic_number}, ${a.atomic_mass} g/mol) · ${a.hybridization || "—"} · ${a.degree} heavy bonds + ${a.n_hydrogens} H · ${a.free_valence} free slot${a.free_valence === 1 ? "" : "s"}`}
               style={{
-                display: "flex", alignItems: "center", gap: 4,
-                padding: "2px 6px",
+                position: "relative",
+                display: "flex", flexDirection: "column", gap: 2,
+                padding: "4px 8px",
                 borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.025))",
-                borderLeft: isSelected ? `2px solid #f59e0b` : "2px solid transparent",
+                borderLeft: isSelected ? `3px solid #f59e0b` : "3px solid transparent",
                 background: isSelected ? "rgba(245,158,11,0.08)"
-                          : isHover ? "rgba(0,0,0,0.025)" : "transparent",
+                          : isHover ? "rgba(16,185,129,0.04)" : "transparent",
                 cursor: "pointer",
-                fontSize: 9.5,
                 fontFamily: "var(--lys-font-mono)",
-                minHeight: 22,
+                transition: "background 0.10s",
               }}>
-              <span style={{
-                fontSize: 8, color: "var(--lys-text-faint)",
-                minWidth: 12, textAlign: "right",
-              }}>{a.idx}</span>
-              <span style={{
-                width: 15, height: 15, borderRadius: "50%",
-                background: c, color: "white",
-                display: "grid", placeItems: "center",
-                fontSize: 8.5, fontWeight: 700, flexShrink: 0,
-              }}>{a.element}</span>
-              {a.n_hydrogens > 0 && (
-                <span style={{ color: "var(--lys-text-faint)", fontSize: 8 }}>H{a.n_hydrogens}</span>
-              )}
-              {a.is_aromatic && (
+              {/* Row 1 — index + element badge + chips */}
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 <span style={{
-                  fontSize: 7, padding: "0 3px", borderRadius: 2,
-                  background: "rgba(168,85,247,0.10)", color: "#a855f7",
-                  fontWeight: 700, letterSpacing: "0.04em",
-                }}>arom</span>
-              )}
-              {a.in_ring && !a.is_aromatic && (
+                  fontSize: 9, color: "var(--lys-text-faint)",
+                  minWidth: 16, textAlign: "right", fontWeight: 600,
+                }}>{a.idx}</span>
+                {/* Element badge — bigger, with charge superscript */}
                 <span style={{
-                  fontSize: 7, padding: "0 3px", borderRadius: 2,
-                  background: "rgba(8,145,178,0.10)", color: "#0891b2",
-                  fontWeight: 700,
-                }}>r{a.ring_size}</span>
-              )}
-              {a.formal_charge !== 0 && (
-                <span style={{
-                  fontSize: 7, padding: "0 3px", borderRadius: 2,
-                  background: "rgba(220,38,38,0.10)", color: "#dc2626",
-                  fontWeight: 700,
-                }}>{a.formal_charge > 0 ? "+" : ""}{a.formal_charge}</span>
-              )}
-              <span style={{ flex: 1 }} />
-              <span style={{ color: "var(--lys-text-faint)", fontSize: 8 }}>
-                ·{a.n_neighbors}
-              </span>
-              {p.onDeleteAtom && (
-                <button type="button"
-                  onClick={(e) => { e.stopPropagation(); p.onDeleteAtom!(a.idx); }}
-                  title={`Delete atom ${a.idx}`}
-                  style={{
-                    border: 0, background: "transparent",
-                    cursor: "pointer", padding: "0 3px",
-                    color: "#dc2626", opacity: 0.5,
-                    fontSize: 11, lineHeight: 1, fontWeight: 700,
-                  }}
-                  onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-                  onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
-                >×</button>
-              )}
+                  position: "relative",
+                  width: 20, height: 20, borderRadius: "50%",
+                  background: c, color: "white",
+                  display: "grid", placeItems: "center",
+                  fontSize: 10.5, fontWeight: 700, flexShrink: 0,
+                  boxShadow: isSelected ? "0 0 0 2px rgba(245,158,11,0.35)" : "none",
+                  fontFamily: "var(--lys-font-body)",
+                }}>
+                  {a.element}
+                  {a.formal_charge !== 0 && (
+                    <span style={{
+                      position: "absolute", top: -3, right: -4,
+                      fontSize: 8, fontWeight: 800,
+                      background: "#dc2626", color: "white",
+                      width: 12, height: 12, borderRadius: "50%",
+                      display: "grid", placeItems: "center",
+                      fontFamily: "var(--lys-font-mono)",
+                      lineHeight: 1,
+                    }}>{a.formal_charge > 0 ? "+" : "−"}</span>
+                  )}
+                </span>
+                {/* Hybridization chip */}
+                {a.hybridization && a.hybridization !== "unspecified" && (
+                  <span style={{
+                    fontSize: 8, padding: "1px 4px", borderRadius: 3,
+                    background: "rgba(99,102,241,0.10)", color: "#6366f1",
+                    fontWeight: 700, letterSpacing: "0.02em",
+                  }}>{a.hybridization}</span>
+                )}
+                {/* Aromatic / ring */}
+                {a.is_aromatic && (
+                  <span style={{
+                    fontSize: 8, padding: "1px 4px", borderRadius: 3,
+                    background: "rgba(168,85,247,0.10)", color: "#a855f7",
+                    fontWeight: 700,
+                  }}>arom</span>
+                )}
+                {a.in_ring && !a.is_aromatic && (
+                  <span style={{
+                    fontSize: 8, padding: "1px 4px", borderRadius: 3,
+                    background: "rgba(8,145,178,0.10)", color: "#0891b2",
+                    fontWeight: 700,
+                  }}>ring{a.ring_size}</span>
+                )}
+                {a.is_chiral && (
+                  <span style={{
+                    fontSize: 8, padding: "1px 4px", borderRadius: 3,
+                    background: "rgba(234,88,12,0.10)", color: "#ea580c",
+                    fontWeight: 700,
+                  }}>{a.cip_code || "★"}</span>
+                )}
+                <span style={{ flex: 1 }} />
+                {/* Per-row action buttons — visible on hover/select */}
+                {(isHover || isSelected) && p.onSwapElement && (
+                  <button type="button"
+                    title="Swap element"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openRowAction(a.idx, "swap", e.currentTarget as HTMLElement);
+                    }}
+                    style={iconBtnStyle("#6366f1")}>⇆</button>
+                )}
+                {(isHover || isSelected) && p.onAddNeighbor && a.free_valence > 0 && (
+                  <button type="button"
+                    title={`Add neighbor (${a.free_valence} slot${a.free_valence === 1 ? "" : "s"} free)`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openRowAction(a.idx, "neighbor", e.currentTarget as HTMLElement);
+                    }}
+                    style={iconBtnStyle("#10b981")}>+</button>
+                )}
+                {p.onDeleteAtom && (
+                  <button type="button"
+                    onClick={(e) => { e.stopPropagation(); p.onDeleteAtom!(a.idx); }}
+                    title={`Delete atom ${a.idx}`}
+                    style={iconBtnStyle("#dc2626", isHover || isSelected ? 1 : 0.4)}>×</button>
+                )}
+              </div>
+              {/* Row 2 — bond profile + free valence */}
+              <div style={{ display: "flex", alignItems: "center", gap: 6,
+                fontSize: 8.5, color: "var(--lys-text-faint)",
+                paddingLeft: 26 }}>
+                <span title="Heavy-atom bond count">⌈{a.degree}⌋</span>
+                {a.n_hydrogens > 0 && (
+                  <span title={`${a.n_hydrogens} implicit hydrogen${a.n_hydrogens === 1 ? "" : "s"}`}
+                    style={{ color: "#9ca3af" }}>H{a.n_hydrogens}</span>
+                )}
+                {a.bonds.length > 0 && (
+                  <span title="Bond-order profile" style={{ display: "flex", gap: 2 }}>
+                    {a.bonds.map((b, i) => (
+                      <span key={i} style={{ color: "var(--lys-text-dim)" }}>
+                        {BOND_GLYPH[b.order] || b.order}{b.count > 1 ? `×${b.count}` : ""}
+                      </span>
+                    ))}
+                  </span>
+                )}
+                <span style={{ flex: 1 }} />
+                {a.free_valence > 0 && (
+                  <span title={`${a.free_valence} open bond slot${a.free_valence === 1 ? "" : "s"} (can attach more atoms)`}
+                    style={{ color: "#10b981", fontWeight: 600 }}>
+                    {a.free_valence}◦
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}
+        {atoms.length > 0 && visibleAtoms.length === 0 && (
+          <div style={{ padding: "12px 10px", textAlign: "center",
+            fontSize: 9.5, color: "var(--lys-text-faint)",
+            fontFamily: "var(--lys-font-mono)" }}>
+            no {elementFilter} atoms · clear filter
+          </div>
+        )}
       </div>
       {paletteOpen && palettePos && palette.length > 0 && createPortal(
         <div data-element-pop style={{
@@ -1717,6 +2024,156 @@ function AtomsRail(p: AtomsRailProps) {
             })}
           </div>
         </div>, document.body)}
+      {/* Row-action popover — swap element OR add neighbor.
+          Reuses the periodic-table palette but scoped to a target atom. */}
+      {actionRowIdx != null && actionMode && actionPos && palette.length > 0 && createPortal(
+        <div data-row-action-pop style={{
+          position: "fixed", left: actionPos.left, top: actionPos.top,
+          width: 320, maxHeight: "60vh",
+          background: "var(--lys-bg-2, #ffffff)",
+          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+          borderRadius: 10,
+          boxShadow: "0 14px 40px rgba(15,23,42,0.18), 0 2px 8px rgba(15,23,42,0.10)",
+          zIndex: 5500, display: "flex", flexDirection: "column",
+          overflow: "hidden", fontFamily: "var(--lys-font-body)",
+        }}>
+          <div style={{ padding: "8px 10px",
+            borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+            display: "flex", flexDirection: "column", gap: 4,
+            background: "var(--lys-bg, #fafafa)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)" }}>
+                {actionMode === "swap" ? "⇆ Swap element" : "+ Add neighbor"}
+                <span style={{ fontFamily: "var(--lys-font-mono)", fontWeight: 500,
+                  fontSize: 10, color: "var(--lys-text-faint)", marginLeft: 4 }}>
+                  · atom {actionRowIdx}
+                </span>
+              </span>
+              <span style={{ flex: 1 }} />
+              <button type="button" onClick={() => {
+                  setActionRowIdx(null); setActionMode(null); setActionPos(null);
+                }}
+                style={{ border: 0, background: "transparent", cursor: "pointer",
+                  padding: 4, color: "var(--lys-text-faint)" }}>✕</button>
+            </div>
+            <div style={{ fontSize: 9.5, color: "var(--lys-text-faint)", lineHeight: 1.35 }}>
+              {actionMode === "swap"
+                ? "Pick a new element. The atom keeps its bonds; valence rules apply server-side."
+                : "Pick an element to attach to atom " + actionRowIdx + ". Choose bond order below."}
+            </div>
+            {actionMode === "neighbor" && (
+              <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
+                {(["single", "double", "triple"] as const).map((bo) => (
+                  <button key={bo} type="button"
+                    onClick={() => setNeighborBondOrder(bo)}
+                    style={{
+                      padding: "2px 8px", borderRadius: 4,
+                      fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                      fontWeight: neighborBondOrder === bo ? 700 : 500,
+                      border: `1px solid ${neighborBondOrder === bo ? "#10b981" : "rgba(0,0,0,0.10)"}`,
+                      background: neighborBondOrder === bo ? "rgba(16,185,129,0.10)" : "var(--lys-bg-2, #ffffff)",
+                      color: neighborBondOrder === bo ? "#10b981" : "var(--lys-text-dim)",
+                      cursor: "pointer",
+                    }}>{BOND_GLYPH[bo]} {bo}</button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ padding: 8, overflow: "auto",
+            display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 4 }}>
+            {palette.map((el) => {
+              const groupColor: Record<string, string> = {
+                "halogen": "#16a34a",
+                "alkali": "#a855f7",
+                "alkaline-earth": "#c084fc",
+                "transition": "#0891b2",
+                "post-transition": "#06b6d4",
+                "metalloid": "#ca8a04",
+                "nonmetal": "#374151",
+              };
+              const c = groupColor[el.group] ?? "#6b7280";
+              return (
+                <button key={el.sym} type="button"
+                  onClick={() => {
+                    if (actionMode === "swap") {
+                      p.onSwapElement?.(actionRowIdx, el.sym);
+                    } else {
+                      p.onAddNeighbor?.(actionRowIdx, el.sym, neighborBondOrder);
+                    }
+                    setActionRowIdx(null); setActionMode(null); setActionPos(null);
+                  }}
+                  title={`${el.name} · Z=${el.Z} · valence ${el.valences.join("/")}`}
+                  style={{
+                    aspectRatio: "1 / 1",
+                    border: `1px solid ${c}40`,
+                    background: `${c}10`,
+                    color: c,
+                    borderRadius: 6,
+                    fontFamily: "var(--lys-font-mono)",
+                    fontWeight: 700, fontSize: 11,
+                    cursor: "pointer",
+                    display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center",
+                    gap: 1, padding: 0,
+                  }}>
+                  <span style={{ fontSize: 8, opacity: 0.7, lineHeight: 1 }}>{el.Z}</span>
+                  <span style={{ lineHeight: 1 }}>{el.sym}</span>
+                  <span style={{ fontSize: 7, opacity: 0.6, lineHeight: 1,
+                    fontFamily: "var(--lys-font-body)", fontWeight: 500 }}>
+                    {el.valences[0]}{el.valences.length > 1 ? "+" : ""}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>, document.body)}
     </div>
   );
+}
+
+/* Helpers for AtomsRail */
+function RailStat({ label, value, color, tip }: {
+  label: string; value: string; color: string; tip?: string;
+}) {
+  return (
+    <span title={tip} style={{
+      display: "inline-flex", alignItems: "center", gap: 3,
+      padding: "1px 5px", borderRadius: 3,
+      background: `${color}10`,
+      fontSize: 8.5,
+    }}>
+      <span style={{ color, fontWeight: 700 }}>{value}</span>
+      <span style={{ color: "var(--lys-text-faint)" }}>{label}</span>
+    </span>
+  );
+}
+
+function FilterChip({ label, active, onClick, color, tip }: {
+  label: string; active: boolean; onClick: () => void; color: string; tip?: string;
+}) {
+  return (
+    <button type="button" onClick={onClick} title={tip}
+      style={{
+        fontSize: 9, padding: "2px 7px", borderRadius: 999,
+        border: `1px solid ${active ? color : "rgba(0,0,0,0.10)"}`,
+        background: active ? `${color}15` : "transparent",
+        color: active ? color : "var(--lys-text-dim)",
+        cursor: "pointer",
+        fontFamily: "var(--lys-font-mono)",
+        fontWeight: active ? 700 : 500,
+      }}>{label}</button>
+  );
+}
+
+function iconBtnStyle(color: string, opacity: number = 1): React.CSSProperties {
+  return {
+    border: `1px solid ${color}40`,
+    background: "transparent",
+    cursor: "pointer", padding: "0 5px",
+    color, opacity,
+    fontSize: 11, lineHeight: 1.4, fontWeight: 700,
+    borderRadius: 3, minWidth: 18,
+    fontFamily: "var(--lys-font-mono)",
+    transition: "background 0.10s, opacity 0.10s",
+  };
 }
