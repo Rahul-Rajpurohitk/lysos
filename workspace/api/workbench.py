@@ -2096,12 +2096,22 @@ class AtomEditRequest(BaseModel):
     functional_group: Optional[str] = None # name for add_functional_group_at
     fragment_smiles: Optional[str] = None  # SMILES of the fragment to attach (rings, custom)
     fragment_anchor_idx: int = 0           # index within the fragment of the bonding atom
+    # Actor attribution — every edit carries its actor (user/designer/critic
+    # /editor/strategist). The frontend reads this from the broadcast event
+    # to render a step trail. Defaults to "user" when not specified.
+    actor: str = "user"
+    # Optional session id to broadcast on. When present, every successful
+    # edit is published on the playground bus so subscribers (other UI
+    # tabs, agent dashboards, replay loggers) re-render in lockstep.
+    session_id: Optional[str] = None
 
 
 @router.post("/molecule/edit")
 async def molecule_edit(req: AtomEditRequest) -> dict:
     """Edit a molecule at the atom/bond level. Used by the 3D viewer to
-    let the user actually mutate the candidate via clicks."""
+    let the user actually mutate the candidate via clicks. Broadcasts
+    `molecule.edit` on the playground bus when session_id is supplied
+    so all WS subscribers (frontend tabs, agent UIs) update in real time."""
     try:
         from rdkit import Chem
         from rdkit.Chem import AllChem
@@ -2387,10 +2397,36 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
             raise HTTPException(422, detail=_violation(code, msg, hint=hint, suggested_fix=fix))
 
     new_smiles = Chem.MolToSmiles(rw, canonical=True)
+
+    # Broadcast `molecule.edit` on the playground bus so every subscriber
+    # (other frontend tabs, agent dashboards, replay loggers) re-renders
+    # in lockstep. The edit carries its actor so the step trail can label
+    # who did what without rendering halos on the molecule visual.
+    if req.session_id:
+        try:
+            from workspace.playground import get_bus
+            import time as _time
+            get_bus().publish(req.session_id, {
+                "type": "molecule.edit",
+                "ts": _time.time(),
+                "actor": req.actor,
+                "op": req.op,
+                "atom_index": req.atom_index,
+                "bond_index": req.bond_index,
+                "new_element": req.new_element,
+                "functional_group": req.functional_group,
+                "smiles": new_smiles,
+                "n_atoms": rw.GetNumAtoms(),
+                "n_bonds": rw.GetNumBonds(),
+            })
+        except Exception:  # noqa: BLE001
+            pass  # WS broadcast is best-effort; never fail the edit
+
     return {
         "smiles": new_smiles,
         "n_atoms": rw.GetNumAtoms(),
         "n_bonds": rw.GetNumBonds(),
+        "actor": req.actor,
     }
 
 

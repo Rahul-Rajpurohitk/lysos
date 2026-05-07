@@ -2067,6 +2067,11 @@ interface AtomRow {
   is_chiral: boolean;
   cip_code: string;
   bonds: { order: string; count: number }[];   // bond-order summary (single/double/triple/aromatic)
+  // Per-atom positional context — explicit neighbor indices + their elements
+  // so the rail can show "row 7 · attached to atom 6 (C) via single" instead
+  // of just "n_neighbors: 1". Resolves the "atom number means nothing" gap.
+  neighbor_idxs: number[];
+  neighbor_elements: string[];
 }
 
 // Element name lookup for tooltips
@@ -2165,6 +2170,10 @@ function AtomsRail(p: AtomsRailProps) {
           const bonds = Object.entries(bondMap).map(([order, count]) => ({
             order, count: count as number,
           }));
+          // Capture neighbor indices + elements for positional context
+          // in the rail row (e.g. "atom 7 · attached to atom 6").
+          const neighbor_idxs: number[] = (a.neighbors || []).map((nb: any) => nb.idx);
+          const neighbor_elements: string[] = (a.neighbors || []).map((nb: any) => nb.element);
           return {
             idx: i,
             element: a.element,
@@ -2176,6 +2185,8 @@ function AtomsRail(p: AtomsRailProps) {
             n_hydrogens: a.n_hydrogens,
             formal_charge: a.formal_charge,
             n_neighbors: (a.neighbors || []).length,
+            neighbor_idxs,
+            neighbor_elements,
             hybridization: a.hybridization ?? "",
             degree: a.degree ?? (a.neighbors || []).length,
             free_valence: a.free_valence ?? a.n_hydrogens,
@@ -2544,11 +2555,14 @@ function AtomsRail(p: AtomsRailProps) {
                     style={iconBtnStyle("#dc2626", isHover || isSelected ? 1 : 0.4)}>×</button>
                 )}
               </div>
-              {/* Row 2 — bond profile + free valence */}
-              <div style={{ display: "flex", alignItems: "center", gap: 6,
+              {/* Row 2 — bond profile + free valence + positional context.
+                  Shows WHO this atom is connected to (neighbor indices)
+                  and flags TERMINAL atoms (degree 1) so the user can
+                  scan for chain ends and dangling bonds at a glance. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 5,
                 fontSize: 8.5, color: "var(--lys-text-faint)",
                 paddingLeft: 26 }}>
-                <span title="Heavy-atom bond count">⌈{a.degree}⌋</span>
+                <span title="Heavy-atom bond count (degree)">⌈{a.degree}⌋</span>
                 {a.n_hydrogens > 0 && (
                   <span title={`${a.n_hydrogens} implicit hydrogen${a.n_hydrogens === 1 ? "" : "s"}`}
                     style={{ color: "#9ca3af" }}>H{a.n_hydrogens}</span>
@@ -2562,6 +2576,14 @@ function AtomsRail(p: AtomsRailProps) {
                     ))}
                   </span>
                 )}
+                {a.degree === 1 && (
+                  <span title="Terminal atom — only one heavy-atom neighbor (chain end)"
+                    style={{ fontSize: 7.5, padding: "1px 4px", borderRadius: 2,
+                      background: "rgba(234,88,12,0.10)", color: "#ea580c",
+                      fontWeight: 700, letterSpacing: "0.04em" }}>
+                    terminal
+                  </span>
+                )}
                 <span style={{ flex: 1 }} />
                 {a.free_valence > 0 && (
                   <span title={`${a.free_valence} open bond slot${a.free_valence === 1 ? "" : "s"} (can attach more atoms)`}
@@ -2570,6 +2592,40 @@ function AtomsRail(p: AtomsRailProps) {
                   </span>
                 )}
               </div>
+              {/* Row 3 — neighbor indices · WHERE this atom sits in the
+                  structure. Compact "→ atom 6 · atom 8" format. Hidden
+                  for atoms with 0 neighbors (which would show "isolated"). */}
+              {a.neighbor_idxs.length > 0 && (
+                <div style={{ paddingLeft: 26, fontSize: 8,
+                  fontFamily: "var(--lys-font-mono)",
+                  color: "var(--lys-text-faint)",
+                  display: "flex", flexWrap: "wrap", gap: 3,
+                  alignItems: "center" }}>
+                  <span style={{ opacity: 0.6 }}>→</span>
+                  {a.neighbor_idxs.map((nbIdx, i) => {
+                    const nbEl = a.neighbor_elements[i] ?? "?";
+                    const nbColor = ELEMENT_COLOR[nbEl] ?? "#374151";
+                    return (
+                      <span key={i} title={`Connected to atom ${nbIdx} (${nbEl}) via ${a.bonds[i]?.order ?? "single"} bond`}
+                        style={{
+                          padding: "0 4px", borderRadius: 2,
+                          background: `${nbColor}10`,
+                          color: nbColor,
+                          fontWeight: 600,
+                        }}>
+                        {nbEl}{nbIdx}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {a.neighbor_idxs.length === 0 && (
+                <div style={{ paddingLeft: 26, fontSize: 8,
+                  fontFamily: "var(--lys-font-mono)",
+                  color: "#dc2626",
+                  fontWeight: 700,
+                }}>⚠ isolated · no neighbors</div>
+              )}
             </div>
           );
         })}
