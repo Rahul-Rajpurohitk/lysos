@@ -165,7 +165,7 @@ class VLLMEndpoint(LLMEndpoint):
     def __init__(
         self,
         model: str = "google/gemma-4-31B-it",
-        base_url: str = "http://localhost:8000/v1",
+        base_url: str = "http://localhost:7861/v1",
         api_key: str = "EMPTY",
         **kwargs,
     ):
@@ -412,7 +412,7 @@ class LysosEndpoint(VLLMEndpoint):
         super().__init__(
             model=model or os.environ.get("LYSOS_MODEL_ID", "lysos-base-dpo"),
             base_url=base_url or os.environ.get(
-                "LYSOS_INFERENCE_URL", "http://localhost:8000/v1"
+                "LYSOS_INFERENCE_URL", "http://localhost:7861/v1"
             ),
             api_key=api_key or os.environ.get("LYSOS_INFERENCE_TOKEN", "EMPTY"),
             **kwargs,
@@ -448,7 +448,7 @@ def get_llm(backend: Optional[str] = None) -> LLMEndpoint:
     if backend == "vllm":
         ep = VLLMEndpoint(
             model=os.environ.get("LYSOS_VLLM_MODEL", "google/gemma-4-31b-it"),
-            base_url=os.environ.get("LYSOS_VLLM_URL", "http://localhost:8000/v1"),
+            base_url=os.environ.get("LYSOS_VLLM_URL", "http://localhost:7861/v1"),
         )
         if ep._client is None:
             log.warning("vLLM client not initialised — falling back to MockEndpoint.")
