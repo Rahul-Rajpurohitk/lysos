@@ -568,20 +568,78 @@ cd workspace/web && npm run dev                                                 
 
 ## STATUS BOARD
 
-- [ ] Service 1 backend (targets + PDB cache + place-in-pocket)
-- [ ] Service 1 frontend (revive Mol3D + target picker + halos)
-- [ ] Service 2 backend (CARD subset + escape predictor)
-- [ ] Service 2 frontend (heatmap + halos)
-- [ ] Service 3 backend (Pareto rollup)
-- [ ] Service 3 frontend (scatter plot)
-- [ ] Best-of-N + Reward-Guided Selection
-- [ ] Knowledge container UI rebuild
-- [ ] Scoring honesty pass
-- [ ] Agents Workflow Phase Tracker
-- [ ] Agents Reasoning Chain rewrite
-- [ ] Report container (snapshot + preview + export)
-- [ ] Pitch deck + demo video script
+- [x] Service 1 backend (targets + PDB cache + place-in-pocket) — `457821b`
+- [x] Service 1 frontend (revive Mol3D + target picker + halos) — `d1441a8`
+- [x] Service 2 backend (CARD subset + escape predictor) — `2cd28c8`
+- [x] Service 2 frontend (heatmap + halos) — `b0e64e7`
+- [x] Service 3 (Pareto Lab backend + scatter plot) — `ee2010e`
+- [x] Best-of-N + Reward-Guided Selection — `141be4a`
+- [x] Knowledge container — ValidatedTargetsCard added — `5cdf93e`
+- [x] Scoring honesty pass — `7cd97c5`
+- [x] Agents Workflow Phase Tracker — `1915ad8`
+- [x] Agents Reasoning Chain rewrite — `c534209`
+- [x] Report container (snapshot + preview + export) + Live → Report — `6b77b9c`
+- [x] Pitch deck + demo video script — `docs/HACKATHON_PITCH.md`
 
 ---
 
-**Last updated**: 2026-05-07 (T-2 days). Will be checked off as work progresses.
+**Last updated**: 2026-05-07. **All 13 tasks checked off.**
+
+---
+
+## SUMMARY OF DELIVERABLES
+
+### Backend modules added
+- `workspace/api/chem_3d.py` — Service 1 (Theater)
+- `workspace/api/chem_resistance.py` — Service 2 (Escape Map)
+- `workspace/api/chem_pareto.py` — Service 3 (Pareto Lab)
+- `workspace/api/report.py` — Report deliverable
+- `data/curated/card_resistance_subset.json` — 64 clinical mutations
+- `workspace/agents/state.py` — phase tracking extensions
+- `workspace/agents/graph.py` — `run_designer_best_of_n`
+- `workspace/api/workbench.py` — `/sessions/{sid}/workflow` endpoint
+
+### Frontend cards added
+- `Mol3DTheaterWindow.tsx` (rewritten with target picker + pose HUD + contacts panel)
+- `ResistanceEscapeMapCard.tsx` (heatmap + clinical-overlap)
+- `ParetoLabCard.tsx` (scatter plot + axis pickers)
+- `WorkflowPhaseTracker.tsx` (6-phase strip)
+- `AgentReasoningTraceWindow.tsx` (rewrote: think → tool → result chain)
+- `ReportBuilderCard.tsx` (snapshot + preview + export)
+- `ValidatedTargetsCard.tsx` (Knowledge: curated targets list)
+- `Mol2DBuilderWindow.tsx` (extended: bindingAtoms, clashingAtoms, vulnerableAtoms halos)
+
+### Tools added (registry now 37 from 35)
+- `place_in_pocket(smiles, pdb_id)` — Service 1
+- `map_resistance_vulnerability(smiles, pdb_id)` — Service 2
+
+### Container layout (final)
+1. **Chemistry** — 2D + 3D Theater + Resistance Escape Map + Pareto Lab + properties + library + atoms/bonds rails (the centerpiece)
+2. **Knowledge** — pathogen profile + validated targets + antibiotic reference + drug-class colors
+3. **Scoring** — 12-axis breakdown with 🟢/🟡/🔴 honesty stamps + radar
+4. **Agents** — Workflow Phase Tracker + Reasoning Chain (real think→tool→result) + roster + metrics + action log
+5. **Report** — Snapshot + preview + export (.md / .json / PDF) — replaces Live; audit trail moves into this container
+
+### Key commit chain (chronological)
+```
+3aaa225 lock in master plan
+457821b Service 1 backend
+d1441a8 Service 1 frontend (3D theater + halos)
+2cd28c8 Service 2 backend (CARD)
+b0e64e7 Service 2 frontend (escape heatmap)
+ee2010e Service 3 (Pareto)
+141be4a Best-of-N reward-guided
+1915ad8 Workflow Phase Tracker
+6b77b9c Report container
+7cd97c5 Scoring honesty stamps
+c534209 Reasoning chain rewrite
+5cdf93e Knowledge ValidatedTargetsCard
+[next]  HACKATHON_PITCH.md
+```
+
+### Pitch story (docs/HACKATHON_PITCH.md)
+1-line + 10-slide deck + 3-min demo script. Covers: training pipeline, 3 services, bidirectional cockpit, agentic workflow, honest scoring, deliverable, AMD showcase.
+
+---
+
+**Ready for submission.** Run `./scripts/lysos.sh up` to bring the model online, then start the workbench and you have the full demo.
