@@ -32,6 +32,11 @@ interface Props {
   /** Open the user's saved-molecules library popover. Implemented by parent
    *  via portal so we can share the same library state across cards. */
   onLoadFromLibrary?: (smi: string, name: string) => void;
+  /** Properties panel (medchem props + reward stack). Merged into the
+   *  2D container as a bottom-collapsible section. Parent passes a fully-
+   *  hydrated component instead of raw data so the chem container owns
+   *  its own data flow. */
+  propertiesPanel?: React.ReactNode;
 }
 
 function navBtnStyle(active: boolean, accent: string): React.CSSProperties {
@@ -224,7 +229,7 @@ const ACTOR_COLOR: Record<string, string> = {
   user: "#f59e0b",
 };
 
-export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, onLoadFromLibrary }: Props) {
+export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, onLoadFromLibrary, propertiesPanel }: Props) {
   const [svg, setSvg] = useState<string>("");
   const [violation, setViolation] = useState<Violation | null>(null);
   // Whole-molecule diagnostics (incomplete atoms after a bond-break, etc).
@@ -1720,6 +1725,63 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       )}
       {/* Library + SMARTS now dock as left-flex children of body row;
           old portal popovers removed completely. */}
+      {/* Properties panel — merged INSIDE the 2D container at the bottom.
+          Was a separate sibling card; now a sub-section of this builder so
+          all the chem feedback (atoms / bonds / properties / status) is
+          one cohesive screen. Collapsible; the user toggles to free up
+          vertical space for the SVG when desired. */}
+      {propertiesPanel && (
+        <PropertiesSubSection>
+          {propertiesPanel}
+        </PropertiesSubSection>
+      )}
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   PropertiesSubSection — collapsible bottom strip inside the 2D
+   builder. Hosts the merged PropertiesCard so the chem container has
+   one container, not two.
+   ───────────────────────────────────────────────────────────────────── */
+function PropertiesSubSection({ children }: { children: React.ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  return (
+    <div style={{
+      flexShrink: 0,
+      borderTop: "2px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      background: "var(--lys-bg-2, #ffffff)",
+      display: "flex", flexDirection: "column",
+      maxHeight: collapsed ? 28 : 280,
+      transition: "max-height 0.20s ease-out",
+      overflow: "hidden",
+    }}>
+      <div
+        onClick={() => setCollapsed((c) => !c)}
+        title="Properties — Lipinski, QED, MW, logP, TPSA, rotatable bonds. Click to collapse."
+        style={{
+          padding: "5px 10px",
+          fontSize: 9, fontFamily: "var(--lys-font-mono)",
+          color: "var(--lys-text-faint)",
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          display: "flex", alignItems: "center", gap: 6,
+          borderBottom: collapsed ? "none" : "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+          cursor: "pointer", userSelect: "none",
+          background: "var(--lys-bg, #fafafa)",
+        }}>
+        <span style={{ fontSize: 9, opacity: 0.6 }}>{collapsed ? "▶" : "▼"}</span>
+        <span style={{ fontWeight: 700 }}>properties · medchem</span>
+        <span style={{ flex: 1 }} />
+        <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0,
+          fontFamily: "var(--lys-font-body)" }}>
+          Lipinski · QED · MW · logP · TPSA
+        </span>
+      </div>
+      {!collapsed && (
+        <div style={{ flex: 1, overflow: "auto" }}>
+          {children}
+        </div>
+      )}
     </div>
   );
 }
@@ -2827,9 +2889,14 @@ interface BondsRailProps {
   onAddBond?: (a: number, b: number, order: "single" | "double" | "triple") => void;
 }
 
-const BOND_GLYPH_RAIL: Record<string, string> = {
+// Bond order → distinctive glyph + color + short label. Now live INSIDE
+// the row mapper as ORDER_THEME (single source of truth alongside the
+// row render). The old BOND_GLYPH_RAIL constant is kept for reference
+// but unused.
+// @ts-expect-error — kept for legacy doc; replaced by ORDER_THEME in row.
+const BOND_GLYPH_RAIL_legacy: Record<string, string> = {
   single:   "—",
-  double:   "=",
+  double:   "═",
   triple:   "≡",
   aromatic: "⌬",
 };
@@ -2838,6 +2905,9 @@ function BondsRail(p: BondsRailProps) {
   const [collapsed, setCollapsed] = useState(false);
   const ringCount = p.bonds.filter((b) => b.in_ring).length;
   const aromCount = p.bonds.filter((b) => b.is_aromatic).length;
+  const singleCount = p.bonds.filter((b) => b.order === "single").length;
+  const doubleCount = p.bonds.filter((b) => b.order === "double").length;
+  const tripleCount = p.bonds.filter((b) => b.order === "triple").length;
   return (
     <div style={{
       flex: "0 0 auto",
@@ -2865,16 +2935,41 @@ function BondsRail(p: BondsRailProps) {
         <span style={{ fontWeight: 700 }}>bonds</span>
         <span style={{ color: "#0891b2", fontWeight: 700 }}>{p.bonds.length}</span>
         <span style={{ flex: 1 }} />
-        {ringCount > 0 && (
-          <span style={{ padding: "0 5px", borderRadius: 3,
-            background: "rgba(8,145,178,0.10)", color: "#0891b2", fontWeight: 700 }}>
-            {ringCount} ring
+        {/* Per-order counts so the user sees the bond inventory split
+            at a glance. Same color theme as each row's order pill. */}
+        {singleCount > 0 && (
+          <span title={`${singleCount} single bond${singleCount === 1 ? "" : "s"}`}
+            style={{ padding: "0 5px", borderRadius: 3,
+              background: "rgba(55,65,81,0.08)", color: "#374151", fontWeight: 700 }}>
+            {singleCount} —
+          </span>
+        )}
+        {doubleCount > 0 && (
+          <span title={`${doubleCount} double bond${doubleCount === 1 ? "" : "s"}`}
+            style={{ padding: "0 5px", borderRadius: 3,
+              background: "rgba(220,38,38,0.10)", color: "#dc2626", fontWeight: 700 }}>
+            {doubleCount} ═
+          </span>
+        )}
+        {tripleCount > 0 && (
+          <span title={`${tripleCount} triple bond${tripleCount === 1 ? "" : "s"}`}
+            style={{ padding: "0 5px", borderRadius: 3,
+              background: "rgba(234,88,12,0.10)", color: "#ea580c", fontWeight: 700 }}>
+            {tripleCount} ≡
           </span>
         )}
         {aromCount > 0 && (
-          <span style={{ padding: "0 5px", borderRadius: 3,
-            background: "rgba(168,85,247,0.10)", color: "#a855f7", fontWeight: 700 }}>
-            {aromCount} arom
+          <span title={`${aromCount} aromatic bond${aromCount === 1 ? "" : "s"}`}
+            style={{ padding: "0 5px", borderRadius: 3,
+              background: "rgba(168,85,247,0.10)", color: "#a855f7", fontWeight: 700 }}>
+            {aromCount} ⌬
+          </span>
+        )}
+        {ringCount > 0 && ringCount !== aromCount && (
+          <span title={`${ringCount} ring bond${ringCount === 1 ? "" : "s"}`}
+            style={{ padding: "0 5px", borderRadius: 3,
+              background: "rgba(8,145,178,0.10)", color: "#0891b2", fontWeight: 700 }}>
+            {ringCount} r
           </span>
         )}
       </div>
@@ -2972,23 +3067,28 @@ function BondsRail(p: BondsRailProps) {
             const aColor = p.elementColor[aEl] ?? "#374151";
             const bColor = p.elementColor[bEl] ?? "#374151";
             const isHover = p.hoveredBondIdx === b.bond_idx;
-            const orderColor = b.is_aromatic ? "#a855f7"
-                             : b.order === "double" ? "#dc2626"
-                             : b.order === "triple" ? "#ea580c"
-                             : "#374151";
+            // Order theme — color + label + bg tint, all keyed off bond order
+            const ORDER_THEME: Record<string, { fg: string; bg: string; border: string; glyph: string; label: string }> = {
+              single:   { fg: "#374151", bg: "rgba(55,65,81,0.06)",   border: "rgba(55,65,81,0.20)",   glyph: "—",  label: "single" },
+              double:   { fg: "#dc2626", bg: "rgba(220,38,38,0.06)",  border: "rgba(220,38,38,0.30)",  glyph: "═",  label: "double" },
+              triple:   { fg: "#ea580c", bg: "rgba(234,88,12,0.06)",  border: "rgba(234,88,12,0.30)",  glyph: "≡",  label: "triple" },
+              aromatic: { fg: "#a855f7", bg: "rgba(168,85,247,0.06)", border: "rgba(168,85,247,0.30)", glyph: "⌬",  label: "arom"  },
+            };
+            const theme = ORDER_THEME[b.order] ?? ORDER_THEME.single;
             return (
               <div key={b.bond_idx}
                 onMouseEnter={() => p.onHoverBond?.(b.bond_idx)}
                 onMouseLeave={() => p.onHoverBond?.(null)}
-                title={`Bond ${b.bond_idx} · atom ${b.atom_a}(${aEl}) ${BOND_GLYPH_RAIL[b.order] ?? b.order} atom ${b.atom_b}(${bEl})${b.in_ring ? " · in ring" : ""}${b.is_aromatic ? " · aromatic" : ""}`}
+                title={`Bond ${b.bond_idx} · atom ${b.atom_a}(${aEl}) ${theme.label} atom ${b.atom_b}(${bEl})${b.in_ring ? " · in ring" : ""}${b.is_aromatic ? " · aromatic" : ""}`}
                 style={{
                   display: "flex", alignItems: "center", gap: 4,
-                  padding: "3px 8px",
+                  padding: "4px 8px",
                   fontSize: 10, fontFamily: "var(--lys-font-mono)",
                   borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.025))",
-                  background: isHover ? "rgba(220,38,38,0.06)" : "transparent",
+                  borderLeft: `3px solid ${isHover ? theme.fg : theme.border}`,
+                  background: isHover ? theme.bg : "transparent",
                   cursor: "pointer",
-                  transition: "background 0.10s",
+                  transition: "background 0.10s, border-left 0.10s",
                 }}>
                 <span style={{ fontSize: 8, color: "var(--lys-text-faint)",
                   minWidth: 14, textAlign: "right", fontWeight: 600 }}>
@@ -3004,12 +3104,12 @@ function BondsRail(p: BondsRailProps) {
                 <span style={{ fontSize: 8, color: "var(--lys-text-faint)" }}>
                   {b.atom_a}
                 </span>
-                {/* bond glyph */}
+                {/* bond glyph — large + colored by order */}
                 <span style={{
-                  fontSize: 13, fontWeight: 800,
-                  color: orderColor, lineHeight: 1,
-                  padding: "0 2px",
-                }}>{BOND_GLYPH_RAIL[b.order] ?? b.order}</span>
+                  fontSize: 14, fontWeight: 800,
+                  color: theme.fg, lineHeight: 1,
+                  padding: "0 3px",
+                }}>{theme.glyph}</span>
                 {/* atom_b element bubble */}
                 <span style={{
                   width: 14, height: 14, borderRadius: "50%",
@@ -3020,6 +3120,13 @@ function BondsRail(p: BondsRailProps) {
                 <span style={{ fontSize: 8, color: "var(--lys-text-faint)" }}>
                   {b.atom_b}
                 </span>
+                {/* Order text-pill — explicit category label so the user
+                    never has to decode the glyph alone. */}
+                <span style={{
+                  fontSize: 8, padding: "1px 5px", borderRadius: 999,
+                  background: `${theme.fg}15`, color: theme.fg,
+                  fontWeight: 700, letterSpacing: "0.02em",
+                }}>{theme.label}</span>
                 {b.in_ring && (
                   <span style={{ fontSize: 7, padding: "0 3px", borderRadius: 2,
                     background: "rgba(8,145,178,0.10)", color: "#0891b2",

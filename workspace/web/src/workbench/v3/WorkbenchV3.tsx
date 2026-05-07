@@ -224,14 +224,17 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // app-screens, not magazine pages. autoFit:true → height auto-computes
   // from cards. Width is the dimension we hand-tune for proportion.
   const DEFAULT_GROUP_LAYOUT: Record<string, GroupLayout> = {
-    // Chem container expanded to give the BuildTools panel room to breathe.
-    // Height 1320 → 1620 so the full Fragments / Rings / SMILES tabs are
-    // visible one-shot without internal scroll inside the rail.
-    "chem":      { x: 16,   y: 16,   w: 1500, h: 1620, z: 1, autoFit: true },
-    "scoring":   { x: 1532, y: 16,   w: 700,  h: 1200, z: 1, autoFit: true },
-    "agents":    { x: 1532, y: 1240, w: 700,  h: 1100, z: 1, autoFit: true },
-    "knowledge": { x: 16,   y: 1656, w: 1500, h: 1200, z: 1, autoFit: true },
-    "live":      { x: 16,   y: 2880, w: 1500, h: 600,  z: 1, autoFit: true },
+    // Chem container is now the principal control panel for atom-by-atom
+    // antibiotic discovery. It absorbs Library / SMARTS / Properties /
+    // Atoms / Bonds / Build / Status into a single coherent screen.
+    // Width 1500 → 1700 to accommodate the new docked Library/SMARTS
+    // (360 each) without squeezing the SVG. Height 1620 → 2000 to fit
+    // the merged Properties sub-section at the bottom.
+    "chem":      { x: 16,   y: 16,   w: 1700, h: 2000, z: 1, autoFit: true },
+    "scoring":   { x: 1732, y: 16,   w: 700,  h: 1200, z: 1, autoFit: true },
+    "agents":    { x: 1732, y: 1240, w: 700,  h: 1100, z: 1, autoFit: true },
+    "knowledge": { x: 16,   y: 2036, w: 1700, h: 1200, z: 1, autoFit: true },
+    "live":      { x: 16,   y: 3260, w: 1700, h: 600,  z: 1, autoFit: true },
   };
   const [playgroundGroupLayouts, setPlaygroundGroupLayouts] = useState<Record<string, Record<string, GroupLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
@@ -1102,7 +1105,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "3d", title: "3D molecule theater · drag-edit", expandedH: 480, body:
+                    { id: "3d", title: "3D molecule theater · drag-edit", expandedH: 520, body:
                       <Mol3DTheaterWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
@@ -1118,7 +1121,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "2d", title: "2D molecule builder", expandedH: 520, body:
+                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", expandedH: 1380, body:
                       <Mol2DBuilderWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
@@ -1154,15 +1157,18 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                             logLabel: `[2D edit ${edit.label} @${edit.atom_idx}]`,
                           });
                         }}
+                        // Properties panel is now MERGED INTO the 2D
+                        // container as a bottom collapsible sub-section.
+                        // No more separate sibling card — the chem
+                        // container has one cohesive screen for atoms +
+                        // bonds + build + props + status.
+                        propertiesPanel={
+                          <PropertiesCard apiBase={apiBase} smiles={currentSmiles} />
+                        }
                       /> },
-                    // Live atoms list is now embedded INSIDE the 2D builder
-                    // as an atoms-rail (right side). No standalone card.
-                    { id: "properties", title: "Properties · medchem", size: 2, expandedH: 220, body:
-                      <PropertiesCard apiBase={apiBase} smiles={currentSmiles} /> },
-                    // Library is now embedded INSIDE Mol2DBuilderWindow as a
-                    // portal popover (📚 button in 2D header). No standalone card.
-                    // SMARTS is now embedded INSIDE Mol2DBuilderWindow as
-                    // an inline strip — no standalone card needed.
+                    // Atoms / Bonds / Build / Properties / Library / SMARTS
+                    // are ALL embedded inside the 2D container now. The
+                    // chem container is a single screen, not a tile-grid.
                   ],
                 },
                 {
