@@ -14,6 +14,7 @@
  *     bubbles new SMILES up to canvas state.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
+import { getMoleculeState, subscribe as subscribeMolCache } from "./moleculeStateCache";
 import { createPortal } from "react-dom";
 import { ChemKnowledgeCard } from "./ChemKnowledgeCard";
 
@@ -911,6 +912,71 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     });
   }, [highlightAtoms, svg]);
 
+  // SELECTION halo — strong amber filled circle behind every atom in
+  // `selected`. Driven by both shift-click in the SVG AND row-click in
+  // the atoms rail, so the user always sees on the molecule what they
+  // picked in the inventory. Single source of truth = `selected` Set.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-selected="1"]').forEach((n) => n.remove());
+    if (selected.size === 0) return;
+    for (const idx of selected) {
+      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
+      if (!target) continue;
+      const bbox = (target as SVGGraphicsElement).getBBox?.();
+      if (!bbox) continue;
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      // Filled disc behind atom — amber, ~70% opacity
+      const disc = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      disc.setAttribute("data-selected", "1");
+      disc.setAttribute("cx", String(cx));
+      disc.setAttribute("cy", String(cy));
+      disc.setAttribute("r", "11");
+      disc.setAttribute("fill", "rgba(245,158,11,0.32)");
+      disc.setAttribute("stroke", "#f59e0b");
+      disc.setAttribute("stroke-width", "2");
+      disc.style.pointerEvents = "none";
+      // Insert at front of SVG so atom labels render ABOVE the halo
+      svgEl.insertBefore(disc, svgEl.firstChild?.nextSibling ?? null);
+    }
+  }, [selected, svg]);
+
+  // RAIL-HOVER halo — temporary cyan ring on the atom currently hovered
+  // in the right-rail atoms list. Lighter than selection so the two
+  // signals are distinguishable. Cleared as soon as the user leaves the
+  // row. Drives off `externalHighlight` AND a separate hovered-row idx
+  // (we use the cursor channel for that).
+  const [railHoverIdx, setRailHoverIdx] = useState<number | null>(null);
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-rail-hover="1"]').forEach((n) => n.remove());
+    if (railHoverIdx == null) return;
+    const target = svgEl.querySelector(`[class*="atom-${railHoverIdx}"]`);
+    if (!target) return;
+    const bbox = (target as SVGGraphicsElement).getBBox?.();
+    if (!bbox) return;
+    const cx = bbox.x + bbox.width / 2;
+    const cy = bbox.y + bbox.height / 2;
+    const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    ring.setAttribute("data-rail-hover", "1");
+    ring.setAttribute("cx", String(cx));
+    ring.setAttribute("cy", String(cy));
+    ring.setAttribute("r", "13");
+    ring.setAttribute("fill", "rgba(8,145,178,0.10)");
+    ring.setAttribute("stroke", "#0891b2");
+    ring.setAttribute("stroke-width", "2");
+    ring.setAttribute("stroke-dasharray", "3,2");
+    ring.style.pointerEvents = "none";
+    svgEl.insertBefore(ring, svgEl.firstChild?.nextSibling ?? null);
+  }, [railHoverIdx, svg]);
+
   // Drag-to-bond visual overlay — cyan source ring + dashed line to current
   // hover position + cyan target ring on the hovered atom. Animated.
   useEffect(() => {
@@ -1410,7 +1476,14 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               return next;
             });
           }}
-          onHoverAtom={(idx) => onCursorHover?.(idx)}
+          onHoverAtom={(idx) => {
+            // Drives the rail-hover halo on the SVG (cyan dashed ring)
+            // so the user sees in the molecule what they're hovering
+            // in the inventory list. Also forwards to onCursorHover
+            // for the broader cursor presence channel.
+            setRailHoverIdx(idx);
+            onCursorHover?.(idx);
+          }}
           onDeleteAtom={async (idx) => {
             if (!smiles) return;
             try {
@@ -4055,11 +4128,11 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
   }, [p.smarts, p.smartsHits.length]);
 
   // ──────────────────────────────────────────────────────────────────
-  // INFRA · single combined fetch via /molecule/state replaces THREE
-  // separate per-SMILES requests (match-known + auto-patterns +
-  // properties). One round-trip → all four sections (match,
-  // patterns, build-state, composition) update in lockstep. Stops
-  // request races + cuts ~3× backend load on every edit.
+  // INFRA · uses the shared SMILES-keyed cache (moleculeStateCache.ts)
+  // so multiple components asking for the same SMILES dedupe to one
+  // backend hit. Subscribes to cache invalidations (driven by
+  // /molecule/edit WS events from agents) so this strip refreshes
+  // automatically when an agent mutates the candidate.
   // ──────────────────────────────────────────────────────────────────
   const [autoPatterns, setAutoPatterns] = useState<AutoPatternHit[]>([]);
   const [elementCounts, setElementCounts] = useState<Record<string, number>>({});
@@ -4069,22 +4142,25 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
       return;
     }
     let cancelled = false;
+    const apply = (d: any) => {
+      if (cancelled || !d) return;
+      setAutoPatterns(d.auto_patterns?.matches ?? []);
+      setMatch(d.match_known
+        ? { matches: d.match_known.matches, best: d.match_known.best }
+        : null);
+      setElementCounts(d.properties?.element_counts ?? {});
+    };
     const t = setTimeout(async () => {
-      try {
-        const include = "auto_patterns,match_known,properties";
-        const url = `${p.apiBase}/workbench/molecule/state?smiles=${encodeURIComponent(p.smiles!)}&include=${include}&top_k=3`;
-        const r = await fetch(url);
-        if (!r.ok) return;
-        const d = await r.json();
-        if (cancelled) return;
-        setAutoPatterns(d.auto_patterns?.matches ?? []);
-        setMatch(d.match_known
-          ? { matches: d.match_known.matches, best: d.match_known.best }
-          : null);
-        setElementCounts(d.properties?.element_counts ?? {});
-      } catch {/*noop*/}
+      const d = await getMoleculeState(
+        p.apiBase, p.smiles!,
+        "auto_patterns,match_known,properties",
+      );
+      apply(d);
     }, 250);
-    return () => { cancelled = true; clearTimeout(t); };
+    // Subscribe — when /molecule/state cache for this SMILES is
+    // refreshed by an agent edit (or sibling component), apply too.
+    const unsub = subscribeMolCache(p.smiles, apply);
+    return () => { cancelled = true; clearTimeout(t); unsub(); };
   }, [p.smiles, p.apiBase]);
 
   // Drug-class colors — loaded once per mount, never changes.

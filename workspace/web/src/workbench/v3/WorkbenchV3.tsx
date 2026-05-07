@@ -64,6 +64,7 @@ import { AgentsNavbar } from "./playground/AgentsNavbar";
 import { LiveNavbar } from "./playground/LiveNavbar";
 import type { GroupLayout } from "./playground/PlaygroundGroup";
 import { useLivePlayground } from "./playground/useLivePlayground";
+import { invalidate as invalidateMolCache } from "./playground/moleculeStateCache";
 void {} as unknown as WindowLayout;
 import { CandidateList as _CandidateList } from "./components/CandidateList";
 void _CandidateList;
@@ -313,12 +314,26 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       setEditLog(d.edits ?? []);
     } catch { /* */ }
   }, [activeChatId, apiBase]);
-  // Refresh edit log whenever a new edit lands (via WS)
+  // Refresh edit log whenever a new edit lands (via WS) and invalidate
+  // the SMILES-keyed molecule-state cache so subscribers (BottomProperties
+  // strip, AtomsRail, etc.) automatically re-fetch when an agent mutates
+  // the candidate behind the scenes. This is the front-end side of the
+  // /molecule/edit WS broadcast we wired in workbench.py.
   useEffect(() => {
     if (!livePlayground.latest) return;
-    const ev = livePlayground.latest;
+    const ev: any = livePlayground.latest;
     if (ev.event === "edit.applied" || ev.event === "molecule.created") {
       refreshEditLog();
+    }
+    if (ev.type === "molecule.edit" || ev.event === "molecule.edit") {
+      // Invalidate cache for the new SMILES so all subscribers refetch
+      // fresh data on the next render tick. Don't need the previous
+      // SMILES — once an agent edit lands, all subscribers will move
+      // to the new smiles via the canvas state update.
+      const nextSmi = ev.smiles ?? ev.payload?.smiles;
+      if (nextSmi) {
+        invalidateMolCache(nextSmi);
+      }
     }
   }, [livePlayground.latest, refreshEditLog]);
   useEffect(() => { refreshEditLog(); }, [refreshEditLog]);
