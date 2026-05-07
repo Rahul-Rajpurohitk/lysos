@@ -53,6 +53,32 @@ const AXIS_TOOLTIP: Record<string, string> = {
   pareto_entry:           "Position on Pareto front of all-axis tradeoffs.",
 };
 
+// Honesty stamps — be explicit about which axes are real, which are
+// proxies, which are stubs. Better than fake authoritativeness.
+//   real  = computed from real data, no estimation
+//   proxy = approximation; indicative but not validated
+//   stub  = placeholder when source data unavailable
+const AXIS_STATUS: Record<string, "real" | "proxy" | "stub"> = {
+  validity:               "real",   // RDKit parse
+  structural_alerts:      "real",   // RDKit FILTER (PAINS / tox)
+  predicted_mic:          "proxy",  // XGBoost on small dataset
+  drug_likeness_qed:      "real",   // Bickerton 2012
+  synthesizability:       "real",   // Ertl 2009 SAscore
+  hemolysis_safety:       "proxy",  // structural-alert based, unvalidated
+  novelty:                "real",   // Tanimoto Morgan-2 vs 30+ knowns
+  embedding_novelty:      "real",   // Gemini 3072d cosine
+  boltz2_pose_conf:       "stub",   // cache-empty for novel SMILES
+  spectrum_breadth:       "stub",   // not yet implemented
+  resistance_robustness:  "proxy",  // Service 2 backs this when pdb_id available
+  pareto_entry:           "real",   // Service 3 (live frontier computation)
+};
+
+const STATUS_BADGES = {
+  real:  { color: "#10b981", label: "real",  dot: "🟢" },
+  proxy: { color: "#ca8a04", label: "proxy", dot: "🟡" },
+  stub:  { color: "#dc2626", label: "stub",  dot: "🔴" },
+} as const;
+
 function colorFor(v: number): string {
   if (v >= 0.7) return "#10b981";
   if (v >= 0.4) return "#d97706";
@@ -118,14 +144,29 @@ export function ScoreBreakdownCard({ scores, weights, best, composite }: Props) 
         )}
         {hasScores && enriched.map((e) => {
           const c = colorFor(e.value);
+          const status = AXIS_STATUS[e.axis] ?? "proxy";
+          const badge = STATUS_BADGES[status];
           return (
-            <div key={e.axis} title={e.tip}
+            <div key={e.axis} title={`${e.tip}\n\nstatus: ${badge.label.toUpperCase()} — ${
+              status === "real" ? "computed from real data, no estimation" :
+              status === "proxy" ? "approximation; indicative but not externally validated" :
+              "placeholder when source data unavailable; treat as no signal"
+            }`}
               style={{ padding: "3px 0", display: "flex", flexDirection: "column", gap: 2 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6,
                 fontSize: 10, fontFamily: "var(--lys-font-mono)" }}>
+                <span title={`${badge.label} — see tooltip on row for explanation`}
+                  style={{
+                    width: 7, height: 7, borderRadius: 7,
+                    background: badge.color, flexShrink: 0,
+                  }} />
                 <span style={{ flex: 1, color: "var(--lys-text)",
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {e.label}
+                </span>
+                <span style={{ fontSize: 8, color: badge.color, fontWeight: 700,
+                  letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                  {badge.label}
                 </span>
                 <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)" }}>
                   w={e.weight.toFixed(2)}
