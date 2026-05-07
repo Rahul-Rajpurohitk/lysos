@@ -1758,7 +1758,7 @@ class AtomEditRequest(BaseModel):
     op: Literal[
         "swap_element", "break_bond", "add_methyl_at",
         "add_atom_at", "delete_atom", "add_bond", "delete_bond",
-        "add_functional_group_at",
+        "add_functional_group_at", "attach_fragment",
     ]
     atom_index: Optional[int] = None       # for swap_element / add_*_at / delete_atom
     atom_index_a: Optional[int] = None     # for add_bond (first atom)
@@ -1767,6 +1767,8 @@ class AtomEditRequest(BaseModel):
     new_element: Optional[str] = None      # element symbol for swap/add_atom_at
     bond_order: Optional[Literal["single", "double", "triple", "aromatic"]] = "single"
     functional_group: Optional[str] = None # name for add_functional_group_at
+    fragment_smiles: Optional[str] = None  # SMILES of the fragment to attach (rings, custom)
+    fragment_anchor_idx: int = 0           # index within the fragment of the bonding atom
 
 
 @router.post("/molecule/edit")
@@ -1818,18 +1820,56 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
 
     # Functional group library (SMARTS templates for "attach this fragment")
     # Each has (atoms_to_add, bonds_to_add) starting from anchor=req.atom_index
+    # Functional group templates — each is (atoms_to_add, bond_order_to_prev).
+    # First atom attaches to anchor with first bond_order, others chain linearly
+    # unless this is a "branched" FG where atoms 2..n branch off atom 1.
     FG_TEMPLATES = {
+        # Single-atom halogens / heteroatoms
         "hydroxyl":   [("O", "single")],
         "methyl":     [("C", "single")],
         "amine":      [("N", "single")],
         "fluorine":   [("F", "single")],
         "chlorine":   [("Cl", "single")],
-        "carbonyl":   [("C", "single"), ("O", "double")],   # ketone-like
-        "carboxyl":   [("C", "single"), ("O", "double"), ("O", "single")],
-        "nitro":      [("N", "single"), ("O", "double"), ("O", "single")],
+        "bromine":    [("Br", "single")],
+        "iodine":     [("I", "single")],
+        "thiol":      [("S", "single")],
+        # Carbonyl / oxo-containing
+        "carbonyl":   [("C", "single"), ("O", "double")],                     # >C=O
+        "aldehyde":   [("C", "single"), ("O", "double")],                     # –CHO (single H stays implicit)
+        "carboxyl":   [("C", "single"), ("O", "double"), ("O", "single")],    # –COOH
+        "ester":      [("O", "single"), ("C", "single"), ("O", "double"), ("C", "single")],  # –O–C(=O)–CH3 methyl ester
+        "amide":      [("C", "single"), ("O", "double"), ("N", "single")],    # –C(=O)NH2 (branched on C)
+        "nitro":      [("N", "single"), ("O", "double"), ("O", "single")],    # –NO2 (branched on N)
+        # Sulfur / phosphorus
+        "sulfonyl":   [("S", "single"), ("O", "double"), ("O", "double")],    # –S(=O)(=O)–
+        "sulfonamide":[("S", "single"), ("O", "double"), ("O", "double"), ("N", "single")],
+        "sulfide":    [("S", "single"), ("C", "single")],                     # –S–CH3 thioether
+        "phosphate":  [("O", "single"), ("P", "single"), ("O", "double"), ("O", "single"), ("O", "single")],
+        "phosphonate":[("P", "single"), ("O", "double"), ("O", "single"), ("O", "single")],
+        # Heteroaryl / unsaturated
         "cyano":      [("C", "single"), ("N", "triple")],
+        "isocyano":   [("N", "single"), ("C", "triple")],                     # –NC
+        "azido":      [("N", "single"), ("N", "double"), ("N", "double")],    # –N=N=N (linear approximation)
         "trifluoromethyl": [("C", "single"), ("F", "single"), ("F", "single"), ("F", "single")],
+        "trichloromethyl": [("C", "single"), ("Cl", "single"), ("Cl", "single"), ("Cl", "single")],
+        # Two-carbon groups
+        "ethyl":      [("C", "single"), ("C", "single")],
+        "vinyl":      [("C", "single"), ("C", "double")],                     # –CH=CH2
+        "ethynyl":    [("C", "single"), ("C", "triple")],                     # –C≡CH
+        "methoxy":    [("O", "single"), ("C", "single")],                     # –O–CH3
+        "ethoxy":     [("O", "single"), ("C", "single"), ("C", "single")],
+        # Larger
+        "isopropyl":  [("C", "single"), ("C", "single"), ("C", "single")],    # branched at first C
+        "tert-butyl": [("C", "single"), ("C", "single"), ("C", "single"), ("C", "single")],
+        "phenyl":     [("C", "single"), ("C", "aromatic"), ("C", "aromatic"),
+                       ("C", "aromatic"), ("C", "aromatic"), ("C", "aromatic")],  # benzene-like
     }
+    # FGs whose atoms 2..n BRANCH from atom 1 (the anchor of the FG itself),
+    # not chain linearly. Carbonyl/carboxyl/nitro/sulfonyl/sulfonamide/amide
+    # all attach multiple substituents to the central heavy atom.
+    BRANCHED_FGS = {"carbonyl", "carboxyl", "amide", "nitro", "sulfonyl",
+                    "sulfonamide", "phosphonate", "trifluoromethyl",
+                    "trichloromethyl", "isopropyl", "tert-butyl", "aldehyde"}
 
     if req.op == "swap_element":
         if req.atom_index is None or req.new_element is None:
@@ -1903,12 +1943,43 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
             bond_type = BOND_ORDERS.get(bo, Chem.BondType.SINGLE)
             # Carbonyl/carboxyl/nitro have branching: atom 1 of template gets =O / extra bonds.
             # Simple heuristic: subsequent atoms connect back to first_new_idx for branched FGs.
-            if i == 0 or req.functional_group not in ("carbonyl", "carboxyl", "nitro", "trifluoromethyl"):
+            if i == 0 or req.functional_group not in BRANCHED_FGS:
                 rw.AddBond(prev_idx, new_idx, bond_type)
                 prev_idx = new_idx
             else:
                 # Branch off the first added atom (anchor of the FG)
                 rw.AddBond(first_new_idx, new_idx, bond_type)
+
+    elif req.op == "attach_fragment":
+        # Generic fragment attachment via SMILES — enables rings (benzene,
+        # pyridine, cyclopropane), heterocycles (imidazole, thiazole),
+        # bicyclics, and arbitrary user-supplied fragments. The agent uses
+        # this to compose larger structures incrementally.
+        if req.atom_index is None or req.fragment_smiles is None:
+            raise HTTPException(422, "attach_fragment needs atom_index + fragment_smiles")
+        if req.atom_index < 0 or req.atom_index >= rw.GetNumAtoms():
+            raise HTTPException(422, "atom_index out of range")
+        try:
+            frag = Chem.MolFromSmiles(req.fragment_smiles)
+            if frag is None:
+                raise HTTPException(422, f"unparseable fragment_smiles: {req.fragment_smiles}")
+            try:
+                Chem.Kekulize(frag, clearAromaticFlags=True)
+            except Exception:  # noqa: BLE001
+                pass
+            anchor_in_frag = req.fragment_anchor_idx
+            if anchor_in_frag < 0 or anchor_in_frag >= frag.GetNumAtoms():
+                raise HTTPException(422, "fragment_anchor_idx out of range")
+            n_main = rw.GetNumAtoms()
+            combined = Chem.CombineMols(rw.GetMol(), frag)
+            rw2 = Chem.RWMol(combined)
+            bond_type = BOND_ORDERS.get(req.bond_order or "single", Chem.BondType.SINGLE)
+            rw2.AddBond(req.atom_index, n_main + anchor_in_frag, bond_type)
+            rw = rw2
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise HTTPException(422, f"attach_fragment failed: {exc}")
 
     else:
         raise HTTPException(422, f"unknown op: {req.op}")
@@ -1937,6 +2008,212 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
         "smiles": new_smiles,
         "n_atoms": rw.GetNumAtoms(),
         "n_bonds": rw.GetNumBonds(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Curated antibiotic reference set — used for similarity matching ("which
+# known drug does this candidate resemble?") and as the seed for the
+# library on first launch. Single source of truth for the agent + UI.
+# ---------------------------------------------------------------------------
+
+ANTIBIOTIC_REFERENCE: list[dict] = [
+    # β-lactams
+    {"name": "Penicillin G",      "smiles": "CC1(C)S[C@@H]2[C@H](NC(=O)Cc3ccccc3)C(=O)N2[C@H]1C(=O)O",
+     "drug_class": "beta-lactam · penicillin", "mechanism": "PBP inhibition",
+     "targets": ["MRSA", "VRE", "NGono"], "year": 1928},
+    {"name": "Amoxicillin",       "smiles": "CC1(C)S[C@@H]2[C@H](NC(=O)[C@@H](N)c3ccc(O)cc3)C(=O)N2[C@H]1C(=O)O",
+     "drug_class": "beta-lactam · aminopenicillin", "mechanism": "PBP inhibition",
+     "targets": ["MRSA", "EColi-CRE"], "year": 1972},
+    {"name": "Methicillin",       "smiles": "COc1ccccc1C(=O)N[C@@H]1C(=O)N2[C@@H](C(=O)O)C(C)(C)S[C@@H]12",
+     "drug_class": "beta-lactam · semisynthetic penicillin", "mechanism": "PBP inhibition",
+     "targets": ["MRSA"], "year": 1959},
+    {"name": "Cefuroxime",        "smiles": "CO/N=C(\\C(=O)N[C@@H]1C(=O)N2[C@H]1SCC(=C2C(=O)O)COC(=O)N)/c1ccoc1",
+     "drug_class": "beta-lactam · cephalosporin (2nd gen)", "mechanism": "PBP inhibition",
+     "targets": ["EColi-CRE", "KpneuCRE"], "year": 1977},
+    {"name": "Ceftriaxone",       "smiles": "CO/N=C(\\C(=O)N[C@@H]1C(=O)N2[C@H]1SCC(=C2C(=O)O)CSc1nc(=O)c(=O)[nH]n1C)/c1csc(N)n1",
+     "drug_class": "beta-lactam · cephalosporin (3rd gen)", "mechanism": "PBP inhibition",
+     "targets": ["EColi-CRE", "NGono"], "year": 1982},
+    {"name": "Meropenem",         "smiles": "CC1=C(C(=O)O)N2C(=O)[C@H]([C@H]1C)[C@H]2[C@H](C)O.OS(=O)(=O)C1CSC2N1C(=O)C2=C(C)C(=O)O",
+     "drug_class": "beta-lactam · carbapenem", "mechanism": "PBP inhibition",
+     "targets": ["EColi-CRE", "KpneuCRE", "Paer"], "year": 1996},
+    {"name": "Aztreonam",         "smiles": "CC(C)(C(=O)O)O/N=C(\\C(=O)NC1C(=O)N(C1)S(=O)(=O)O)/c1csc(N)n1",
+     "drug_class": "monobactam", "mechanism": "PBP3 inhibition",
+     "targets": ["EColi-CRE", "KpneuCRE", "Paer"], "year": 1987},
+    {"name": "Clavulanic acid",   "smiles": "OC(=O)C1=CCO[C@@H]2CC(=O)N12",
+     "drug_class": "beta-lactamase inhibitor", "mechanism": "irreversible serine-β-lactamase inhibition",
+     "targets": ["EColi-CRE"], "year": 1976},
+    # Fluoroquinolones
+    {"name": "Ciprofloxacin",     "smiles": "OC(=O)c1cn(C2CC2)c2cc(N3CCNCC3)c(F)cc2c1=O",
+     "drug_class": "fluoroquinolone", "mechanism": "DNA gyrase inhibition",
+     "targets": ["EColi-CRE", "Paer", "NGono"], "year": 1987},
+    {"name": "Levofloxacin",      "smiles": "C[C@H]1COc2c(N3CCN(C)CC3)c(F)cc3C(=O)C(=CN1c23)C(=O)O",
+     "drug_class": "fluoroquinolone", "mechanism": "DNA gyrase / topoisomerase IV",
+     "targets": ["EColi-CRE", "Paer"], "year": 1996},
+    {"name": "Moxifloxacin",      "smiles": "COc1c(N2CC3CCCNC3C2)c(F)cc2c1N(C1CC1)C=C(C(=O)O)C2=O",
+     "drug_class": "fluoroquinolone", "mechanism": "DNA gyrase / topoisomerase IV",
+     "targets": ["MRSA", "Mtb"], "year": 1999},
+    # Aminoglycosides
+    {"name": "Gentamicin",        "smiles": "CC(N)C1OC(OC2C(N)CC(N)C(OC3OCC(C)(O)C(NC)C3O)C2O)C(N)C(O)C1O",
+     "drug_class": "aminoglycoside", "mechanism": "30S ribosomal misreading",
+     "targets": ["EColi-CRE", "Paer"], "year": 1963},
+    {"name": "Tobramycin",        "smiles": "NCC1OC(OC2C(N)CC(N)C(OC3OC(CN)C(O)C(O)C3N)C2O)C(N)CC1O",
+     "drug_class": "aminoglycoside", "mechanism": "30S ribosomal misreading",
+     "targets": ["Paer", "EColi-CRE"], "year": 1967},
+    {"name": "Amikacin",          "smiles": "NCC1OC(OC2C(O)C(NC(=O)C(O)CCN)CC(N)C2OC2OC(CO)C(O)C(O)C2N)C(N)CC1O",
+     "drug_class": "aminoglycoside", "mechanism": "30S ribosomal misreading",
+     "targets": ["Mtb", "Paer"], "year": 1972},
+    # Tetracyclines
+    {"name": "Doxycycline",       "smiles": "CC1c2cccc(O)c2C(=O)C2=C1C(=O)C1(O)C(C(=O)C(C(=O)N)=C1O)C2N(C)C",
+     "drug_class": "tetracycline", "mechanism": "30S ribosomal binding",
+     "targets": ["MRSA", "VRE"], "year": 1967},
+    {"name": "Tigecycline",       "smiles": "CN(C)C1C(O)=C(C(=O)N)C(=O)C2(O)C1Cc1cc(NC(=O)CNC(C)(C)C)c(N(C)C)c(O)c1C2=O",
+     "drug_class": "glycylcycline", "mechanism": "30S ribosomal binding",
+     "targets": ["MRSA", "VRE", "Abaum"], "year": 2005},
+    # Macrolides
+    {"name": "Erythromycin",      "smiles": "CCC1OC(=O)C(C)C(OC2CC(C)(OC)C(O)C(C)O2)C(C)C(OC2OC(C)CC(N(C)C)C2O)C(C)(O)CC(C)C(=O)C(C)C(O)C1(C)O",
+     "drug_class": "macrolide", "mechanism": "50S ribosomal binding",
+     "targets": ["MRSA"], "year": 1952},
+    {"name": "Azithromycin",      "smiles": "CCC1OC(=O)C(C)C(OC2CC(C)(OC)C(O)C(C)O2)C(C)C(OC2OC(C)CC(N(C)C)C2O)C(C)(O)CC(C)CN(C)C(C)C(O)C1(C)O",
+     "drug_class": "azalide (macrolide)", "mechanism": "50S ribosomal binding",
+     "targets": ["MRSA", "NGono"], "year": 1980},
+    # Glycopeptides
+    {"name": "Vancomycin",        "smiles": "CC1C(C(CC(=O)NC(C)C(O)C2=CC(=C(C(=C2)O)Cl)Oc2cc3cc(c2O)Oc2ccc(cc2Cl)C(C(NC(=O)C(c2ccc(O)c(O)c2)NC(=O)c2ccc(O)c(O)c2)C(=O)NC2C(=O)NC(c4cc(O)cc(O)c4-c4cc3ccc4O)C(=O)O)O)C(=O)NC(C(=O)NC(C)C2OC(CO)C(O)C(N)C2O)C(=O)NC(c2cc(O)cc(O)c2-c2c(O)cc(O)cc2C(C)C)C(=O)O)NC(=O)C(N(C)C)C)O",
+     "drug_class": "glycopeptide", "mechanism": "D-Ala-D-Ala binding · cell-wall synthesis",
+     "targets": ["MRSA", "VRE"], "year": 1958},
+    {"name": "Daptomycin",        "smiles": "CCCCCCCCCC(=O)NC(Cc1c[nH]c2ccccc12)C(=O)NC(CC(=O)N)C(=O)NC(CC(=O)O)C(=O)NC1C(C)OC(=O)C(Cc2ccc(O)cc2)NC(=O)C(CCCN)NC(=O)C(CC(=O)O)NC(=O)C(C)NC(=O)C(CC(=O)O)NC(=O)CNC(=O)C(NC(=O)C1)C(C)CC(=O)O",
+     "drug_class": "lipopeptide", "mechanism": "membrane depolarization",
+     "targets": ["MRSA", "VRE"], "year": 2003},
+    # Oxazolidinones
+    {"name": "Linezolid",         "smiles": "CC(=O)NCC1CN(c2ccc(N3CCOCC3)cc2F)C(=O)O1",
+     "drug_class": "oxazolidinone", "mechanism": "50S initiation complex",
+     "targets": ["MRSA", "VRE"], "year": 2000},
+    # Polymyxins
+    {"name": "Colistin",          "smiles": "CCC(C)CCCCC(=O)NC(CCN)C(=O)NC(C(C)O)C(=O)NC(CCN)C(=O)NC1CCNC(=O)C(NC(=O)C(NC(=O)C(NC(=O)C(NC(=O)C1)CCN)CC(C)C)CC(C)C)CCN",
+     "drug_class": "polymyxin", "mechanism": "outer-membrane disruption (binds LPS)",
+     "targets": ["EColi-CRE", "KpneuCRE", "Abaum", "Paer"], "year": 1959},
+    # Nitroimidazoles / antimycobacterials
+    {"name": "Metronidazole",     "smiles": "Cc1ncc([N+](=O)[O-])n1CCO",
+     "drug_class": "nitroimidazole", "mechanism": "DNA strand breakage (anaerobes)",
+     "targets": ["EColi-CRE"], "year": 1959},
+    {"name": "Isoniazid",         "smiles": "NNC(=O)c1ccncc1",
+     "drug_class": "antimycobacterial", "mechanism": "InhA inhibition (mycolic acid)",
+     "targets": ["Mtb"], "year": 1952},
+    {"name": "Rifampicin",        "smiles": "CO[C@H]1\\C=C\\O[C@@]2(C)Oc3c(C)c(O)c4c(O)c(NC(=O)\\C(C)=C/C=C/[C@H](C)[C@H](O)[C@@H](C)[C@@H](O)[C@@H](C)[C@H](OC(C)=O)[C@H]1C)c(/C=N/N1CCN(C)CC1)c(O)c4c3C2=O",
+     "drug_class": "rifamycin", "mechanism": "RNA polymerase inhibition",
+     "targets": ["Mtb", "MRSA"], "year": 1965},
+    {"name": "Pyrazinamide",      "smiles": "NC(=O)c1cnccn1",
+     "drug_class": "antimycobacterial", "mechanism": "POA (acid pH) · membrane",
+     "targets": ["Mtb"], "year": 1952},
+    {"name": "Ethambutol",        "smiles": "CCC(CO)NCCNC(CC)CO",
+     "drug_class": "antimycobacterial", "mechanism": "arabinosyl transferase",
+     "targets": ["Mtb"], "year": 1961},
+    # Sulfonamides + diaminopyrimidine combos
+    {"name": "Trimethoprim",      "smiles": "COc1cc(Cc2cnc(N)nc2N)cc(OC)c1OC",
+     "drug_class": "diaminopyrimidine", "mechanism": "DHFR inhibition",
+     "targets": ["EColi-CRE"], "year": 1962},
+    {"name": "Sulfamethoxazole",  "smiles": "Cc1cc(NS(=O)(=O)c2ccc(N)cc2)no1",
+     "drug_class": "sulfonamide", "mechanism": "DHPS inhibition",
+     "targets": ["EColi-CRE"], "year": 1961},
+    # Lincosamides / streptogramins
+    {"name": "Clindamycin",       "smiles": "CCCC1CC(C(=O)NC(C(C)Cl)C2OC(SC)C(O)C(O)C2O)N(C)C1",
+     "drug_class": "lincosamide", "mechanism": "50S ribosomal binding",
+     "targets": ["MRSA"], "year": 1968},
+    # Newer / pipeline
+    {"name": "Cefiderocol",       "smiles": "CO/N=C(\\C(=O)N[C@@H]1C(=O)N2[C@H]1SCC(=C2C(=O)O)C[N+]1(CCNC(=O)c2ccccc2OC2=CC(=O)C(O)=C(O)C=2)CCCC1)/c1csc(N)n1",
+     "drug_class": "siderophore cephalosporin", "mechanism": "PBP3 + iron-uptake exploit",
+     "targets": ["EColi-CRE", "KpneuCRE", "Abaum"], "year": 2019},
+    {"name": "Eravacycline",      "smiles": "CN(C)C1C(=O)C(C(=O)N)=C(O)C2(O)C1Cc1cc(F)c(NCC(=O)NC(C)(C)C)c(N(C)C)c1C2=O",
+     "drug_class": "fluorocycline", "mechanism": "30S ribosomal binding",
+     "targets": ["MRSA", "VRE"], "year": 2018},
+]
+
+
+def _morgan_fp(mol, radius: int = 2, n_bits: int = 2048):
+    """Morgan/ECFP4 fingerprint — used for similarity matching."""
+    from rdkit.Chem import AllChem
+    return AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=n_bits)
+
+
+@router.get("/molecule/match-known")
+async def molecule_match_known(smiles: str, top_k: int = 5) -> Dict[str, Any]:
+    """Find the closest known antibiotic(s) to the candidate via Tanimoto
+    on Morgan-2 fingerprints. Returns top_k matches with similarity in
+    [0, 1]. Used by the 3D viewer's "tag-detection" overlay so the user
+    sees `≈ Penicillin G (0.94)` as they build atom-by-atom."""
+    try:
+        from rdkit import Chem
+        from rdkit import DataStructs
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {smiles}")
+    cand_fp = _morgan_fp(mol)
+    scored: list[tuple[float, dict]] = []
+    for ref in ANTIBIOTIC_REFERENCE:
+        rmol = Chem.MolFromSmiles(ref["smiles"])
+        if rmol is None:
+            continue
+        rfp = _morgan_fp(rmol)
+        sim = DataStructs.TanimotoSimilarity(cand_fp, rfp)
+        scored.append((sim, ref))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    matches = [
+        {
+            "name": ref["name"],
+            "drug_class": ref["drug_class"],
+            "mechanism": ref["mechanism"],
+            "targets": ref["targets"],
+            "year": ref["year"],
+            "smiles": ref["smiles"],
+            "similarity": round(sim, 4),
+            "is_exact": sim >= 0.999,
+        }
+        for sim, ref in scored[:top_k]
+    ]
+    return {
+        "matches": matches,
+        "best": matches[0] if matches else None,
+        "is_known": bool(matches and matches[0]["similarity"] >= 0.95),
+        "candidate_smiles": smiles,
+    }
+
+
+@router.get("/molecule/reference-set")
+async def molecule_reference_set() -> Dict[str, Any]:
+    """Curated known-antibiotic library used for matching, library seed,
+    and the 'load reference' picker in the 2D builder. Same set the agent
+    sees when it asks 'show me known antibiotics in class X'."""
+    return {
+        "antibiotics": ANTIBIOTIC_REFERENCE,
+        "count": len(ANTIBIOTIC_REFERENCE),
+        "classes": sorted(set(a["drug_class"].split(" · ")[0] for a in ANTIBIOTIC_REFERENCE)),
+    }
+
+
+class ReplaceRequest(BaseModel):
+    smiles: str
+
+
+@router.post("/molecule/replace")
+async def molecule_replace(req: ReplaceRequest) -> Dict[str, Any]:
+    """Validate a full SMILES string and return canonical form. Used by
+    the SMILES quick-input field in the 2D builder so a user (or agent)
+    can paste a complete structure instead of building atom-by-atom."""
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    mol = Chem.MolFromSmiles(req.smiles)
+    if mol is None:
+        raise HTTPException(422, f"unparseable SMILES: {req.smiles}")
+    canonical = Chem.MolToSmiles(mol, canonical=True)
+    return {
+        "smiles": canonical,
+        "n_atoms": mol.GetNumAtoms(),
+        "n_bonds": mol.GetNumBonds(),
+        "n_rings": mol.GetRingInfo().NumRings(),
     }
 
 

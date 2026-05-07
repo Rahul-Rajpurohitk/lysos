@@ -47,16 +47,52 @@ function navBtnStyle(active: boolean, accent: string): React.CSSProperties {
 }
 
 const SMARTS_PRESETS = [
-  { label: "aromatic-N", pattern: "[n]" },
-  { label: "carbonyl", pattern: "[CX3]=[OX1]" },
-  { label: "amide", pattern: "[NX3][CX3](=[OX1])" },
-  { label: "ester", pattern: "[#6][CX3](=O)O[#6]" },
-  { label: "carboxylic", pattern: "C(=O)[OH]" },
-  { label: "β-lactam", pattern: "[#7]1[#6](=O)[#6]([#6]1)" },
-  { label: "sulfonamide", pattern: "[#16](=O)(=O)[#7]" },
-  { label: "peptide", pattern: "[NX3][CX3](=O)[CX3]" },
-  { label: "halogen", pattern: "[F,Cl,Br,I]" },
-  { label: "phenol", pattern: "c[OH]" },
+  // Antibiotic-class warheads
+  { label: "β-lactam",          pattern: "[#7]1[#6](=O)[#6]([#6]1)" },
+  { label: "thiazolidine",      pattern: "C1SCNC1" },
+  { label: "fluoroquinolone",   pattern: "c1cc2N(C)cc(C(=O)O)c(=O)c2cc1F" },
+  { label: "aminoglycoside-NH₂",pattern: "[CH]([NH2])[CH]([OH])[CH][CH]([OH])" },
+  { label: "tetracycline core", pattern: "C1=CC=C2C(=O)C3=C(C(=C(C=C3)O)O)C(=O)C2=C1" },
+  { label: "oxazolidinone",     pattern: "O=C1OCCN1" },
+  // Functional groups (acid / base / H-bond)
+  { label: "carboxylic acid",   pattern: "C(=O)[OH]" },
+  { label: "ester",             pattern: "[#6][CX3](=O)O[#6]" },
+  { label: "amide",             pattern: "[NX3][CX3](=[OX1])" },
+  { label: "peptide bond",      pattern: "[NX3][CX3](=O)[CX3]" },
+  { label: "carbonyl",          pattern: "[CX3]=[OX1]" },
+  { label: "aldehyde",          pattern: "[CX3H1](=O)[#6]" },
+  { label: "ketone",            pattern: "[#6][CX3](=O)[#6]" },
+  { label: "ether",             pattern: "[OD2]([#6])[#6]" },
+  { label: "alcohol -OH",       pattern: "[OX2H][CX4]" },
+  { label: "phenol",            pattern: "c[OH]" },
+  { label: "primary amine",     pattern: "[NX3;H2;!$(NC=O)]" },
+  { label: "secondary amine",   pattern: "[NX3;H1;!$(NC=O)]" },
+  { label: "tertiary amine",    pattern: "[NX3;H0;!$(NC=O);!$(N=*)]" },
+  { label: "thiol -SH",         pattern: "[#16X2H]" },
+  { label: "sulfonamide",       pattern: "[#16](=O)(=O)[#7]" },
+  { label: "sulfonyl",          pattern: "[#16X4](=[OX1])(=[OX1])" },
+  { label: "phosphate",         pattern: "P(=O)(O)(O)O" },
+  { label: "nitro",             pattern: "[N+](=O)[O-]" },
+  { label: "nitrile -CN",       pattern: "C#N" },
+  { label: "azide",             pattern: "N=[N+]=[N-]" },
+  // Halogens
+  { label: "halogen",           pattern: "[F,Cl,Br,I]" },
+  { label: "trifluoromethyl",   pattern: "C(F)(F)F" },
+  { label: "aryl halide",       pattern: "[c][F,Cl,Br,I]" },
+  // Aromatic / heteroaryl
+  { label: "aromatic-N",        pattern: "[n]" },
+  { label: "benzene",           pattern: "c1ccccc1" },
+  { label: "pyridine",          pattern: "c1ccncc1" },
+  { label: "imidazole",         pattern: "c1cnc[nH]1" },
+  { label: "thiazole",          pattern: "c1cscn1" },
+  { label: "indole",            pattern: "c1ccc2[nH]ccc2c1" },
+  { label: "quinoline",         pattern: "c1ccc2ncccc2c1" },
+  // Drug-likeness motifs
+  { label: "Michael acceptor",  pattern: "[#6]=[#6][CX3](=O)" },
+  { label: "epoxide",           pattern: "C1OC1" },
+  { label: "Mannich base",      pattern: "[NX3]C[CX4]C(=O)" },
+  { label: "guanidine",         pattern: "NC(=N)N" },
+  { label: "urea",              pattern: "[NX3][CX3](=[OX1])[NX3]" },
 ];
 
 interface PopoverState {
@@ -977,6 +1013,92 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               setTimeout(() => setError(""), 2200);
             }
           }}
+          onAttachFG={async (anchorIdx, fgName, label) => {
+            if (!smiles) return;
+            try {
+              const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  smiles, op: "add_functional_group_at",
+                  atom_index: anchorIdx, functional_group: fgName,
+                }),
+              });
+              if (!r.ok) {
+                const txt = await r.text();
+                setError(`${label} ${r.status}: ${txt.slice(0, 80)}`);
+                setTimeout(() => setError(""), 2400);
+                return;
+              }
+              const d = await r.json();
+              if (d.smiles) {
+                onMoleculeEdit?.(d.smiles, {
+                  op: "add_functional_group_at", atom_idx: anchorIdx,
+                  label: `${label} on atom ${anchorIdx}`,
+                });
+              }
+            } catch (exc: any) {
+              setError(`${label} error: ${exc?.message ?? exc}`);
+              setTimeout(() => setError(""), 2200);
+            }
+          }}
+          onAttachFragment={async (anchorIdx, fragmentSmiles, label, bondOrder = "single") => {
+            if (!smiles) return;
+            try {
+              const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  smiles, op: "attach_fragment",
+                  atom_index: anchorIdx,
+                  fragment_smiles: fragmentSmiles,
+                  fragment_anchor_idx: 0,
+                  bond_order: bondOrder,
+                }),
+              });
+              if (!r.ok) {
+                const txt = await r.text();
+                setError(`${label} ${r.status}: ${txt.slice(0, 80)}`);
+                setTimeout(() => setError(""), 2400);
+                return;
+              }
+              const d = await r.json();
+              if (d.smiles) {
+                onMoleculeEdit?.(d.smiles, {
+                  op: "attach_fragment", atom_idx: anchorIdx,
+                  label: `${label} on atom ${anchorIdx}`,
+                });
+              }
+            } catch (exc: any) {
+              setError(`${label} error: ${exc?.message ?? exc}`);
+              setTimeout(() => setError(""), 2200);
+            }
+          }}
+          onReplaceSmiles={async (newSmiles, label) => {
+            try {
+              const r = await fetch(`${apiBase}/workbench/molecule/replace`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ smiles: newSmiles }),
+              });
+              if (!r.ok) {
+                const txt = await r.text();
+                setError(`replace ${r.status}: ${txt.slice(0, 80)}`);
+                setTimeout(() => setError(""), 2400);
+                return;
+              }
+              const d = await r.json();
+              if (d.smiles) {
+                onMoleculeEdit?.(d.smiles, {
+                  op: "replace_smiles", atom_idx: 0,
+                  label,
+                });
+              }
+            } catch (exc: any) {
+              setError(`replace error: ${exc?.message ?? exc}`);
+              setTimeout(() => setError(""), 2200);
+            }
+          }}
         />
         {pop && smiles && createPortal(
           <div data-chem-pop style={{
@@ -1484,6 +1606,9 @@ interface AtomsRailProps {
   onAddAtom?: (element?: string) => void;
   onSwapElement?: (idx: number, newElement: string) => void;
   onAddNeighbor?: (anchorIdx: number, element: string, bondOrder: "single" | "double" | "triple") => void;
+  onAttachFragment?: (anchorIdx: number, fragmentSmiles: string, label: string, bondOrder?: "single" | "double" | "aromatic") => void;
+  onAttachFG?: (anchorIdx: number, fgName: string, label: string) => void;
+  onReplaceSmiles?: (newSmiles: string, label: string) => void;
 }
 
 interface ElementInfo {
@@ -1782,8 +1907,8 @@ function AtomsRail(p: AtomsRailProps) {
           })}
         </div>
       )}
-      {/* Atoms list */}
-      <div className="lys-card-body" style={{ flex: 1, overflow: "auto" }}>
+      {/* Atoms list — flex:1 lets it grow but BuildTools below claims its share */}
+      <div className="lys-card-body" style={{ flex: "1 1 0", minHeight: 80, overflow: "auto" }}>
         {!p.smiles && (
           <div style={{
             padding: "20px 12px", textAlign: "center",
@@ -1947,6 +2072,17 @@ function AtomsRail(p: AtomsRailProps) {
           </div>
         )}
       </div>
+      {/* Build Tools — fills the bottom space of the rail with concrete
+          building blocks the user (and the agent) can attach to the
+          currently-selected atom. Three tabs: Fragments, Rings, SMILES. */}
+      <BuildTools
+        smiles={p.smiles}
+        selected={p.selected}
+        atoms={atoms}
+        onAttachFragment={p.onAttachFragment}
+        onAttachFG={p.onAttachFG}
+        onReplaceSmiles={p.onReplaceSmiles}
+      />
       {paletteOpen && palettePos && palette.length > 0 && createPortal(
         <div data-element-pop style={{
           position: "fixed", left: palettePos.left, top: palettePos.top,
@@ -2176,4 +2312,313 @@ function iconBtnStyle(color: string, opacity: number = 1): React.CSSProperties {
     fontFamily: "var(--lys-font-mono)",
     transition: "background 0.10s, opacity 0.10s",
   };
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   BuildTools — bottom panel of the AtomsRail. Three tabs:
+
+   1. Fragments  · clickable functional-group chips (–OH, –NH₂, –COOH,
+                   –CN, –CF₃, –SO₂NH₂, –C(=O)O–CH₃ etc.). Attaches to
+                   the selected atom via /molecule/edit op:
+                   add_functional_group_at.
+   2. Rings      · clickable ring/heterocycle chips (benzene, pyridine,
+                   furan, imidazole, thiazole, pyrazine, cyclohexane,
+                   cyclopropane). Uses /molecule/edit op:attach_fragment.
+   3. SMILES     · paste/type a full SMILES, validate via
+                   /molecule/replace, and replace the current candidate.
+                   This is the agent's fast-path: it can write a whole
+                   structure in one shot rather than atom-by-atom.
+
+   The panel is the user-and-agent-shared toolbox (workbench-as-
+   simulation). Every action goes through the same backend endpoint
+   the agent tool registry calls.
+   ───────────────────────────────────────────────────────────────────── */
+interface BuildToolsProps {
+  smiles: string | null;
+  selected: Set<number>;
+  atoms: AtomRow[];
+  onAttachFragment?: (anchorIdx: number, fragmentSmiles: string, label: string, bondOrder?: "single" | "double" | "aromatic") => void;
+  onAttachFG?: (anchorIdx: number, fgName: string, label: string) => void;
+  onReplaceSmiles?: (newSmiles: string, label: string) => void;
+}
+
+const FRAGMENT_PALETTE: { name: string; label: string; tip: string; color: string }[] = [
+  { name: "hydroxyl",   label: "–OH",     tip: "Hydroxyl · adds polarity, H-bond donor",                 color: "#dc2626" },
+  { name: "amine",      label: "–NH₂",    tip: "Primary amine · base, H-bond donor",                     color: "#2563eb" },
+  { name: "methyl",     label: "–CH₃",    tip: "Methyl · adds lipophilicity",                            color: "#374151" },
+  { name: "fluorine",   label: "–F",      tip: "Fluorine · metabolic blocker",                           color: "#16a34a" },
+  { name: "chlorine",   label: "–Cl",     tip: "Chlorine · steric + electronic modulation",              color: "#16a34a" },
+  { name: "bromine",    label: "–Br",     tip: "Bromine · halogen bond, lipophilic",                     color: "#9a3412" },
+  { name: "iodine",     label: "–I",      tip: "Iodine · halogen bond, large halogen",                   color: "#7c3aed" },
+  { name: "thiol",      label: "–SH",     tip: "Thiol · soft nucleophile",                               color: "#ca8a04" },
+  { name: "carbonyl",   label: "–C(=O)–", tip: "Carbonyl · ketone-like, H-bond acceptor",                color: "#374151" },
+  { name: "carboxyl",   label: "–COOH",   tip: "Carboxylic acid · ionizable",                            color: "#dc2626" },
+  { name: "amide",      label: "–CONH₂",  tip: "Amide · planar, H-bond donor+acceptor",                  color: "#2563eb" },
+  { name: "ester",      label: "–OC(=O)–",tip: "Ester · prodrug handle",                                 color: "#374151" },
+  { name: "nitro",      label: "–NO₂",    tip: "Nitro · strong EWG, sometimes prodrug",                  color: "#dc2626" },
+  { name: "cyano",      label: "–CN",     tip: "Cyano · linear, isostere of carboxylic acid",            color: "#374151" },
+  { name: "trifluoromethyl", label: "–CF₃", tip: "Trifluoromethyl · metabolic shield",                   color: "#16a34a" },
+  { name: "sulfonyl",   label: "–SO₂–",   tip: "Sulfonyl · strong EWG, polar",                           color: "#ca8a04" },
+  { name: "sulfonamide",label: "–SO₂NH₂", tip: "Sulfonamide · classic antibiotic warhead",               color: "#ca8a04" },
+  { name: "phosphate",  label: "–OPO(OH)₂", tip: "Phosphate · prodrug solubilizer / mimetic",            color: "#ea580c" },
+  { name: "methoxy",    label: "–OCH₃",   tip: "Methoxy · weak EDG",                                     color: "#374151" },
+  { name: "ethyl",      label: "–CH₂CH₃", tip: "Ethyl · slightly more lipophilic than methyl",           color: "#374151" },
+  { name: "vinyl",      label: "–CH=CH₂", tip: "Vinyl · unsaturation, Michael acceptor when activated",  color: "#374151" },
+  { name: "ethynyl",    label: "–C≡CH",   tip: "Ethynyl · linear, click-chemistry handle",               color: "#374151" },
+  { name: "azido",      label: "–N₃",     tip: "Azide · click-chemistry handle, photoaffinity",          color: "#2563eb" },
+  { name: "tert-butyl", label: "–C(CH₃)₃",tip: "tert-Butyl · steric block",                              color: "#374151" },
+  { name: "phenyl",     label: "–C₆H₅",   tip: "Phenyl · π-stacking handle",                             color: "#a855f7" },
+];
+
+const RING_PALETTE: { name: string; smiles: string; label: string; tip: string; color: string; aromatic: boolean }[] = [
+  { name: "benzene",      smiles: "c1ccccc1",      label: "⌬ Benzene",       tip: "Aromatic 6-ring · π-stacking, lipophilic",            color: "#a855f7", aromatic: true  },
+  { name: "pyridine",     smiles: "c1ccncc1",      label: "⌬ Pyridine",      tip: "Aromatic N-6-ring · weakly basic",                    color: "#2563eb", aromatic: true  },
+  { name: "pyrimidine",   smiles: "c1cncnc1",      label: "⌬ Pyrimidine",    tip: "Aromatic 1,3-diaza · base in nucleotides",            color: "#2563eb", aromatic: true  },
+  { name: "pyrazine",     smiles: "c1cnccn1",      label: "⌬ Pyrazine",      tip: "Aromatic 1,4-diaza · pyrazinamide core",              color: "#2563eb", aromatic: true  },
+  { name: "imidazole",    smiles: "c1cnc[nH]1",    label: "⌬ Imidazole",     tip: "Aromatic 1,3-diaza-5-ring · histidine, metronidazole",color: "#2563eb", aromatic: true  },
+  { name: "thiazole",     smiles: "c1cscn1",       label: "⌬ Thiazole",      tip: "Aromatic S/N-5-ring · cefiderocol/sulfa-class",       color: "#ca8a04", aromatic: true  },
+  { name: "oxazole",      smiles: "c1ocnc1",       label: "⌬ Oxazole",       tip: "Aromatic O/N-5-ring · linezolid core",                color: "#dc2626", aromatic: true  },
+  { name: "furan",        smiles: "c1ccoc1",       label: "⌬ Furan",         tip: "Aromatic O-5-ring · oxidative liability",             color: "#dc2626", aromatic: true  },
+  { name: "thiophene",    smiles: "c1ccsc1",       label: "⌬ Thiophene",     tip: "Aromatic S-5-ring · benzene bioisostere",             color: "#ca8a04", aromatic: true  },
+  { name: "pyrrole",      smiles: "c1cc[nH]c1",    label: "⌬ Pyrrole",       tip: "Aromatic N-5-ring · porphyrin building block",        color: "#2563eb", aromatic: true  },
+  { name: "indole",       smiles: "c1ccc2[nH]ccc2c1", label: "⌬ Indole",     tip: "Bicyclic aromatic · tryptophan, tryptamine",          color: "#a855f7", aromatic: true  },
+  { name: "benzimidazole",smiles: "c1ccc2nc[nH]c2c1", label: "⌬ Benzimidazole", tip: "Bicyclic aromatic · proton-pump inhibitors",     color: "#2563eb", aromatic: true  },
+  { name: "quinoline",    smiles: "c1ccc2ncccc2c1", label: "⌬ Quinoline",   tip: "Bicyclic aromatic · fluoroquinolone, antimalarials",   color: "#2563eb", aromatic: true  },
+  { name: "cyclopropane", smiles: "C1CC1",          label: "△ Cyclopropane",   tip: "Strained 3-ring · bioisostere, conformational lock",  color: "#374151", aromatic: false },
+  { name: "cyclobutane",  smiles: "C1CCC1",         label: "□ Cyclobutane",    tip: "4-ring · puckered, modest strain",                    color: "#374151", aromatic: false },
+  { name: "cyclopentane", smiles: "C1CCCC1",        label: "⬠ Cyclopentane",   tip: "5-ring · ribose-like",                                color: "#374151", aromatic: false },
+  { name: "cyclohexane",  smiles: "C1CCCCC1",       label: "⬡ Cyclohexane",    tip: "6-ring · chair conformation",                         color: "#374151", aromatic: false },
+  { name: "piperidine",   smiles: "C1CCNCC1",       label: "⬡ Piperidine",     tip: "Saturated N-6-ring · basic amine handle",             color: "#2563eb", aromatic: false },
+  { name: "piperazine",   smiles: "C1CNCCN1",       label: "⬡ Piperazine",     tip: "Saturated 1,4-diaza-6 · fluoroquinolone tail",        color: "#2563eb", aromatic: false },
+  { name: "morpholine",   smiles: "C1COCCN1",       label: "⬡ Morpholine",     tip: "Saturated O/N-6-ring · solubility booster",           color: "#dc2626", aromatic: false },
+  { name: "tetrahydrofuran", smiles: "C1CCOC1",     label: "⬠ THF",            tip: "Saturated O-5-ring · sugar-like",                     color: "#dc2626", aromatic: false },
+  { name: "pyrrolidine",  smiles: "C1CCNC1",        label: "⬠ Pyrrolidine",    tip: "Saturated N-5-ring · proline core",                   color: "#2563eb", aromatic: false },
+];
+
+function BuildTools(p: BuildToolsProps) {
+  const [tab, setTab] = useState<"fragments" | "rings" | "smiles">("fragments");
+  const [smilesInput, setSmilesInput] = useState("");
+  const [smilesErr, setSmilesErr] = useState("");
+
+  const selectedArr = Array.from(p.selected);
+  const anchorIdx = selectedArr.length === 1 ? selectedArr[0] : null;
+  const anchorAtom = anchorIdx != null ? p.atoms.find((a) => a.idx === anchorIdx) : null;
+  const canAttach = anchorIdx != null && anchorAtom != null && anchorAtom.free_valence > 0;
+
+  const tabBtnStyle = (active: boolean): React.CSSProperties => ({
+    flex: 1,
+    padding: "5px 6px",
+    fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+    fontWeight: active ? 700 : 500,
+    border: 0,
+    borderBottom: `2px solid ${active ? "#10b981" : "transparent"}`,
+    background: active ? "rgba(16,185,129,0.06)" : "transparent",
+    color: active ? "#10b981" : "var(--lys-text-dim)",
+    cursor: "pointer",
+    letterSpacing: "0.04em",
+    textTransform: "uppercase",
+    transition: "all 0.10s",
+  });
+
+  return (
+    <div style={{
+      flex: "1 1 0", minHeight: 100,
+      display: "flex", flexDirection: "column",
+      borderTop: "2px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      background: "var(--lys-bg-2, #ffffff)",
+      overflow: "hidden",
+    }}>
+      {/* Sticky header — title + selection-aware status line */}
+      <div style={{
+        padding: "5px 8px 3px",
+        fontSize: 9, fontFamily: "var(--lys-font-mono)",
+        color: "var(--lys-text-faint)",
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <span style={{ fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+            build
+          </span>
+          <span style={{ flex: 1 }} />
+          {anchorIdx != null && anchorAtom ? (
+            <span style={{
+              padding: "1px 6px", borderRadius: 3,
+              background: canAttach ? "rgba(16,185,129,0.10)" : "rgba(220,38,38,0.10)",
+              color: canAttach ? "#059669" : "#dc2626",
+              fontWeight: 700,
+            }}>
+              anchor: atom {anchorIdx} ({anchorAtom.element}){canAttach ? ` · ${anchorAtom.free_valence}◦` : " · no slots"}
+            </span>
+          ) : selectedArr.length > 1 ? (
+            <span style={{
+              padding: "1px 6px", borderRadius: 3,
+              background: "rgba(220,38,38,0.10)", color: "#dc2626", fontWeight: 700,
+            }}>{selectedArr.length} selected · pick 1</span>
+          ) : (
+            <span style={{
+              padding: "1px 6px", borderRadius: 3,
+              background: "rgba(0,0,0,0.04)", color: "var(--lys-text-faint)",
+            }}>select 1 atom →</span>
+          )}
+        </div>
+        <div style={{ marginTop: 2, fontSize: 8.5, lineHeight: 1.35,
+          fontFamily: "var(--lys-font-body)" }}>
+          Compose with chemistry blocks. Fragments + rings attach to the
+          selected atom. SMILES replaces the whole structure.
+        </div>
+      </div>
+      {/* Tab switcher */}
+      <div style={{ display: "flex", borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))" }}>
+        <button type="button" onClick={() => setTab("fragments")} style={tabBtnStyle(tab === "fragments")}>
+          Fragments
+        </button>
+        <button type="button" onClick={() => setTab("rings")} style={tabBtnStyle(tab === "rings")}>
+          Rings
+        </button>
+        <button type="button" onClick={() => setTab("smiles")} style={tabBtnStyle(tab === "smiles")}>
+          SMILES
+        </button>
+      </div>
+      {/* Tab content */}
+      <div style={{ flex: 1, overflow: "auto", padding: 6 }}>
+        {tab === "fragments" && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+            {FRAGMENT_PALETTE.map((fg) => (
+              <button key={fg.name} type="button"
+                onClick={() => {
+                  if (anchorIdx == null || !canAttach) return;
+                  p.onAttachFG?.(anchorIdx, fg.name, fg.label);
+                }}
+                title={fg.tip + (canAttach ? "" : " · select an atom with free slots first")}
+                disabled={!canAttach}
+                style={{
+                  fontSize: 10, padding: "3px 7px", borderRadius: 999,
+                  border: `1px solid ${canAttach ? `${fg.color}50` : "rgba(0,0,0,0.08)"}`,
+                  background: canAttach ? `${fg.color}10` : "transparent",
+                  color: canAttach ? fg.color : "var(--lys-text-faint)",
+                  fontFamily: "var(--lys-font-mono)",
+                  fontWeight: 600,
+                  cursor: canAttach ? "pointer" : "not-allowed",
+                  opacity: canAttach ? 1 : 0.45,
+                  transition: "background 0.10s",
+                }}
+                onMouseEnter={(e) => { if (canAttach) (e.currentTarget as HTMLButtonElement).style.background = `${fg.color}22`; }}
+                onMouseLeave={(e) => { if (canAttach) (e.currentTarget as HTMLButtonElement).style.background = `${fg.color}10`; }}
+              >{fg.label}</button>
+            ))}
+          </div>
+        )}
+        {tab === "rings" && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 4 }}>
+            {RING_PALETTE.map((r) => (
+              <button key={r.name} type="button"
+                onClick={() => {
+                  if (anchorIdx == null || !canAttach) return;
+                  p.onAttachFragment?.(anchorIdx, r.smiles, r.label,
+                    r.aromatic ? "single" : "single");
+                }}
+                title={r.tip + (canAttach ? "" : " · select an atom with free slots first")}
+                disabled={!canAttach}
+                style={{
+                  fontSize: 10, padding: "4px 8px", borderRadius: 5,
+                  border: `1px solid ${canAttach ? `${r.color}50` : "rgba(0,0,0,0.08)"}`,
+                  background: canAttach ? `${r.color}10` : "transparent",
+                  color: canAttach ? r.color : "var(--lys-text-faint)",
+                  fontFamily: "var(--lys-font-body)",
+                  fontWeight: 600,
+                  cursor: canAttach ? "pointer" : "not-allowed",
+                  opacity: canAttach ? 1 : 0.45,
+                  textAlign: "left",
+                  transition: "background 0.10s, transform 0.10s",
+                }}
+                onMouseEnter={(e) => {
+                  if (canAttach) {
+                    (e.currentTarget as HTMLButtonElement).style.background = `${r.color}22`;
+                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (canAttach) {
+                    (e.currentTarget as HTMLButtonElement).style.background = `${r.color}10`;
+                    (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                  }
+                }}
+              >{r.label}</button>
+            ))}
+          </div>
+        )}
+        {tab === "smiles" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+            <div style={{ fontSize: 9, color: "var(--lys-text-faint)", lineHeight: 1.4,
+              fontFamily: "var(--lys-font-body)" }}>
+              Paste a complete SMILES to replace the candidate. The agent
+              uses this fast-path to write structures in one shot.
+            </div>
+            <textarea
+              value={smilesInput}
+              onChange={(e) => { setSmilesInput(e.target.value); setSmilesErr(""); }}
+              placeholder="e.g. CC1(C)S[C@@H]2[C@H](NC(=O)Cc3ccccc3)C(=O)N2[C@H]1C(=O)O"
+              rows={3}
+              style={{
+                fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                padding: 5, borderRadius: 4,
+                border: smilesErr
+                  ? "1px solid #dc2626"
+                  : "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+                background: "var(--lys-bg-2, #ffffff)",
+                color: "var(--lys-text)", outline: "none",
+                resize: "vertical",
+                minHeight: 50,
+              }} />
+            {smilesErr && (
+              <div style={{ fontSize: 9, color: "#dc2626",
+                fontFamily: "var(--lys-font-mono)" }}>{smilesErr}</div>
+            )}
+            <div style={{ display: "flex", gap: 4 }}>
+              <button type="button"
+                onClick={async () => {
+                  if (!smilesInput.trim()) return;
+                  // The parent owns /molecule/replace; we ask it to apply.
+                  if (p.onReplaceSmiles) {
+                    p.onReplaceSmiles(smilesInput.trim(), `replace SMILES (${smilesInput.length} chars)`);
+                    setSmilesInput("");
+                  }
+                }}
+                disabled={!smilesInput.trim()}
+                style={{
+                  flex: 1, padding: "4px 9px", borderRadius: 4,
+                  fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                  background: smilesInput.trim() ? "#10b981" : "rgba(16,185,129,0.30)",
+                  color: "white", border: 0,
+                  cursor: smilesInput.trim() ? "pointer" : "not-allowed",
+                  fontWeight: 700,
+                }}>apply</button>
+              <button type="button"
+                onClick={() => { setSmilesInput(p.smiles ?? ""); setSmilesErr(""); }}
+                disabled={!p.smiles}
+                style={{
+                  padding: "4px 9px", borderRadius: 4,
+                  fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                  background: "var(--lys-bg-2, #ffffff)",
+                  color: "var(--lys-text-dim)",
+                  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+                  cursor: p.smiles ? "pointer" : "not-allowed",
+                  opacity: p.smiles ? 1 : 0.5,
+                }}>copy current</button>
+            </div>
+            {p.smiles && (
+              <div style={{
+                fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+                color: "var(--lys-text-faint)", padding: "3px 5px",
+                borderRadius: 3, background: "rgba(0,0,0,0.025)",
+                wordBreak: "break-all", lineHeight: 1.3,
+              }}>
+                <span style={{ color: "#10b981", fontWeight: 700 }}>now:</span> {p.smiles}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }

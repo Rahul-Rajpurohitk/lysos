@@ -288,3 +288,152 @@ warnings, etc.
 See `feedback_workbench_design_pattern.md` in user memory for the full
 build pattern (concise sub-containers, top-nav over sidebar, no scroll
 on canvases, hover tooltips not text labels).
+
+---
+
+## 10. Chemistry container · agent + user contract (v1.2)
+
+Everything below is a **stable endpoint contract** the Gemma agent can
+rely on. Same routes serve the human UI; calling them from the agent
+yields visually-identical state changes.
+
+### 10.1 Live state model
+
+Single source of truth: the `playground store` keyed by `chat_id`.
+Per-chat state includes `smiles`, `pathogen`, `selected_atoms`,
+`edit_log`, `library_view`, `score_view`. UI cards subscribe; agents
+write through the same endpoints. WS bus broadcasts every mutation.
+
+### 10.2 Atom-level edit ops · `POST /workbench/molecule/edit`
+
+All ops take `{smiles, op, ...args}` and return `{smiles, n_atoms,
+n_bonds}`. RDKit kekulizes before edits and re-sanitizes after; if
+sanitize fails on stale aromatic flags, it clears them and retries.
+
+| op | required args | semantics |
+|---|---|---|
+| `swap_element` | atom_index, new_element | replace element on atom (keeps bonds) |
+| `add_atom_at` | atom_index, new_element, bond_order | attach new atom to anchor |
+| `delete_atom` | atom_index | remove atom + all incident bonds |
+| `add_bond` | atom_index_a, atom_index_b, bond_order | connect two existing atoms |
+| `delete_bond` / `break_bond` | bond_index | remove bond between atoms |
+| `add_methyl_at` | atom_index | shortcut for `add_atom_at` C single |
+| `add_functional_group_at` | atom_index, functional_group | attach FG template (see 10.3) |
+| `attach_fragment` | atom_index, fragment_smiles, fragment_anchor_idx, bond_order | attach arbitrary SMILES (rings, custom) |
+
+### 10.3 Functional-group palette
+
+Templates live in `workbench.py::FG_TEMPLATES`. Names accepted by
+`add_functional_group_at`:
+
+`hydroxyl, methyl, amine, fluorine, chlorine, bromine, iodine, thiol,
+carbonyl, aldehyde, carboxyl, ester, amide, nitro, sulfonyl, sulfonamide,
+sulfide, phosphate, phosphonate, cyano, isocyano, azido, trifluoromethyl,
+trichloromethyl, ethyl, vinyl, ethynyl, methoxy, ethoxy, isopropyl,
+tert-butyl, phenyl`
+
+Branched FGs (atoms 2..n attach to the FG's central heavy atom rather
+than chain linearly) are listed in `BRANCHED_FGS`.
+
+### 10.4 Ring/fragment palette · `attach_fragment`
+
+Pass any SMILES as `fragment_smiles`; the backend `CombineMols` it onto
+the parent at `atom_index` with `bond_order`. The frontend ships a
+22-ring built-in palette (benzene, pyridine, pyrimidine, pyrazine,
+imidazole, thiazole, oxazole, furan, thiophene, pyrrole, indole,
+benzimidazole, quinoline, cyclopropane … cyclohexane, piperidine,
+piperazine, morpholine, tetrahydrofuran, pyrrolidine).
+
+### 10.5 Whole-structure replace · `POST /workbench/molecule/replace`
+
+`{smiles}` → `{smiles (canonical), n_atoms, n_bonds, n_rings}`. Used
+when the agent (or user via the SMILES tab) wants to write a full
+candidate in one shot. Validates with RDKit; 422 on unparseable.
+
+### 10.6 Atom context · `GET /workbench/chem/atom/{smiles_b64}/{idx}`
+
+Returns rich atom context the rail consumes:
+`element, atomic_number, atomic_mass, formal_charge, is_aromatic,
+in_ring, ring_size, explicit_valence, implicit_valence, n_hydrogens,
+hybridization (sp/sp²/sp³/sp³d/sp³d²), degree, total_degree,
+free_valence, is_chiral, is_isotope, cip_code (R/S), neighbors[],
+allowed_attachments[], sar_notes[]`.
+
+### 10.7 Element palette · `GET /workbench/chem/elements`
+
+Returns the 37-element drug-relevant subset with `{sym, Z, valences,
+name, group}` per entry. Frontend uses this to render the periodic-
+table popover; agent uses it to know the supported atom types.
+
+### 10.8 Known-antibiotic library · seeded reference set
+
+Curated 30+ antibiotic reference set in `workbench.py::ANTIBIOTIC_REFERENCE`
+covering β-lactams (penicillins, cephalosporins, carbapenems,
+monobactams), fluoroquinolones, aminoglycosides, tetracyclines,
+macrolides, glycopeptides, lipopeptides, oxazolidinones, polymyxins,
+nitroimidazoles, antimycobacterials, sulfa/diaminopyrimidine,
+lincosamides, and recent siderophore-cephalosporin/fluorocycline.
+
+- `GET /workbench/molecule/reference-set` — full curated list
+- `GET /workbench/molecule/match-known?smiles=...&top_k=K` — Tanimoto
+  on Morgan-2 fingerprints; returns `{matches[], best, is_known}`.
+  `is_known` is true when best similarity ≥ 0.95.
+
+The 3D viewer polls match-known on every SMILES change (debounced
+250 ms) and shows a tag-detection overlay tier:
+  - `EXACT` ≥0.95 (green) — you've built this drug
+  - `CLOSE` ≥0.65 (cyan)  — analog of a known drug
+  - `WEAK`  ≥0.30 (amber) — distant relative
+  - `NOVEL` <0.30 (purple) — possibly novel scaffold
+
+### 10.9 SMARTS substructure search · `POST /workbench/chem/smarts-match`
+
+`{smiles, pattern}` → `{hits: int[], matched_atoms: int[][]}`. The
+top-nav SMARTS popover ships 41 presets (β-lactam, fluoroquinolone,
+aminoglycoside, tetracycline, oxazolidinone, all common FGs, common
+heterocycles, drug-likeness motifs).
+
+### 10.10 Library save/load · `POST/GET/DELETE /workbench/library/molecules`
+
+Persistent SQLite-backed library scoped per-user. Each entry: smiles,
+canonical_smiles, name, tags, qed, mw, lipinski_pass.
+
+### 10.11 Properties + scoring · `GET /workbench/molecule/properties`
+
+Lipinski, QED, MW, logP, rotatable bonds, HBA/HBD, TPSA, plus the
+12-component reward stack (validity, structural_alerts,
+predicted_mic, drug_likeness_qed, synthesizability, hemolysis_safety,
+novelty, embedding_novelty, boltz2_pose_conf, spectrum_breadth,
+resistance_robustness, pareto_entry).
+
+### 10.12 Agent-tool mapping (slash → endpoint)
+
+| Slash | Endpoint | Purpose |
+|---|---|---|
+| `/build <smiles>` | `POST /molecule/replace` | one-shot structure |
+| `/atom + <element> at <idx>` | `POST /molecule/edit add_atom_at` | atomic add |
+| `/atom × at <idx>` | `POST /molecule/edit delete_atom` | atomic delete |
+| `/swap <idx> -> <element>` | `POST /molecule/edit swap_element` | element substitution |
+| `/bond <a> - <b>` | `POST /molecule/edit add_bond` | bond create |
+| `/fg <name> at <idx>` | `POST /molecule/edit add_functional_group_at` | FG attach |
+| `/ring <smiles> at <idx>` | `POST /molecule/edit attach_fragment` | ring/fragment attach |
+| `/match` | `GET /molecule/match-known` | known-drug detection |
+| `/smarts <pattern>` | `POST /chem/smarts-match` | substructure highlight |
+| `/score` | `GET /molecule/properties` | full reward stack |
+
+### 10.13 Build dynamics
+
+The user (or agent) can build a molecule three ways, **all producing
+the same state**:
+
+1. **Atom-by-atom** — click + atom (palette) → click atoms → swap/bond.
+2. **Fragment-by-fragment** — select an atom → Build Tools panel →
+   Fragments tab (FG chip) or Rings tab (ring chip) → backend attaches.
+3. **Whole-structure** — Build Tools → SMILES tab → paste → apply.
+
+Every mutation appends to `edit_log`, broadcasts on the WS bus, and
+re-renders the 2D viewer + atoms rail + 3D match overlay + properties +
+score panels — even when the originating actor was an agent.
+
+Version: 1.2 (May 7 2026)
+
