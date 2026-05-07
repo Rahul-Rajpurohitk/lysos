@@ -633,3 +633,100 @@ The 2D viewer SVG still has plenty of width budget (chem container is
 
 Version: 1.4 (May 8 2026)
 
+---
+
+## 12. Agent tool registry · chem_workbench category (v1.5)
+
+The chem-edit operations the human UI uses are now ALSO registered as
+`@tool`-decorated functions in the global registry, exposed at:
+
+- `GET  /workbench/skills` — full tool catalog (35 tools across 7 cats)
+- `POST /workbench/tools/{tool_name}` — direct MCP-style dispatch
+- `GET  /workbench/skills` returns JSON Schema input/output for every
+  tool, compatible with Anthropic / OpenAI / Gemini / Gemma 4
+  function-calling.
+
+### 12.1 The 10 chem_workbench tools
+
+| Tool | Purpose | Input | Output |
+|---|---|---|---|
+| `edit_molecule` | atom/bond level edit (swap, add, delete, attach) | smiles + op + args | new SMILES |
+| `replace_smiles` | one-shot whole-structure write | full SMILES | canonical + counts |
+| `inspect_atom` | rich chem context for one atom | smiles + atom_idx | hyb, valence, neighbors, CIP |
+| `valid_actions` | pre-filter palette by chemistry rules | smiles + atom_idx | valid elements/FGs/rings/orders |
+| `diagnostics` | whole-molecule health check | smiles | incomplete atoms + warnings |
+| `list_bonds` | enumerate every bond | smiles | bond_idx + endpoints + order |
+| `match_known` | Tanimoto match vs antibiotic library | smiles + top_k | matches + similarity + is_known |
+| `list_elements` | the 37-element palette | (none) | full periodic-table subset |
+| `attach_fragment` | attach SMILES fragment (rings, custom) | smiles + anchor + frag_smiles | new SMILES |
+| `attach_functional_group` | attach named FG | smiles + anchor + fg_name | new SMILES |
+
+### 12.2 Workflow patterns
+
+**Building a candidate from scratch (atom-by-atom)**
+```python
+1. list_elements()                          # know what's available
+2. replace_smiles({smiles: "C"})            # start with methane
+3. valid_actions({smiles, atom_idx: 0})     # what can I do to atom 0?
+4. edit_molecule({op: "add_atom_at", ...})  # add neighbor
+5. diagnostics({smiles})                    # verify result is valid
+6. match_known({smiles})                    # is this a known drug?
+```
+
+**Building a candidate (whole-structure, fast-path)**
+```python
+1. replace_smiles({smiles: "<full-smiles>"})  # one-shot
+2. diagnostics({smiles})                       # verify
+3. match_known({smiles})                       # find analog
+```
+
+**Mutating an existing candidate**
+```python
+1. inspect_atom({smiles, atom_idx})            # read state
+2. valid_actions({smiles, atom_idx})           # what's allowed?
+3. edit_molecule({op: ..., ...})               # mutate
+4. list_bonds({smiles}) → for break_bond       # if breaking
+5. diagnostics({smiles})                       # verify
+```
+
+### 12.3 Actor attribution
+
+Every edit-class tool accepts an `actor` field (defaults to "agent").
+The UI reads this to color-code who made the change:
+
+- `user` → amber halo
+- `designer` → green halo
+- `critic` → red halo
+- `editor` → blue halo
+- `strategist` → purple halo
+
+Multiple actors can edit concurrently; the SVG renders all halos
+side-by-side so the user sees who's doing what in real time.
+
+### 12.4 Structured errors
+
+All tools raise `ValueError` with a structured payload (dict with
+`code`, `message`, `hint`, `suggested_fix`, `atom_idx?`, `bond_idx?`)
+on chemistry violations. The `Tool.call()` wrapper captures these into
+the standard `{tool, args, result, error, duration_ms}` record format
+the agent loop expects.
+
+### 12.5 Backend module split
+
+- `workspace/tools/chem_workbench/_chem_lib.py` — shared constants
+  (ELEMENTS, FG_TEMPLATES, BRANCHED_FGS, DEFAULT_VALENCE) used by both
+  the FastAPI endpoints AND the @tool functions.
+- `workspace/tools/chem_workbench/<tool>.py` — one file per tool.
+- The existing `/workbench/molecule/edit` REST endpoint and the
+  `edit_molecule` tool produce IDENTICAL output for the same input —
+  human UI and agent function-call both update the same playground
+  store.
+
+Verified e2e:
+- `POST /workbench/tools/edit_molecule {smiles: c1ccccc1, op: swap_element,
+   atom_index: 0, new_element: N, actor: designer}` → c1ccncc1 (pyridine)
+- `POST /workbench/tools/match_known` on penicillin G → similarity 1.0
+- `GET /workbench/skills` → 35 tools across 7 categories.
+
+Version: 1.5 (May 9 2026)
+

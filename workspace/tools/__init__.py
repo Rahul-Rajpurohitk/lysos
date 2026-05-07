@@ -25,5 +25,6 @@ from . import generative  # noqa: F401
 from . import structural  # noqa: F401
 from . import knowledge  # noqa: F401
 from . import sandbox  # noqa: F401
+from . import chem_workbench  # noqa: F401  — molecule edit / inspect / match / valid-actions / diagnostics
 
 __all__ = ["Tool", "ToolRegistry", "tool", "registry"]

@@ -2175,6 +2175,27 @@ function AtomsRail(p: AtomsRailProps) {
   const [actionMode, setActionMode] = useState<"swap" | "neighbor" | null>(null);
   const [actionPos, setActionPos] = useState<{ left: number; top: number } | null>(null);
   const [neighborBondOrder, setNeighborBondOrder] = useState<"single" | "double" | "triple">("single");
+  // valid-swap whitelist for the current anchor — fetched from /chem/valid-actions
+  // so the swap popover only shows elements that won't over-valence the atom.
+  const [validSwapElements, setValidSwapElements] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (actionRowIdx == null || actionMode !== "swap" || !p.smiles) {
+      setValidSwapElements(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const b64 = smilesToB64(p.smiles!);
+        const r = await fetch(`${p.apiBase}/workbench/chem/valid-actions/${b64}/${actionRowIdx}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (cancelled) return;
+        setValidSwapElements(new Set<string>(d.valid_elements_for_swap || []));
+      } catch {/*noop*/}
+    })();
+    return () => { cancelled = true; };
+  }, [actionRowIdx, actionMode, p.smiles, p.apiBase]);
   const actionRowRef = useRef<HTMLElement | null>(null);
 
   const openRowAction = (idx: number, mode: "swap" | "neighbor", anchor: HTMLElement) => {
@@ -2638,7 +2659,25 @@ function AtomsRail(p: AtomsRailProps) {
           </div>
           <div style={{ padding: 8, overflow: "auto",
             display: "grid", gridTemplateColumns: "repeat(8, 1fr)", gap: 4 }}>
-            {palette.map((el) => {
+            {/* Pre-filter: in swap mode, hide elements that can't preserve
+                this atom's bond count. Backend valid-actions is the source
+                of truth — agent + UI use the same whitelist. */}
+            {(() => {
+              const filtered = (actionMode === "swap" && validSwapElements != null)
+                ? palette.filter((el) => validSwapElements.has(el.sym))
+                : palette;
+              const hidden = palette.length - filtered.length;
+              return (<>
+                {hidden > 0 && (
+                  <div style={{ gridColumn: "1 / -1",
+                    fontSize: 8.5, color: "var(--lys-text-faint)",
+                    fontFamily: "var(--lys-font-mono)",
+                    padding: "2px 4px",
+                    background: "rgba(0,0,0,0.025)", borderRadius: 3, marginBottom: 2 }}>
+                    {hidden} element{hidden === 1 ? "" : "s"} hidden — would over-valence atom {actionRowIdx}
+                  </div>
+                )}
+                {filtered.map((el) => {
               const groupColor: Record<string, string> = {
                 "halogen": "#16a34a",
                 "alkali": "#a855f7",
@@ -2682,6 +2721,8 @@ function AtomsRail(p: AtomsRailProps) {
                 </button>
               );
             })}
+              </>);
+            })()}
           </div>
         </div>, document.body)}
     </div>
