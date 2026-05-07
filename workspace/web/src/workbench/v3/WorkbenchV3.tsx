@@ -224,17 +224,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // app-screens, not magazine pages. autoFit:true → height auto-computes
   // from cards. Width is the dimension we hand-tune for proportion.
   const DEFAULT_GROUP_LAYOUT: Record<string, GroupLayout> = {
-    // Chem container is now the principal control panel for atom-by-atom
-    // antibiotic discovery. It absorbs Library / SMARTS / Properties /
-    // Atoms / Bonds / Build / Status into a single coherent screen.
-    // Width 1500 → 1700 to accommodate the new docked Library/SMARTS
-    // (360 each) without squeezing the SVG. Height 1620 → 2000 to fit
-    // the merged Properties sub-section at the bottom.
-    "chem":      { x: 16,   y: 16,   w: 1700, h: 2000, z: 1, autoFit: true },
+    // Chem container — DIAGONAL scaling: width AND height grow together
+    // proportionally, not just height. Original was 1500×1320 (1.14
+    // ratio). New 1700×1480 keeps roughly the same aspect ratio while
+    // adding room for left Properties panel + future control panels.
+    // The 2D card uses internal scroll for any overflow inside.
+    "chem":      { x: 16,   y: 16,   w: 1700, h: 1480, z: 1, autoFit: true },
     "scoring":   { x: 1732, y: 16,   w: 700,  h: 1200, z: 1, autoFit: true },
     "agents":    { x: 1732, y: 1240, w: 700,  h: 1100, z: 1, autoFit: true },
-    "knowledge": { x: 16,   y: 2036, w: 1700, h: 1200, z: 1, autoFit: true },
-    "live":      { x: 16,   y: 3260, w: 1700, h: 600,  z: 1, autoFit: true },
+    "knowledge": { x: 16,   y: 1516, w: 1700, h: 1200, z: 1, autoFit: true },
+    "live":      { x: 16,   y: 2740, w: 1700, h: 600,  z: 1, autoFit: true },
   };
   const [playgroundGroupLayouts, setPlaygroundGroupLayouts] = useState<Record<string, Record<string, GroupLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});
@@ -1121,7 +1120,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", expandedH: 1380, body:
+                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", expandedH: 860, body:
                       <Mol2DBuilderWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}

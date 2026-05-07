@@ -1294,6 +1294,20 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             onClose={() => setSmartsOpen(false)}
           />
         )}
+        {/* Left Properties panel — always visible (collapsible). Hosts
+            the merged PropertiesCard PLUS live SMARTS-finds + match
+            insights. Aligned to the right-rail UI vocabulary. */}
+        {propertiesPanel && (
+          <LeftPropertiesPanel
+            smiles={smiles}
+            smartsHits={smartsHits}
+            smarts={smarts}
+            diagnostics={diagnostics}
+            atoms={[]}
+            bondsCount={bondList.length}>
+            {propertiesPanel}
+          </LeftPropertiesPanel>
+        )}
         {/* SVG area — molecule scales to fit, never scrolls, never clips */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
           {svg
@@ -1725,63 +1739,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       )}
       {/* Library + SMARTS now dock as left-flex children of body row;
           old portal popovers removed completely. */}
-      {/* Properties panel — merged INSIDE the 2D container at the bottom.
-          Was a separate sibling card; now a sub-section of this builder so
-          all the chem feedback (atoms / bonds / properties / status) is
-          one cohesive screen. Collapsible; the user toggles to free up
-          vertical space for the SVG when desired. */}
-      {propertiesPanel && (
-        <PropertiesSubSection>
-          {propertiesPanel}
-        </PropertiesSubSection>
-      )}
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────────────────────────────
-   PropertiesSubSection — collapsible bottom strip inside the 2D
-   builder. Hosts the merged PropertiesCard so the chem container has
-   one container, not two.
-   ───────────────────────────────────────────────────────────────────── */
-function PropertiesSubSection({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
-  return (
-    <div style={{
-      flexShrink: 0,
-      borderTop: "2px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-      background: "var(--lys-bg-2, #ffffff)",
-      display: "flex", flexDirection: "column",
-      maxHeight: collapsed ? 28 : 280,
-      transition: "max-height 0.20s ease-out",
-      overflow: "hidden",
-    }}>
-      <div
-        onClick={() => setCollapsed((c) => !c)}
-        title="Properties — Lipinski, QED, MW, logP, TPSA, rotatable bonds. Click to collapse."
-        style={{
-          padding: "5px 10px",
-          fontSize: 9, fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-faint)",
-          letterSpacing: "0.06em", textTransform: "uppercase",
-          display: "flex", alignItems: "center", gap: 6,
-          borderBottom: collapsed ? "none" : "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-          cursor: "pointer", userSelect: "none",
-          background: "var(--lys-bg, #fafafa)",
-        }}>
-        <span style={{ fontSize: 9, opacity: 0.6 }}>{collapsed ? "▶" : "▼"}</span>
-        <span style={{ fontWeight: 700 }}>properties · medchem</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0,
-          fontFamily: "var(--lys-font-body)" }}>
-          Lipinski · QED · MW · logP · TPSA
-        </span>
-      </div>
-      {!collapsed && (
-        <div style={{ flex: 1, overflow: "auto" }}>
-          {children}
-        </div>
-      )}
+      {/* Properties panel is now rendered as a LEFT-side panel inside
+          the body row (see body row above) — not a bottom strip. The
+          left layout aligns with the existing right-rail UI vocabulary
+          (mono fonts, colored chips, compact rows) for consistency. */}
     </div>
   );
 }
@@ -3896,5 +3857,297 @@ function DockHeader({ title, count, icon, color, onClose, description, rightActi
         }}>{description}</div>
       )}
     </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   LeftPropertiesPanel — always-visible left side panel inside the 2D
+   container. Hosts the merged PropertiesCard PLUS additional
+   simulation-design sections:
+
+     • PROPERTIES (mono header) — wraps PropertiesCard (Lipinski/QED/MW/
+       logP/TPSA tiles + rule pills)
+     • PATTERNS (mono header) — current SMARTS query + hit count + small
+       history of recent SMARTS pattern findings
+     • CLOSEST KNOWN (mono header) — live Tanimoto match results vs
+       the curated antibiotic library (top 3, similarity bars)
+     • BUILD STATE (mono header) — heavy atoms / bonds / rings / fragment
+       count / total formal charge — at-a-glance counts
+
+   Visual language matches AtomsRail + BondsRail (mono fonts, colored
+   chips, compact 4-px-padded rows). Everything is collapsible to free
+   horizontal space when the user wants more SVG real estate.
+   ───────────────────────────────────────────────────────────────────── */
+interface LeftPropertiesPanelProps {
+  smiles: string | null;
+  smartsHits: number[];
+  smarts: string;
+  diagnostics: any;
+  atoms: AtomRow[];
+  bondsCount: number;
+  children: React.ReactNode;  // PropertiesCard
+}
+
+function LeftPropertiesPanel(p: LeftPropertiesPanelProps) {
+  const [collapsed, setCollapsed] = useState(false);
+  const [match, setMatch] = useState<{
+    matches: { name: string; drug_class: string; similarity: number }[];
+    best: { name: string; similarity: number } | null;
+  } | null>(null);
+  const [classColors, setClassColors] = useState<Record<string, string>>({});
+  // Track the last few SMARTS queries the user has run with their hit
+  // counts. When the SMARTS pattern changes, we push the previous one
+  // onto the trail. Capped at 5 entries.
+  const [smartsTrail, setSmartsTrail] = useState<{ pattern: string; hits: number; ts: number }[]>([]);
+  const lastSmarts = useRef<string>("");
+  useEffect(() => {
+    if (p.smarts && p.smarts !== lastSmarts.current && p.smartsHits.length > 0) {
+      lastSmarts.current = p.smarts;
+      setSmartsTrail((cur) => {
+        const next = [{ pattern: p.smarts, hits: p.smartsHits.length, ts: Date.now() }, ...cur];
+        return next.slice(0, 5);
+      });
+    }
+  }, [p.smarts, p.smartsHits.length]);
+
+  // Live tanimoto match against the antibiotic library
+  useEffect(() => {
+    if (!p.smiles) { setMatch(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const url = `/api/v3/workbench/molecule/match-known?smiles=${encodeURIComponent(p.smiles!)}&top_k=3`;
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setMatch(d);
+      } catch {/*noop*/}
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [p.smiles]);
+
+  useEffect(() => {
+    fetch("/api/v3/workbench/molecule/drug-class-colors")
+      .then((r) => r.ok ? r.json() : { colors: {} })
+      .then((d) => setClassColors(d.colors || {}))
+      .catch(() => {/*noop*/});
+  }, []);
+
+  return (
+    <div style={{
+      flex: collapsed ? "0 0 28px" : "0 0 320px",
+      maxWidth: collapsed ? 28 : 320,
+      display: "flex", flexDirection: "column",
+      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      background: "var(--lys-bg, #fafafa)",
+      overflow: "hidden",
+      transition: "flex 0.18s ease-out, max-width 0.18s ease-out",
+    }}>
+      {collapsed ? (
+        <button type="button"
+          onClick={() => setCollapsed(false)}
+          title="Expand Properties panel"
+          style={{
+            width: "100%", height: 40,
+            border: 0, background: "transparent",
+            color: "var(--lys-text-faint)",
+            cursor: "pointer",
+            fontSize: 12, lineHeight: 1,
+            writingMode: "vertical-rl",
+            transform: "rotate(180deg)",
+            padding: "10px 0",
+            fontFamily: "var(--lys-font-mono)",
+            letterSpacing: "0.06em", textTransform: "uppercase",
+          }}>▶ properties</button>
+      ) : (
+        <>
+          {/* Header */}
+          <div
+            onClick={() => setCollapsed(true)}
+            title="Properties · build insights · pattern findings · match results. Click to collapse."
+            style={{
+              padding: "5px 8px",
+              fontSize: 9, fontFamily: "var(--lys-font-mono)",
+              color: "var(--lys-text-faint)",
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+              display: "flex", alignItems: "center", gap: 5,
+              cursor: "pointer", userSelect: "none",
+            }}>
+            <span style={{ fontSize: 9, opacity: 0.6 }}>▼</span>
+            <span style={{ fontWeight: 700 }}>insights</span>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 8.5, opacity: 0.6,
+              textTransform: "none", letterSpacing: 0,
+              fontFamily: "var(--lys-font-body)" }}>
+              props · patterns · matches
+            </span>
+          </div>
+          <div style={{ flex: 1, overflow: "auto",
+            display: "flex", flexDirection: "column" }}>
+            {/* PROPERTIES — wraps the existing PropertiesCard */}
+            <SectionHeader label="properties" subtle="medchem" />
+            <div>{p.children}</div>
+
+            {/* BUILD STATE — counts as colored chips */}
+            <SectionHeader label="build state" subtle="counts" />
+            <div style={{ padding: "5px 8px",
+              display: "flex", flexWrap: "wrap", gap: 4 }}>
+              {p.diagnostics && (
+                <>
+                  <BuildChip label="atoms" value={p.diagnostics.n_atoms ?? 0} color="#374151" />
+                  <BuildChip label="bonds" value={p.bondsCount} color="#0891b2" />
+                  <BuildChip label="rings" value={(p.diagnostics.n_rings_implicit ?? 0)} color="#a855f7"
+                    fallbackOk />
+                  <BuildChip label="frag" value={p.diagnostics.n_fragments ?? 1}
+                    color={p.diagnostics.n_fragments > 1 ? "#dc2626" : "#10b981"} />
+                  <BuildChip label="charge" value={p.diagnostics.total_formal_charge ?? 0}
+                    color={p.diagnostics.total_formal_charge !== 0 ? "#ca8a04" : "#10b981"} signed />
+                </>
+              )}
+            </div>
+
+            {/* PATTERNS — current SMARTS + recent trail */}
+            <SectionHeader label="patterns found"
+              subtle={p.smartsHits.length > 0 ? `${p.smartsHits.length} active` : "smarts trail"} />
+            <div style={{ padding: "4px 8px 8px",
+              display: "flex", flexDirection: "column", gap: 4 }}>
+              {p.smarts && p.smartsHits.length > 0 && (
+                <div style={{ padding: "4px 6px", borderRadius: 4,
+                  background: "rgba(8,145,178,0.08)",
+                  border: "1px solid rgba(8,145,178,0.30)",
+                  display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                    <span style={{
+                      fontSize: 8.5, padding: "1px 5px", borderRadius: 999,
+                      background: "#0891b2", color: "white", fontWeight: 700,
+                      fontFamily: "var(--lys-font-mono)" }}>
+                      {p.smartsHits.length}
+                    </span>
+                    <span style={{ fontSize: 9.5, color: "#0891b2", fontWeight: 700,
+                      fontFamily: "var(--lys-font-mono)" }}>active hits</span>
+                  </div>
+                  <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+                    color: "var(--lys-text-dim)", wordBreak: "break-all", lineHeight: 1.3 }}>
+                    {p.smarts}
+                  </div>
+                </div>
+              )}
+              {smartsTrail.length === 0 && !p.smarts && (
+                <div style={{ fontSize: 9, color: "var(--lys-text-faint)",
+                  fontFamily: "var(--lys-font-body)", lineHeight: 1.4 }}>
+                  Run a SMARTS query (top-nav 🔍) to log pattern findings here.
+                </div>
+              )}
+              {smartsTrail.map((t, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", gap: 5,
+                  padding: "2px 6px", borderRadius: 3,
+                  fontSize: 9, fontFamily: "var(--lys-font-mono)",
+                  background: "rgba(0,0,0,0.025)",
+                  borderLeft: "2px solid rgba(8,145,178,0.40)",
+                }}>
+                  <span style={{ fontWeight: 700, color: "#0891b2" }}>{t.hits}</span>
+                  <span style={{ flex: 1, color: "var(--lys-text-dim)",
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {t.pattern}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* CLOSEST KNOWN — Tanimoto match top-3 with similarity bars */}
+            {match?.matches && match.matches.length > 0 && (
+              <>
+                <SectionHeader label="closest known"
+                  subtle={match.best ? `${(match.best.similarity * 100).toFixed(0)}%` : ""} />
+                <div style={{ padding: "4px 8px 8px",
+                  display: "flex", flexDirection: "column", gap: 4 }}>
+                  {match.matches.map((m, i) => {
+                    const classKey = m.drug_class.split(" · ")[0];
+                    const c = classColors[classKey] ?? classColors[classKey.toLowerCase()] ?? "#6b7280";
+                    const pct = m.similarity * 100;
+                    return (
+                      <div key={i} style={{
+                        display: "flex", flexDirection: "column", gap: 2,
+                        padding: "3px 6px", borderRadius: 3,
+                        background: i === 0 ? `${c}10` : "transparent",
+                        borderLeft: i === 0 ? `2px solid ${c}` : "2px solid transparent",
+                      }}>
+                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <span style={{ fontSize: 10, fontWeight: i === 0 ? 700 : 500,
+                            color: "var(--lys-text)", flex: 1,
+                            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {m.name}
+                          </span>
+                          <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+                            color: c, fontWeight: 700 }}>
+                            {pct.toFixed(0)}%
+                          </span>
+                        </div>
+                        {/* Similarity bar */}
+                        <div style={{ height: 3, borderRadius: 999,
+                          background: "rgba(0,0,0,0.05)", overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`,
+                            background: c, transition: "width 0.30s" }} />
+                        </div>
+                        <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
+                          fontFamily: "var(--lys-font-mono)" }}>
+                          {classKey}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function SectionHeader({ label, subtle }: { label: string; subtle?: string }) {
+  return (
+    <div style={{
+      padding: "5px 8px 3px",
+      fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+      color: "var(--lys-text-faint)",
+      letterSpacing: "0.08em", textTransform: "uppercase",
+      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+      borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.025))",
+      background: "var(--lys-bg, #fafafa)",
+      display: "flex", alignItems: "center", gap: 5,
+    }}>
+      <span style={{ fontWeight: 700 }}>{label}</span>
+      {subtle && (
+        <>
+          <span style={{ flex: 1 }} />
+          <span style={{ opacity: 0.6, textTransform: "none",
+            letterSpacing: 0, fontFamily: "var(--lys-font-body)" }}>{subtle}</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function BuildChip({ label, value, color, signed = false, fallbackOk = false }: {
+  label: string; value: number; color: string; signed?: boolean; fallbackOk?: boolean;
+}) {
+  if (fallbackOk && !value && value !== 0) return null;
+  const display = signed && value !== 0 ? `${value > 0 ? "+" : ""}${value}` : String(value);
+  return (
+    <span title={`${label}: ${display}`}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 3,
+        padding: "1px 6px", borderRadius: 3,
+        background: `${color}10`,
+        border: `1px solid ${color}30`,
+        fontSize: 9, fontFamily: "var(--lys-font-mono)",
+      }}>
+      <span style={{ color, fontWeight: 700 }}>{display}</span>
+      <span style={{ color: "var(--lys-text-faint)" }}>{label}</span>
+    </span>
   );
 }
