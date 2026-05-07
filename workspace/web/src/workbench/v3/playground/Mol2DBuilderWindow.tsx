@@ -513,132 +513,150 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     } catch { return null; }
   };
 
-  // Inject SVG safely + wire atom-click + atom-hover handlers
+  // Inject SVG and stamp default cursors on bond paths.
+  // ALL interactivity (atom click, atom drag, bond click, hover) is
+  // event-DELEGATED onto svgHostRef in a separate useEffect below.
+  // Per-path listeners were unreliable: RDKit re-emits the entire SVG
+  // on every edit cycle, detaching the old <path> nodes and their
+  // listeners. The new paths arrived without handlers, leaving the
+  // diagram inert until the next manual remount.
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
     const root = injectSvgSafely(host, svg);
     if (!root) return;
-    // RDKit emits class="bond-0 atom-0 atom-1" on BOND paths — they share
-    // the "atom-" substring with real atom elements. We need both gestures:
-    //   • atom labels (no bond- class) → mousedown (drag-start) + click (select)
-    //   • bond paths (has bond- class) → mousedown (drag-start using first atom-N)
-    //                                  + bond-click (break) — handled in second loop
-    // This way pure-carbon atoms (which RDKit doesn't draw as separate text
-    // elements) remain draggable through their bond paths, and clicking a
-    // bond breaks it without also opening the atom popover.
-    const atoms = root.querySelectorAll("[class^='atom-'], [class*=' atom-']");
-    const handlers: Array<{ node: Element; type: string; fn: (e: Event) => void }> = [];
-    atoms.forEach((node) => {
-      const cls = node.getAttribute("class") || "";
-      const isBondPath = /(^|\s)bond-/.test(cls);
-      const m = cls.match(/atom-(\d+)/);
-      if (!m) return;
-      const idx = parseInt(m[1], 10);
-      (node as HTMLElement).style.cursor = "grab";
-
-      // mousedown — always wired, lets the user drag-to-bond from any atom
-      // (heteroatom label or carbon via bond path).
-      const onMouseDown = (e: Event) => {
-        const me = e as MouseEvent;
-        if (me.shiftKey || me.button !== 0) return;
-        e.stopPropagation();
-        e.preventDefault();
-        setDragStart(idx);
-        (node as HTMLElement).style.cursor = "grabbing";
-      };
-      node.addEventListener("mousedown", onMouseDown);
-      handlers.push({ node, type: "mousedown", fn: onMouseDown });
-
-      // click — only on REAL atom labels (heteroatoms). On bond paths the
-      // click is handled by the bond-click handler below (break_bond).
-      if (!isBondPath) {
-        const onClick = (e: Event) => {
-          e.stopPropagation();
-          const me = e as MouseEvent;
-          if (me.shiftKey) {
-            setSelected((cur) => {
-              const next = new Set(cur);
-              if (next.has(idx)) next.delete(idx);
-              else next.add(idx);
-              return next;
-            });
-            return;
-          }
-          setPop({ atomIdx: idx, x: me.clientX, y: me.clientY });
-        };
-        node.addEventListener("click", onClick);
-        handlers.push({ node, type: "click", fn: onClick });
-      }
-
-      const onEnter = () => onCursorHover?.(idx);
-      const onLeave = () => onCursorHover?.(null);
-      node.addEventListener("mouseenter", onEnter);
-      node.addEventListener("mouseleave", onLeave);
-      handlers.push({ node, type: "mouseenter", fn: onEnter });
-      handlers.push({ node, type: "mouseleave", fn: onLeave });
+    // Cursor on bond paths — pointer (signals "click to break")
+    root.querySelectorAll<HTMLElement>("[class^='bond-'], [class*=' bond-']")
+      .forEach((n) => { n.style.cursor = "pointer"; });
+    // Cursor on heteroatom labels — grab (signals drag-to-bond)
+    root.querySelectorAll<SVGElement>("[class^='atom-']").forEach((n) => {
+      const cls = n.getAttribute("class") || "";
+      if (!/(^|\s)bond-/.test(cls)) (n as unknown as HTMLElement).style.cursor = "grab";
     });
-    // Bond hover + click are wired via event DELEGATION on svgHostRef
-    // (see the dedicated useEffect below) — NOT per-bond-path. Per-path
-    // listeners were detaching when RDKit re-emitted the SVG (which
-    // happens on every SMILES edit), leaving the diagram unresponsive
-    // until the next edit cycle. Delegation listens at the stable host
-    // container and walks event.target up the DOM to find the bond path
-    // — survives any inner SVG re-render.
-    //
-    // We DO still set the bond cursor here for the visual affordance,
-    // since cursor:pointer needs to be on the path itself (cursor on
-    // the host wouldn't reach SVG children of unknown geometry).
-    const bonds = root.querySelectorAll("[class^='bond-'], [class*=' bond-']");
-    bonds.forEach((node) => {
-      (node as HTMLElement).style.cursor = "pointer";
-    });
-    return () => handlers.forEach(({ node, type, fn }) => node.removeEventListener(type, fn));
-  }, [svg, onCursorHover, bondList]);
+  }, [svg]);
 
-  // Bond hover + click — single source of truth, delegated to the SVG
-  // host. mousemove tracks which bond the cursor is over (walking up
-  // event.target chain, finding closest `bond-N` class). mouseleave
-  // clears. click + shift-click handle break_bond + endpoint multi-
-  // select. This replaces the previous per-path attachment which was
-  // unreliable under RDKit re-renders.
+  // ATOM HIT-TARGETS — invisible click circles at every atom position.
+  // RDKit doesn't emit <text class="atom-N"> for pure carbons (only for
+  // heteroatoms); the atom-INDEX numbers it draws are bare <text> with
+  // no class, so they were unclickable. We solve this by drawing one
+  // transparent r=14 circle per atom (using the atomPositions map
+  // built in the prior effect) tagged with `data-atom-hit="N"` AND
+  // `class="atom-N atom-hit"`. The class lets existing drag-mouseup
+  // detection (`class*="atom-${dragStart}"`) pick them up; the data-
+  // attribute is what the event delegation handler keys off.
+  // Appended LAST so they sit on top of everything → clicks on the
+  // atom-index digit, the heteroatom symbol, or empty space within
+  // 14px of the atom center all route to the same click target.
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
-    // Walk up from the event.target until we hit a bond path or the host.
-    // Returns { bondIdx, endpointA, endpointB } or null.
-    const findBond = (target: EventTarget | null): { bondIdx: number; endpointA: number | null; endpointB: number | null } | null => {
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-atom-hit]').forEach((n) => n.remove());
+    for (const [idx, pos] of atomPositions.current.entries()) {
+      const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      c.setAttribute("class", `atom-${idx} atom-hit`);
+      c.setAttribute("data-atom-hit", String(idx));
+      c.setAttribute("cx", String(pos.x));
+      c.setAttribute("cy", String(pos.y));
+      c.setAttribute("r", "14");
+      c.setAttribute("fill", "transparent");
+      // pointer-events: all is the default for SVG circles with non-
+      // none fill (transparent counts as "filled" for hit testing in
+      // most engines, but explicit attr ensures consistency).
+      c.setAttribute("pointer-events", "all");
+      (c as unknown as HTMLElement).style.cursor = "grab";
+      svgEl.appendChild(c);
+    }
+    // Re-run when SVG changes (atomPositions Map rebuilt after) AND
+    // when bondList changes (which signals a /molecule/state refresh
+    // that rebuilds positions even if SVG string was identical).
+  }, [svg, bondList]);
+
+  // EVENT DELEGATION — single source of truth for atom + bond input.
+  // Listens at the stable svgHostRef container; walks event.target up
+  // the DOM looking for `data-atom-hit` (atoms) or `bond-N` class
+  // (bonds). Survives any RDKit SVG re-injection.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    type Hit = { kind: "atom"; idx: number } | { kind: "bond"; bondIdx: number; endpointA: number | null; endpointB: number | null };
+    const findHit = (target: EventTarget | null): Hit | null => {
       let el = target as Element | null;
       while (el && el !== host) {
-        const cls = (el as Element).getAttribute?.("class") || "";
+        const dataHit = el.getAttribute?.("data-atom-hit");
+        if (dataHit != null) {
+          return { kind: "atom", idx: parseInt(dataHit, 10) };
+        }
+        const cls = el.getAttribute?.("class") || "";
         const bm = cls.match(/bond-(\d+)/);
         if (bm) {
-          const bondIdx = parseInt(bm[1], 10);
           const am = cls.match(/atom-(\d+).*?atom-(\d+)/);
           return {
-            bondIdx,
+            kind: "bond",
+            bondIdx: parseInt(bm[1], 10),
             endpointA: am ? parseInt(am[1], 10) : null,
             endpointB: am ? parseInt(am[2], 10) : null,
           };
+        }
+        // Heteroatom label fallback (atom-N WITHOUT bond- prefix)
+        const am2 = cls.match(/(?:^|\s)atom-(\d+)(?:\s|$)/);
+        if (am2 && !/(^|\s)bond-/.test(cls)) {
+          return { kind: "atom", idx: parseInt(am2[1], 10) };
         }
         el = el.parentElement;
       }
       return null;
     };
     const onMove = (e: Event) => {
-      const hit = findBond((e as MouseEvent).target);
-      const idx = hit?.bondIdx ?? null;
-      setHoveredBondIdx((cur) => (cur === idx ? cur : idx));
+      const hit = findHit((e as MouseEvent).target);
+      if (hit?.kind === "bond") {
+        setHoveredBondIdx((cur) => (cur === hit.bondIdx ? cur : hit.bondIdx));
+        onCursorHover?.(null);
+      } else if (hit?.kind === "atom") {
+        setHoveredBondIdx((cur) => (cur == null ? cur : null));
+        onCursorHover?.(hit.idx);
+      } else {
+        setHoveredBondIdx((cur) => (cur == null ? cur : null));
+        onCursorHover?.(null);
+      }
     };
-    const onLeave = () => setHoveredBondIdx(null);
+    const onLeave = () => {
+      setHoveredBondIdx(null);
+      onCursorHover?.(null);
+    };
+    const onMouseDown = (e: Event) => {
+      const me = e as MouseEvent;
+      if (me.button !== 0 || me.shiftKey) return;
+      const hit = findHit(me.target);
+      if (hit?.kind !== "atom") return;
+      e.stopPropagation();
+      e.preventDefault();
+      setDragStart(hit.idx);
+    };
     const onClick = (e: Event) => {
-      const hit = findBond((e as MouseEvent).target);
+      const me = e as MouseEvent;
+      const hit = findHit(me.target);
       if (!hit) return;
       e.stopPropagation();
-      const me = e as MouseEvent;
-      // Shift-click → toggle both endpoint atoms (lets the user multi-
-      // select pure carbons, which RDKit doesn't draw as <text> labels).
+      if (hit.kind === "atom") {
+        // Shift-click → toggle selection (multi-select)
+        if (me.shiftKey) {
+          setSelected((cur) => {
+            const next = new Set(cur);
+            if (next.has(hit.idx)) next.delete(hit.idx); else next.add(hit.idx);
+            return next;
+          });
+          return;
+        }
+        if (me.altKey) return;
+        // Plain click → open the element/edit palette popover
+        setPop({ atomIdx: hit.idx, x: me.clientX, y: me.clientY });
+        return;
+      }
+      // hit.kind === "bond"
       if (me.shiftKey) {
+        // Shift-click on a bond toggles BOTH endpoint atoms
         if (hit.endpointA != null && hit.endpointB != null) {
           setSelected((cur) => {
             const next = new Set(cur);
@@ -650,7 +668,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         return;
       }
       if (me.altKey) return;
-      // Aromatic ring bonds are protected — breaking them shatters the ring.
+      // Plain bond click → break (with aromatic ring guard)
       const meta = bondList.find((b) => b.bond_idx === hit.bondIdx);
       if (meta?.in_ring && meta.order === "aromatic") {
         showViolation({
@@ -666,13 +684,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     };
     host.addEventListener("mousemove", onMove);
     host.addEventListener("mouseleave", onLeave);
+    host.addEventListener("mousedown", onMouseDown);
     host.addEventListener("click", onClick);
     return () => {
       host.removeEventListener("mousemove", onMove);
       host.removeEventListener("mouseleave", onLeave);
+      host.removeEventListener("mousedown", onMouseDown);
       host.removeEventListener("click", onClick);
     };
-  }, [svg, bondList]);
+  }, [svg, bondList, onCursorHover]);
+
 
   // Break a bond via /molecule/edit op:break_bond. Used by SVG bond clicks
   // AND by the AtomsRail bond row delete button. Captures the bond's two
@@ -1573,8 +1594,14 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             of this center column. */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column",
           minWidth: 0, overflow: "hidden" }}>
-        {/* SVG area — molecule scales to fit, never scrolls, never clips */}
-        <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
+        {/* SVG area — molecule scales to fit, never scrolls, never clips.
+            Uses `flex: 1 0 280` + `minHeight: 280` so the diagram is
+            ALWAYS visible: it claims at least 280px of vertical space,
+            never shrinks below that even when the Properties strip
+            below grows to its responsive maxHeight (240/360/460). When
+            the card is very short, the strip absorbs the squeeze
+            instead (its body has internal overflow:auto). */}
+        <div style={{ flex: "1 0 280px", minHeight: 280, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
           {svg
             ? <div ref={svgHostRef} style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }} />
             : (
@@ -4465,11 +4492,18 @@ function PropertiesStrip(p: PropertiesStripProps) {
 
   return (
     <div style={{
-      flexShrink: 0,
+      // flexShrink: 1 so the strip absorbs space pressure when the
+      // center column is short — its body has overflow:auto for
+      // internal scroll, so content stays accessible. The SVG above
+      // (flex: 1 0 280) holds its minimum 280px, keeping the diagram
+      // always visible.
+      flexShrink: 1,
+      flexBasis: collapsed ? 28 : "auto",
       borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
       maxHeight: collapsed ? 28 : expandedH,
+      minHeight: collapsed ? 28 : 0,
       transition: "max-height 0.20s ease-out",
       overflow: "hidden",
     }}>
