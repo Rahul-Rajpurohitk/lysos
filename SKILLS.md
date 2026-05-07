@@ -437,3 +437,128 @@ score panels — even when the originating actor was an agent.
 
 Version: 1.2 (May 7 2026)
 
+---
+
+## 11. Chemistry-rule gating + structured violations (v1.3)
+
+**Rule of the workbench**: never offer an action the user (or agent)
+cannot legally perform. Pre-filter palettes from `/chem/valid-actions`;
+on attempt-failure, return a structured `ChemViolation` (not a string)
+with code, message, hint, and suggested fix.
+
+### 11.1 Structured violation shape
+
+Returned in 422 `detail` body and embedded in `/chem/diagnostics` +
+`/chem/valid-actions blocked_reasons`:
+
+```json
+{
+  "code": "valence_violation",          // machine-parseable
+  "message": "Explicit valence for atom 0 C, 5, is greater than permitted",
+  "hint": "Atom would exceed its allowed valence. Pick a different element, lower the bond order, or break a neighbor bond first.",
+  "atom_idx": null,
+  "bond_idx": null,
+  "suggested_fix": "lower bond order or remove a neighbor"
+}
+```
+
+**Stable codes** (frontend renders them with consistent severity colors):
+- `valence_violation`, `aromaticity_violation`, `non_ring_aromatic_atom`,
+  `chemistry_violation` → red (block)
+- `swap_element_undervalent`, `unparseable_smiles`,
+  `atom_index_out_of_range`, `bond_index_out_of_range`,
+  `unsupported_element` → red (block)
+- `bond_already_exists`, `fg_no_free_valence`, `ring_no_free_valence`,
+  `atom_under_valent`, `aromatic_ring_break` → amber (warn)
+- `missing_args` → blue (info)
+
+### 11.2 Pre-filter palette · `GET /chem/valid-actions/{smiles_b64}/{atom_idx}`
+
+Returns the per-anchor whitelist used by the BuildTools panel. The
+frontend hides invalid options entirely instead of greying them — user
+never sees "click then error". Response shape:
+
+```json
+{
+  "atom_idx": 3,
+  "element": "C",
+  "free_valence": 1,
+  "explicit_valence": 3,
+  "valid_elements_for_swap": ["B", "N", "Si", "P", ...],
+  "valid_functional_groups": ["hydroxyl", "methyl", ...],
+  "valid_rings": true,
+  "valid_bond_orders_to_neighbors": {"4": ["single", "double"], ...},
+  "blocked_reasons": [ChemViolation, ...]
+}
+```
+
+Agent usage: call this before suggesting an edit. If the proposed
+operation isn't in the whitelist, propose an alternative or break a
+neighbor bond first.
+
+### 11.3 Whole-molecule diagnostics · `GET /chem/diagnostics/{smiles_b64}`
+
+Polled by the 2D viewer on every SMILES change (debounced 200 ms).
+Returns:
+
+```json
+{
+  "is_valid": false,
+  "n_atoms": 12, "n_bonds": 11,
+  "n_fragments": 2,
+  "total_formal_charge": 0,
+  "incomplete_atoms": [{code: "atom_under_valent", atom_idx: 5, ...}],
+  "charge_warnings": [...],
+  "fragment_warnings": [...],
+  "all_violations": [...]
+}
+```
+
+The 2D viewer uses `incomplete_atoms` to draw a red pulsing dashed ring
+around any atom that's under-valent (e.g. carbon with 3 bonds after a
+break). Agent usage: after every edit, fetch diagnostics and address
+violations before reporting success.
+
+### 11.4 Bond list · `GET /chem/bonds/{smiles_b64}`
+
+Returns every bond with `{bond_idx, atom_a, atom_b, order, in_ring,
+is_aromatic}`. Used by the 2D viewer to translate a click on a bond
+glyph (RDKit's SVG class `bond-N`) into the correct `bond_index` for
+`break_bond`.
+
+### 11.5 Bond-break gesture (user + agent)
+
+User: click any bond in the 2D viewer → `/molecule/edit op:break_bond`.
+Aromatic ring bonds are blocked client-side with hint "delete an atom
+from the ring instead" — never destroys aromaticity by accident.
+
+Agent: same `op:break_bond` with `bond_index`. Recommended: poll
+`/chem/diagnostics` after every break and reconnect any incomplete
+atoms.
+
+### 11.6 ViolationToast · frontend rendering contract
+
+Every backend 422 with structured detail is rendered as a toast with:
+- severity icon (⚠ block / ⓘ warn / ⓘ info) — color from tier table
+- main message (the original error text)
+- hint (human-readable explanation)
+- "try: <suggested_fix>" (if provided)
+- atom/bond context tag (if `atom_idx` or `bond_idx` present)
+- code (greyed, monospace, for debugging)
+
+Auto-dismisses after 4s. Manual ✕ to close.
+
+### 11.7 Subheaders → hover tooltips
+
+UI rule: short labels (ATOMS · BUILD · 4 atoms · 6 aromatic · etc) are
+self-explanatory. Long descriptions go in the parent's `title` attribute
+so they appear on hover instead of taking permanent screen space.
+
+### 11.8 Layout — one-shot visibility
+
+Search bars, submission bars, fragment chips must all be visible without
+internal scroll. The chem container default height was bumped 1320 →
+1620 to accommodate the BuildTools panel below the atoms rail.
+
+Version: 1.3 (May 7 2026)
+

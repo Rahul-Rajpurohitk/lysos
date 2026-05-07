@@ -154,6 +154,67 @@ function injectSvgSafely(host: HTMLElement, svgText: string): SVGSVGElement | nu
   return svgEl;
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+   Structured violation type — matches the backend's `_violation`
+   shape from workbench.py. The frontend renders these in a single
+   ViolationToast component (replaces the old plain string `error`),
+   so every chemistry-law violation, missing-arg error, and over-
+   valence message has the same readable look + suggested fix.
+   ───────────────────────────────────────────────────────────────────── */
+interface Violation {
+  code: string;          // machine code, e.g. "valence_violation"
+  message: string;       // raw RDKit / backend message
+  hint?: string;         // human-readable explanation
+  atom_idx?: number | null;
+  bond_idx?: number | null;
+  suggested_fix?: string;  // free-form remediation text
+}
+
+/**
+ * Parse a fetch Response (assumed not-ok) into a structured Violation.
+ * Backend returns `{detail: {code, message, hint, atom_idx?, bond_idx?,
+ * suggested_fix?}}` on /molecule/edit failures; older endpoints still
+ * return plain strings, which we wrap into a generic violation.
+ */
+async function parseError(r: Response, fallbackCode = "request_failed"): Promise<Violation> {
+  try {
+    const j = await r.json();
+    const d = j?.detail ?? j;
+    if (typeof d === "object" && d !== null && typeof d.code === "string") {
+      return d as Violation;
+    }
+    return {
+      code: fallbackCode,
+      message: typeof d === "string" ? d : `${r.status} ${r.statusText}`,
+    };
+  } catch {
+    return {
+      code: fallbackCode,
+      message: `${r.status} ${r.statusText}`,
+    };
+  }
+}
+
+// Severity colors for the toast — keep red = block, amber = warn,
+// blue = info. Matches the rest of the workbench palette.
+const VIOLATION_TIER: Record<string, { fg: string; bg: string; border: string; icon: string; tier: "block" | "warn" | "info" }> = {
+  valence_violation:        { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+  aromaticity_violation:    { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+  non_ring_aromatic_atom:   { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+  chemistry_violation:      { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+  bond_already_exists:      { fg: "#ca8a04", bg: "rgba(202,138,4,0.10)",  border: "rgba(202,138,4,0.30)", icon: "ⓘ", tier: "warn"  },
+  swap_element_undervalent: { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+  fg_no_free_valence:       { fg: "#ca8a04", bg: "rgba(202,138,4,0.10)",  border: "rgba(202,138,4,0.30)", icon: "ⓘ", tier: "warn"  },
+  ring_no_free_valence:     { fg: "#ca8a04", bg: "rgba(202,138,4,0.10)",  border: "rgba(202,138,4,0.30)", icon: "ⓘ", tier: "warn"  },
+  atom_under_valent:        { fg: "#ca8a04", bg: "rgba(202,138,4,0.10)",  border: "rgba(202,138,4,0.30)", icon: "⚠", tier: "warn"  },
+  unparseable_smiles:       { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+  missing_args:             { fg: "#0891b2", bg: "rgba(8,145,178,0.10)",  border: "rgba(8,145,178,0.30)", icon: "ⓘ", tier: "info"  },
+  atom_index_out_of_range:  { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+  bond_index_out_of_range:  { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+  unsupported_element:      { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" },
+};
+const VIOLATION_DEFAULT = { fg: "#dc2626", bg: "rgba(220,38,38,0.10)", border: "rgba(220,38,38,0.30)", icon: "⚠", tier: "block" as const };
+
 // Per-actor halo color (matches AgentAvatar palette).
 const ACTOR_COLOR: Record<string, string> = {
   designer: "#10b981",
@@ -166,6 +227,22 @@ const ACTOR_COLOR: Record<string, string> = {
 export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, onLoadFromLibrary }: Props) {
   const [svg, setSvg] = useState<string>("");
   const [error, setError] = useState<string>("");
+  const [violation, setViolation] = useState<Violation | null>(null);
+  // Whole-molecule diagnostics (incomplete atoms after a bond-break, etc).
+  // Polled whenever SMILES changes; the rail + SVG highlight from this.
+  const [diagnostics, setDiagnostics] = useState<{
+    is_valid: boolean;
+    incomplete_atoms: Violation[];
+    all_violations: Violation[];
+    n_fragments: number;
+    total_formal_charge: number;
+  } | null>(null);
+  const showViolation = (v: Violation, autoDismissMs: number = 4000) => {
+    setViolation(v);
+    if (autoDismissMs > 0) {
+      setTimeout(() => setViolation((cur) => (cur === v ? null : cur)), autoDismissMs);
+    }
+  };
   const [pop, setPop] = useState<PopoverState | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   // Internal SMARTS state — replaces standalone SMARTSMatchCard
@@ -299,6 +376,41 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   // Reset selection when SMILES changes (atom indices reshuffle)
   useEffect(() => { setSelected(new Set()); }, [smiles]);
 
+  // Poll /chem/diagnostics whenever SMILES changes — debounced 200ms.
+  // Used to highlight incomplete atoms (red pulse) after a bond-break.
+  useEffect(() => {
+    if (!smiles) { setDiagnostics(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const b64 = smilesToB64(smiles);
+        const r = await fetch(`${apiBase}/workbench/chem/diagnostics/${b64}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setDiagnostics(d);
+      } catch {/*noop*/}
+    }, 200);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [smiles, apiBase]);
+
+  // Poll /chem/bonds whenever SMILES changes — needed to map a bond
+  // click on the SVG back to a bond_index for /molecule/edit break_bond.
+  const [bondList, setBondList] = useState<{ bond_idx: number; atom_a: number; atom_b: number; order: string; in_ring: boolean }[]>([]);
+  useEffect(() => {
+    if (!smiles) { setBondList([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const b64 = smilesToB64(smiles);
+        const r = await fetch(`${apiBase}/workbench/chem/bonds/${b64}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setBondList(d.bonds || []);
+      } catch {/*noop*/}
+    })();
+    return () => { cancelled = true; };
+  }, [smiles, apiBase]);
+
   // Fetch 2D SVG whenever SMILES changes
   useEffect(() => {
     if (!smiles) {
@@ -367,8 +479,77 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       handlers.push({ node, type: "mouseenter", fn: onEnter });
       handlers.push({ node, type: "mouseleave", fn: onLeave });
     });
+    // Bond click → break_bond. RDKit emits class="bond-N" on each bond.
+    // Click highlights the bond, then calls /molecule/edit op:break_bond.
+    const bonds = root.querySelectorAll("[class^='bond-'], [class*=' bond-']");
+    bonds.forEach((node) => {
+      const cls = node.getAttribute("class") || "";
+      const m = cls.match(/bond-(\d+)/);
+      if (!m) return;
+      const bondIdx = parseInt(m[1], 10);
+      (node as HTMLElement).style.cursor = "pointer";
+      const onBondHover = () => {
+        (node as SVGElement & { style: CSSStyleDeclaration }).style.filter =
+          "drop-shadow(0 0 4px #dc2626) drop-shadow(0 0 2px #dc2626)";
+      };
+      const onBondLeave = () => {
+        (node as SVGElement & { style: CSSStyleDeclaration }).style.filter = "";
+      };
+      const onBondClick = (e: Event) => {
+        e.stopPropagation();
+        const me = e as MouseEvent;
+        if (me.shiftKey || me.altKey) return;  // reserved for future modifiers
+        // Don't break aromatic ring bonds — would shatter the ring.
+        const meta = bondList.find((b) => b.bond_idx === bondIdx);
+        if (meta?.in_ring && meta.order === "aromatic") {
+          showViolation({
+            code: "aromatic_ring_break",
+            message: `Bond ${bondIdx} is part of an aromatic ring`,
+            hint: "Breaking aromatic ring bonds destroys aromaticity. Try a non-aromatic bond instead.",
+            bond_idx: bondIdx,
+            suggested_fix: "delete an atom from the ring instead",
+          });
+          return;
+        }
+        void breakBond(bondIdx);
+      };
+      node.addEventListener("mouseenter", onBondHover);
+      node.addEventListener("mouseleave", onBondLeave);
+      node.addEventListener("click", onBondClick);
+      handlers.push({ node, type: "mouseenter", fn: onBondHover });
+      handlers.push({ node, type: "mouseleave", fn: onBondLeave });
+      handlers.push({ node, type: "click", fn: onBondClick });
+    });
     return () => handlers.forEach(({ node, type, fn }) => node.removeEventListener(type, fn));
-  }, [svg, onCursorHover]);
+  }, [svg, onCursorHover, bondList]);
+
+  // Break a bond via /molecule/edit op:break_bond. Used by SVG bond clicks.
+  const breakBond = async (bondIdx: number) => {
+    if (!smiles) return;
+    try {
+      const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ smiles, op: "break_bond", bond_index: bondIdx }),
+      });
+      if (!r.ok) {
+        showViolation(await parseError(r, "break_bond_failed"));
+        return;
+      }
+      const d = await r.json();
+      if (d.smiles) {
+        onMoleculeEdit?.(d.smiles, {
+          op: "break_bond", atom_idx: 0,
+          label: `break bond ${bondIdx}`,
+        });
+      }
+    } catch (exc: any) {
+      showViolation({
+        code: "network_error",
+        message: `bond-break network error: ${exc?.message ?? exc}`,
+      });
+    }
+  };
 
   // Drag-to-bond — global mousemove tracks which atom is under cursor;
   // mouseup commits add_bond if started on atom A and released on atom B.
@@ -546,6 +727,51 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       svgEl.appendChild(label);
     }
   }, [cursors, svg]);
+
+  // Incomplete-atom overlay — pulse red ring on atoms violating valence
+  // (e.g. carbon with 3 bonds after a bond break). Uses /chem/diagnostics.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-incomplete="1"]').forEach((n) => n.remove());
+    if (!diagnostics?.incomplete_atoms?.length) return;
+    for (const v of diagnostics.incomplete_atoms) {
+      if (v.atom_idx == null) continue;
+      const target = svgEl.querySelector(`[class*="atom-${v.atom_idx}"]`);
+      if (!target) continue;
+      const bbox = (target as SVGGraphicsElement).getBBox?.();
+      if (!bbox) continue;
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("data-incomplete", "1");
+      ring.setAttribute("cx", String(cx));
+      ring.setAttribute("cy", String(cy));
+      ring.setAttribute("r", "13");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", "#dc2626");
+      ring.setAttribute("stroke-width", "2");
+      ring.setAttribute("stroke-dasharray", "3,2");
+      ring.setAttribute("opacity", "0.9");
+      ring.style.pointerEvents = "none";
+      // Pulse animation
+      const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      anim.setAttribute("attributeName", "r");
+      anim.setAttribute("values", "13;16;13");
+      anim.setAttribute("dur", "1.2s");
+      anim.setAttribute("repeatCount", "indefinite");
+      ring.appendChild(anim);
+      const animO = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      animO.setAttribute("attributeName", "opacity");
+      animO.setAttribute("values", "0.9;0.45;0.9");
+      animO.setAttribute("dur", "1.2s");
+      animO.setAttribute("repeatCount", "indefinite");
+      ring.appendChild(animO);
+      svgEl.appendChild(ring);
+    }
+  }, [diagnostics, svg]);
 
   // SMARTS pattern match overlay — green pulse halos on matched atoms.
   useEffect(() => {
@@ -896,6 +1122,91 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               background: "rgba(255,255,255,0.95)", padding: "2px 6px", borderRadius: 4,
             }}>{error}</div>
           )}
+          {/* Violation toast — structured, replaces simple `error` string.
+              Shows code + message + hint + suggested fix as an action button. */}
+          {violation && (() => {
+            const tier = VIOLATION_TIER[violation.code] ?? VIOLATION_DEFAULT;
+            return (
+              <div style={{
+                position: "absolute", bottom: 8, left: "50%",
+                transform: "translateX(-50%)",
+                maxWidth: "84%",
+                background: tier.bg,
+                border: `1px solid ${tier.border}`,
+                borderRadius: 6,
+                backdropFilter: "blur(8px)",
+                padding: "6px 10px",
+                fontFamily: "var(--lys-font-body)",
+                fontSize: 10.5,
+                color: tier.fg,
+                display: "flex", flexDirection: "column", gap: 2,
+                boxShadow: "0 4px 14px rgba(15,23,42,0.10)",
+                zIndex: 200,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    fontSize: 11, fontWeight: 800,
+                    width: 16, height: 16, borderRadius: "50%",
+                    background: tier.fg, color: "white",
+                    display: "grid", placeItems: "center",
+                  }}>{tier.icon}</span>
+                  <span style={{ fontWeight: 700 }}>{violation.message}</span>
+                  <span style={{ flex: 1 }} />
+                  <button type="button"
+                    onClick={() => setViolation(null)}
+                    style={{
+                      border: 0, background: "transparent", cursor: "pointer",
+                      color: tier.fg, opacity: 0.6, padding: 0,
+                      fontSize: 12, lineHeight: 1,
+                    }}>✕</button>
+                </div>
+                {violation.hint && (
+                  <div style={{ fontSize: 9.5, opacity: 0.85, lineHeight: 1.4,
+                    paddingLeft: 22 }}>
+                    {violation.hint}
+                  </div>
+                )}
+                {violation.suggested_fix && (
+                  <div style={{ fontSize: 9, paddingLeft: 22, opacity: 0.75,
+                    fontFamily: "var(--lys-font-mono)" }}>
+                    <span style={{ fontWeight: 700,
+                      letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                      try:
+                    </span>{" "}
+                    {violation.suggested_fix}
+                  </div>
+                )}
+                {(violation.atom_idx != null || violation.bond_idx != null) && (
+                  <div style={{
+                    fontSize: 8.5, paddingLeft: 22,
+                    fontFamily: "var(--lys-font-mono)", opacity: 0.65,
+                  }}>
+                    {violation.atom_idx != null && `atom ${violation.atom_idx}`}
+                    {violation.bond_idx != null && `bond ${violation.bond_idx}`}
+                    {" · "}{violation.code}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+          {/* Diagnostics banner — when molecule has incomplete atoms after
+              a bond-break, show a sticky banner so the user knows. */}
+          {diagnostics && !diagnostics.is_valid && diagnostics.incomplete_atoms.length > 0 && !violation && (
+            <div style={{
+              position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)",
+              padding: "4px 10px",
+              background: "rgba(220,38,38,0.10)",
+              border: "1px solid rgba(220,38,38,0.35)",
+              borderRadius: 6,
+              fontSize: 10, fontFamily: "var(--lys-font-body)",
+              color: "#dc2626", fontWeight: 600,
+              zIndex: 60,
+              backdropFilter: "blur(8px)",
+              boxShadow: "0 2px 8px rgba(220,38,38,0.10)",
+            }}>
+              ⚠ {diagnostics.incomplete_atoms.length} incomplete atom{diagnostics.incomplete_atoms.length === 1 ? "" : "s"} · pulsing red — needs reconnection
+            </div>
+          )}
         </div>
         {/* Atoms rail — embedded list of all atoms with element + valence + edit chips */}
         <AtomsRail
@@ -920,16 +1231,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 body: JSON.stringify({ smiles, op: "delete_atom", atom_index: idx }),
               });
               if (!r.ok) {
-                const txt = await r.text();
-                setError(`delete ${r.status}: ${txt.slice(0, 60)}`);
-                setTimeout(() => setError(""), 2200);
+                showViolation(await parseError(r, "delete_atom_failed"));
                 return;
               }
               const d = await r.json();
               if (d.smiles) {
                 onMoleculeEdit?.(d.smiles, { op: "delete_atom", atom_idx: idx, label: `delete atom ${idx}` });
               }
-            } catch {/*noop*/}
+            } catch (exc: any) {
+              showViolation({ code: "network_error", message: `delete failed: ${exc?.message ?? exc}` });
+            }
           }}
           onAddAtom={async (element?: string) => {
             if (!smiles) return;
@@ -944,16 +1255,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 }),
               });
               if (!r.ok) {
-                const txt = await r.text();
-                setError(`add ${r.status}: ${txt.slice(0, 60)}`);
-                setTimeout(() => setError(""), 2200);
+                showViolation(await parseError(r, "add_atom_failed"));
                 return;
               }
               const d = await r.json();
               if (d.smiles) {
                 onMoleculeEdit?.(d.smiles, { op: "add_atom_at", atom_idx: 0, label: `+${elt} atom` });
               }
-            } catch {/*noop*/}
+            } catch (exc: any) {
+              showViolation({ code: "network_error", message: `add atom failed: ${exc?.message ?? exc}` });
+            }
           }}
           onSwapElement={async (idx, newElement) => {
             if (!smiles) return;
@@ -967,9 +1278,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 }),
               });
               if (!r.ok) {
-                const txt = await r.text();
-                setError(`swap ${r.status}: ${txt.slice(0, 80)}`);
-                setTimeout(() => setError(""), 2400);
+                showViolation(await parseError(r, "swap_element_failed"));
                 return;
               }
               const d = await r.json();
@@ -980,8 +1289,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 });
               }
             } catch (exc: any) {
-              setError(`swap error: ${exc?.message ?? exc}`);
-              setTimeout(() => setError(""), 2200);
+              showViolation({ code: "network_error", message: `swap failed: ${exc?.message ?? exc}` });
             }
           }}
           onAddNeighbor={async (anchorIdx, element, bondOrder) => {
@@ -996,9 +1304,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 }),
               });
               if (!r.ok) {
-                const txt = await r.text();
-                setError(`neighbor ${r.status}: ${txt.slice(0, 80)}`);
-                setTimeout(() => setError(""), 2400);
+                showViolation(await parseError(r, "add_neighbor_failed"));
                 return;
               }
               const d = await r.json();
@@ -1009,8 +1315,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 });
               }
             } catch (exc: any) {
-              setError(`neighbor error: ${exc?.message ?? exc}`);
-              setTimeout(() => setError(""), 2200);
+              showViolation({ code: "network_error", message: `neighbor failed: ${exc?.message ?? exc}` });
             }
           }}
           onAttachFG={async (anchorIdx, fgName, label) => {
@@ -1025,9 +1330,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 }),
               });
               if (!r.ok) {
-                const txt = await r.text();
-                setError(`${label} ${r.status}: ${txt.slice(0, 80)}`);
-                setTimeout(() => setError(""), 2400);
+                showViolation(await parseError(r, "attach_fg_failed"));
                 return;
               }
               const d = await r.json();
@@ -1038,8 +1341,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 });
               }
             } catch (exc: any) {
-              setError(`${label} error: ${exc?.message ?? exc}`);
-              setTimeout(() => setError(""), 2200);
+              showViolation({ code: "network_error", message: `${label} failed: ${exc?.message ?? exc}` });
             }
           }}
           onAttachFragment={async (anchorIdx, fragmentSmiles, label, bondOrder = "single") => {
@@ -1057,9 +1359,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 }),
               });
               if (!r.ok) {
-                const txt = await r.text();
-                setError(`${label} ${r.status}: ${txt.slice(0, 80)}`);
-                setTimeout(() => setError(""), 2400);
+                showViolation(await parseError(r, "attach_fragment_failed"));
                 return;
               }
               const d = await r.json();
@@ -1070,7 +1370,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 });
               }
             } catch (exc: any) {
-              setError(`${label} error: ${exc?.message ?? exc}`);
+              showViolation({ code: "network_error", message: `${label} failed: ${exc?.message ?? exc}` });
               setTimeout(() => setError(""), 2200);
             }
           }}
@@ -1082,9 +1382,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 body: JSON.stringify({ smiles: newSmiles }),
               });
               if (!r.ok) {
-                const txt = await r.text();
-                setError(`replace ${r.status}: ${txt.slice(0, 80)}`);
-                setTimeout(() => setError(""), 2400);
+                showViolation(await parseError(r, "replace_smiles_failed"));
                 return;
               }
               const d = await r.json();
@@ -1095,8 +1393,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 });
               }
             } catch (exc: any) {
-              setError(`replace error: ${exc?.message ?? exc}`);
-              setTimeout(() => setError(""), 2200);
+              showViolation({ code: "network_error", message: `replace failed: ${exc?.message ?? exc}` });
             }
           }}
         />
@@ -1857,16 +2154,9 @@ function AtomsRail(p: AtomsRailProps) {
             }}>+ atom</button>
         )}
       </div>
-      {/* Sub-line description */}
-      <div style={{
-        padding: "3px 8px 5px",
-        fontSize: 8.5, lineHeight: 1.35,
-        color: "var(--lys-text-faint)",
-        fontFamily: "var(--lys-font-body)",
-        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-      }}>
-        Heavy atoms in this candidate. Click row → select. Hover → actions.
-      </div>
+      {/* Sub-line description removed — folded into the header `title`
+          tooltip. The header itself ("ATOMS · N · + atom") is enough
+          identifier; explanatory text only on hover. */}
       {/* Stats band — quick chemistry summary */}
       {atoms.length > 0 && (
         <div style={{
@@ -2076,6 +2366,7 @@ function AtomsRail(p: AtomsRailProps) {
           building blocks the user (and the agent) can attach to the
           currently-selected atom. Three tabs: Fragments, Rings, SMILES. */}
       <BuildTools
+        apiBase={p.apiBase}
         smiles={p.smiles}
         selected={p.selected}
         atoms={atoms}
@@ -2334,12 +2625,14 @@ function iconBtnStyle(color: string, opacity: number = 1): React.CSSProperties {
    the agent tool registry calls.
    ───────────────────────────────────────────────────────────────────── */
 interface BuildToolsProps {
+  apiBase: string;
   smiles: string | null;
   selected: Set<number>;
   atoms: AtomRow[];
   onAttachFragment?: (anchorIdx: number, fragmentSmiles: string, label: string, bondOrder?: "single" | "double" | "aromatic") => void;
   onAttachFG?: (anchorIdx: number, fgName: string, label: string) => void;
   onReplaceSmiles?: (newSmiles: string, label: string) => void;
+  onShowViolation?: (v: Violation) => void;
 }
 
 const FRAGMENT_PALETTE: { name: string; label: string; tip: string; color: string }[] = [
@@ -2405,6 +2698,35 @@ function BuildTools(p: BuildToolsProps) {
   const anchorAtom = anchorIdx != null ? p.atoms.find((a) => a.idx === anchorIdx) : null;
   const canAttach = anchorIdx != null && anchorAtom != null && anchorAtom.free_valence > 0;
 
+  // Pre-filter palettes by chemistry rules — fetch /chem/valid-actions
+  // for the current anchor, hide invalid options BEFORE rendering them.
+  const [validFGs, setValidFGs] = useState<Set<string> | null>(null);
+  const [validRings, setValidRings] = useState<boolean>(true);
+  useEffect(() => {
+    if (anchorIdx == null || !p.smiles) { setValidFGs(null); setValidRings(true); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const b64 = smilesToB64(p.smiles!);
+        const r = await fetch(`${p.apiBase}/workbench/chem/valid-actions/${b64}/${anchorIdx}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (cancelled) return;
+        setValidFGs(new Set(d.valid_functional_groups || []));
+        setValidRings(!!d.valid_rings);
+      } catch {/*noop*/}
+    })();
+    return () => { cancelled = true; };
+  }, [anchorIdx, p.smiles, p.apiBase]);
+
+  // Visible palettes — pre-filtered by valid-actions response.
+  const visibleFGs = canAttach && validFGs != null
+    ? FRAGMENT_PALETTE.filter((fg) => validFGs.has(fg.name))
+    : (canAttach ? FRAGMENT_PALETTE : []);
+  const hiddenFGCount = (canAttach && validFGs != null)
+    ? FRAGMENT_PALETTE.length - visibleFGs.length : 0;
+  const visibleRings = canAttach && validRings ? RING_PALETTE : [];
+
   const tabBtnStyle = (active: boolean): React.CSSProperties => ({
     flex: 1,
     padding: "5px 6px",
@@ -2429,43 +2751,39 @@ function BuildTools(p: BuildToolsProps) {
       overflow: "hidden",
     }}>
       {/* Sticky header — title + selection-aware status line */}
-      <div style={{
-        padding: "5px 8px 3px",
-        fontSize: 9, fontFamily: "var(--lys-font-mono)",
-        color: "var(--lys-text-faint)",
-        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-          <span style={{ fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-            build
+      <div
+        title="Build tools — compose with chemistry blocks. Fragments + rings attach to the selected atom (only chemistry-valid options shown). SMILES replaces the entire structure."
+        style={{
+          padding: "5px 8px",
+          fontSize: 9, fontFamily: "var(--lys-font-mono)",
+          color: "var(--lys-text-faint)",
+          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+          display: "flex", alignItems: "center", gap: 5,
+        }}>
+        <span style={{ fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+          build
+        </span>
+        <span style={{ flex: 1 }} />
+        {anchorIdx != null && anchorAtom ? (
+          <span style={{
+            padding: "1px 6px", borderRadius: 3,
+            background: canAttach ? "rgba(16,185,129,0.10)" : "rgba(220,38,38,0.10)",
+            color: canAttach ? "#059669" : "#dc2626",
+            fontWeight: 700,
+          }}>
+            anchor: atom {anchorIdx} ({anchorAtom.element}){canAttach ? ` · ${anchorAtom.free_valence}◦` : " · no slots"}
           </span>
-          <span style={{ flex: 1 }} />
-          {anchorIdx != null && anchorAtom ? (
-            <span style={{
-              padding: "1px 6px", borderRadius: 3,
-              background: canAttach ? "rgba(16,185,129,0.10)" : "rgba(220,38,38,0.10)",
-              color: canAttach ? "#059669" : "#dc2626",
-              fontWeight: 700,
-            }}>
-              anchor: atom {anchorIdx} ({anchorAtom.element}){canAttach ? ` · ${anchorAtom.free_valence}◦` : " · no slots"}
-            </span>
-          ) : selectedArr.length > 1 ? (
-            <span style={{
-              padding: "1px 6px", borderRadius: 3,
-              background: "rgba(220,38,38,0.10)", color: "#dc2626", fontWeight: 700,
-            }}>{selectedArr.length} selected · pick 1</span>
-          ) : (
-            <span style={{
-              padding: "1px 6px", borderRadius: 3,
-              background: "rgba(0,0,0,0.04)", color: "var(--lys-text-faint)",
-            }}>select 1 atom →</span>
-          )}
-        </div>
-        <div style={{ marginTop: 2, fontSize: 8.5, lineHeight: 1.35,
-          fontFamily: "var(--lys-font-body)" }}>
-          Compose with chemistry blocks. Fragments + rings attach to the
-          selected atom. SMILES replaces the whole structure.
-        </div>
+        ) : selectedArr.length > 1 ? (
+          <span style={{
+            padding: "1px 6px", borderRadius: 3,
+            background: "rgba(220,38,38,0.10)", color: "#dc2626", fontWeight: 700,
+          }}>{selectedArr.length} selected · pick 1</span>
+        ) : (
+          <span style={{
+            padding: "1px 6px", borderRadius: 3,
+            background: "rgba(0,0,0,0.04)", color: "var(--lys-text-faint)",
+          }}>select 1 atom →</span>
+        )}
       </div>
       {/* Tab switcher */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))" }}>
@@ -2482,42 +2800,78 @@ function BuildTools(p: BuildToolsProps) {
       {/* Tab content */}
       <div style={{ flex: 1, overflow: "auto", padding: 6 }}>
         {tab === "fragments" && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-            {FRAGMENT_PALETTE.map((fg) => (
-              <button key={fg.name} type="button"
-                onClick={() => {
-                  if (anchorIdx == null || !canAttach) return;
-                  p.onAttachFG?.(anchorIdx, fg.name, fg.label);
-                }}
-                title={fg.tip + (canAttach ? "" : " · select an atom with free slots first")}
-                disabled={!canAttach}
-                style={{
-                  fontSize: 10, padding: "3px 7px", borderRadius: 999,
-                  border: `1px solid ${canAttach ? `${fg.color}50` : "rgba(0,0,0,0.08)"}`,
-                  background: canAttach ? `${fg.color}10` : "transparent",
-                  color: canAttach ? fg.color : "var(--lys-text-faint)",
-                  fontFamily: "var(--lys-font-mono)",
-                  fontWeight: 600,
-                  cursor: canAttach ? "pointer" : "not-allowed",
-                  opacity: canAttach ? 1 : 0.45,
-                  transition: "background 0.10s",
-                }}
-                onMouseEnter={(e) => { if (canAttach) (e.currentTarget as HTMLButtonElement).style.background = `${fg.color}22`; }}
-                onMouseLeave={(e) => { if (canAttach) (e.currentTarget as HTMLButtonElement).style.background = `${fg.color}10`; }}
-              >{fg.label}</button>
-            ))}
+          <div>
+            {!canAttach && (
+              <div style={{
+                padding: "8px 6px", textAlign: "center",
+                fontSize: 9.5, color: "var(--lys-text-faint)",
+                fontFamily: "var(--lys-font-body)", lineHeight: 1.4,
+              }}>
+                {anchorIdx == null
+                  ? "Pick exactly one atom in the structure above to see only the fragments you can legally attach to it."
+                  : `Atom ${anchorIdx} has no free bond slots. Break a bond first.`}
+              </div>
+            )}
+            {canAttach && (
+              <>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                  {visibleFGs.map((fg) => (
+                    <button key={fg.name} type="button"
+                      onClick={() => p.onAttachFG?.(anchorIdx!, fg.name, fg.label)}
+                      title={fg.tip}
+                      style={{
+                        fontSize: 10, padding: "3px 7px", borderRadius: 999,
+                        border: `1px solid ${fg.color}50`,
+                        background: `${fg.color}10`,
+                        color: fg.color,
+                        fontFamily: "var(--lys-font-mono)",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        transition: "background 0.10s",
+                      }}
+                      onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = `${fg.color}22`; }}
+                      onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = `${fg.color}10`; }}
+                    >{fg.label}</button>
+                  ))}
+                </div>
+                {hiddenFGCount > 0 && (
+                  <div style={{
+                    marginTop: 4, padding: "3px 6px",
+                    fontSize: 8.5, color: "var(--lys-text-faint)",
+                    fontFamily: "var(--lys-font-mono)",
+                    background: "rgba(0,0,0,0.025)",
+                    borderRadius: 3, lineHeight: 1.4,
+                  }}>
+                    {hiddenFGCount} more hidden — needs ≥2 free bond slots
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
         {tab === "rings" && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 4 }}>
-            {RING_PALETTE.map((r) => (
+          <div>
+            {!canAttach && (
+              <div style={{
+                padding: "8px 6px", textAlign: "center",
+                fontSize: 9.5, color: "var(--lys-text-faint)",
+                fontFamily: "var(--lys-font-body)", lineHeight: 1.4,
+              }}>
+                {anchorIdx == null
+                  ? "Pick exactly one atom in the structure above to see only the rings you can legally attach to it."
+                  : `Atom ${anchorIdx} has no free bond slots. Break a bond first.`}
+              </div>
+            )}
+            {canAttach && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 4 }}>
+            {visibleRings.map((r) => (
               <button key={r.name} type="button"
                 onClick={() => {
                   if (anchorIdx == null || !canAttach) return;
                   p.onAttachFragment?.(anchorIdx, r.smiles, r.label,
                     r.aromatic ? "single" : "single");
                 }}
-                title={r.tip + (canAttach ? "" : " · select an atom with free slots first")}
+                title={r.tip}
                 disabled={!canAttach}
                 style={{
                   fontSize: 10, padding: "4px 8px", borderRadius: 5,
@@ -2545,6 +2899,8 @@ function BuildTools(p: BuildToolsProps) {
                 }}
               >{r.label}</button>
             ))}
+            </div>
+            )}
           </div>
         )}
         {tab === "smiles" && (

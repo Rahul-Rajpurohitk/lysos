@@ -224,11 +224,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // app-screens, not magazine pages. autoFit:true → height auto-computes
   // from cards. Width is the dimension we hand-tune for proportion.
   const DEFAULT_GROUP_LAYOUT: Record<string, GroupLayout> = {
-    "chem":      { x: 16,   y: 16,   w: 1500, h: 1320, z: 1, autoFit: true },
+    // Chem container expanded to give the BuildTools panel room to breathe.
+    // Height 1320 → 1620 so the full Fragments / Rings / SMILES tabs are
+    // visible one-shot without internal scroll inside the rail.
+    "chem":      { x: 16,   y: 16,   w: 1500, h: 1620, z: 1, autoFit: true },
     "scoring":   { x: 1532, y: 16,   w: 700,  h: 1200, z: 1, autoFit: true },
     "agents":    { x: 1532, y: 1240, w: 700,  h: 1100, z: 1, autoFit: true },
-    "knowledge": { x: 16,   y: 1356, w: 1500, h: 1200, z: 1, autoFit: true },
-    "live":      { x: 16,   y: 2580, w: 1500, h: 600,  z: 1, autoFit: true },
+    "knowledge": { x: 16,   y: 1656, w: 1500, h: 1200, z: 1, autoFit: true },
+    "live":      { x: 16,   y: 2880, w: 1500, h: 600,  z: 1, autoFit: true },
   };
   const [playgroundGroupLayouts, setPlaygroundGroupLayouts] = useState<Record<string, Record<string, GroupLayout>>>({});
   const [playgroundViewports, setPlaygroundViewports] = useState<Record<string, Viewport>>({});

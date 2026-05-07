@@ -694,6 +694,301 @@ async def chem_elements_palette() -> Dict[str, Any]:
     return {"elements": PALETTE, "count": len(PALETTE)}
 
 
+# ---------------------------------------------------------------------------
+# Chemistry-law gating + diagnostics + structured violations.
+# Rule of the workbench: never offer an action the user (or agent) cannot
+# legally perform. The frontend pre-filters its palettes from these
+# endpoints, and the /molecule/edit failure path returns the same
+# structured `ChemViolation` shape so toasts, inline errors, and agent
+# replies all share one vocabulary.
+# ---------------------------------------------------------------------------
+
+# Common bond-cost (single bonds the FG/ring will consume off the anchor)
+_FG_BOND_COST: Dict[str, int] = {
+    "hydroxyl": 1, "methyl": 1, "amine": 1, "fluorine": 1, "chlorine": 1,
+    "bromine": 1, "iodine": 1, "thiol": 1, "carbonyl": 1, "aldehyde": 1,
+    "carboxyl": 1, "ester": 1, "amide": 1, "nitro": 1, "sulfonyl": 1,
+    "sulfonamide": 1, "sulfide": 1, "phosphate": 1, "phosphonate": 1,
+    "cyano": 1, "isocyano": 1, "azido": 1, "trifluoromethyl": 1,
+    "trichloromethyl": 1, "ethyl": 1, "vinyl": 1, "ethynyl": 1,
+    "methoxy": 1, "ethoxy": 1, "isopropyl": 1, "tert-butyl": 1, "phenyl": 1,
+}
+
+# Default valences (max bonds an atom can have, ignoring formal charge)
+_DEFAULT_VALENCE: Dict[str, int] = {
+    "H": 1, "B": 3, "C": 4, "N": 3, "O": 2, "F": 1,
+    "Si": 4, "P": 3, "S": 2, "Cl": 1, "Br": 1, "I": 1,
+    "Se": 2, "As": 3,
+    # Metals/heavies — varies; use conservative max
+    "Li": 1, "Na": 1, "K": 1, "Mg": 2, "Ca": 2, "Al": 3,
+    "Ti": 4, "V": 5, "Cr": 6, "Mn": 7, "Fe": 6, "Co": 6, "Ni": 6,
+    "Cu": 4, "Zn": 4, "Mo": 6, "Ru": 6, "Pd": 4, "Ag": 4,
+    "Pt": 6, "Au": 5, "Hg": 2,
+}
+
+
+def _violation(code: str, message: str, hint: str = "",
+               atom_idx: Optional[int] = None,
+               bond_idx: Optional[int] = None,
+               suggested_fix: str = "") -> Dict[str, Any]:
+    """Structured violation payload — used both in 422 detail bodies and
+    in /chem/diagnostics + /chem/valid-actions blocked_reasons. Agents
+    parse `code`; humans read `message` + `hint`."""
+    return {
+        "code": code,
+        "message": message,
+        "hint": hint,
+        "atom_idx": atom_idx,
+        "bond_idx": bond_idx,
+        "suggested_fix": suggested_fix,
+    }
+
+
+@router.get("/chem/valid-actions/{smiles_b64}/{atom_idx}")
+async def chem_valid_actions(smiles_b64: str, atom_idx: int) -> Dict[str, Any]:
+    """Pre-filter palette for an anchor atom. Returns ONLY the actions
+    that won't violate chemistry laws — the frontend uses this to render
+    valid options upfront instead of grey-out + 422-on-attempt.
+
+    Returns:
+      {
+        atom_idx, element, free_valence,
+        valid_elements_for_swap: [str, ...],      # element symbols that
+                                                  # respect existing bonds
+        valid_functional_groups: [str, ...],      # FGs whose cost ≤ free_v
+        valid_rings: bool,                        # any ring attaches?
+        valid_bond_orders_to_neighbors: {nb_idx: ["single","double",...]},
+        blocked_reasons: [ChemViolation, ...],    # why other actions blocked
+      }
+    """
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    try:
+        smiles = _decode_smiles_b64(smiles_b64)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, detail=_violation(
+            "decode_failed", f"smiles decode failed: {exc}",
+            hint="Frontend should pass URL-safe base64 of canonical SMILES.",
+        ))
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, detail=_violation(
+            "unparseable_smiles", f"unparseable SMILES: {smiles}",
+            hint="RDKit could not parse this structure. Check ring closures + valence.",
+        ))
+    if atom_idx < 0 or atom_idx >= mol.GetNumAtoms():
+        raise HTTPException(422, detail=_violation(
+            "atom_index_out_of_range",
+            f"atom_idx {atom_idx} out of range (0..{mol.GetNumAtoms()-1})",
+            atom_idx=atom_idx,
+        ))
+    atom = mol.GetAtomWithIdx(atom_idx)
+    elt = atom.GetSymbol()
+    n_h = atom.GetTotalNumHs()
+    free_valence = n_h
+    explicit_v = atom.GetExplicitValence()
+
+    blocked: list[Dict[str, Any]] = []
+
+    # 1) Valid functional groups — cost ≤ free_valence
+    valid_fgs: list[str] = []
+    for fg, cost in _FG_BOND_COST.items():
+        if cost <= free_valence:
+            valid_fgs.append(fg)
+        else:
+            blocked.append(_violation(
+                "fg_no_free_valence",
+                f"functional group '{fg}' needs {cost} free bond slot(s); atom {atom_idx} has {free_valence}",
+                hint=f"Free up a slot on atom {atom_idx} by deleting a neighbor or breaking a bond.",
+                atom_idx=atom_idx,
+                suggested_fix=f"break a bond on atom {atom_idx} first",
+            ))
+
+    # 2) Valid rings — any ring attach needs ≥1 free bond
+    valid_rings = free_valence >= 1
+    if not valid_rings:
+        blocked.append(_violation(
+            "ring_no_free_valence",
+            f"atom {atom_idx} has no free bond slots; cannot attach a ring",
+            hint="Rings attach via a single bond from anchor to first ring atom.",
+            atom_idx=atom_idx,
+            suggested_fix=f"break a bond on atom {atom_idx} first",
+        ))
+
+    # 3) Valid swap elements — preserve existing explicit valence.
+    # An element is a candidate iff its default max valence ≥ explicit_v.
+    valid_swap_elements: list[str] = []
+    for sym, max_v in _DEFAULT_VALENCE.items():
+        if sym == elt:
+            continue
+        if max_v >= explicit_v:
+            valid_swap_elements.append(sym)
+        else:
+            blocked.append(_violation(
+                "swap_element_undervalent",
+                f"swapping atom {atom_idx} ({elt}) → {sym} would over-valence "
+                f"(needs ≥{explicit_v} bonds, {sym} max is {max_v})",
+                hint=f"{sym} can hold at most {max_v} bonds.",
+                atom_idx=atom_idx,
+                suggested_fix=f"break {explicit_v - max_v} bond(s) first",
+            ))
+
+    # 4) Valid bond orders to existing neighbors (for upgrade attempts)
+    valid_bond_orders: Dict[int, list[str]] = {}
+    for nb in atom.GetNeighbors():
+        b = mol.GetBondBetweenAtoms(atom_idx, nb.GetIdx())
+        cur = "single"
+        if b:
+            bt = b.GetBondType()
+            if bt == Chem.BondType.DOUBLE: cur = "double"
+            elif bt == Chem.BondType.TRIPLE: cur = "triple"
+            elif bt == Chem.BondType.AROMATIC: cur = "aromatic"
+        # An upgrade from single→double consumes 1 more H from each end;
+        # only valid if both atoms have ≥1 free valence.
+        nb_free = nb.GetTotalNumHs()
+        upgrades = []
+        if cur == "single":
+            if free_valence >= 1 and nb_free >= 1:
+                upgrades.append("double")
+            if free_valence >= 2 and nb_free >= 2:
+                upgrades.append("triple")
+        elif cur == "double":
+            if free_valence >= 1 and nb_free >= 1:
+                upgrades.append("triple")
+        valid_bond_orders[nb.GetIdx()] = [cur] + upgrades
+
+    return {
+        "atom_idx": atom_idx,
+        "element": elt,
+        "free_valence": free_valence,
+        "explicit_valence": explicit_v,
+        "valid_elements_for_swap": valid_swap_elements,
+        "valid_functional_groups": valid_fgs,
+        "valid_rings": valid_rings,
+        "valid_bond_orders_to_neighbors": valid_bond_orders,
+        "blocked_reasons": blocked,
+    }
+
+
+@router.get("/chem/diagnostics/{smiles_b64}")
+async def chem_diagnostics(smiles_b64: str) -> Dict[str, Any]:
+    """Whole-molecule chemistry health check. Returns structured
+    violations for every atom whose explicit valence < expected (broken
+    bond after a delete/break), invalid charge balances, and any
+    Sanitize warnings RDKit can give us.
+
+    The 2D viewer uses this to highlight incomplete atoms (red pulse)
+    after a bond-break, and to gate scoring."""
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    try:
+        smiles = _decode_smiles_b64(smiles_b64)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, detail=_violation(
+            "decode_failed", f"smiles decode failed: {exc}"))
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, detail=_violation(
+            "unparseable_smiles", f"unparseable SMILES: {smiles}",
+            hint="See atom-by-atom diagnostics by editing one step back.",
+            suggested_fix="undo last edit",
+        ))
+
+    incomplete: list[Dict[str, Any]] = []
+    for atom in mol.GetAtoms():
+        sym = atom.GetSymbol()
+        max_v = _DEFAULT_VALENCE.get(sym, 0)
+        if max_v == 0:
+            continue
+        # Account for formal charge: +1 raises valence by 1, −1 lowers it.
+        adjusted_max = max_v + atom.GetFormalCharge()
+        explicit = atom.GetExplicitValence()
+        n_h = atom.GetTotalNumHs()
+        total = explicit + n_h
+        if total < adjusted_max - 1:  # under-valent by ≥2 → likely broken
+            incomplete.append(_violation(
+                "atom_under_valent",
+                f"atom {atom.GetIdx()} ({sym}) has only {total} bonds; expected {adjusted_max}",
+                hint=f"{sym} normally forms {adjusted_max} bonds. After a bond-break this atom needs reconnection.",
+                atom_idx=atom.GetIdx(),
+                suggested_fix=f"add a bond or H on atom {atom.GetIdx()}",
+            ))
+
+    # Charge balance — track total formal charge
+    total_charge = sum(a.GetFormalCharge() for a in mol.GetAtoms())
+    charge_warnings: list[Dict[str, Any]] = []
+    if abs(total_charge) > 0:
+        charge_warnings.append(_violation(
+            "non_zero_total_charge",
+            f"total formal charge = {total_charge:+d}",
+            hint="Most drugs are net-neutral. Consider counterions or an opposite charge elsewhere.",
+            suggested_fix="add a counterion or balance the charge",
+        ))
+
+    # Disconnected fragments
+    n_frags = len(Chem.GetMolFrags(mol))
+    fragment_warnings: list[Dict[str, Any]] = []
+    if n_frags > 1:
+        fragment_warnings.append(_violation(
+            "disconnected_fragments",
+            f"molecule has {n_frags} disconnected fragments",
+            hint="A bond was broken without reconnection; molecule is no longer one piece.",
+            suggested_fix="reconnect the fragments with add_bond",
+        ))
+
+    return {
+        "is_valid": (not incomplete) and (n_frags == 1),
+        "n_atoms": mol.GetNumAtoms(),
+        "n_bonds": mol.GetNumBonds(),
+        "n_fragments": n_frags,
+        "total_formal_charge": total_charge,
+        "incomplete_atoms": incomplete,
+        "charge_warnings": charge_warnings,
+        "fragment_warnings": fragment_warnings,
+        "all_violations": incomplete + charge_warnings + fragment_warnings,
+    }
+
+
+@router.get("/chem/bonds/{smiles_b64}")
+async def chem_bonds(smiles_b64: str) -> Dict[str, Any]:
+    """List every bond in the molecule with structured metadata. The 2D
+    viewer uses this to translate a click on a bond glyph back to the
+    correct bond_index for /molecule/edit op:break_bond."""
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    try:
+        smiles = _decode_smiles_b64(smiles_b64)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, detail=_violation(
+            "decode_failed", f"smiles decode failed: {exc}"))
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, detail=_violation(
+            "unparseable_smiles", f"unparseable SMILES: {smiles}"))
+    bonds = []
+    for b in mol.GetBonds():
+        bt = b.GetBondType()
+        order = "single"
+        if bt == Chem.BondType.DOUBLE:    order = "double"
+        elif bt == Chem.BondType.TRIPLE:  order = "triple"
+        elif bt == Chem.BondType.AROMATIC: order = "aromatic"
+        bonds.append({
+            "bond_idx": b.GetIdx(),
+            "atom_a": b.GetBeginAtomIdx(),
+            "atom_b": b.GetEndAtomIdx(),
+            "order": order,
+            "in_ring": b.IsInRing(),
+            "is_aromatic": b.GetIsAromatic(),
+        })
+    return {"bonds": bonds, "n_bonds": len(bonds)}
+
+
 @router.get("/chem/atom/{smiles_b64}/{atom_idx}", response_model=AtomContextResponse)
 async def chem_atom_context(smiles_b64: str, atom_idx: int,
                              target: Optional[str] = None) -> AtomContextResponse:
@@ -1873,63 +2168,96 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
 
     if req.op == "swap_element":
         if req.atom_index is None or req.new_element is None:
-            raise HTTPException(422, "swap_element needs atom_index + new_element")
+            raise HTTPException(422, detail=_violation(
+                "missing_args", "swap_element needs atom_index + new_element",
+                hint="Pass both atom_index (target atom) and new_element (e.g. 'N')."))
         if req.atom_index < 0 or req.atom_index >= rw.GetNumAtoms():
-            raise HTTPException(422, "atom_index out of range")
+            raise HTTPException(422, detail=_violation(
+                "atom_index_out_of_range",
+                f"atom_index {req.atom_index} out of range (0..{rw.GetNumAtoms()-1})",
+                atom_idx=req.atom_index))
         if req.new_element not in ELEMENTS:
-            raise HTTPException(422, f"unsupported element: {req.new_element}")
+            raise HTTPException(422, detail=_violation(
+                "unsupported_element", f"unsupported element: {req.new_element}",
+                hint="See GET /workbench/chem/elements for the supported palette."))
         rw.GetAtomWithIdx(req.atom_index).SetAtomicNum(ELEMENTS[req.new_element])
 
     elif req.op == "break_bond" or req.op == "delete_bond":
         if req.bond_index is None:
-            raise HTTPException(422, f"{req.op} needs bond_index")
+            raise HTTPException(422, detail=_violation(
+                "missing_args", f"{req.op} needs bond_index",
+                hint="See GET /workbench/chem/bonds/{smiles_b64} for bond indices."))
         if req.bond_index < 0 or req.bond_index >= rw.GetNumBonds():
-            raise HTTPException(422, "bond_index out of range")
+            raise HTTPException(422, detail=_violation(
+                "bond_index_out_of_range",
+                f"bond_index {req.bond_index} out of range (0..{rw.GetNumBonds()-1})",
+                bond_idx=req.bond_index))
         b = rw.GetBondWithIdx(req.bond_index)
         rw.RemoveBond(b.GetBeginAtomIdx(), b.GetEndAtomIdx())
 
     elif req.op == "add_methyl_at":
         if req.atom_index is None:
-            raise HTTPException(422, "add_methyl_at needs atom_index")
+            raise HTTPException(422, detail=_violation(
+                "missing_args", "add_methyl_at needs atom_index",
+                hint="Pass atom_index of the anchor atom."))
         c = rw.AddAtom(Chem.Atom(6))
         rw.AddBond(req.atom_index, c, Chem.BondType.SINGLE)
 
     elif req.op == "add_atom_at":
         if req.atom_index is None or req.new_element is None:
-            raise HTTPException(422, "add_atom_at needs atom_index + new_element")
+            raise HTTPException(422, detail=_violation(
+                "missing_args", "add_atom_at needs atom_index + new_element",
+                hint="Pass both anchor atom_index and the element symbol."))
         if req.new_element not in ELEMENTS:
-            raise HTTPException(422, f"unsupported element: {req.new_element}")
+            raise HTTPException(422, detail=_violation(
+                "unsupported_element", f"unsupported element: {req.new_element}",
+                hint="See GET /workbench/chem/elements for the supported palette."))
         new_idx = rw.AddAtom(Chem.Atom(ELEMENTS[req.new_element]))
         bond_type = BOND_ORDERS.get(req.bond_order or "single", Chem.BondType.SINGLE)
         rw.AddBond(req.atom_index, new_idx, bond_type)
 
     elif req.op == "delete_atom":
         if req.atom_index is None:
-            raise HTTPException(422, "delete_atom needs atom_index")
+            raise HTTPException(422, detail=_violation(
+                "missing_args", "delete_atom needs atom_index"))
         if req.atom_index < 0 or req.atom_index >= rw.GetNumAtoms():
-            raise HTTPException(422, "atom_index out of range")
+            raise HTTPException(422, detail=_violation(
+                "atom_index_out_of_range",
+                f"atom_index {req.atom_index} out of range",
+                atom_idx=req.atom_index))
         rw.RemoveAtom(req.atom_index)
 
     elif req.op == "add_bond":
         if req.atom_index_a is None or req.atom_index_b is None:
-            raise HTTPException(422, "add_bond needs atom_index_a + atom_index_b")
+            raise HTTPException(422, detail=_violation(
+                "missing_args", "add_bond needs atom_index_a + atom_index_b"))
         if req.atom_index_a == req.atom_index_b:
-            raise HTTPException(422, "cannot bond an atom to itself")
+            raise HTTPException(422, detail=_violation(
+                "self_bond", "cannot bond an atom to itself",
+                atom_idx=req.atom_index_a))
         n = rw.GetNumAtoms()
         if not (0 <= req.atom_index_a < n and 0 <= req.atom_index_b < n):
-            raise HTTPException(422, "atom_index_a or _b out of range")
-        # Reject if bond already exists
+            raise HTTPException(422, detail=_violation(
+                "atom_index_out_of_range", "atom_index_a or _b out of range"))
         if rw.GetBondBetweenAtoms(req.atom_index_a, req.atom_index_b) is not None:
-            raise HTTPException(422, f"bond already exists between {req.atom_index_a} and {req.atom_index_b}")
+            raise HTTPException(422, detail=_violation(
+                "bond_already_exists",
+                f"bond already exists between {req.atom_index_a} and {req.atom_index_b}",
+                hint="Use op:break_bond to remove first, or upgrade order via add_bond on a different pair.",
+                suggested_fix="break the existing bond first"))
         bond_type = BOND_ORDERS.get(req.bond_order or "single", Chem.BondType.SINGLE)
         rw.AddBond(req.atom_index_a, req.atom_index_b, bond_type)
 
     elif req.op == "add_functional_group_at":
         if req.atom_index is None or req.functional_group is None:
-            raise HTTPException(422, "add_functional_group_at needs atom_index + functional_group")
+            raise HTTPException(422, detail=_violation(
+                "missing_args", "add_functional_group_at needs atom_index + functional_group"))
         tpl = FG_TEMPLATES.get(req.functional_group)
         if tpl is None:
-            raise HTTPException(422, f"unknown functional group: {req.functional_group}")
+            raise HTTPException(422, detail=_violation(
+                "unknown_functional_group",
+                f"unknown functional group: {req.functional_group}",
+                hint="See SKILLS.md §10.3 for the supported FG list."))
         # Build the fragment: anchor connects to new atom 1, which connects to others linearly
         # (simple chain layout; ring FGs would need a separate template).
         prev_idx = req.atom_index
@@ -2001,7 +2329,30 @@ async def molecule_edit(req: AtomEditRequest) -> dict:
                     bond.SetBondType(Chem.BondType.SINGLE)
             Chem.SanitizeMol(rw)
         except Exception as exc2:  # noqa: BLE001
-            raise HTTPException(422, f"chemistry violation: {first_err} (retry: {exc2})")
+            # Translate the RDKit SanitizeException to a structured violation.
+            # Common patterns we can match → human-friendly hint:
+            err_text = first_err.lower()
+            if "valence" in err_text or "explicit valence" in err_text:
+                code = "valence_violation"
+                msg = first_err
+                hint = "Atom would exceed its allowed valence. Pick a different element, lower the bond order, or break a neighbor bond first."
+                fix = "lower bond order or remove a neighbor"
+            elif "aromatic" in err_text:
+                code = "aromaticity_violation"
+                msg = first_err
+                hint = "Aromatic ring constraint violated (Hückel rule). The structure no longer satisfies 4n+2 π electrons."
+                fix = "restore the ring or convert to non-aromatic"
+            elif "non-ring" in err_text:
+                code = "non_ring_aromatic_atom"
+                msg = first_err
+                hint = "An atom flagged aromatic is no longer in a ring."
+                fix = "convert to non-aromatic bonds"
+            else:
+                code = "chemistry_violation"
+                msg = f"chemistry violation: {first_err}"
+                hint = "RDKit could not sanitize the resulting structure."
+                fix = "undo this edit"
+            raise HTTPException(422, detail=_violation(code, msg, hint=hint, suggested_fix=fix))
 
     new_smiles = Chem.MolToSmiles(rw, canonical=True)
     return {
