@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "source": "Curated subset of CARD (Comprehensive Antibiotic Resistance Database) + literature for the 8 priority pathogens. Each entry is a single point mutation that confers clinical resistance. Maps pdb_id → list of mutations.",
+  "license": "CARD ARO ontology data is CC-BY 4.0",
+  "last_updated": "2026-05-07",
+  "by_pdb": {
+    "1VQQ": {
+      "_target": "PBP2a (MRSA)",
+      "_pathogen": "MRSA",
+      "mutations": [
+        {"position": 246, "wt": "V", "mutant": "A", "drug_class": "ceftaroline", "frequency": "high", "note": "common ceftaroline-R isolate, weakens binding pocket"},
+        {"position": 247, "wt": "K", "mutant": "T", "drug_class": "all_beta_lactams", "frequency": "rare", "note": "active-site lysine — disrupts catalytic transpeptidation"},
+        {"position": 351, "wt": "E", "mutant": "K", "drug_class": "ceftaroline", "frequency": "moderate", "note": "alters allosteric communication"},
+        {"position": 365, "wt": "S", "mutant": "T", "drug_class": "all_beta_lactams", "frequency": "very_rare", "note": "catalytic serine of SXXK motif — almost always lethal"},
+        {"position": 365, "wt": "S", "mutant": "A", "drug_class": "all_beta_lactams", "frequency": "very_rare", "note": "kills enzyme entirely; counter-selected"},
+        {"position": 382, "wt": "K", "mutant": "Q", "drug_class": "ceftaroline", "frequency": "moderate", "note": "second SXXK lysine"},
+        {"position": 590, "wt": "S", "mutant": "L", "drug_class": "ceftaroline", "frequency": "high", "note": "non-active-site, allosteric resistance pathway"},
+        {"position": 598, "wt": "Y", "mutant": "F", "drug_class": "all_beta_lactams", "frequency": "moderate", "note": "loss of H-bond donor"},
+        {"position": 600, "wt": "T", "mutant": "I", "drug_class": "ceftaroline", "frequency": "high", "note": "ceftaroline-resistant SCCmec strain marker"},
+        {"position": 643, "wt": "P", "mutant": "L", "drug_class": "ceftaroline", "frequency": "moderate", "note": "loop flexibility change"}
+      ]
+    },
+    "1A2N": {
+      "_target": "MurA (E. coli, used for MRSA modeling too)",
+      "_pathogen": "MRSA",
+      "mutations": [
+        {"position": 21, "wt": "C", "mutant": "Y", "drug_class": "fosfomycin", "frequency": "very_high", "note": "classic fosfomycin-R, the cysteine attacks the antibiotic"},
+        {"position": 22, "wt": "D", "mutant": "N", "drug_class": "fosfomycin", "frequency": "moderate", "note": "loss of catalytic aspartate"},
+        {"position": 91, "wt": "K", "mutant": "R", "drug_class": "fosfomycin", "frequency": "rare", "note": "PEP binding loop"},
+        {"position": 115, "wt": "T", "mutant": "S", "drug_class": "fosfomycin", "frequency": "rare", "note": "minor pocket change"}
+      ]
+    },
+    "2X22": {
+      "_target": "InhA (Mtb)",
+      "_pathogen": "Mtb",
+      "mutations": [
+        {"position": 21, "wt": "I", "mutant": "T", "drug_class": "isoniazid", "frequency": "moderate", "note": "low-level isoniazid resistance"},
+        {"position": 94, "wt": "S", "mutant": "A", "drug_class": "isoniazid", "frequency": "high", "note": "common clinical INH-R isolate, weakens NADH binding"},
+        {"position": 95, "wt": "I", "mutant": "T", "drug_class": "isoniazid", "frequency": "rare", "note": "active site"},
+        {"position": 96, "wt": "L", "mutant": "P", "drug_class": "ethionamide", "frequency": "moderate", "note": "ethionamide cross-resistance"},
+        {"position": 158, "wt": "Y", "mutant": "F", "drug_class": "all_inha_inh", "frequency": "very_rare", "note": "catalytic tyrosine"},
+        {"position": 165, "wt": "K", "mutant": "R", "drug_class": "isoniazid", "frequency": "rare", "note": "NADH ribose contact"},
+        {"position": 196, "wt": "M", "mutant": "T", "drug_class": "isoniazid", "frequency": "moderate", "note": "lipid pocket alteration"},
+        {"position": 215, "wt": "G", "mutant": "S", "drug_class": "isoniazid", "frequency": "high", "note": "activator loop"}
+      ]
+    },
+    "4FDO": {
+      "_target": "DprE1 (Mtb)",
+      "_pathogen": "Mtb",
+      "mutations": [
+        {"position": 387, "wt": "C", "mutant": "S", "drug_class": "BTZ043_class", "frequency": "very_high", "note": "the catalytic cysteine that BTZ043 covalently attacks; mutation = full resistance"},
+        {"position": 387, "wt": "C", "mutant": "G", "drug_class": "BTZ043_class", "frequency": "moderate", "note": "alternative escape"},
+        {"position": 132, "wt": "Y", "mutant": "H", "drug_class": "DprE1_inhibitors", "frequency": "rare", "note": "FAD pocket"},
+        {"position": 314, "wt": "G", "mutant": "D", "drug_class": "DprE1_inhibitors", "frequency": "rare", "note": "substrate channel"},
+        {"position": 318, "wt": "K", "mutant": "T", "drug_class": "DprE1_inhibitors", "frequency": "moderate", "note": "substrate binding"}
+      ]
+    },
+    "5UL8": {
+      "_target": "KPC-2 (Klebsiella, E. coli)",
+      "_pathogen": "EColi-CRE",
+      "mutations": [
+        {"position": 70, "wt": "S", "mutant": "T", "drug_class": "all_beta_lactams", "frequency": "very_rare", "note": "catalytic serine — almost always lethal"},
+        {"position": 73, "wt": "K", "mutant": "R", "drug_class": "ceftazidime_avibactam", "frequency": "high", "note": "K73 H-bonds avibactam; loss = avibactam-R"},
+        {"position": 130, "wt": "S", "mutant": "G", "drug_class": "ceftazidime_avibactam", "frequency": "moderate", "note": "omega loop"},
+        {"position": 164, "wt": "R", "mutant": "S", "drug_class": "ceftazidime_avibactam", "frequency": "very_high", "note": "the canonical KPC-3/KPC-31 avibactam-R mutation"},
+        {"position": 167, "wt": "Y", "mutant": "S", "drug_class": "ceftazidime_avibactam", "frequency": "moderate", "note": "ω-loop residue"},
+        {"position": 234, "wt": "K", "mutant": "R", "drug_class": "all_beta_lactams", "frequency": "rare", "note": "catalytic"},
+        {"position": 237, "wt": "T", "mutant": "A", "drug_class": "carbapenems", "frequency": "moderate", "note": "expands carbapenem pocket"}
+      ]
+    },
+    "3SPU": {
+      "_target": "NDM-1 (Klebsiella, E. coli)",
+      "_pathogen": "KpneuCRE",
+      "mutations": [
+        {"position": 88, "wt": "M", "mutant": "L", "drug_class": "carbapenems", "frequency": "rare", "note": "Zn coordination periphery"},
+        {"position": 120, "wt": "H", "mutant": "Q", "drug_class": "carbapenems", "frequency": "very_rare", "note": "Zn1 ligand; loss kills enzyme"},
+        {"position": 122, "wt": "H", "mutant": "Y", "drug_class": "carbapenems", "frequency": "very_rare", "note": "Zn1 ligand"},
+        {"position": 178, "wt": "D", "mutant": "N", "drug_class": "carbapenems", "frequency": "rare", "note": "Zn2 ligand"},
+        {"position": 189, "wt": "M", "mutant": "V", "drug_class": "carbapenems", "frequency": "moderate", "note": "NDM-5 hallmark, broader spectrum"},
+        {"position": 211, "wt": "C", "mutant": "S", "drug_class": "carbapenems", "frequency": "very_rare", "note": "Zn2 ligand"},
+        {"position": 218, "wt": "H", "mutant": "Q", "drug_class": "carbapenems", "frequency": "very_rare", "note": "Zn2 ligand"}
+      ]
+    },
+    "7M4F": {
+      "_target": "OXA-23 (A. baumannii)",
+      "_pathogen": "Abaum",
+      "mutations": [
+        {"position": 70, "wt": "S", "mutant": "T", "drug_class": "all_beta_lactams", "frequency": "very_rare", "note": "catalytic serine"},
+        {"position": 73, "wt": "K", "mutant": "R", "drug_class": "carbapenems", "frequency": "moderate", "note": "carbamoylation residue"},
+        {"position": 144, "wt": "Y", "mutant": "F", "drug_class": "carbapenems", "frequency": "rare", "note": "ω-loop"},
+        {"position": 220, "wt": "R", "mutant": "S", "drug_class": "all_beta_lactams", "frequency": "rare", "note": "active-site stabilization"},
+        {"position": 224, "wt": "I", "mutant": "M", "drug_class": "doripenem", "frequency": "moderate", "note": "narrow-spectrum hopping"}
+      ]
+    },
+    "5TJX": {
+      "_target": "DNA gyrase B (P. aeruginosa)",
+      "_pathogen": "Paer",
+      "mutations": [
+        {"position": 46, "wt": "T", "mutant": "I", "drug_class": "novobiocin_aminocoumarins", "frequency": "rare", "note": "ATP binding pocket"},
+        {"position": 50, "wt": "G", "mutant": "D", "drug_class": "novobiocin_aminocoumarins", "frequency": "rare", "note": "P-loop"},
+        {"position": 73, "wt": "D", "mutant": "N", "drug_class": "novobiocin_aminocoumarins", "frequency": "moderate", "note": "ATP γ-phosphate contact"},
+        {"position": 99, "wt": "S", "mutant": "L", "drug_class": "fluoroquinolones", "frequency": "very_high", "note": "S99L is canonical levofloxacin-R in Paer"},
+        {"position": 119, "wt": "G", "mutant": "S", "drug_class": "novobiocin_aminocoumarins", "frequency": "rare", "note": "lid loop"}
+      ]
+    },
+    "1MWS": {
+      "_target": "PBP5 (E. faecium)",
+      "_pathogen": "VRE",
+      "mutations": [
+        {"position": 422, "wt": "S", "mutant": "T", "drug_class": "all_beta_lactams", "frequency": "very_rare", "note": "catalytic serine"},
+        {"position": 424, "wt": "S", "mutant": "A", "drug_class": "ampicillin", "frequency": "high", "note": "PBP5 over-expressing strain marker"},
+        {"position": 477, "wt": "M", "mutant": "I", "drug_class": "ampicillin", "frequency": "moderate", "note": "ampicillin-R faecium isolates"},
+        {"position": 555, "wt": "T", "mutant": "S", "drug_class": "all_beta_lactams", "frequency": "moderate", "note": "K-T-G motif"},
+        {"position": 580, "wt": "P", "mutant": "S", "drug_class": "ampicillin", "frequency": "low", "note": "modulates PBP5 activity"}
+      ]
+    },
+    "1E4E": {
+      "_target": "VanA D-Ala-D-Lac ligase (E. faecium)",
+      "_pathogen": "VRE",
+      "mutations": [
+        {"position": 73, "wt": "D", "mutant": "N", "drug_class": "vancomycin", "frequency": "very_rare", "note": "VanA-disabling — would re-sensitize bacteria, would be selected against in clinical setting"},
+        {"position": 110, "wt": "K", "mutant": "Q", "drug_class": "vancomycin", "frequency": "rare", "note": "ATP binding"},
+        {"position": 159, "wt": "Y", "mutant": "F", "drug_class": "vancomycin", "frequency": "rare", "note": "substrate orientation"},
+        {"position": 212, "wt": "E", "mutant": "Q", "drug_class": "vancomycin", "frequency": "rare", "note": "metal coordination"},
+        {"position": 268, "wt": "T", "mutant": "M", "drug_class": "vancomycin", "frequency": "moderate", "note": "lid loop"}
+      ]
+    },
+    "5XFT": {
+      "_target": "PBP2 / penA (N. gonorrhoeae)",
+      "_pathogen": "NGono",
+      "mutations": [
+        {"position": 310, "wt": "I", "mutant": "V", "drug_class": "cephalosporins", "frequency": "high", "note": "mosaic penA-34 hallmark"},
+        {"position": 312, "wt": "A", "mutant": "T", "drug_class": "cephalosporins", "frequency": "very_high", "note": "ceftriaxone-decreased-susceptibility marker"},
+        {"position": 365, "wt": "S", "mutant": "T", "drug_class": "all_beta_lactams", "frequency": "very_rare", "note": "catalytic serine"},
+        {"position": 547, "wt": "G", "mutant": "S", "drug_class": "cephalosporins", "frequency": "high", "note": "high-level cefixime-R"},
+        {"position": 549, "wt": "F", "mutant": "Y", "drug_class": "cephalosporins", "frequency": "moderate", "note": "loop conformation"}
+      ]
+    }
+  },
+  "frequency_score": {
+    "very_high": 0.95,
+    "high": 0.80,
+    "moderate": 0.55,
+    "low": 0.30,
+    "rare": 0.18,
+    "very_rare": 0.06
+  }
+}

@@ -209,6 +209,15 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem 3D router not loaded: %s", exc)
 
+# Chemistry resistance — Service 2: Resistance-Escape Vulnerability Map
+# Mounts under /workbench/chem/* alongside Service 1.
+try:
+    from .chem_resistance import router as chem_resistance_router
+    app.include_router(chem_resistance_router, prefix="/workbench")
+    log.info("Chem resistance routes loaded (/workbench/chem/resistance/known, /predict)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem resistance router not loaded: %s", exc)
+
 # Chemistry sandbox — agent-driven molecular edits with reward delta
 try:
     from .sandbox import router as sandbox_router
