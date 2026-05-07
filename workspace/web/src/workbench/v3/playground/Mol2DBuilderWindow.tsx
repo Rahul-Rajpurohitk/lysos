@@ -38,6 +38,10 @@ interface Props {
    *  Rendered as red halos. Critic agent uses this to identify which
    *  atom edits are required to relieve steric strain. */
   clashingAtoms?: number[];
+  /** Service 2 — atoms vulnerable to known clinical resistance mutations.
+   *  Rendered as orange halos with a "harden me" sticker. Editor agent
+   *  uses this to pick which atom to swap for hardening. */
+  vulnerableAtoms?: number[];
   /** Open the user's saved-molecules library popover. Implemented by parent
    *  via portal so we can share the same library state across cards. */
   onLoadFromLibrary?: (smi: string, name: string) => void;
@@ -242,7 +246,7 @@ const ACTOR_COLOR: Record<string, string> = {
   user: "#f59e0b",
 };
 
-export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, bindingAtoms, clashingAtoms, onLoadFromLibrary, propertiesPanel }: Props) {
+export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, bindingAtoms, clashingAtoms, vulnerableAtoms, onLoadFromLibrary, propertiesPanel }: Props) {
   const [svg, setSvg] = useState<string>("");
   const [violation, setViolation] = useState<Violation | null>(null);
   // Whole-molecule diagnostics (incomplete atoms after a bond-break, etc).
@@ -1338,6 +1342,43 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       }
     }
   }, [bindingAtoms, clashingAtoms, svg]);
+
+  // VULNERABLE atom halos — Service 2. Orange ring with "shield" annotation
+  // for atoms that the resistance map says are vulnerable to known clinical
+  // mutations. Distinct color from binding (green) / clashing (red) /
+  // SMARTS (variable) / selected (amber). User and agent see at a glance
+  // which atoms to harden against pathogen evolution.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-vulnerable="1"]').forEach((n) => n.remove());
+    if (!vulnerableAtoms || vulnerableAtoms.length === 0) return;
+    for (const idx of vulnerableAtoms) {
+      const pos = getAtomXY(idx);
+      if (!pos) continue;
+      // Outer pulse ring — orange, dashed
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("data-vulnerable", "1");
+      ring.setAttribute("cx", String(pos.x));
+      ring.setAttribute("cy", String(pos.y));
+      ring.setAttribute("r", "13");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", "#ea580c");
+      ring.setAttribute("stroke-width", "1.8");
+      ring.setAttribute("stroke-dasharray", "4,2");
+      ring.setAttribute("opacity", "0.85");
+      ring.style.pointerEvents = "none";
+      const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      anim.setAttribute("attributeName", "r");
+      anim.setAttribute("values", "13;16;13");
+      anim.setAttribute("dur", "1.6s");
+      anim.setAttribute("repeatCount", "indefinite");
+      ring.appendChild(anim);
+      svgEl.insertBefore(ring, svgEl.firstChild?.nextSibling ?? null);
+    }
+  }, [vulnerableAtoms, svg]);
 
   // RAIL-HOVER halo — temporary cyan ring on the atom currently hovered
   // in the right-rail atoms list. Lighter than selection so the two

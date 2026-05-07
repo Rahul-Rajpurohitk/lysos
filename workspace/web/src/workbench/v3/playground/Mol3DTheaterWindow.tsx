@@ -69,6 +69,10 @@ interface Props {
   /** When a new pose is computed, bubble the binding/clashing atom indices
    *  up so the 2D builder can paint matching halos on those same atoms. */
   onPoseChange?: (poseData: PoseResult | null) => void;
+  /** When the user picks a different target via the picker dropdown, bubble
+   *  the new PDB ID upstream — the Resistance Escape Map card consumes it
+   *  to know which target to predict mutations against. */
+  onTargetChange?: (pdbId: string | null) => void;
 }
 
 interface MatchResult {
@@ -105,6 +109,13 @@ export function Mol3DTheaterWindow(p: Props) {
   }, [p.pathogen, p.apiBase]);
 
   const selectedTarget = targets.find((t) => t.pdb_id === selectedTargetId) || null;
+
+  // Bubble target change upstream so sibling cards (resistance map, scoring)
+  // can use the same selected target.
+  useEffect(() => {
+    p.onTargetChange?.(selectedTargetId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTargetId]);
 
   // ─── Pose: place-in-pocket on SMILES + target change ───────────────
   const [pose, setPose] = useState<PoseResult | null>(null);

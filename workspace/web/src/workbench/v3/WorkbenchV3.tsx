@@ -30,6 +30,7 @@ void _RadarPanel; void _ParetoPanel; void _SynthPanel; void _LineagePanel; void 
 import { ArtifactPanel, type ArtifactDoc } from "./panels/ArtifactPanel";
 import { PlaygroundCanvas, type WindowLayout, type Viewport } from "./playground/PlaygroundCanvas";
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
+import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
@@ -134,6 +135,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // views. Single source of truth = WorkbenchV3 state.
   const [poseBindingAtoms, setPoseBindingAtoms] = useState<number[]>([]);
   const [poseClashingAtoms, setPoseClashingAtoms] = useState<number[]>([]);
+  // Selected PDB target — lifted from the Theater's target picker so
+  // sibling cards (Resistance Escape Map, Scoring) can use the same
+  // target context.
+  const [selectedPdbId, setSelectedPdbId] = useState<string | null>(null);
+  // Service 2 — vulnerable atom indices from the Resistance Escape Map.
+  // Rendered on the 2D builder as orange halos so the agent sees which
+  // atoms are clinically vulnerable AND which are binding/clashing.
+  const [vulnerableAtoms, setVulnerableAtoms] = useState<number[]>([]);
   // Filter state for navbar buttons across containers
   const [drugClassFilter, setDrugClassFilter] = useState<string>("");
   const [scoringPreset, setScoringPreset] = useState<"default" | "mic" | "admet" | "novel">("default");
@@ -1146,6 +1155,15 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           setPoseBindingAtoms(pose?.binding_atoms ?? []);
                           setPoseClashingAtoms(pose?.clashing_atoms ?? []);
                         }}
+                        onTargetChange={(pdbId) => setSelectedPdbId(pdbId)}
+                      /> },
+                    { id: "resistance-escape", title: "Resistance escape · per-atom vulnerability map",
+                      expandedH: 540, body:
+                      <ResistanceEscapeMapCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pdbId={selectedPdbId}
+                        onVulnerableChange={(atoms) => setVulnerableAtoms(atoms)}
                       /> },
                     { id: "2d", title: "2D molecule builder · atoms · bonds · properties", expandedH: 860, body:
                       <Mol2DBuilderWindow
@@ -1156,6 +1174,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         highlightAtoms={smartsHighlight}
                         bindingAtoms={poseBindingAtoms}
                         clashingAtoms={poseClashingAtoms}
+                        vulnerableAtoms={vulnerableAtoms}
                         onLoadFromLibrary={(smi, name) => {
                           loadSmilesIntoCanvas(smi, {
                             createdBy: "user",
