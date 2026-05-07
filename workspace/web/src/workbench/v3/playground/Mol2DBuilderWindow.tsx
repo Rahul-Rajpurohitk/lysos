@@ -294,15 +294,28 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   const [dragHover, setDragHover] = useState<number | null>(null);
   // Combined highlight: internal SMARTS hits OR external (from agent loop)
   const highlightAtoms = smartsHits.length > 0 ? smartsHits : externalHighlight;
+  // Active SMARTS category color — when user clicks a categorized
+  // preset chip (β-lactam, pyridine, etc.), the corresponding color
+  // (green for antibiotic-warhead, purple for aromatic, etc.) drives
+  // the halo + bond-trace tint on the SVG. Defaults to green for raw
+  // pattern queries with no category.
+  const [smartsCategoryColor, setSmartsCategoryColor] = useState<string>("#10b981");
+  // Atom indices forming each MATCH — kept separate from `smartsHits`
+  // (which is the union of all atoms across matches) so we can draw
+  // bond traces only between atoms that are connected within ONE match
+  // (not random pairs across different matches).
+  const [smartsMatchSets, setSmartsMatchSets] = useState<number[][]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const svgHostRef = useRef<HTMLDivElement | null>(null);
 
-  async function runSmartsMatch(pattern: string) {
+  async function runSmartsMatch(pattern: string, categoryColor?: string) {
     if (!smiles || !pattern.trim()) {
       setSmartsHits([]);
+      setSmartsMatchSets([]);
       setSmartsError("");
       return;
     }
+    if (categoryColor) setSmartsCategoryColor(categoryColor);
     setSmartsLoading(true);
     setSmartsError("");
     try {
@@ -314,22 +327,29 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       if (!r.ok) {
         setSmartsError(`http ${r.status}`);
         setSmartsHits([]);
+        setSmartsMatchSets([]);
         return;
       }
       const d = await r.json();
       if (!d.valid_smarts) {
         setSmartsError(d.error || "invalid SMARTS");
         setSmartsHits([]);
+        setSmartsMatchSets([]);
         return;
       }
-      // Flatten all match indices into one set for highlighting
+      // Flatten all match indices into one set for halo highlighting
       const all = new Set<number>();
-      (d.matches || []).forEach((m: { atom_indices: number[] }) =>
-        m.atom_indices.forEach((i) => all.add(i)));
+      const matchSets: number[][] = [];
+      (d.matches || []).forEach((m: { atom_indices: number[] }) => {
+        m.atom_indices.forEach((i) => all.add(i));
+        matchSets.push(m.atom_indices);
+      });
       setSmartsHits(Array.from(all));
+      setSmartsMatchSets(matchSets);
     } catch (e: any) {
       setSmartsError(String(e?.message ?? e));
       setSmartsHits([]);
+      setSmartsMatchSets([]);
     } finally {
       setSmartsLoading(false);
     }
@@ -949,7 +969,13 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     });
   }, [hoveredBondIdx, svg, bondList]);
 
-  // SMARTS pattern match overlay — green pulse halos on matched atoms.
+  // SMARTS pattern match overlay — pulse halos on matched atoms PLUS
+  // colored traces on bonds whose both endpoints are part of the same
+  // match. Color is keyed off `smartsCategoryColor` so clicking the
+  // pyridine preset (aromatic category) tints the highlight purple,
+  // β-lactam (antibiotic-warhead) green, sulfonamide (heteroatom-oxo)
+  // amber, etc. Atom NUMBER badges drawn next to each highlighted atom
+  // so the user can map the pattern back to specific atom indices.
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
@@ -957,32 +983,114 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     if (!svgEl) return;
     svgEl.querySelectorAll('[data-smarts="1"]').forEach((n) => n.remove());
     if (!highlightAtoms || highlightAtoms.length === 0) return;
+    const color = smartsCategoryColor || "#10b981";
+    // Hex → rgba helper for the fill tint
+    const tint = (hex: string, a: number) => {
+      const m = hex.match(/^#([0-9a-f]{6})$/i);
+      if (!m) return `rgba(16,185,129,${a})`;
+      const n = parseInt(m[1], 16);
+      const r = (n >> 16) & 0xff, g = (n >> 8) & 0xff, b = n & 0xff;
+      return `rgba(${r},${g},${b},${a})`;
+    };
+
+    // (1) BOND TRACES — for each match, find every bond whose both
+    // endpoints are in the match's atom set, and draw a thick colored
+    // overlay path. This makes it obvious WHICH bonds participate
+    // (vs just disconnected atoms lighting up).
+    const matchSets = (smartsMatchSets.length > 0 ? smartsMatchSets : [highlightAtoms]);
+    for (const set of matchSets) {
+      const ss = new Set(set);
+      bondList.forEach((b) => {
+        if (!ss.has(b.atom_a) || !ss.has(b.atom_b)) return;
+        // Find the SVG bond path(s) for this bond_idx
+        svgEl.querySelectorAll<SVGPathElement>("[class^='bond-'], [class*=' bond-']").forEach((n) => {
+          const cls = n.getAttribute("class") || "";
+          const m = cls.match(/bond-(\d+)/);
+          if (!m || parseInt(m[1], 10) !== b.bond_idx) return;
+          const d = n.getAttribute("d");
+          if (!d) return;
+          const trace = document.createElementNS("http://www.w3.org/2000/svg", "path");
+          trace.setAttribute("data-smarts", "1");
+          trace.setAttribute("d", d);
+          trace.setAttribute("fill", "none");
+          trace.setAttribute("stroke", color);
+          trace.setAttribute("stroke-width", "5");
+          trace.setAttribute("stroke-linecap", "round");
+          trace.setAttribute("opacity", "0.55");
+          trace.style.pointerEvents = "none";
+          n.parentNode?.insertBefore(trace, n.nextSibling);
+        });
+      });
+    }
+
+    // (2) ATOM HALOS — colored disc + pulsing ring + atom-number badge
+    // for each matched atom.
     highlightAtoms.forEach((idx) => {
       const _pos = getAtomXY(idx);
       if (!_pos) return;
       const cx = _pos.x;
       const cy = _pos.y;
+      // Filled disc behind atom
+      const disc = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      disc.setAttribute("data-smarts", "1");
+      disc.setAttribute("cx", String(cx));
+      disc.setAttribute("cy", String(cy));
+      disc.setAttribute("r", "10");
+      disc.setAttribute("fill", tint(color, 0.20));
+      disc.setAttribute("stroke", color);
+      disc.setAttribute("stroke-width", "2");
+      disc.style.pointerEvents = "none";
+      svgEl.insertBefore(disc, svgEl.firstChild?.nextSibling ?? null);
+      // Pulsing outer ring for animation
       const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       ring.setAttribute("data-smarts", "1");
       ring.setAttribute("cx", String(cx));
       ring.setAttribute("cy", String(cy));
       ring.setAttribute("r", "12");
-      ring.setAttribute("fill", "rgba(16,185,129,0.18)");
-      ring.setAttribute("stroke", "#10b981");
-      ring.setAttribute("stroke-width", "2.5");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", color);
+      ring.setAttribute("stroke-width", "2");
+      ring.setAttribute("opacity", "0.7");
       ring.style.pointerEvents = "none";
-      // Pulse animation
       const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
       anim.setAttribute("attributeName", "r");
-      anim.setAttribute("from", "12");
-      anim.setAttribute("to", "16");
       anim.setAttribute("dur", "1.1s");
       anim.setAttribute("repeatCount", "indefinite");
       anim.setAttribute("values", "12;16;12");
       ring.appendChild(anim);
+      const animO = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      animO.setAttribute("attributeName", "opacity");
+      animO.setAttribute("dur", "1.1s");
+      animO.setAttribute("repeatCount", "indefinite");
+      animO.setAttribute("values", "0.7;0.20;0.7");
+      ring.appendChild(animO);
       svgEl.appendChild(ring);
+      // Atom-NUMBER badge — small filled circle with the atom index,
+      // anchored top-right of the halo. Resolves the user's recurring
+      // ask: "highlight it based on the number that they represent"
+      const badgeBg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      badgeBg.setAttribute("data-smarts", "1");
+      badgeBg.setAttribute("cx", String(cx + 11));
+      badgeBg.setAttribute("cy", String(cy - 11));
+      badgeBg.setAttribute("r", "7");
+      badgeBg.setAttribute("fill", color);
+      badgeBg.style.pointerEvents = "none";
+      svgEl.appendChild(badgeBg);
+      const badgeTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      badgeTxt.setAttribute("data-smarts", "1");
+      badgeTxt.setAttribute("x", String(cx + 11));
+      badgeTxt.setAttribute("y", String(cy - 11));
+      badgeTxt.setAttribute("text-anchor", "middle");
+      badgeTxt.setAttribute("dominant-baseline", "central");
+      badgeTxt.setAttribute("font-size", "8.5");
+      badgeTxt.setAttribute("font-weight", "700");
+      badgeTxt.setAttribute("font-family", "var(--lys-font-mono), monospace");
+      badgeTxt.setAttribute("fill", "white");
+      badgeTxt.style.pointerEvents = "none";
+      badgeTxt.textContent = String(idx);
+      svgEl.appendChild(badgeTxt);
     });
-  }, [highlightAtoms, svg]);
+  }, [highlightAtoms, svg, smartsCategoryColor, smartsMatchSets, bondList]);
 
   // SELECTION halo — strong amber filled circle behind every atom in
   // `selected`. Driven by both shift-click in the SVG AND row-click in
@@ -1521,11 +1629,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             smarts={smarts}
             diagnostics={diagnostics}
             bondsCount={bondList.length}
-            onSelectPattern={(pattern) => {
+            onSelectPattern={(pattern, categoryColor) => {
               // Click on an auto-detected pattern chip → run SMARTS so
-              // the matched atoms light up in the 2D viewer.
+              // the matched atoms + bonds light up in the 2D viewer
+              // tinted with the category's color.
               setSmarts(pattern);
-              runSmartsMatch(pattern);
+              runSmartsMatch(pattern, categoryColor);
             }}>
             {propertiesPanel}
           </BottomPropertiesStrip>
@@ -3980,7 +4089,7 @@ interface SmartsDockProps {
   smartsHits: number[];
   smartsLoading: boolean;
   smartsError: string;
-  runSmartsMatch: (pattern: string) => void;
+  runSmartsMatch: (pattern: string, categoryColor?: string) => void;
   clearSmarts: () => void;
   onClose: () => void;
 }
@@ -4073,8 +4182,15 @@ function SmartsDock(p: SmartsDockProps) {
                 const active = p.smarts === preset.pattern;
                 return (
                   <button key={preset.label} type="button"
-                    onClick={() => { p.setSmarts(preset.pattern); p.runSmartsMatch(preset.pattern); }}
-                    title={preset.pattern}
+                    onClick={() => {
+                      p.setSmarts(preset.pattern);
+                      p.runSmartsMatch(preset.pattern, cat.color);
+                      // Auto-close the dock so the molecule visual is
+                      // unobstructed and the user can see the
+                      // highlights they just triggered.
+                      p.onClose();
+                    }}
+                    title={`${preset.label} · click to highlight on the 2D viewer (matched atoms + bonds get tinted ${cat.name} color). Pattern: ${preset.pattern}`}
                     disabled={!p.smiles}
                     style={{
                       fontSize: 10, padding: "2px 8px", borderRadius: 999,
@@ -4163,7 +4279,7 @@ interface BottomPropertiesStripProps {
   /** Click handler when an auto-detected pattern chip is clicked.
    *  Wires through to Mol2DBuilderWindow's setSmarts + runSmartsMatch
    *  so the matched atoms light up in the SVG. */
-  onSelectPattern?: (pattern: string) => void;
+  onSelectPattern?: (pattern: string, categoryColor?: string) => void;
   children: React.ReactNode;  // PropertiesCard
 }
 
@@ -4405,7 +4521,7 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
               <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
                 {autoPatterns.map((h) => (
                   <button key={h.label} type="button"
-                    onClick={() => p.onSelectPattern?.(h.pattern)}
+                    onClick={() => p.onSelectPattern?.(h.pattern, h.color)}
                     title={`${h.label} · ${h.category} · ${h.hit_count} match${h.hit_count === 1 ? "" : "es"} on atoms ${h.atom_idxs.slice(0, 8).join(",")}${h.atom_idxs.length > 8 ? "…" : ""}\n\nClick to highlight on the 2D viewer.\n\nPattern: ${h.pattern}`}
                     style={{
                       fontSize: 9, padding: "2px 7px", borderRadius: 999,
