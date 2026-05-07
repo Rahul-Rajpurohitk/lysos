@@ -72,7 +72,18 @@ def _harness_singleton():
         return _HARNESS  # type: ignore[name-defined]
     except NameError:
         from workspace.agents.harness import Harness
-        _HARNESS = Harness()
+        from workspace.agents.llm import get_llm
+        # Wire the LLM so free-form chat reaches the model. get_llm()
+        # picks the backend per LYSOS_LLM_BACKEND (default "lysos" →
+        # OpenAI-compatible endpoint at LYSOS_INFERENCE_URL, currently
+        # the SSH-tunneled MI300X serve.py at localhost:7861/v1).
+        # Falls back to MockEndpoint if the backend can't initialize so
+        # the demo flow never breaks end-to-end.
+        try:
+            llm = get_llm()
+        except Exception:  # noqa: BLE001
+            llm = None
+        _HARNESS = Harness(llm=llm)
         return _HARNESS
 
 

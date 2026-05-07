@@ -29,6 +29,20 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 
+# Load .env from repo root if present so env vars (LYSOS_INFERENCE_URL,
+# LYSOS_MODEL_ID, GEMINI_API_KEY, etc.) reach os.environ before any
+# downstream module reads them. Without this, running the backend with
+# `uvicorn workspace.api.server:app` from the repo root won't pick up
+# .env automatically — the workbench would fall back to "LLM endpoint
+# not configured" even when the SSH tunnel + serve.py on the VM are up.
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).resolve().parents[2] / ".env"
+    if _env_path.exists():
+        load_dotenv(_env_path, override=False)
+except ImportError:
+    pass
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
