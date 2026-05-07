@@ -352,6 +352,107 @@ async def run_designer(
 
 
 # ---------------------------------------------------------------------------
+# Designer (best-of-N) — inference-time RL substitute for shelved Stage 3 GRPO.
+# Hybrid pattern:
+#   1. Run the full anchored Designer (with tool-use) → primary candidate
+#   2. Generate N-1 sampling variations at higher temperature for diversity
+#   3. Score all N via composite reward
+#   4. Pick the top-1 to commit to state
+#   5. Log runners-up + score distribution so the Critic / Strategist can
+#      see the exploration depth
+# Activated by env LYSOS_BEST_OF_N (default 1 = legacy single-shot).
+# ---------------------------------------------------------------------------
+async def run_designer_best_of_n(
+    state: WorkbenchState,
+    llm: LLMEndpoint,
+    emit: EventCallback,
+    n: int = 5,
+) -> Optional[str]:
+    """Best-of-N reward-guided Designer. Replaces shelved Stage 3 GRPO with
+    runtime selection from the same 12-component reward stack."""
+    if n <= 1:
+        return await run_designer(state, llm, emit)
+
+    log.info("Running Designer best-of-%d (anchored + %d variations)", n, n - 1)
+
+    # Step 1 — anchored primary candidate (uses tool-use loop, full reasoning)
+    primary = await run_designer(state, llm, emit)
+    if primary is None:
+        log.warning("best-of-N: anchored Designer failed; aborting variation phase")
+        return None
+
+    # Step 2 — N-1 variations from a single direct prompt (no tools, higher T)
+    variation_prompt = _designer_message(state)
+    variation_prompt["content"] += (
+        "\n\nGenerate ONE alternative SMILES candidate distinct from prior proposals. "
+        "Same target pathogen and constraints. Output ONLY: PROPOSAL: <SMILES>"
+    )
+
+    async def _one_variation() -> Optional[str]:
+        original_temp = getattr(llm, "temperature", 0.7)
+        try:
+            llm.temperature = 0.95
+            resp = await llm.acomplete(
+                messages=[variation_prompt], system=DESIGNER_SYSTEM,
+            )
+            return _extract_smiles(resp.get("content", ""))
+        except Exception as exc:  # noqa: BLE001
+            log.warning("best-of-N variation failed: %s", exc)
+            return None
+        finally:
+            llm.temperature = original_temp
+
+    variation_smiles = await asyncio.gather(*[_one_variation() for _ in range(n - 1)])
+    candidates_smiles = [primary] + [s for s in variation_smiles if s and s != primary]
+
+    if len(candidates_smiles) <= 1:
+        log.info("best-of-N: only primary survived; returning anchored candidate")
+        return primary
+
+    # Step 3 — score each via the existing reward tool
+    scored: list[tuple[float, str]] = []
+    for smi in candidates_smiles:
+        rec = await _dispatch_tool(
+            state, "score_molecule",
+            {"smiles": smi, "target_pathogen": state.target_pathogen},
+            "designer", emit,
+        )
+        if rec.get("result"):
+            scored.append((float(rec["result"].get("composite", 0.0)), smi))
+
+    if not scored:
+        log.warning("best-of-N: no candidates scored successfully; falling back to primary")
+        return primary
+
+    # Step 4 — pick the top
+    scored.sort(reverse=True)
+    best_score, best_smi = scored[0]
+
+    # Step 5 — log the exploration so the Critic + Strategist see it
+    runner_summaries = [
+        f"  ({i+2}) composite={s:.3f}  {m[:60]}{'…' if len(m) > 60 else ''}"
+        for i, (s, m) in enumerate(scored[1:4])
+    ]
+    log_msg = (
+        f"[best-of-{len(scored)}] selected composite={best_score:.3f}: {best_smi}\n"
+        + ("\n".join(runner_summaries) if runner_summaries else "")
+    )
+    state.add_message(AgentMessage(role="designer", content=log_msg))
+    await emit({
+        "type": "agent_message",
+        "agent": "designer",
+        "data": state.history[-1].model_dump(mode="json"),
+    })
+    await emit({
+        "type": "best_of_n_explored",
+        "n": len(scored),
+        "scores": [{"composite": s, "smiles": m, "selected": (i == 0)} for i, (s, m) in enumerate(scored)],
+    })
+
+    return best_smi
+
+
+# ---------------------------------------------------------------------------
 # Score a candidate
 # ---------------------------------------------------------------------------
 
@@ -632,8 +733,15 @@ async def run_workbench_loop(
         await emit({"type": "iteration_start", "iteration": state.iteration,
                     "data": {"i": state.iteration}})
 
-        # Designer with full tool-use loop
-        smiles = await run_designer(state, llm, emit)
+        # Designer — best-of-N reward-guided when LYSOS_BEST_OF_N > 1,
+        # else legacy single-shot. Inference-time substitute for shelved
+        # Stage 3 GRPO: same reward stack drives selection at runtime.
+        import os as _os
+        _bon = max(1, int(_os.environ.get("LYSOS_BEST_OF_N", "3") or "3"))
+        if _bon > 1:
+            smiles = await run_designer_best_of_n(state, llm, emit, n=_bon)
+        else:
+            smiles = await run_designer(state, llm, emit)
         if not smiles:
             state.add_message(AgentMessage(
                 role="strategist",
