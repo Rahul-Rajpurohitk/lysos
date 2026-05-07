@@ -32,6 +32,7 @@ import { PlaygroundCanvas, type WindowLayout, type Viewport } from "./playground
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
+import { WorkflowPhaseTracker } from "./playground/WorkflowPhaseTracker";
 import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
@@ -1297,6 +1298,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         actionFilter={actionFilter}
                         onActionChange={setActionFilter}
                       /> },
+                    { id: "workflow", title: "Workflow phase · medchem protocol tracker", size: 2, expandedH: 220, body:
+                      <WorkflowPhaseTracker apiBase={apiBase} sessionId={activeChatId} /> },
                     { id: "trace", title: "Reasoning trace · 4 specialists", size: 2, body:
                       <AgentReasoningTraceWindow events={events as any[]} /> },
                     { id: "roster", title: "Agent roster · live state", size: 2, body:

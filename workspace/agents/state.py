@@ -97,6 +97,37 @@ class WorkbenchState(BaseModel):
     terminated: bool = False
     termination_reason: Optional[str] = None
 
+    # Workflow phase tracker — explicit medchem protocol the agentic system
+    # traverses. Each phase has its own tools and exit criteria; Strategist
+    # transitions between phases. Visible in the Agents container as a
+    # phase strip so user can see "we're in DESIGN, will move to VALIDATE
+    # when reward >= 0.6". See WORKFLOW_PHASES below.
+    phase: Literal["scope", "anchor", "design", "validate", "stress_test", "report"] = "scope"
+    phase_history: list[dict] = Field(default_factory=list)  # [{phase, ts, reason}]
+    phase_evidence: dict[str, list[dict]] = Field(default_factory=dict)  # phase → evidence items
+
+    def transition_phase(self, new_phase: str, reason: str = "") -> None:
+        """Move to a new workflow phase, log the transition."""
+        import time as _t
+        prev = self.phase
+        self.phase = new_phase  # type: ignore[assignment]
+        self.phase_history.append({
+            "from_phase": prev,
+            "to_phase": new_phase,
+            "ts": _t.time(),
+            "iteration": self.iteration,
+            "reason": reason,
+        })
+        self.events.append({
+            "type": "phase_transition",
+            "from": prev, "to": new_phase, "reason": reason,
+            "ts": _t.time(),
+        })
+
+    def add_phase_evidence(self, item: dict) -> None:
+        """Attach an evidence item (tool call result, agent decision) to current phase."""
+        self.phase_evidence.setdefault(self.phase, []).append(item)
+
     # Each transition is appended to events for replay/branching
     events: list[dict] = Field(default_factory=list)
 

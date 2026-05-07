@@ -3842,6 +3842,122 @@ async def molecule_similarity(req: SimilarityRequest) -> SimilarityResponse:
 # SESSION TIMELINE — unified event log for the Live container
 # ===========================================================================
 
+@router.get("/sessions/{sid}/workflow")
+async def session_workflow(sid: str) -> dict:
+    """Return the derived workflow phase + per-phase evidence for a session.
+    Used by the Agents container's WorkflowPhaseTracker.
+
+    Phases:
+      SCOPE       — user defines pathogen + constraints + criteria
+      ANCHOR      — Designer queries resistome, picks scaffold class
+      DESIGN      — Designer/Critic/Editor loop with reward feedback
+      VALIDATE    — Top candidates run through 3D pose + resistance map
+      STRESS_TEST — Adversarial Critic + red-team escape
+      REPORT      — Final snapshot ready for export
+
+    Phase derivation is heuristic from agent activity: looks at action_types
+    and tool calls in the action log. The graph runner can also explicitly
+    emit phase_transition events that override the heuristic.
+    """
+    from workspace.playground.store import get_store as _get_store
+    store = _get_store()
+    actions = store.list_actions(sid, limit=2000)
+    mols = store.list_session_molecules(sid)
+
+    # Collect per-phase evidence
+    n_candidates = len(mols)
+    n_score_actions = sum(1 for a in actions if (a.get("action_type") or "").lower() in ("score", "score_molecule"))
+    n_resistome = sum(1 for a in actions if "resistome" in (a.get("action_type") or "").lower())
+    n_pocket = sum(1 for a in actions if "pocket" in (a.get("action_type") or "").lower() or "place_in_pocket" in (a.get("message_text") or ""))
+    n_resistance = sum(1 for a in actions if "resistance" in (a.get("action_type") or "").lower() or "vulnerability" in (a.get("message_text") or "").lower())
+    n_red_team = sum(1 for a in actions if "red_team" in (a.get("action_type") or "").lower() or "escape" in (a.get("action_type") or "").lower())
+
+    # Look for explicit phase_transition actions first
+    explicit_transitions = [a for a in actions if (a.get("action_type") or "") == "phase_transition"]
+    if explicit_transitions:
+        latest = max(explicit_transitions, key=lambda a: a.get("ts", 0))
+        # Convention: message_text = "from→to" or just the new phase
+        msg = (latest.get("message_text") or "").strip()
+        if "→" in msg:
+            current_phase = msg.split("→", 1)[1].strip().split()[0]
+        else:
+            current_phase = msg.split()[0] if msg else "design"
+    else:
+        # Heuristic derivation
+        if n_red_team > 0:
+            current_phase = "stress_test"
+        elif n_pocket > 0 or n_resistance > 0:
+            current_phase = "validate"
+        elif n_score_actions > 0:
+            current_phase = "design"
+        elif n_candidates > 0 or n_resistome > 0:
+            current_phase = "anchor"
+        else:
+            current_phase = "scope"
+
+    # Phase order
+    PHASES = ["scope", "anchor", "design", "validate", "stress_test", "report"]
+    cur_idx = PHASES.index(current_phase) if current_phase in PHASES else 0
+
+    return {
+        "session_id": sid,
+        "current_phase": current_phase,
+        "phases": [
+            {
+                "id": p,
+                "label": p.replace("_", " ").upper(),
+                "status": ("completed" if i < cur_idx else ("active" if i == cur_idx else "pending")),
+                "tools_called": _phase_tool_count(p, actions),
+                "evidence_count": _phase_evidence_count(p, actions, n_candidates, n_score_actions,
+                                                        n_resistome, n_pocket, n_resistance, n_red_team),
+            }
+            for i, p in enumerate(PHASES)
+        ],
+        "counts": {
+            "candidates": n_candidates,
+            "score_actions": n_score_actions,
+            "resistome_calls": n_resistome,
+            "pocket_calls": n_pocket,
+            "resistance_calls": n_resistance,
+            "red_team_calls": n_red_team,
+        },
+        "transitions": [
+            {
+                "ts": a.get("ts"),
+                "from_phase": (a.get("message_text") or "").split("→", 1)[0].strip() if "→" in (a.get("message_text") or "") else "",
+                "to_phase": (a.get("message_text") or "").split("→", 1)[1].strip().split()[0] if "→" in (a.get("message_text") or "") else (a.get("message_text") or "").split()[0] if a.get("message_text") else "",
+                "agent": a.get("agent_name", "system"),
+            }
+            for a in explicit_transitions
+        ],
+    }
+
+
+def _phase_tool_count(phase: str, actions: list) -> int:
+    PHASE_TOOLS = {
+        "scope": [],
+        "anchor": ["get_pathogen_resistome", "find_active_against_mdr", "find_similar_drugs"],
+        "design": ["score_molecule", "edit_molecule", "transform_structure", "replace_smiles"],
+        "validate": ["place_in_pocket", "predict_admet", "compare_molecules", "map_resistance_vulnerability"],
+        "stress_test": ["predict_resistance_escape", "predict_resistance_escape_geometric"],
+        "report": [],
+    }
+    tools = PHASE_TOOLS.get(phase, [])
+    return sum(1 for a in actions if any(t in (a.get("action_type") or "") for t in tools))
+
+
+def _phase_evidence_count(phase: str, actions: list, n_candidates: int, n_score: int,
+                          n_resistome: int, n_pocket: int, n_resistance: int, n_red_team: int) -> int:
+    return {
+        "scope": 1 if n_candidates > 0 else 0,
+        "anchor": n_resistome,
+        "design": n_score,
+        "validate": n_pocket + n_resistance,
+        "stress_test": n_red_team,
+        "report": 0,
+    }.get(phase, 0)
+
+
 @router.get("/sessions/{sid}/timeline")
 async def session_timeline(sid: str, limit: int = 200) -> dict:
     """Unified timeline: molecule edits + score snapshots + agent actions
