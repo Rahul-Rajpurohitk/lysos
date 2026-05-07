@@ -372,41 +372,30 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   // Reset selection when SMILES changes (atom indices reshuffle)
   useEffect(() => { setSelected(new Set()); }, [smiles]);
 
-  // Poll /chem/diagnostics whenever SMILES changes — debounced 200ms.
-  // Used to highlight incomplete atoms (red pulse) after a bond-break.
-  useEffect(() => {
-    if (!smiles) { setDiagnostics(null); return; }
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const b64 = smilesToB64(smiles);
-        const r = await fetch(`${apiBase}/workbench/chem/diagnostics/${b64}`);
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!cancelled) setDiagnostics(d);
-      } catch {/*noop*/}
-    }, 200);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [smiles, apiBase]);
-
-  // Poll /chem/bonds whenever SMILES changes — needed to map a bond
-  // click on the SVG back to a bond_index for /molecule/edit break_bond.
+  // Diagnostics + bonds via shared SMILES-keyed cache. Both used to be
+  // separate per-SMILES fetches racing each other; now a single
+  // /molecule/state call (deduped + cached + invalidated by WS edits)
+  // serves both. Subscribers re-render on any cache refresh.
   const [bondList, setBondList] = useState<BondMeta[]>([]);
   const [hoveredBondIdx, setHoveredBondIdx] = useState<number | null>(null);
   const [recentlyBroken, setRecentlyBroken] = useState<Set<number>>(new Set());
   useEffect(() => {
-    if (!smiles) { setBondList([]); return; }
+    if (!smiles) { setDiagnostics(null); setBondList([]); return; }
     let cancelled = false;
-    (async () => {
-      try {
-        const b64 = smilesToB64(smiles);
-        const r = await fetch(`${apiBase}/workbench/chem/bonds/${b64}`);
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!cancelled) setBondList(d.bonds || []);
-      } catch {/*noop*/}
-    })();
-    return () => { cancelled = true; };
+    const apply = (d: any) => {
+      if (cancelled || !d) return;
+      if (d.diagnostics) setDiagnostics(d.diagnostics);
+      if (d.bonds?.bonds) setBondList(d.bonds.bonds);
+    };
+    const t = setTimeout(async () => {
+      const d = await getMoleculeState(
+        apiBase, smiles!,
+        "diagnostics,bonds",
+      );
+      apply(d);
+    }, 200);
+    const unsub = subscribeMolCache(smiles, apply);
+    return () => { cancelled = true; clearTimeout(t); unsub(); };
   }, [smiles, apiBase]);
 
   // Fetch 2D SVG whenever SMILES changes
