@@ -578,73 +578,101 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       handlers.push({ node, type: "mouseenter", fn: onEnter });
       handlers.push({ node, type: "mouseleave", fn: onLeave });
     });
-    // Bond click → break_bond. RDKit emits class="bond-N" on each bond.
-    // Click highlights the bond, then calls /molecule/edit op:break_bond.
+    // Bond hover + click are wired via event DELEGATION on svgHostRef
+    // (see the dedicated useEffect below) — NOT per-bond-path. Per-path
+    // listeners were detaching when RDKit re-emitted the SVG (which
+    // happens on every SMILES edit), leaving the diagram unresponsive
+    // until the next edit cycle. Delegation listens at the stable host
+    // container and walks event.target up the DOM to find the bond path
+    // — survives any inner SVG re-render.
+    //
+    // We DO still set the bond cursor here for the visual affordance,
+    // since cursor:pointer needs to be on the path itself (cursor on
+    // the host wouldn't reach SVG children of unknown geometry).
     const bonds = root.querySelectorAll("[class^='bond-'], [class*=' bond-']");
     bonds.forEach((node) => {
-      const cls = node.getAttribute("class") || "";
-      const m = cls.match(/bond-(\d+)/);
-      if (!m) return;
-      const bondIdx = parseInt(m[1], 10);
       (node as HTMLElement).style.cursor = "pointer";
-      // SVG bond hover → drive the central hoveredBondIdx state. That state
-      // is the single source of truth for ALL bond hover affordances —
-      // both the SVG glow (via the hoveredBondIdx useEffect) and the
-      // BondsRail row highlight react to it.
-      const onBondHover = () => { setHoveredBondIdx(bondIdx); };
-      const onBondLeave = () => { setHoveredBondIdx((cur) => cur === bondIdx ? null : cur); };
-      // Extract the bond's two endpoint atom indices from the class string
-      // ("bond-N atom-A atom-B"). Used by shift-click multi-select below.
-      const bondClsMatch = cls.match(/atom-(\d+).*?atom-(\d+)/);
-      const endpointA = bondClsMatch ? parseInt(bondClsMatch[1], 10) : null;
-      const endpointB = bondClsMatch ? parseInt(bondClsMatch[2], 10) : null;
-      const onBondClick = (e: Event) => {
-        e.stopPropagation();
-        const me = e as MouseEvent;
-        // Shift-click on a bond path selects BOTH endpoint atoms — this is
-        // how the user multi-selects pure carbons (which RDKit doesn't draw
-        // as separate <text> labels). Without this, bond building between
-        // pure carbons is impossible from the SVG.
-        if (me.shiftKey) {
-          if (endpointA != null && endpointB != null) {
-            setSelected((cur) => {
-              const next = new Set(cur);
-              // Toggle both endpoints. If neither selected → select both.
-              // If one selected → select the other (so the user can build
-              // a chain: shift-click bond A-B selects A+B; shift-click
-              // a bond B-C selects A, B, C — wait, that's wrong, we'd add
-              // B again. Better: toggle each independently.
-              if (next.has(endpointA)) next.delete(endpointA); else next.add(endpointA);
-              if (next.has(endpointB)) next.delete(endpointB); else next.add(endpointB);
-              return next;
-            });
-          }
-          return;
-        }
-        if (me.altKey) return;  // reserved for future modifiers
-        // Don't break aromatic ring bonds — would shatter the ring.
-        const meta = bondList.find((b) => b.bond_idx === bondIdx);
-        if (meta?.in_ring && meta.order === "aromatic") {
-          showViolation({
-            code: "aromatic_ring_break",
-            message: `Bond ${bondIdx} is part of an aromatic ring`,
-            hint: "Breaking aromatic ring bonds destroys aromaticity. Try a non-aromatic bond instead.",
-            bond_idx: bondIdx,
-            suggested_fix: "delete an atom from the ring instead",
-          });
-          return;
-        }
-        void breakBond(bondIdx);
-      };
-      node.addEventListener("mouseenter", onBondHover);
-      node.addEventListener("mouseleave", onBondLeave);
-      node.addEventListener("click", onBondClick);
-      handlers.push({ node, type: "mouseenter", fn: onBondHover });
-      handlers.push({ node, type: "mouseleave", fn: onBondLeave });
-      handlers.push({ node, type: "click", fn: onBondClick });
     });
     return () => handlers.forEach(({ node, type, fn }) => node.removeEventListener(type, fn));
   }, [svg, onCursorHover, bondList]);
+
+  // Bond hover + click — single source of truth, delegated to the SVG
+  // host. mousemove tracks which bond the cursor is over (walking up
+  // event.target chain, finding closest `bond-N` class). mouseleave
+  // clears. click + shift-click handle break_bond + endpoint multi-
+  // select. This replaces the previous per-path attachment which was
+  // unreliable under RDKit re-renders.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    // Walk up from the event.target until we hit a bond path or the host.
+    // Returns { bondIdx, endpointA, endpointB } or null.
+    const findBond = (target: EventTarget | null): { bondIdx: number; endpointA: number | null; endpointB: number | null } | null => {
+      let el = target as Element | null;
+      while (el && el !== host) {
+        const cls = (el as Element).getAttribute?.("class") || "";
+        const bm = cls.match(/bond-(\d+)/);
+        if (bm) {
+          const bondIdx = parseInt(bm[1], 10);
+          const am = cls.match(/atom-(\d+).*?atom-(\d+)/);
+          return {
+            bondIdx,
+            endpointA: am ? parseInt(am[1], 10) : null,
+            endpointB: am ? parseInt(am[2], 10) : null,
+          };
+        }
+        el = el.parentElement;
+      }
+      return null;
+    };
+    const onMove = (e: Event) => {
+      const hit = findBond((e as MouseEvent).target);
+      const idx = hit?.bondIdx ?? null;
+      setHoveredBondIdx((cur) => (cur === idx ? cur : idx));
+    };
+    const onLeave = () => setHoveredBondIdx(null);
+    const onClick = (e: Event) => {
+      const hit = findBond((e as MouseEvent).target);
+      if (!hit) return;
+      e.stopPropagation();
+      const me = e as MouseEvent;
+      // Shift-click → toggle both endpoint atoms (lets the user multi-
+      // select pure carbons, which RDKit doesn't draw as <text> labels).
+      if (me.shiftKey) {
+        if (hit.endpointA != null && hit.endpointB != null) {
+          setSelected((cur) => {
+            const next = new Set(cur);
+            if (next.has(hit.endpointA!)) next.delete(hit.endpointA!); else next.add(hit.endpointA!);
+            if (next.has(hit.endpointB!)) next.delete(hit.endpointB!); else next.add(hit.endpointB!);
+            return next;
+          });
+        }
+        return;
+      }
+      if (me.altKey) return;
+      // Aromatic ring bonds are protected — breaking them shatters the ring.
+      const meta = bondList.find((b) => b.bond_idx === hit.bondIdx);
+      if (meta?.in_ring && meta.order === "aromatic") {
+        showViolation({
+          code: "aromatic_ring_break",
+          message: `Bond ${hit.bondIdx} is part of an aromatic ring`,
+          hint: "Breaking aromatic ring bonds destroys aromaticity. Try a non-aromatic bond instead.",
+          bond_idx: hit.bondIdx,
+          suggested_fix: "delete an atom from the ring instead",
+        });
+        return;
+      }
+      void breakBond(hit.bondIdx);
+    };
+    host.addEventListener("mousemove", onMove);
+    host.addEventListener("mouseleave", onLeave);
+    host.addEventListener("click", onClick);
+    return () => {
+      host.removeEventListener("mousemove", onMove);
+      host.removeEventListener("mouseleave", onLeave);
+      host.removeEventListener("click", onClick);
+    };
+  }, [svg, bondList]);
 
   // Break a bond via /molecule/edit op:break_bond. Used by SVG bond clicks
   // AND by the AtomsRail bond row delete button. Captures the bond's two
@@ -929,102 +957,42 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     }
   }, [recentlyBroken, svg]);
 
-  // Hovered-bond glow — driven by hoveredBondIdx (set from rail row hover
-  // OR SVG bond-mouseenter / delegated SVG mouseover). Layers a thick red
-  // glow path on top of the original RDKit path. We render TWO layered
-  // paths (an outer wide soft glow + an inner thinner sharp stroke) so
-  // the highlight reads from a distance even on thin RDKit bond lines,
-  // and we attach a pulsing opacity animation so the eye is drawn to it.
+  // Hovered-bond glow — single red stroke overlay on top of the RDKit
+  // bond path. ONE visual, not two (no halo + stripe layering): users
+  // saw "two highlights for one bond" with the previous double-layer.
+  // Width 7px @ 0.7 opacity — readable across the diagram, doesn't
+  // overpower the structure. Driven by hoveredBondIdx (set by the
+  // event-delegated SVG mousemove handler OR the rail row mouseenter).
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
     const svgEl = host.querySelector("svg");
     if (!svgEl) return;
-    // Remove any prior hover-trace overlays
     svgEl.querySelectorAll('[data-bond-hover="1"]').forEach((n) => n.remove());
     if (hoveredBondIdx == null) return;
-    // Find every path matching the hovered bond's class. Aromatic
-    // bonds may produce multiple <path> elements (the line + the
-    // inner stripe), so we trace ALL of them.
+    // Aromatic bonds may produce multiple <path> elements (line + inner
+    // stripe). Trace ALL paths matching the bond's bond-N class so the
+    // entire bond gets one consistent red stroke.
     svgEl.querySelectorAll<SVGPathElement>("[class^='bond-'], [class*=' bond-']").forEach((n) => {
       const cls = n.getAttribute("class") || "";
       const m = cls.match(/bond-(\d+)/);
       if (!m) return;
-      const idx = parseInt(m[1], 10);
-      if (idx !== hoveredBondIdx) return;
+      if (parseInt(m[1], 10) !== hoveredBondIdx) return;
       const d = n.getAttribute("d");
       if (!d) return;
-      // OUTER soft glow — wide, low opacity (creates the halo feel)
-      const glow = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      glow.setAttribute("data-bond-hover", "1");
-      glow.setAttribute("d", d);
-      glow.setAttribute("fill", "none");
-      glow.setAttribute("stroke", "#dc2626");
-      glow.setAttribute("stroke-width", "12");
-      glow.setAttribute("stroke-linecap", "round");
-      glow.setAttribute("opacity", "0.30");
-      glow.style.pointerEvents = "none";
-      // pulse animation
-      const animO = document.createElementNS("http://www.w3.org/2000/svg", "animate");
-      animO.setAttribute("attributeName", "opacity");
-      animO.setAttribute("values", "0.30;0.55;0.30");
-      animO.setAttribute("dur", "0.9s");
-      animO.setAttribute("repeatCount", "indefinite");
-      glow.appendChild(animO);
-      n.parentNode?.insertBefore(glow, n.nextSibling);
-      // INNER sharp stroke — thinner, higher opacity (defines the bond)
-      const trace = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      trace.setAttribute("data-bond-hover", "1");
-      trace.setAttribute("d", d);
-      trace.setAttribute("fill", "none");
-      trace.setAttribute("stroke", "#dc2626");
-      trace.setAttribute("stroke-width", "5");
-      trace.setAttribute("stroke-linecap", "round");
-      trace.setAttribute("opacity", "0.85");
-      trace.style.pointerEvents = "none";
-      n.parentNode?.insertBefore(trace, n.nextSibling);
+      const stroke = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      stroke.setAttribute("data-bond-hover", "1");
+      stroke.setAttribute("d", d);
+      stroke.setAttribute("fill", "none");
+      stroke.setAttribute("stroke", "#dc2626");
+      stroke.setAttribute("stroke-width", "7");
+      stroke.setAttribute("stroke-linecap", "round");
+      stroke.setAttribute("opacity", "0.70");
+      stroke.style.pointerEvents = "none";
+      n.parentNode?.insertBefore(stroke, n.nextSibling);
     });
   }, [hoveredBondIdx, svg, bondList]);
 
-  // Event-delegated bond hover — attaches ONCE to the SVG host container
-  // (not per-bond-path), so it survives re-renders of the inner SVG when
-  // RDKit re-emits the molecule diagram. mouseover/mouseout bubble (unlike
-  // mouseenter/mouseleave), so we can listen at the host and walk up the
-  // event.target chain to find the closest bond path. This is a robust
-  // fallback to the per-path handlers wired earlier — works even if those
-  // handlers detach during a fast re-render.
-  useEffect(() => {
-    const host = svgHostRef.current;
-    if (!host) return;
-    const findBondIdx = (target: EventTarget | null): number | null => {
-      let el = target as Element | null;
-      while (el && el !== host) {
-        const cls = (el as Element).getAttribute?.("class") || "";
-        const m = cls.match(/bond-(\d+)/);
-        if (m) return parseInt(m[1], 10);
-        el = el.parentElement;
-      }
-      return null;
-    };
-    const onOver = (e: Event) => {
-      const idx = findBondIdx((e as MouseEvent).target);
-      if (idx != null) setHoveredBondIdx(idx);
-    };
-    const onOut = (e: Event) => {
-      const me = e as MouseEvent;
-      // Only clear when leaving the host entirely — when moving between
-      // adjacent bond paths, relatedTarget will still be inside host.
-      const related = me.relatedTarget as Node | null;
-      if (related && host.contains(related)) return;
-      setHoveredBondIdx(null);
-    };
-    host.addEventListener("mouseover", onOver);
-    host.addEventListener("mouseout", onOut);
-    return () => {
-      host.removeEventListener("mouseover", onOver);
-      host.removeEventListener("mouseout", onOut);
-    };
-  }, [svg]);
 
   // SMARTS pattern match overlay — pulse halos on matched atoms PLUS
   // colored traces on bonds whose both endpoints are part of the same
@@ -1596,37 +1564,15 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             onClose={() => setSmartsOpen(false)}
           />
         )}
-        {/* CENTER COLUMN — Properties strip on TOP, SVG diagram BELOW.
-            The KPI tiles + build counts + patterns + closest-known
-            matches sit as a compact dashboard ABOVE the molecule, so
-            the prominent numbers (MW · LogP · TPSA · QED) read as the
-            header line for whatever structure the user is editing.
-            The diagram fills the remaining column height beneath, and
-            the right rail is a sibling of this center column. */}
+        {/* CENTER COLUMN — SVG diagram on TOP, Properties strip BELOW.
+            The molecule is the primary visual; KPI tiles + build counts
+            + patterns + closest-known sit as a compact dashboard
+            beneath it. This restores the diagram-first hierarchy after
+            an earlier experiment with properties-on-top buried the
+            structure too low in the column. The right rail is a sibling
+            of this center column. */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column",
           minWidth: 0, overflow: "hidden" }}>
-        {/* Properties strip ABOVE the SVG, inside the center column.
-            Compact: KPI tiles + recent SMARTS-finds + closest-known
-            match. Collapsible header so the user can tuck it away
-            and let the diagram fill the column. */}
-        {propertiesPanel && (
-          <PropertiesStrip
-            apiBase={apiBase}
-            smiles={smiles}
-            smartsHits={smartsHits}
-            smarts={smarts}
-            diagnostics={diagnostics}
-            bondsCount={bondList.length}
-            onSelectPattern={(pattern, categoryColor) => {
-              // Click on an auto-detected pattern chip → run SMARTS so
-              // the matched atoms + bonds light up in the 2D viewer
-              // tinted with the category's color.
-              setSmarts(pattern);
-              runSmartsMatch(pattern, categoryColor);
-            }}>
-            {propertiesPanel}
-          </PropertiesStrip>
-        )}
         {/* SVG area — molecule scales to fit, never scrolls, never clips */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
           {svg
@@ -1725,6 +1671,28 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </div>
           )}
         </div>
+        {/* Properties strip — sits BELOW the SVG inside the center column.
+            Compact KPI dashboard (medchem props · build state · patterns ·
+            closest known) with a responsive 4/2/1-column layout that
+            adapts to the strip's actual width. Collapsible header. */}
+        {propertiesPanel && (
+          <PropertiesStrip
+            apiBase={apiBase}
+            smiles={smiles}
+            smartsHits={smartsHits}
+            smarts={smarts}
+            diagnostics={diagnostics}
+            bondsCount={bondList.length}
+            onSelectPattern={(pattern, categoryColor) => {
+              // Click on an auto-detected pattern chip → run SMARTS so
+              // the matched atoms + bonds light up in the 2D viewer
+              // tinted with the category's color.
+              setSmarts(pattern);
+              runSmartsMatch(pattern, categoryColor);
+            }}>
+            {propertiesPanel}
+          </PropertiesStrip>
+        )}
         </div>
         {/* Atoms rail — embedded list of all atoms with element + valence + edit chips */}
         <AtomsRail
@@ -3473,9 +3441,10 @@ function BondsRail(p: BondsRailProps) {
             const bColor = p.elementColor[bEl] ?? "#374151";
             const isHover = p.hoveredBondIdx === b.bond_idx;
             // Order theme — color + label + bg tint, all keyed off bond order.
-            // Hover row uses a strong red glow (matching the SVG bond-glow
-            // overlay color) so the cross-rail/SVG mapping reads instantly,
-            // regardless of the bond's order theme.
+            // Single hover signal: red left-border + light red bg tint
+            // matching the SVG glow color (#dc2626). One visual, one
+            // affordance — the row "lights up" the same way the bond
+            // does in the diagram so the cross-mapping is unmistakable.
             const ORDER_THEME: Record<string, { fg: string; bg: string; border: string; glyph: string; label: string }> = {
               single:   { fg: "#374151", bg: "rgba(55,65,81,0.06)",   border: "rgba(55,65,81,0.20)",   glyph: "—",  label: "single" },
               double:   { fg: "#dc2626", bg: "rgba(220,38,38,0.06)",  border: "rgba(220,38,38,0.30)",  glyph: "═",  label: "double" },
@@ -3484,8 +3453,7 @@ function BondsRail(p: BondsRailProps) {
             };
             const theme = ORDER_THEME[b.order] ?? ORDER_THEME.single;
             const HOVER_FG = "#dc2626";
-            const HOVER_BG = "rgba(220,38,38,0.12)";
-            const HOVER_SHADOW = "0 0 0 1px rgba(220,38,38,0.45) inset";
+            const HOVER_BG = "rgba(220,38,38,0.10)";
             return (
               <div key={b.bond_idx}
                 onMouseEnter={() => p.onHoverBond?.(b.bond_idx)}
@@ -3496,13 +3464,10 @@ function BondsRail(p: BondsRailProps) {
                   padding: "4px 8px",
                   fontSize: 10, fontFamily: "var(--lys-font-mono)",
                   borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.025))",
-                  borderLeft: `5px solid ${isHover ? HOVER_FG : theme.border}`,
+                  borderLeft: `4px solid ${isHover ? HOVER_FG : theme.border}`,
                   background: isHover ? HOVER_BG : "transparent",
-                  boxShadow: isHover ? HOVER_SHADOW : "none",
-                  fontWeight: isHover ? 700 : 400,
-                  color: isHover ? HOVER_FG : "var(--lys-text)",
                   cursor: "pointer",
-                  transition: "background 0.10s, border-left 0.10s, box-shadow 0.10s",
+                  transition: "background 0.10s, border-left 0.10s",
                 }}>
                 <span style={{ fontSize: 8, color: "var(--lys-text-faint)",
                   minWidth: 14, textAlign: "right", fontWeight: 600 }}>
@@ -4350,11 +4315,13 @@ function DockHeader({ title, count, icon, color, onClose, description, rightActi
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   PropertiesStrip — horizontal strip ABOVE the SVG inside the
+   PropertiesStrip — horizontal strip BELOW the SVG inside the
    center column. Compact KPI tiles + build counts + smart-pattern
-   trail + closest-known matches, arranged side-by-side as a header
-   dashboard for the molecule. Header collapses to a single 28px row
-   when the user wants the diagram to fill the column.
+   trail + closest-known matches, arranged side-by-side as a footer
+   dashboard for the molecule. Layout adapts to width via ResizeObserver
+   (4 cols → 2 cols → stacked) so the right rail can overlap freely
+   without ever clipping content. Header collapses to a single 28px
+   row when the user wants the diagram to fill the column.
 
    Visual language matches the right-rail BondsRail header (mono
    uppercase + faint subtle right-aligned subtitle), so the chem
@@ -4499,7 +4466,7 @@ function PropertiesStrip(p: PropertiesStripProps) {
   return (
     <div style={{
       flexShrink: 0,
-      borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
       maxHeight: collapsed ? 28 : expandedH,
