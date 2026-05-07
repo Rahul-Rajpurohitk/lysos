@@ -930,11 +930,11 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   }, [recentlyBroken, svg]);
 
   // Hovered-bond glow — driven by hoveredBondIdx (set from rail row hover
-  // OR SVG bond-mouseenter). Was using drop-shadow only — barely visible
-  // on thin RDKit bond paths. Now layers a colored "trace" path on top
-  // of the original so the highlight is unmistakable. Original stroke
-  // is preserved (filter previously sometimes couldn't apply because
-  // the path's `style` attribute already had a fill/stroke baked in).
+  // OR SVG bond-mouseenter / delegated SVG mouseover). Layers a thick red
+  // glow path on top of the original RDKit path. We render TWO layered
+  // paths (an outer wide soft glow + an inner thinner sharp stroke) so
+  // the highlight reads from a distance even on thin RDKit bond lines,
+  // and we attach a pulsing opacity animation so the eye is drawn to it.
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
@@ -954,7 +954,25 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       if (idx !== hoveredBondIdx) return;
       const d = n.getAttribute("d");
       if (!d) return;
-      // Layer a thicker red overlay path right on top of the original
+      // OUTER soft glow — wide, low opacity (creates the halo feel)
+      const glow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      glow.setAttribute("data-bond-hover", "1");
+      glow.setAttribute("d", d);
+      glow.setAttribute("fill", "none");
+      glow.setAttribute("stroke", "#dc2626");
+      glow.setAttribute("stroke-width", "12");
+      glow.setAttribute("stroke-linecap", "round");
+      glow.setAttribute("opacity", "0.30");
+      glow.style.pointerEvents = "none";
+      // pulse animation
+      const animO = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      animO.setAttribute("attributeName", "opacity");
+      animO.setAttribute("values", "0.30;0.55;0.30");
+      animO.setAttribute("dur", "0.9s");
+      animO.setAttribute("repeatCount", "indefinite");
+      glow.appendChild(animO);
+      n.parentNode?.insertBefore(glow, n.nextSibling);
+      // INNER sharp stroke — thinner, higher opacity (defines the bond)
       const trace = document.createElementNS("http://www.w3.org/2000/svg", "path");
       trace.setAttribute("data-bond-hover", "1");
       trace.setAttribute("d", d);
@@ -962,12 +980,51 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       trace.setAttribute("stroke", "#dc2626");
       trace.setAttribute("stroke-width", "5");
       trace.setAttribute("stroke-linecap", "round");
-      trace.setAttribute("opacity", "0.55");
+      trace.setAttribute("opacity", "0.85");
       trace.style.pointerEvents = "none";
-      // Insert AFTER the bond path so it draws on top
       n.parentNode?.insertBefore(trace, n.nextSibling);
     });
   }, [hoveredBondIdx, svg, bondList]);
+
+  // Event-delegated bond hover — attaches ONCE to the SVG host container
+  // (not per-bond-path), so it survives re-renders of the inner SVG when
+  // RDKit re-emits the molecule diagram. mouseover/mouseout bubble (unlike
+  // mouseenter/mouseleave), so we can listen at the host and walk up the
+  // event.target chain to find the closest bond path. This is a robust
+  // fallback to the per-path handlers wired earlier — works even if those
+  // handlers detach during a fast re-render.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const findBondIdx = (target: EventTarget | null): number | null => {
+      let el = target as Element | null;
+      while (el && el !== host) {
+        const cls = (el as Element).getAttribute?.("class") || "";
+        const m = cls.match(/bond-(\d+)/);
+        if (m) return parseInt(m[1], 10);
+        el = el.parentElement;
+      }
+      return null;
+    };
+    const onOver = (e: Event) => {
+      const idx = findBondIdx((e as MouseEvent).target);
+      if (idx != null) setHoveredBondIdx(idx);
+    };
+    const onOut = (e: Event) => {
+      const me = e as MouseEvent;
+      // Only clear when leaving the host entirely — when moving between
+      // adjacent bond paths, relatedTarget will still be inside host.
+      const related = me.relatedTarget as Node | null;
+      if (related && host.contains(related)) return;
+      setHoveredBondIdx(null);
+    };
+    host.addEventListener("mouseover", onOver);
+    host.addEventListener("mouseout", onOut);
+    return () => {
+      host.removeEventListener("mouseover", onOver);
+      host.removeEventListener("mouseout", onOut);
+    };
+  }, [svg]);
 
   // SMARTS pattern match overlay — pulse halos on matched atoms PLUS
   // colored traces on bonds whose both endpoints are part of the same
@@ -1093,9 +1150,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   }, [highlightAtoms, svg, smartsCategoryColor, smartsMatchSets, bondList]);
 
   // SELECTION halo — strong amber filled circle behind every atom in
-  // `selected`. Driven by both shift-click in the SVG AND row-click in
-  // the atoms rail, so the user always sees on the molecule what they
-  // picked in the inventory. Single source of truth = `selected` Set.
+  // `selected`, PLUS a top-right atom-number badge so the user can see
+  // exactly which atom indices they've picked without having to glance at
+  // the right-rail row labels. Driven by both shift-click in the SVG AND
+  // row-click in the atoms rail. Single source of truth = `selected` Set.
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
@@ -1108,7 +1166,8 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       if (!_pos) continue;
       const cx = _pos.x;
       const cy = _pos.y;
-      // Filled disc behind atom — amber, ~70% opacity
+      // Filled disc behind atom — amber, ~70% opacity. Inserted at the
+      // FRONT of the SVG so atom labels render ABOVE it.
       const disc = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       disc.setAttribute("data-selected", "1");
       disc.setAttribute("cx", String(cx));
@@ -1118,8 +1177,34 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       disc.setAttribute("stroke", "#f59e0b");
       disc.setAttribute("stroke-width", "2");
       disc.style.pointerEvents = "none";
-      // Insert at front of SVG so atom labels render ABOVE the halo
       svgEl.insertBefore(disc, svgEl.firstChild?.nextSibling ?? null);
+      // Atom-NUMBER badge — small filled circle with the atom index,
+      // anchored top-right of the halo. Same pattern as the SMARTS-hit
+      // badges so the visual vocabulary is consistent. Appended (not
+      // inserted at front) so the badge sits ABOVE the disc + atom label.
+      const badgeBg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      badgeBg.setAttribute("data-selected", "1");
+      badgeBg.setAttribute("cx", String(cx + 11));
+      badgeBg.setAttribute("cy", String(cy - 11));
+      badgeBg.setAttribute("r", "7.5");
+      badgeBg.setAttribute("fill", "#f59e0b");
+      badgeBg.setAttribute("stroke", "#fff");
+      badgeBg.setAttribute("stroke-width", "1.2");
+      badgeBg.style.pointerEvents = "none";
+      svgEl.appendChild(badgeBg);
+      const badgeTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      badgeTxt.setAttribute("data-selected", "1");
+      badgeTxt.setAttribute("x", String(cx + 11));
+      badgeTxt.setAttribute("y", String(cy - 11));
+      badgeTxt.setAttribute("text-anchor", "middle");
+      badgeTxt.setAttribute("dominant-baseline", "central");
+      badgeTxt.setAttribute("font-size", "9");
+      badgeTxt.setAttribute("font-weight", "800");
+      badgeTxt.setAttribute("font-family", "var(--lys-font-mono), monospace");
+      badgeTxt.setAttribute("fill", "white");
+      badgeTxt.style.pointerEvents = "none";
+      badgeTxt.textContent = String(idx);
+      svgEl.appendChild(badgeTxt);
     }
   }, [selected, svg]);
 
@@ -2913,41 +2998,21 @@ function AtomsRail(p: AtomsRailProps) {
         onAddBond={p.onAddBond}
       />
       {/* BUILD TOOLS — fragments, rings, SMILES tabs.
-          Section header with collapse arrow lets the user hide the
-          tabs without losing the BondsRail above. */}
-      <div
-        onClick={() => setBuildSectionCollapsed((c) => !c)}
-        title={buildSectionCollapsed ? "Show build tools (fragments / rings / SMILES)"
-                                     : "Collapse build tools"}
-        style={{
-          padding: "5px 8px",
-          fontSize: 9, fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-faint)",
-          letterSpacing: "0.06em", textTransform: "uppercase",
-          borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-          borderBottom: buildSectionCollapsed ? "none" : "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-          display: "flex", alignItems: "center", gap: 5,
-          cursor: "pointer", userSelect: "none",
-        }}>
-        <span style={{ fontSize: 9, opacity: 0.6 }}>{buildSectionCollapsed ? "▶" : "▼"}</span>
-        <span style={{ fontWeight: 700 }}>build</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0,
-          fontFamily: "var(--lys-font-body)" }}>
-          fragments · rings · smiles
-        </span>
-      </div>
-      {!buildSectionCollapsed && (
+          Single header pattern (collapse arrow + title + selection-aware
+          status) lives INSIDE BuildTools to match the atoms + bonds rails.
+          The previous outer wrapper that duplicated the header has been
+          removed; BuildTools now owns its own collapse state. */}
         <BuildTools
           apiBase={p.apiBase}
           smiles={p.smiles}
           selected={p.selected}
+          collapsed={buildSectionCollapsed}
+          onToggleCollapsed={() => setBuildSectionCollapsed((c) => !c)}
           atoms={atoms}
           onAttachFragment={p.onAttachFragment}
           onAttachFG={p.onAttachFG}
           onReplaceSmiles={p.onReplaceSmiles}
         />
-      )}
       {paletteOpen && palettePos && palette.length > 0 && createPortal(
         <div data-element-pop style={{
           position: "fixed", left: palettePos.left, top: palettePos.top,
@@ -3407,7 +3472,10 @@ function BondsRail(p: BondsRailProps) {
             const aColor = p.elementColor[aEl] ?? "#374151";
             const bColor = p.elementColor[bEl] ?? "#374151";
             const isHover = p.hoveredBondIdx === b.bond_idx;
-            // Order theme — color + label + bg tint, all keyed off bond order
+            // Order theme — color + label + bg tint, all keyed off bond order.
+            // Hover row uses a strong red glow (matching the SVG bond-glow
+            // overlay color) so the cross-rail/SVG mapping reads instantly,
+            // regardless of the bond's order theme.
             const ORDER_THEME: Record<string, { fg: string; bg: string; border: string; glyph: string; label: string }> = {
               single:   { fg: "#374151", bg: "rgba(55,65,81,0.06)",   border: "rgba(55,65,81,0.20)",   glyph: "—",  label: "single" },
               double:   { fg: "#dc2626", bg: "rgba(220,38,38,0.06)",  border: "rgba(220,38,38,0.30)",  glyph: "═",  label: "double" },
@@ -3415,6 +3483,9 @@ function BondsRail(p: BondsRailProps) {
               aromatic: { fg: "#a855f7", bg: "rgba(168,85,247,0.06)", border: "rgba(168,85,247,0.30)", glyph: "⌬",  label: "arom"  },
             };
             const theme = ORDER_THEME[b.order] ?? ORDER_THEME.single;
+            const HOVER_FG = "#dc2626";
+            const HOVER_BG = "rgba(220,38,38,0.12)";
+            const HOVER_SHADOW = "0 0 0 1px rgba(220,38,38,0.45) inset";
             return (
               <div key={b.bond_idx}
                 onMouseEnter={() => p.onHoverBond?.(b.bond_idx)}
@@ -3425,10 +3496,13 @@ function BondsRail(p: BondsRailProps) {
                   padding: "4px 8px",
                   fontSize: 10, fontFamily: "var(--lys-font-mono)",
                   borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.025))",
-                  borderLeft: `3px solid ${isHover ? theme.fg : theme.border}`,
-                  background: isHover ? theme.bg : "transparent",
+                  borderLeft: `5px solid ${isHover ? HOVER_FG : theme.border}`,
+                  background: isHover ? HOVER_BG : "transparent",
+                  boxShadow: isHover ? HOVER_SHADOW : "none",
+                  fontWeight: isHover ? 700 : 400,
+                  color: isHover ? HOVER_FG : "var(--lys-text)",
                   cursor: "pointer",
-                  transition: "background 0.10s, border-left 0.10s",
+                  transition: "background 0.10s, border-left 0.10s, box-shadow 0.10s",
                 }}>
                 <span style={{ fontSize: 8, color: "var(--lys-text-faint)",
                   minWidth: 14, textAlign: "right", fontWeight: 600 }}>
@@ -3526,6 +3600,8 @@ interface BuildToolsProps {
   smiles: string | null;
   selected: Set<number>;
   atoms: AtomRow[];
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   onAttachFragment?: (anchorIdx: number, fragmentSmiles: string, label: string, bondOrder?: "single" | "double" | "aromatic") => void;
   onAttachFG?: (anchorIdx: number, fgName: string, label: string) => void;
   onReplaceSmiles?: (newSmiles: string, label: string) => void;
@@ -3641,32 +3717,41 @@ function BuildTools(p: BuildToolsProps) {
 
   return (
     <div style={{
-      flex: "1 1 0", minHeight: 100,
+      flexShrink: 0,
+      flexGrow: p.collapsed ? 0 : 1,
+      minHeight: p.collapsed ? "auto" : 100,
       display: "flex", flexDirection: "column",
-      borderTop: "2px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
       background: "var(--lys-bg-2, #ffffff)",
       overflow: "hidden",
     }}>
-      {/* Sticky header — title + selection-aware status line */}
+      {/* Single header — collapse arrow · build · selection-aware anchor status.
+          Replaces the older two-header pattern (outer wrapper + inner BuildTools
+          header) so the right rail follows the same one-header-per-panel
+          rhythm as the atoms + bonds rails above. */}
       <div
-        title="Build tools — compose with chemistry blocks. Fragments + rings attach to the selected atom (only chemistry-valid options shown). SMILES replaces the entire structure."
+        onClick={p.onToggleCollapsed}
+        title={p.collapsed
+          ? "Show build tools (fragments / rings / SMILES)"
+          : "Build tools — compose with chemistry blocks. Click to collapse. Fragments + rings attach to the selected atom (chemistry-valid options only). SMILES replaces the entire structure."}
         style={{
           padding: "5px 8px",
           fontSize: 9, fontFamily: "var(--lys-font-mono)",
           color: "var(--lys-text-faint)",
-          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          borderBottom: p.collapsed ? "none" : "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
           display: "flex", alignItems: "center", gap: 5,
+          cursor: "pointer", userSelect: "none",
         }}>
-        <span style={{ fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-          build
-        </span>
+        <span style={{ fontSize: 9, opacity: 0.6 }}>{p.collapsed ? "▶" : "▼"}</span>
+        <span style={{ fontWeight: 700 }}>build</span>
         <span style={{ flex: 1 }} />
         {anchorIdx != null && anchorAtom ? (
           <span style={{
             padding: "1px 6px", borderRadius: 3,
             background: canAttach ? "rgba(16,185,129,0.10)" : "rgba(220,38,38,0.10)",
             color: canAttach ? "#059669" : "#dc2626",
-            fontWeight: 700,
+            fontWeight: 700, textTransform: "none", letterSpacing: 0,
           }}>
             anchor: atom {anchorIdx} ({anchorAtom.element}){canAttach ? ` · ${anchorAtom.free_valence}◦` : " · no slots"}
           </span>
@@ -3674,14 +3759,18 @@ function BuildTools(p: BuildToolsProps) {
           <span style={{
             padding: "1px 6px", borderRadius: 3,
             background: "rgba(220,38,38,0.10)", color: "#dc2626", fontWeight: 700,
+            textTransform: "none", letterSpacing: 0,
           }}>{selectedArr.length} selected · pick 1</span>
         ) : (
           <span style={{
             padding: "1px 6px", borderRadius: 3,
             background: "rgba(0,0,0,0.04)", color: "var(--lys-text-faint)",
-          }}>select 1 atom →</span>
+            textTransform: "none", letterSpacing: 0, fontFamily: "var(--lys-font-body)",
+          }}>fragments · rings · smiles</span>
         )}
       </div>
+      {/* Tab switcher — only when expanded */}
+      {!p.collapsed && (<>
       {/* Tab switcher */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))" }}>
         <button type="button" onClick={() => setTab("fragments")} style={tabBtnStyle(tab === "fragments")}>
@@ -3872,6 +3961,7 @@ function BuildTools(p: BuildToolsProps) {
           </div>
         )}
       </div>
+      </>)}
     </div>
   );
 }
