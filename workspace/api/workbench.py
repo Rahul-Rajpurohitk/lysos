@@ -929,16 +929,41 @@ async def chem_diagnostics(smiles_b64: str) -> Dict[str, Any]:
             suggested_fix="add a counterion or balance the charge",
         ))
 
-    # Disconnected fragments
-    n_frags = len(Chem.GetMolFrags(mol))
+    # Disconnected fragments — return per-atom fragment ids so the
+    # frontend can highlight all atoms in NON-main fragments (the
+    # "broken-off" pieces that need reconnection).
+    frags = Chem.GetMolFrags(mol)
+    n_frags = len(frags)
     fragment_warnings: list[Dict[str, Any]] = []
+    fragment_atom_ids: list[list[int]] = [list(f) for f in frags]
+    # Largest fragment is the "main" one; others are broken-off.
+    main_frag_idx = max(range(n_frags), key=lambda i: len(frags[i])) if n_frags else 0
+    broken_off_atom_ids: list[int] = []
     if n_frags > 1:
+        for i, f in enumerate(frags):
+            if i != main_frag_idx:
+                broken_off_atom_ids.extend(list(f))
         fragment_warnings.append(_violation(
             "disconnected_fragments",
             f"molecule has {n_frags} disconnected fragments",
             hint="A bond was broken without reconnection; molecule is no longer one piece.",
             suggested_fix="reconnect the fragments with add_bond",
         ))
+
+    # Single unified status — frontend renders this as one badge at the
+    # top of the 2D viewer. tier: "ok" (green) | "warn" (amber) | "block" (red)
+    if n_frags > 1 or incomplete:
+        status_tier = "block"
+        status_label = (
+            f"{n_frags} fragments"      if n_frags > 1
+            else f"{len(incomplete)} under-valent"
+        )
+    elif charge_warnings:
+        status_tier = "warn"
+        status_label = f"charge {total_charge:+d}"
+    else:
+        status_tier = "ok"
+        status_label = "valid"
 
     return {
         "is_valid": (not incomplete) and (n_frags == 1),
@@ -950,6 +975,13 @@ async def chem_diagnostics(smiles_b64: str) -> Dict[str, Any]:
         "charge_warnings": charge_warnings,
         "fragment_warnings": fragment_warnings,
         "all_violations": incomplete + charge_warnings + fragment_warnings,
+        # New fields — per-atom fragment membership + broken-off ids +
+        # single unified status tag for the top-of-viewer badge.
+        "fragment_atom_ids": fragment_atom_ids,
+        "main_fragment_idx": main_frag_idx,
+        "broken_off_atom_ids": broken_off_atom_ids,
+        "status_tier": status_tier,
+        "status_label": status_label,
     }
 
 

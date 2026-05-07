@@ -235,6 +235,11 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     all_violations: Violation[];
     n_fragments: number;
     total_formal_charge: number;
+    fragment_atom_ids?: number[][];
+    main_fragment_idx?: number;
+    broken_off_atom_ids?: number[];
+    status_tier?: "ok" | "warn" | "block";
+    status_label?: string;
   } | null>(null);
   const showViolation = (v: Violation, autoDismissMs: number = 4000) => {
     setViolation(v);
@@ -513,10 +518,35 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       // BondsRail row highlight react to it.
       const onBondHover = () => { setHoveredBondIdx(bondIdx); };
       const onBondLeave = () => { setHoveredBondIdx((cur) => cur === bondIdx ? null : cur); };
+      // Extract the bond's two endpoint atom indices from the class string
+      // ("bond-N atom-A atom-B"). Used by shift-click multi-select below.
+      const bondClsMatch = cls.match(/atom-(\d+).*?atom-(\d+)/);
+      const endpointA = bondClsMatch ? parseInt(bondClsMatch[1], 10) : null;
+      const endpointB = bondClsMatch ? parseInt(bondClsMatch[2], 10) : null;
       const onBondClick = (e: Event) => {
         e.stopPropagation();
         const me = e as MouseEvent;
-        if (me.shiftKey || me.altKey) return;  // reserved for future modifiers
+        // Shift-click on a bond path selects BOTH endpoint atoms — this is
+        // how the user multi-selects pure carbons (which RDKit doesn't draw
+        // as separate <text> labels). Without this, bond building between
+        // pure carbons is impossible from the SVG.
+        if (me.shiftKey) {
+          if (endpointA != null && endpointB != null) {
+            setSelected((cur) => {
+              const next = new Set(cur);
+              // Toggle both endpoints. If neither selected → select both.
+              // If one selected → select the other (so the user can build
+              // a chain: shift-click bond A-B selects A+B; shift-click
+              // a bond B-C selects A, B, C — wait, that's wrong, we'd add
+              // B again. Better: toggle each independently.
+              if (next.has(endpointA)) next.delete(endpointA); else next.add(endpointA);
+              if (next.has(endpointB)) next.delete(endpointB); else next.add(endpointB);
+              return next;
+            });
+          }
+          return;
+        }
+        if (me.altKey) return;  // reserved for future modifiers
         // Don't break aromatic ring bonds — would shatter the ring.
         const meta = bondList.find((b) => b.bond_idx === bondIdx);
         if (meta?.in_ring && meta.order === "aromatic") {
@@ -764,18 +794,30 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     }
   }, [cursors, svg]);
 
-  // Incomplete-atom overlay — pulse red ring on atoms violating valence
-  // (e.g. carbon with 3 bonds after a bond break). Uses /chem/diagnostics.
+  // Unified rule-violation overlay — pulse red ring on:
+  //   1. Under-valent atoms (broken_atom rule)
+  //   2. ALL atoms in disconnected fragments (the "broken off" pieces).
+  // Both feed off /chem/diagnostics so the same backend truth drives
+  // every visual signal — no inconsistency between the badge and the
+  // SVG ring.
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
     const svgEl = host.querySelector("svg");
     if (!svgEl) return;
     svgEl.querySelectorAll('[data-incomplete="1"]').forEach((n) => n.remove());
-    if (!diagnostics?.incomplete_atoms?.length) return;
-    for (const v of diagnostics.incomplete_atoms) {
-      if (v.atom_idx == null) continue;
-      const target = svgEl.querySelector(`[class*="atom-${v.atom_idx}"]`);
+    if (!diagnostics) return;
+    // Union of two atom sets: under-valent + broken-off-fragment atoms.
+    const flagged = new Set<number>();
+    for (const v of (diagnostics.incomplete_atoms || [])) {
+      if (v.atom_idx != null) flagged.add(v.atom_idx);
+    }
+    for (const idx of (diagnostics.broken_off_atom_ids || [])) {
+      flagged.add(idx);
+    }
+    if (!flagged.size) return;
+    for (const idx of flagged) {
+      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
       if (!target) continue;
       const bbox = (target as SVGGraphicsElement).getBBox?.();
       if (!bbox) continue;
@@ -792,7 +834,6 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       ring.setAttribute("stroke-dasharray", "3,2");
       ring.setAttribute("opacity", "0.9");
       ring.style.pointerEvents = "none";
-      // Pulse animation
       const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
       anim.setAttribute("attributeName", "r");
       anim.setAttribute("values", "13;16;13");
@@ -1110,6 +1151,45 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           </span>
         </button>
         <span style={{ flex: 1 }} />
+        {/* Unified molecule status badge — single source of truth from
+            /chem/diagnostics. Tier driven (ok/warn/block). Click to scroll
+            into the violation details. */}
+        {smiles && diagnostics?.status_tier && (() => {
+          const tier = diagnostics.status_tier!;
+          const palette = tier === "ok"
+            ? { fg: "#059669", bg: "rgba(16,185,129,0.12)", border: "rgba(16,185,129,0.40)", icon: "✓" }
+            : tier === "warn"
+            ? { fg: "#ca8a04", bg: "rgba(202,138,4,0.12)", border: "rgba(202,138,4,0.40)", icon: "⚠" }
+            : { fg: "#dc2626", bg: "rgba(220,38,38,0.12)", border: "rgba(220,38,38,0.40)", icon: "⚠" };
+          const allViolations = diagnostics.all_violations || [];
+          return (
+            <button
+              type="button"
+              onClick={() => {
+                if (allViolations.length > 0) {
+                  showViolation(allViolations[0], 6000);
+                }
+              }}
+              title={
+                allViolations.length > 0
+                  ? `${allViolations.length} chemistry issue${allViolations.length === 1 ? "" : "s"}: ${allViolations.map((v) => v.message).join("; ")}`
+                  : "Molecule passes all chemistry checks: connected, no over-valence, charge-neutral."
+              }
+              style={{
+                padding: "1px 8px", borderRadius: 999,
+                background: palette.bg,
+                border: `1px solid ${palette.border}`,
+                color: palette.fg,
+                fontSize: 10, fontWeight: 700,
+                fontFamily: "var(--lys-font-mono)",
+                cursor: allViolations.length > 0 ? "pointer" : "default",
+                display: "inline-flex", alignItems: "center", gap: 4,
+              }}>
+              <span style={{ fontSize: 11, lineHeight: 1 }}>{palette.icon}</span>
+              {diagnostics.status_label}
+            </button>
+          );
+        })()}
         {selected.size > 0 && (
           <span style={{ color: "#f59e0b", fontWeight: 600 }}>{selected.size} selected</span>
         )}
@@ -1490,6 +1570,37 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           incompleteAtomIdxs={new Set((diagnostics?.incomplete_atoms || [])
             .map((v) => v.atom_idx).filter((x): x is number => x != null))}
           recentlyBrokenAtomIdxs={recentlyBroken}
+          nFragments={diagnostics?.n_fragments ?? 1}
+          brokenOffAtomIdxs={new Set(diagnostics?.broken_off_atom_ids ?? [])}
+          onAddBond={async (a, b, order) => {
+            if (!smiles) return;
+            try {
+              const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  smiles, op: "add_bond",
+                  atom_index_a: a, atom_index_b: b,
+                  bond_order: order,
+                }),
+              });
+              if (!r.ok) {
+                showViolation(await parseError(r, "add_bond_failed"));
+                return;
+              }
+              const d = await r.json();
+              if (d.smiles) {
+                setSelected(new Set());
+                onMoleculeEdit?.(d.smiles, {
+                  op: "add_bond", atom_idx: a,
+                  label: `+${order} bond ${a}–${b}`,
+                });
+              }
+            } catch (exc: any) {
+              showViolation({ code: "network_error",
+                message: `bond network error: ${exc?.message ?? exc}` });
+            }
+          }}
         />
         {pop && smiles && createPortal(
           <div data-chem-pop style={{
@@ -2013,6 +2124,9 @@ interface AtomsRailProps {
   recentlyBrokenAtomIdxs?: Set<number>;
   onHoverBond?: (idx: number | null) => void;
   onBreakBond?: (bondIdx: number) => void;
+  nFragments?: number;
+  brokenOffAtomIdxs?: Set<number>;
+  onAddBond?: (a: number, b: number, order: "single" | "double" | "triple") => void;
 }
 
 interface ElementInfo {
@@ -2512,6 +2626,10 @@ function AtomsRail(p: AtomsRailProps) {
         onBreakBond={p.onBreakBond}
         elementColor={ELEMENT_COLOR}
         atoms={atoms}
+        selected={p.selected}
+        nFragments={p.nFragments}
+        brokenOffAtomIdxs={p.brokenOffAtomIdxs}
+        onAddBond={p.onAddBond}
       />
       {/* Build Tools — fills the bottom space of the rail with concrete
           building blocks the user (and the agent) can attach to the
@@ -2797,6 +2915,10 @@ interface BondsRailProps {
   onBreakBond?: (idx: number) => void;
   elementColor: Record<string, string>;
   atoms: AtomRow[];
+  selected?: Set<number>;
+  nFragments?: number;
+  brokenOffAtomIdxs?: Set<number>;
+  onAddBond?: (a: number, b: number, order: "single" | "double" | "triple") => void;
 }
 
 const BOND_GLYPH_RAIL: Record<string, string> = {
@@ -2852,6 +2974,86 @@ function BondsRail(p: BondsRailProps) {
       </div>
       {!collapsed && (
         <div style={{ flex: 1, overflow: "auto" }}>
+          {/* Disconnected fragments callout — when n_fragments > 1, show a
+              prominent banner with a one-click "Bridge" button that bonds
+              the two selected atoms (or guides the user to select them). */}
+          {(p.nFragments ?? 1) > 1 && (() => {
+            const sel = p.selected ? Array.from(p.selected) : [];
+            const canBridge = sel.length === 2;
+            return (
+              <div style={{
+                padding: "6px 8px",
+                background: "rgba(220,38,38,0.08)",
+                borderBottom: "1px solid rgba(220,38,38,0.20)",
+                fontSize: 9.5, fontFamily: "var(--lys-font-body)",
+                display: "flex", flexDirection: "column", gap: 4,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5,
+                  color: "#dc2626", fontWeight: 700 }}>
+                  <span>⚠ Disconnected · {p.nFragments} fragments</span>
+                  <span style={{ flex: 1 }} />
+                  {canBridge && p.onAddBond && (
+                    <button type="button"
+                      onClick={() => p.onAddBond?.(sel[0], sel[1], "single")}
+                      title={`Bridge atom ${sel[0]} ↔ atom ${sel[1]} with a single bond`}
+                      style={{
+                        padding: "2px 8px", borderRadius: 4,
+                        fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+                        fontWeight: 700,
+                        background: "#dc2626", color: "white", border: 0,
+                        cursor: "pointer",
+                      }}>🔗 bridge {sel[0]}↔{sel[1]}</button>
+                  )}
+                </div>
+                <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
+                  lineHeight: 1.4 }}>
+                  {canBridge
+                    ? "Click 🔗 bridge to connect."
+                    : sel.length === 1
+                    ? `Atom ${sel[0]} selected — shift-click another atom (or any bond) to pick a partner.`
+                    : "Shift-click 2 atoms (or click a bond between them) to bridge fragments."}
+                </div>
+              </div>
+            );
+          })()}
+          {/* "+ Bond" CTA when 2 atoms are selected (regardless of fragment
+              state) — gives the user a click-first path to creating bonds
+              without finding the toolbar at the SVG bottom. */}
+          {p.selected && p.selected.size === 2 && (p.nFragments ?? 1) === 1 && p.onAddBond && (() => {
+            const sel = Array.from(p.selected!);
+            return (
+              <div style={{
+                padding: "5px 8px",
+                background: "rgba(245,158,11,0.06)",
+                borderBottom: "1px solid rgba(245,158,11,0.20)",
+                display: "flex", alignItems: "center", gap: 5,
+                fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+                color: "#92400e",
+              }}>
+                <span style={{ fontWeight: 700 }}>+ bond</span>
+                <span style={{ opacity: 0.75 }}>
+                  atom {sel[0]} ↔ atom {sel[1]}
+                </span>
+                <span style={{ flex: 1 }} />
+                {(["single", "double", "triple"] as const).map((bo) => (
+                  <button key={bo} type="button"
+                    onClick={() => p.onAddBond?.(sel[0], sel[1], bo)}
+                    title={`Connect with ${bo} bond`}
+                    style={{
+                      padding: "2px 7px", borderRadius: 4,
+                      fontSize: 9, fontFamily: "var(--lys-font-mono)",
+                      fontWeight: 700,
+                      background: "rgba(245,158,11,0.20)",
+                      border: "1px solid rgba(245,158,11,0.40)",
+                      color: "#92400e",
+                      cursor: "pointer",
+                    }}>
+                    {bo === "single" ? "—" : bo === "double" ? "=" : "≡"}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
           {p.bonds.length === 0 ? (
             <div style={{ padding: "10px 8px", textAlign: "center",
               fontSize: 9.5, color: "var(--lys-text-faint)",
