@@ -128,94 +128,175 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
         onRefresh={refresh}
         loading={loading}
       />
-      <div style={{ flex: 1, overflow: "auto", padding: 6, display: "flex",
-        flexDirection: "column", gap: 5 }}>
+      <div style={{ flex: 1, overflow: "auto", display: "flex",
+        flexDirection: "column" }}>
 
-        {/* HERO row — 4 inline mini-tiles, single horizontal strip */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 4 }}>
-          <MiniTile label="MW" value={data.molecular_weight.toFixed(0)} unit="Da"
-            color={data.molecular_weight < 500 ? "#10b981" : "#d97706"} />
-          <MiniTile label="logP" value={data.logp.toFixed(2)} unit=""
-            color={data.logp < 5 && data.logp > -2 ? "#10b981" : "#d97706"} />
-          <MiniTile label="TPSA" value={data.tpsa.toFixed(0)} unit="Å²"
-            color={data.tpsa <= 140 ? "#10b981" : "#d97706"} />
-          <MiniTile label="QED" value={data.qed.toFixed(2)} unit=""
-            color={data.qed >= 0.67 ? "#10b981" : data.qed >= 0.4 ? "#d97706" : "#dc2626"} />
-        </div>
+        {/* SECTION 1 · DRUG-LIKENESS · 4 hero KPI tiles with rule status
+            baked into the tile color (green = passes Lipinski threshold,
+            amber = violation, red = severe). Tooltip per tile shows the
+            threshold + medchem rationale. */}
+        <PropSection label="drug-likeness" subtitle="Lipinski Ro5 KPIs">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+            gap: 4, padding: "0 6px 4px" }}>
+            <MiniTile label="MW" value={data.molecular_weight.toFixed(0)} unit="Da"
+              color={data.molecular_weight < 500 ? "#10b981" : "#d97706"}
+              tip={`Molecular weight (Daltons). Lipinski Ro5: < 500 Da. Currently ${data.molecular_weight.toFixed(1)} Da · ${data.molecular_weight < 500 ? "passes" : "fails"}.`} />
+            <MiniTile label="logP" value={data.logp.toFixed(2)} unit=""
+              color={data.logp < 5 && data.logp > -2 ? "#10b981" : "#d97706"}
+              tip={`Octanol-water partition coefficient. Lipinski Ro5: < 5. Higher = more lipophilic / poorer solubility. Currently ${data.logp.toFixed(2)} · ${data.logp < 5 && data.logp > -2 ? "passes" : "fails"}.`} />
+            <MiniTile label="TPSA" value={data.tpsa.toFixed(0)} unit="Å²"
+              color={data.tpsa <= 140 ? "#10b981" : "#d97706"}
+              tip={`Topological polar surface area. Veber: ≤ 140 Å² for oral bioavailability. Currently ${data.tpsa.toFixed(0)} Å² · ${data.tpsa <= 140 ? "passes" : "fails"}.`} />
+            <MiniTile label="QED" value={data.qed.toFixed(2)} unit=""
+              color={data.qed >= 0.67 ? "#10b981" : data.qed >= 0.4 ? "#d97706" : "#dc2626"}
+              tip={`Quantitative Estimate of Drug-likeness (Bickerton 2012). Range [0,1]. ≥0.67 = drug-like, 0.4-0.67 = passable, <0.4 = poor. Currently ${data.qed.toFixed(2)}.`} />
+          </div>
+        </PropSection>
 
-        {/* Rules row — Lipinski + Veber as inline chips */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-          <RulePill label="Lipinski" pass={data.lipinski_pass} sub={data.lipinski_pass ? "pass" : `${data.lipinski_violations} viol`} />
-          <RulePill label="Veber" pass={data.veber_pass} sub={data.veber_pass ? "pass" : "fail"} />
-          {lipChecks.map((c) => (
-            <InlineRuleCheck key={c.name} {...c} />
-          ))}
-        </div>
-
-        {/* Composition row — element pills + ring/fsp3/charge inline */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-          {Object.entries(data.element_counts).map(([sym, n]) => {
-            const c = ELEMENT_COLOR[sym] ?? "#374151";
-            return (
-              <span key={sym} style={{
-                padding: "1px 6px", borderRadius: 999,
-                background: `${c}10`, border: `1px solid ${c}30`,
-                fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
-              }}>
-                <span style={{ fontWeight: 700, color: c }}>{sym}</span>
-                <span style={{ color: "var(--lys-text-faint)" }}>·{n}</span>
-              </span>
-            );
-          })}
-          <span style={{ width: 1, height: 14, background: "var(--lys-border-faint, rgba(0,0,0,0.08))", margin: "0 2px" }} />
-          <InlineStat label="rings" value={`${data.n_rings}/${data.n_aromatic_rings}ar`} />
-          <InlineStat label="fsp3" value={data.fsp3.toFixed(2)} />
-          <InlineStat label="charge" value={data.formal_charge === 0 ? "0" : String(data.formal_charge)} />
-          <InlineStat label="rot" value={String(data.n_rotatable_bonds)} />
-        </div>
-
-        {/* Drug-class detector — only renders when matches exist */}
-        {data.detected_classes.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
-            <span style={{ fontSize: 9, color: "var(--lys-text-faint)",
-              fontFamily: "var(--lys-font-mono)",
-              letterSpacing: "0.04em", textTransform: "uppercase",
-              fontWeight: 600 }}>matches</span>
-            {data.detected_classes.map((c) => (
-              <span key={c} style={{
-                padding: "1px 6px", borderRadius: 999,
-                background: "rgba(168,85,247,0.10)",
-                color: "#a855f7", fontSize: 9.5,
-                fontFamily: "var(--lys-font-mono)", fontWeight: 600,
-              }}>{c}</span>
+        {/* SECTION 2 · RULE COMPLIANCE · explicit pass/fail summary for
+            Lipinski + Veber + per-rule breakdown (only shown if any
+            violation exists, to keep clean state minimal). */}
+        <PropSection
+          label="rule compliance"
+          subtitle={
+            data.lipinski_pass && data.veber_pass
+              ? "Lipinski Ro5 + Veber · all pass"
+              : `${data.lipinski_violations} Lipinski viol${data.lipinski_violations === 1 ? "" : "s"}${data.veber_pass ? "" : " · Veber fail"}`
+          }>
+          <div style={{ padding: "0 6px 4px",
+            display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+            <RulePill label="Lipinski Ro5" pass={data.lipinski_pass}
+              sub={data.lipinski_pass ? `4/4 pass` : `${4 - data.lipinski_violations}/4 pass`} />
+            <RulePill label="Veber" pass={data.veber_pass}
+              sub={data.veber_pass ? "rotB ≤ 10 · TPSA ≤ 140" : "rotB or TPSA fail"} />
+            {/* Per-rule chips — only rendered when there's a Lipinski
+                violation, so the clean state stays minimal. */}
+            {!data.lipinski_pass && lipChecks.map((c) => (
+              <InlineRuleCheck key={c.name} {...c} />
             ))}
           </div>
+        </PropSection>
+
+        {/* SECTION 3 · COMPOSITION · element counts only */}
+        <PropSection label="composition" subtitle={`${data.n_heavy_atoms} heavy atoms`}>
+          <div style={{ padding: "0 6px 4px",
+            display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+            {Object.entries(data.element_counts).map(([sym, n]) => {
+              const c = ELEMENT_COLOR[sym] ?? "#374151";
+              return (
+                <span key={sym}
+                  title={`${n} ${sym} atom${n === 1 ? "" : "s"}`}
+                  style={{
+                    padding: "1px 7px", borderRadius: 999,
+                    background: `${c}10`, border: `1px solid ${c}30`,
+                    fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                    display: "inline-flex", gap: 3, alignItems: "baseline",
+                  }}>
+                  <span style={{ fontWeight: 700, color: c }}>{sym}</span>
+                  <span style={{ color: "var(--lys-text-faint)" }}>·{n}</span>
+                </span>
+              );
+            })}
+          </div>
+        </PropSection>
+
+        {/* SECTION 4 · STRUCTURE · structural / topological metrics. */}
+        <PropSection label="structure" subtitle="rings · sp³ · charge · rotatable">
+          <div style={{ padding: "0 6px 4px",
+            display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
+            <InlineStat label="rings"
+              value={`${data.n_rings}/${data.n_aromatic_rings}ar`}
+              tip={`${data.n_rings} ring${data.n_rings === 1 ? "" : "s"} total · ${data.n_aromatic_rings} aromatic`} />
+            <InlineStat label="fsp3" value={data.fsp3.toFixed(2)}
+              tip={`Fraction of sp³-hybridized carbons. Higher = more 3D / less flat. Drug-like ≥ 0.25.`} />
+            <InlineStat label="charge"
+              value={data.formal_charge === 0 ? "0" : (data.formal_charge > 0 ? `+${data.formal_charge}` : String(data.formal_charge))}
+              tip={data.formal_charge === 0
+                ? "Net-neutral · most drugs"
+                : `Net formal charge ${data.formal_charge > 0 ? "+" : ""}${data.formal_charge} · ionizable / counterion needed`} />
+            <InlineStat label="rot" value={String(data.n_rotatable_bonds)}
+              tip={`${data.n_rotatable_bonds} rotatable bond${data.n_rotatable_bonds === 1 ? "" : "s"}. Veber: ≤ 10 for oral bioavailability.`} />
+          </div>
+        </PropSection>
+
+        {/* SECTION 5 · DRUG-CLASS MATCHES · only renders when matches exist. */}
+        {data.detected_classes.length > 0 && (
+          <PropSection label="drug-class matches"
+            subtitle={`${data.detected_classes.length} SMARTS pattern hit${data.detected_classes.length === 1 ? "" : "s"}`}>
+            <div style={{ padding: "0 6px 4px",
+              display: "flex", flexWrap: "wrap", gap: 3, alignItems: "center" }}>
+              {data.detected_classes.map((c) => (
+                <span key={c}
+                  title={`Substructure of class "${c}" detected — likely contributes to mechanism / SAR profile.`}
+                  style={{
+                  padding: "1px 7px", borderRadius: 999,
+                  background: "rgba(168,85,247,0.12)",
+                  border: "1px solid rgba(168,85,247,0.32)",
+                  color: "#a855f7", fontSize: 10,
+                  fontFamily: "var(--lys-font-mono)", fontWeight: 600,
+                }}>{c}</span>
+              ))}
+            </div>
+          </PropSection>
         )}
 
-        {/* Identifiers — single compact line, truncated SMILES + InChIKey */}
-        <div style={{
-          fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-dim)",
-          padding: "3px 6px", borderRadius: 4,
-          background: "var(--lys-bg-3, rgba(0,0,0,0.02))",
-          display: "flex", flexWrap: "wrap", gap: 8, alignItems: "baseline",
-        }}>
-          <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5,
-            letterSpacing: "0.04em", textTransform: "uppercase" }}>SMILES</span>
-          <span style={{ wordBreak: "break-all", flex: 1, minWidth: 0,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-            color: "var(--lys-text)" }} title={data.canonical_smiles}>
-            {data.canonical_smiles}
-          </span>
-          {data.sa_score > 0 && (
-            <span style={{ flexShrink: 0, color: "var(--lys-text-faint)" }}>
-              SA <span style={{ color: data.sa_score < 4 ? "#10b981" : data.sa_score < 6 ? "#d97706" : "#dc2626", fontWeight: 600 }}>
-                {data.sa_score.toFixed(2)}
-              </span>
+        {/* SECTION 6 · IDENTIFIERS · canonical SMILES + SA score. */}
+        <PropSection label="identifiers" subtitle="canonical · synth-access">
+          <div style={{ padding: "2px 6px 6px",
+            display: "flex", gap: 8, alignItems: "baseline",
+            fontSize: 10, fontFamily: "var(--lys-font-mono)" }}>
+            <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5,
+              letterSpacing: "0.04em", textTransform: "uppercase",
+              flexShrink: 0 }}>SMILES</span>
+            <span title={data.canonical_smiles}
+              style={{ flex: 1, minWidth: 0,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                color: "var(--lys-text)" }}>
+              {data.canonical_smiles}
             </span>
-          )}
-        </div>
+            {data.sa_score > 0 && (
+              <span title={`Synthetic Accessibility Score (Ertl 2009). 1=easy, 10=hard. ${data.sa_score < 4 ? "Easy synthesis." : data.sa_score < 6 ? "Moderate." : "Difficult."}`}
+                style={{ flexShrink: 0, color: "var(--lys-text-faint)",
+                  fontSize: 9 }}>
+                SA <span style={{ color: data.sa_score < 4 ? "#10b981" : data.sa_score < 6 ? "#d97706" : "#dc2626", fontWeight: 700 }}>
+                  {data.sa_score.toFixed(2)}
+                </span>
+              </span>
+            )}
+          </div>
+        </PropSection>
       </div>
+    </div>
+  );
+}
+
+// Section header with mono uppercase label + faint subtitle. Same
+// vocabulary as the right-rail BondsRail / atoms-rail section headers.
+function PropSection({ label, subtitle, children }: {
+  label: string; subtitle?: string; children: React.ReactNode;
+}) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{
+        padding: "5px 8px 3px",
+        fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+        color: "var(--lys-text-faint)",
+        letterSpacing: "0.06em", textTransform: "uppercase",
+        display: "flex", alignItems: "center", gap: 5,
+        background: "var(--lys-bg, #fafafa)",
+      }}>
+        <span style={{ fontWeight: 700 }}>{label}</span>
+        {subtitle && (
+          <>
+            <span style={{ flex: 1 }} />
+            <span style={{ opacity: 0.65, textTransform: "none",
+              letterSpacing: 0, fontFamily: "var(--lys-font-body)" }}>
+              {subtitle}
+            </span>
+          </>
+        )}
+      </div>
+      {children}
     </div>
   );
 }
@@ -257,9 +338,9 @@ function Header({ title, iconColor, onRefresh, loading }: { title: string; iconC
 //  MiniTile/RulePill/InlineRuleCheck/InlineStat below for compact layout.)
 
 // Compact in-line stat (single horizontal pill style)
-function InlineStat({ label, value }: { label: string; value: string }) {
+function InlineStat({ label, value, tip }: { label: string; value: string; tip?: string }) {
   return (
-    <span style={{
+    <span title={tip} style={{
       padding: "1px 6px", borderRadius: 4,
       background: "var(--lys-bg-3, rgba(0,0,0,0.02))",
       border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
@@ -274,12 +355,15 @@ function InlineStat({ label, value }: { label: string; value: string }) {
 }
 
 // Compact mini-tile for hero row (smaller than full Tile)
-function MiniTile({ label, value, unit, color }: { label: string; value: string; unit: string; color: string }) {
+function MiniTile({ label, value, unit, color, tip }: {
+  label: string; value: string; unit: string; color: string; tip?: string;
+}) {
   return (
-    <div style={{
+    <div title={tip} style={{
       padding: "5px 7px", borderRadius: 5,
       background: `${color}10`, borderLeft: `3px solid ${color}`,
       display: "flex", flexDirection: "column", gap: 0,
+      cursor: tip ? "help" : "default",
     }}>
       <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
         fontFamily: "var(--lys-font-mono)", letterSpacing: "0.04em",
