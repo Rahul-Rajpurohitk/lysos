@@ -422,6 +422,77 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     return () => { cancelled = true; };
   }, [smiles, apiBase]);
 
+  // Per-render atom position map. RDKit's SVG only emits separate
+  // <text class="atom-N"> for HETEROATOMS — pure carbons have no
+  // dedicated element. So `querySelector("[class*='atom-0']")` for a
+  // pure C returns the FIRST bond path containing atom-0 in its
+  // class, and bbox of that path = midpoint of the BOND, not the
+  // atom. That's why selection halos / SMARTS hits / incomplete
+  // pulses were rendering at wrong positions.
+  //
+  // Fix: parse every bond path's "d" attribute ("M x1,y1 L x2,y2"),
+  // assign atom_a → (x1,y1) and atom_b → (x2,y2). Build a map at
+  // SVG-inject time, then EVERY overlay (selection, hover, SMARTS,
+  // incomplete, recently-broken, multi-cursor) uses the map for
+  // accurate placement.
+  const atomPositions = useRef<Map<number, { x: number; y: number }>>(new Map());
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) { atomPositions.current.clear(); return; }
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) { atomPositions.current.clear(); return; }
+    const map = new Map<number, { x: number; y: number }>();
+    // 1) For heteroatoms, RDKit emits <path class="atom-N"> with NO
+    //    bond- prefix. Use bbox of those directly (most accurate).
+    svgEl.querySelectorAll<SVGGraphicsElement>("[class^='atom-']").forEach((el) => {
+      const cls = el.getAttribute("class") || "";
+      if (/(^|\s)bond-/.test(cls)) return;  // skip bond paths
+      const m = cls.match(/atom-(\d+)/);
+      if (!m) return;
+      const idx = parseInt(m[1], 10);
+      try {
+        const bbox = el.getBBox();
+        map.set(idx, { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 });
+      } catch {/*noop*/}
+    });
+    // 2) For atoms missing from step 1 (pure carbons), parse bond
+    //    paths' "d" attribute. "M x1,y1 L x2,y2" → atom_a at start,
+    //    atom_b at end. Class shape: "bond-N atom-A atom-B".
+    const dRe = /M\s*([\d.\-]+),?\s*([\d.\-]+).*?[L\s]\s*([\d.\-]+),?\s*([\d.\-]+)/i;
+    svgEl.querySelectorAll<SVGGraphicsElement>("[class^='bond-']").forEach((el) => {
+      const cls = el.getAttribute("class") || "";
+      const am = cls.match(/atom-(\d+)\s+atom-(\d+)/);
+      if (!am) return;
+      const aIdx = parseInt(am[1], 10);
+      const bIdx = parseInt(am[2], 10);
+      const d = el.getAttribute("d") || "";
+      const dm = d.match(dRe);
+      if (!dm) return;
+      const x1 = parseFloat(dm[1]), y1 = parseFloat(dm[2]);
+      const x2 = parseFloat(dm[3]), y2 = parseFloat(dm[4]);
+      if (!map.has(aIdx) && isFinite(x1) && isFinite(y1)) map.set(aIdx, { x: x1, y: y1 });
+      if (!map.has(bIdx) && isFinite(x2) && isFinite(y2)) map.set(bIdx, { x: x2, y: y2 });
+    });
+    atomPositions.current = map;
+  }, [svg]);
+
+  // Helper: get atom (cx, cy) — uses the parsed map; falls back to
+  // querySelector + getBBox for safety on weird SVGs.
+  const getAtomXY = (idx: number): { x: number; y: number } | null => {
+    const p = atomPositions.current.get(idx);
+    if (p) return p;
+    const host = svgHostRef.current;
+    if (!host) return null;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return null;
+    const target = svgEl.querySelector(`[class^="atom-${idx}"], [class*=" atom-${idx} "]`);
+    if (!target) return null;
+    try {
+      const bbox = (target as SVGGraphicsElement).getBBox();
+      return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
+    } catch { return null; }
+  };
+
   // Inject SVG safely + wire atom-click + atom-hover handlers
   useEffect(() => {
     const host = svgHostRef.current;
@@ -656,12 +727,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
 
     const centers: Array<{ idx: number; cx: number; cy: number }> = [];
     selected.forEach((idx) => {
-      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
-      if (!target) return;
-      const bbox = (target as SVGGraphicsElement).getBBox?.();
-      if (!bbox) return;
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
+      const _pos = getAtomXY(idx);
+      if (!_pos) return;
+      const cx = _pos.x;
+      const cy = _pos.y;
       centers.push({ idx, cx, cy });
 
       // Selection ring
@@ -772,12 +841,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     }
     if (!flagged.size) return;
     for (const idx of flagged) {
-      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
-      if (!target) continue;
-      const bbox = (target as SVGGraphicsElement).getBBox?.();
-      if (!bbox) continue;
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
+      const _pos = getAtomXY(idx);
+      if (!_pos) continue;
+      const cx = _pos.x;
+      const cy = _pos.y;
       const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       ring.setAttribute("data-incomplete", "1");
       ring.setAttribute("cx", String(cx));
@@ -817,12 +884,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     svgEl.querySelectorAll('[data-recent-break="1"]').forEach((n) => n.remove());
     if (!recentlyBroken.size) return;
     for (const idx of recentlyBroken) {
-      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
-      if (!target) continue;
-      const bbox = (target as SVGGraphicsElement).getBBox?.();
-      if (!bbox) continue;
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
+      const _pos = getAtomXY(idx);
+      if (!_pos) continue;
+      const cx = _pos.x;
+      const cy = _pos.y;
       const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       ring.setAttribute("data-recent-break", "1");
       ring.setAttribute("cx", String(cx));
@@ -844,23 +909,43 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     }
   }, [recentlyBroken, svg]);
 
-  // Hovered-bond glow — driven by hoveredBondIdx (set from rail row hover).
-  // The SVG bond-mouseenter handler also sets this directly via onHoverBond
-  // wiring, so glow appears on both rail-hover and SVG-hover.
+  // Hovered-bond glow — driven by hoveredBondIdx (set from rail row hover
+  // OR SVG bond-mouseenter). Was using drop-shadow only — barely visible
+  // on thin RDKit bond paths. Now layers a colored "trace" path on top
+  // of the original so the highlight is unmistakable. Original stroke
+  // is preserved (filter previously sometimes couldn't apply because
+  // the path's `style` attribute already had a fill/stroke baked in).
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
     const svgEl = host.querySelector("svg");
     if (!svgEl) return;
-    svgEl.querySelectorAll("[class^='bond-'], [class*=' bond-']").forEach((n) => {
+    // Remove any prior hover-trace overlays
+    svgEl.querySelectorAll('[data-bond-hover="1"]').forEach((n) => n.remove());
+    if (hoveredBondIdx == null) return;
+    // Find every path matching the hovered bond's class. Aromatic
+    // bonds may produce multiple <path> elements (the line + the
+    // inner stripe), so we trace ALL of them.
+    svgEl.querySelectorAll<SVGPathElement>("[class^='bond-'], [class*=' bond-']").forEach((n) => {
       const cls = n.getAttribute("class") || "";
       const m = cls.match(/bond-(\d+)/);
       if (!m) return;
       const idx = parseInt(m[1], 10);
-      const el = n as SVGElement & { style: CSSStyleDeclaration };
-      el.style.filter = (idx === hoveredBondIdx)
-        ? "drop-shadow(0 0 4px #dc2626) drop-shadow(0 0 2px #dc2626)"
-        : "";
+      if (idx !== hoveredBondIdx) return;
+      const d = n.getAttribute("d");
+      if (!d) return;
+      // Layer a thicker red overlay path right on top of the original
+      const trace = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      trace.setAttribute("data-bond-hover", "1");
+      trace.setAttribute("d", d);
+      trace.setAttribute("fill", "none");
+      trace.setAttribute("stroke", "#dc2626");
+      trace.setAttribute("stroke-width", "5");
+      trace.setAttribute("stroke-linecap", "round");
+      trace.setAttribute("opacity", "0.55");
+      trace.style.pointerEvents = "none";
+      // Insert AFTER the bond path so it draws on top
+      n.parentNode?.insertBefore(trace, n.nextSibling);
     });
   }, [hoveredBondIdx, svg, bondList]);
 
@@ -873,12 +958,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     svgEl.querySelectorAll('[data-smarts="1"]').forEach((n) => n.remove());
     if (!highlightAtoms || highlightAtoms.length === 0) return;
     highlightAtoms.forEach((idx) => {
-      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
-      if (!target) return;
-      const bbox = (target as SVGGraphicsElement).getBBox?.();
-      if (!bbox) return;
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
+      const _pos = getAtomXY(idx);
+      if (!_pos) return;
+      const cx = _pos.x;
+      const cy = _pos.y;
       const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       ring.setAttribute("data-smarts", "1");
       ring.setAttribute("cx", String(cx));
@@ -913,12 +996,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     svgEl.querySelectorAll('[data-selected="1"]').forEach((n) => n.remove());
     if (selected.size === 0) return;
     for (const idx of selected) {
-      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
-      if (!target) continue;
-      const bbox = (target as SVGGraphicsElement).getBBox?.();
-      if (!bbox) continue;
-      const cx = bbox.x + bbox.width / 2;
-      const cy = bbox.y + bbox.height / 2;
+      const _pos = getAtomXY(idx);
+      if (!_pos) continue;
+      const cx = _pos.x;
+      const cy = _pos.y;
       // Filled disc behind atom — amber, ~70% opacity
       const disc = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       disc.setAttribute("data-selected", "1");
@@ -947,12 +1028,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     if (!svgEl) return;
     svgEl.querySelectorAll('[data-rail-hover="1"]').forEach((n) => n.remove());
     if (railHoverIdx == null) return;
-    const target = svgEl.querySelector(`[class*="atom-${railHoverIdx}"]`);
-    if (!target) return;
-    const bbox = (target as SVGGraphicsElement).getBBox?.();
-    if (!bbox) return;
-    const cx = bbox.x + bbox.width / 2;
-    const cy = bbox.y + bbox.height / 2;
+    const _pos = getAtomXY(railHoverIdx);
+    if (!_pos) return;
+    const cx = _pos.x;
+    const cy = _pos.y;
     const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
     ring.setAttribute("data-rail-hover", "1");
     ring.setAttribute("cx", String(cx));
@@ -4213,8 +4292,11 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
           gridTemplateColumns: "minmax(380px, 2.2fr) 150px minmax(220px, 1.4fr) minmax(240px, 1.6fr)",
           gap: 0,
         }}>
-          {/* COL 1 — wraps the existing PropertiesCard (KPI tiles) */}
-          <div style={{ overflow: "auto",
+          {/* COL 1 — wraps PropertiesCard. `overflow: auto` was forcing
+              a scrollbar even when content fits (composition moved out
+              to col 2 → col 1 has plenty of room). Switch to hidden so
+              the scrollbar only appears when truly overflowing. */}
+          <div style={{ overflow: "hidden",
             borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))" }}>
             {p.children}
           </div>

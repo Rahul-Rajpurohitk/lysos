@@ -132,7 +132,7 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
         onRefresh={refresh}
         loading={loading}
       />
-      <div style={{ flex: 1, overflow: "auto", display: "flex",
+      <div style={{ flex: 1, overflow: "hidden", display: "flex",
         flexDirection: "column" }}>
 
         {/* SECTION 1 · DRUG-LIKENESS · 4 hero KPI tiles with rule status
