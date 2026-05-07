@@ -4097,6 +4097,38 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
     return () => { cancelled = true; clearTimeout(t); };
   }, [p.smiles, p.apiBase]);
 
+  // Element composition — fetched separately so the Build State column
+  // can stack BUILD STATE + COMPOSITION sub-blocks. PropertiesCard no
+  // longer renders composition; small content (1-3 chips) sits better
+  // here next to atoms/bonds counts and saves vertical space in the
+  // main properties column.
+  const [elementCounts, setElementCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (!p.smiles) { setElementCounts({}); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const url = `${p.apiBase}/workbench/molecule/properties?smiles=${encodeURIComponent(p.smiles!)}`;
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setElementCounts(d.element_counts || {});
+      } catch {/*noop*/}
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [p.smiles, p.apiBase]);
+
+  // Element color palette (synced with PropertiesCard / AtomsRail).
+  const ELEMENT_COLOR_BPS: Record<string, string> = {
+    C: "#374151", N: "#2563eb", O: "#dc2626", S: "#ca8a04",
+    F: "#16a34a", Cl: "#16a34a", Br: "#9a3412", I: "#7c3aed",
+    P: "#ea580c", H: "#9ca3af",
+    Fe: "#b45309", Cu: "#c2410c", Zn: "#737373", Pt: "#475569",
+    Pd: "#475569", Au: "#ca8a04", Ag: "#71717a", Hg: "#737373",
+    As: "#7c3aed", Se: "#a16207", B: "#16a34a", Si: "#525252",
+    Na: "#a855f7", Mg: "#c084fc", Ca: "#c084fc", K: "#a855f7",
+  };
+
   return (
     <div style={{
       flexShrink: 0,
@@ -4144,27 +4176,64 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
             borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))" }}>
             {p.children}
           </div>
-          {/* COL 2 — BUILD STATE chips */}
+          {/* COL 2 — BUILD STATE + COMPOSITION stacked. Composition was
+              previously a row inside the main Properties column and
+              forced internal scroll. Moved here so small content
+              (1-3 element chips) sits compactly next to BUILD STATE
+              counts, and the main Properties column stays scroll-free. */}
           <div
-            title="Build state · live counts of what you've assembled in the 2D viewer. Atoms = heavy atoms only (Hs implicit). Frag count > 1 means the molecule is disconnected and needs a bridge bond. Charge ≠ 0 indicates ionizable / counterion-needed."
-            style={{ padding: "5px 8px", overflow: "auto", minWidth: 140,
+            title="Build state + composition · live counts of what you've assembled. Atoms = heavy atoms only. Frag>1 = disconnected. Composition lists each element + its count."
+            style={{ padding: "5px 8px", overflow: "auto", minWidth: 160,
             borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-            display: "flex", flexDirection: "column", gap: 4 }}>
-            <div style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-              color: "var(--lys-text-faint)", letterSpacing: "0.06em",
-              textTransform: "uppercase", fontWeight: 700 }}>
-              build state
-            </div>
-            {p.diagnostics ? (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                <BuildChip label="atoms" value={p.diagnostics.n_atoms ?? 0} color="#374151" />
-                <BuildChip label="bonds" value={p.bondsCount} color="#0891b2" />
-                <BuildChip label="frag" value={p.diagnostics.n_fragments ?? 1}
-                  color={p.diagnostics.n_fragments > 1 ? "#dc2626" : "#10b981"} />
-                <BuildChip label="charge" value={p.diagnostics.total_formal_charge ?? 0}
-                  color={p.diagnostics.total_formal_charge !== 0 ? "#ca8a04" : "#10b981"} signed />
+            display: "flex", flexDirection: "column", gap: 6 }}>
+            {/* Sub-block: BUILD STATE */}
+            <div>
+              <div style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+                color: "var(--lys-text-faint)", letterSpacing: "0.06em",
+                textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>
+                build state
               </div>
-            ) : null}
+              {p.diagnostics ? (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                  <BuildChip label="atoms" value={p.diagnostics.n_atoms ?? 0} color="#374151" />
+                  <BuildChip label="bonds" value={p.bondsCount} color="#0891b2" />
+                  <BuildChip label="frag" value={p.diagnostics.n_fragments ?? 1}
+                    color={p.diagnostics.n_fragments > 1 ? "#dc2626" : "#10b981"} />
+                  <BuildChip label="charge" value={p.diagnostics.total_formal_charge ?? 0}
+                    color={p.diagnostics.total_formal_charge !== 0 ? "#ca8a04" : "#10b981"} signed />
+                </div>
+              ) : null}
+            </div>
+            {/* Sub-block: COMPOSITION — element-count chips. Color-keyed
+                to match AtomsRail / PropertiesCard so the same element
+                always carries the same hue across the chem container. */}
+            {Object.keys(elementCounts).length > 0 && (
+              <div>
+                <div style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+                  color: "var(--lys-text-faint)", letterSpacing: "0.06em",
+                  textTransform: "uppercase", fontWeight: 700, marginBottom: 3 }}>
+                  composition
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                  {Object.entries(elementCounts).map(([sym, n]) => {
+                    const c = ELEMENT_COLOR_BPS[sym] ?? "#374151";
+                    return (
+                      <span key={sym}
+                        title={`${n} ${sym} atom${n === 1 ? "" : "s"}`}
+                        style={{
+                          padding: "1px 7px", borderRadius: 999,
+                          background: `${c}10`, border: `1px solid ${c}30`,
+                          fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+                          display: "inline-flex", gap: 3, alignItems: "baseline",
+                        }}>
+                        <span style={{ fontWeight: 700, color: c }}>{sym}</span>
+                        <span style={{ color: "var(--lys-text-faint)" }}>·{n}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
           {/* COL 3 — PATTERNS FOUND. Two sub-blocks:
               (a) AUTO-detected — every preset that already matches the

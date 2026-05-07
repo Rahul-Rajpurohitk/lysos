@@ -48,6 +48,10 @@ interface Props {
   smiles: string | null;
 }
 
+// Element color palette — shared with AtomsRail and BottomPropertiesStrip.
+// Composition rendering moved out of this component into the strip's
+// Build-State column; keeping the constant here for future reuse.
+// @ts-expect-error — kept for future reuse, currently unused.
 const ELEMENT_COLOR: Record<string, string> = {
   C: "#374151", N: "#2563eb", O: "#dc2626", S: "#ca8a04",
   F: "#16a34a", Cl: "#16a34a", Br: "#9a3412", I: "#7c3aed",
@@ -177,28 +181,12 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
           </div>
         </PropSection>
 
-        {/* SECTION 3 · COMPOSITION · element counts only */}
-        <PropSection label="composition" subtitle={`${data.n_heavy_atoms} heavy atoms`}>
-          <div style={{ padding: "0 6px 4px",
-            display: "flex", flexWrap: "wrap", gap: 4, alignItems: "center" }}>
-            {Object.entries(data.element_counts).map(([sym, n]) => {
-              const c = ELEMENT_COLOR[sym] ?? "#374151";
-              return (
-                <span key={sym}
-                  title={`${n} ${sym} atom${n === 1 ? "" : "s"}`}
-                  style={{
-                    padding: "1px 7px", borderRadius: 999,
-                    background: `${c}10`, border: `1px solid ${c}30`,
-                    fontSize: 10, fontFamily: "var(--lys-font-mono)",
-                    display: "inline-flex", gap: 3, alignItems: "baseline",
-                  }}>
-                  <span style={{ fontWeight: 700, color: c }}>{sym}</span>
-                  <span style={{ color: "var(--lys-text-faint)" }}>·{n}</span>
-                </span>
-              );
-            })}
-          </div>
-        </PropSection>
+        {/* COMPOSITION moved to the BUILD STATE column of the parent
+            BottomPropertiesStrip — small content (1-3 element chips) sits
+            better next to the Build State counts than as its own row in
+            the main properties column. Frees vertical space here so
+            DRUG-LIKENESS + RULE COMPLIANCE + STRUCTURE + IDENTIFIERS
+            all fit one-shot without internal scroll. */}
 
         {/* SECTION 4 · STRUCTURE · structural / topological metrics. */}
         <PropSection label="structure" subtitle="rings · sp³ · charge · rotatable">
