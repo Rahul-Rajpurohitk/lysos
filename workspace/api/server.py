@@ -226,6 +226,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem pareto router not loaded: %s", exc)
 
+# Report container — snapshot + preview + export
+try:
+    from .report import router as report_router
+    app.include_router(report_router, prefix="/workbench")
+    log.info("Report routes loaded (/workbench/report/snapshot, /preview, /export)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Report router not loaded: %s", exc)
+
 # Chemistry sandbox — agent-driven molecular edits with reward delta
 try:
     from .sandbox import router as sandbox_router

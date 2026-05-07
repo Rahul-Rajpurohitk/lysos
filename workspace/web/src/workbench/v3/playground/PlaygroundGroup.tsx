@@ -65,6 +65,7 @@ const ICONS: Record<WindowCategory, any> = {
   Knowledge: BookOpen,
   Library:   LibraryIcon,
   Live:      Activity,
+  Report:    Activity,
 };
 
 const COLORS: Record<WindowCategory, string> = {
@@ -74,6 +75,7 @@ const COLORS: Record<WindowCategory, string> = {
   Knowledge: "#3b82f6",
   Library:   "#64748b",
   Live:      "#dc2626",
+  Report:    "#0891b2",
 };
 
 const SNAP = 8;

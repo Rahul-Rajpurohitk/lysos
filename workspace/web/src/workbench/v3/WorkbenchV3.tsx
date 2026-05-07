@@ -33,6 +33,7 @@ import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { WorkflowPhaseTracker } from "./playground/WorkflowPhaseTracker";
+import { ReportBuilderCard } from "./playground/ReportBuilderCard";
 import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
@@ -1311,14 +1312,17 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   ],
                 },
                 {
-                  id: "live",
-                  category: "Live",
+                  id: "report",
+                  category: "Report",
                   cards: [
-                    { id: "live-nav", title: "", slot: "nav", body:
+                    { id: "report-nav", title: "", slot: "nav", body:
                       <LiveNavbar
                         eventKindFilter={eventKindFilter}
                         onEventKindChange={setEventKindFilter}
                       /> },
+                    { id: "report-builder", title: "Deliverable · capture + preview + export",
+                      size: 2, expandedH: 720, body:
+                      <ReportBuilderCard apiBase={apiBase} sessionId={activeChatId} /> },
                     { id: "status", title: "System health · WS · DB · jobs", size: 2, body:
                       <ConnectionStatusCard
                         apiBase={apiBase}
@@ -1328,7 +1332,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         recentEditCount={editLog.length}
                         lastEventTs={livePlayground.latest?.ts}
                       /> },
-                    { id: "trace", title: "Session trace · unified timeline", size: 2, body:
+                    { id: "trace", title: "Session trace · unified timeline · audit", size: 2, body:
                       <SessionTraceCard apiBase={apiBase} sessionId={activeChatId} /> },
                     { id: "editlog", title: "Edit log · sqlite · live", size: 2, body:
                       <EditLogCard
