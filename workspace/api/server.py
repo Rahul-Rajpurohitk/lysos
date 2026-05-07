@@ -200,6 +200,15 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Workbench router not loaded: %s", exc)
 
+# Chemistry 3D — Service 1: Target-Ligand Theater
+# Mounts under /workbench/chem/* alongside the existing chem endpoints.
+try:
+    from .chem_3d import router as chem_3d_router
+    app.include_router(chem_3d_router, prefix="/workbench")
+    log.info("Chem 3D routes loaded (/workbench/chem/targets, /target/{pdb}, /place-in-pocket)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem 3D router not loaded: %s", exc)
+
 # Chemistry sandbox — agent-driven molecular edits with reward delta
 try:
     from .sandbox import router as sandbox_router
