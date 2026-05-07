@@ -456,11 +456,19 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   // incomplete, recently-broken, multi-cursor) uses the map for
   // accurate placement.
   const atomPositions = useRef<Map<number, { x: number; y: number }>>(new Map());
+  // Map atom index → RDKit's bare <text> element drawing that index
+  // number on the diagram. RDKit emits these as classless <text> nodes
+  // with text content "0", "1", "2" etc. when addAtomIndices is on.
+  // We resolve them by matching text content to atom indices AND by
+  // proximity to the atom's geometric position. The selection halo
+  // useEffect uses this to highlight the SAME number the user sees,
+  // instead of drawing a separate amber-badge that floats nearby.
+  const atomIdxText = useRef<Map<number, SVGTextElement>>(new Map());
   useEffect(() => {
     const host = svgHostRef.current;
-    if (!host) { atomPositions.current.clear(); return; }
+    if (!host) { atomPositions.current.clear(); atomIdxText.current.clear(); return; }
     const svgEl = host.querySelector("svg");
-    if (!svgEl) { atomPositions.current.clear(); return; }
+    if (!svgEl) { atomPositions.current.clear(); atomIdxText.current.clear(); return; }
     const map = new Map<number, { x: number; y: number }>();
     // 1) For heteroatoms, RDKit emits <path class="atom-N"> with NO
     //    bond- prefix. Use bbox of those directly (most accurate).
@@ -494,6 +502,34 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       if (!map.has(bIdx) && isFinite(x2) && isFinite(y2)) map.set(bIdx, { x: x2, y: y2 });
     });
     atomPositions.current = map;
+    // 3) Map RDKit's atom-index <text> elements to their atom indices.
+    //    These are bare <text> with no class attribute and text content
+    //    that's a parseable integer ("0", "1", ...). Match each to the
+    //    closest atom in the position map within 60px so we never
+    //    misattribute a label to the wrong atom.
+    const idxMap = new Map<number, SVGTextElement>();
+    svgEl.querySelectorAll<SVGTextElement>("text").forEach((t) => {
+      if (t.getAttribute("class")) return;          // skip classed text (heteroatom symbols, our badges)
+      if ((t as SVGElement).getAttribute("data-selected")) return;
+      if ((t as SVGElement).getAttribute("data-smarts")) return;
+      const txt = (t.textContent || "").trim();
+      if (!/^\d+$/.test(txt)) return;
+      const idx = parseInt(txt, 10);
+      const apos = map.get(idx);
+      if (!apos) return;
+      try {
+        const bbox = t.getBBox();
+        const tx = bbox.x + bbox.width / 2;
+        const ty = bbox.y + bbox.height / 2;
+        const dist = Math.hypot(tx - apos.x, ty - apos.y);
+        // Tight tolerance (60px in SVG user space) — RDKit places the
+        // index ~25-40 px from the atom center for visibility, so 60 is
+        // generous enough to catch real labels but tight enough not to
+        // accidentally match a stray digit elsewhere on the canvas.
+        if (dist <= 60) idxMap.set(idx, t);
+      } catch {/*noop*/}
+    });
+    atomIdxText.current = idxMap;
   }, [svg]);
 
   // Helper: get atom (cx, cy) — uses the parsed map; falls back to
@@ -978,12 +1014,14 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     }
   }, [recentlyBroken, svg]);
 
-  // Hovered-bond glow — single red stroke overlay on top of the RDKit
-  // bond path. ONE visual, not two (no halo + stripe layering): users
-  // saw "two highlights for one bond" with the previous double-layer.
-  // Width 7px @ 0.7 opacity — readable across the diagram, doesn't
-  // overpower the structure. Driven by hoveredBondIdx (set by the
-  // event-delegated SVG mousemove handler OR the rail row mouseenter).
+  // Hovered-bond glow — exactly ONE red stroke overlay per bond.
+  // RDKit emits aromatic bonds as TWO <path> elements (the outer line
+  // + the inner double-bond stripe). Drawing an overlay on each one
+  // produced two visible red highlights for a single bond. Now we
+  // pick the FIRST matching path (the outer/longer line) and ignore
+  // the rest — one visual signal, no layering. Width 7px @ 0.7
+  // opacity. Same color/intensity whether the highlight comes from
+  // SVG hover OR rail-row hover.
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
@@ -991,27 +1029,33 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     if (!svgEl) return;
     svgEl.querySelectorAll('[data-bond-hover="1"]').forEach((n) => n.remove());
     if (hoveredBondIdx == null) return;
-    // Aromatic bonds may produce multiple <path> elements (line + inner
-    // stripe). Trace ALL paths matching the bond's bond-N class so the
-    // entire bond gets one consistent red stroke.
+    // Pick the longest (outer) path among the matching bond paths.
+    // Path length proxy: |d| string length — outer paths have more
+    // segments than inner stripes. This avoids ever drawing the
+    // overlay on the short inner-stripe path that sits between the
+    // two parallel lines of an aromatic bond.
+    let best: { node: SVGPathElement; d: string } | null = null;
     svgEl.querySelectorAll<SVGPathElement>("[class^='bond-'], [class*=' bond-']").forEach((n) => {
       const cls = n.getAttribute("class") || "";
       const m = cls.match(/bond-(\d+)/);
       if (!m) return;
       if (parseInt(m[1], 10) !== hoveredBondIdx) return;
-      const d = n.getAttribute("d");
+      const d = n.getAttribute("d") || "";
       if (!d) return;
-      const stroke = document.createElementNS("http://www.w3.org/2000/svg", "path");
-      stroke.setAttribute("data-bond-hover", "1");
-      stroke.setAttribute("d", d);
-      stroke.setAttribute("fill", "none");
-      stroke.setAttribute("stroke", "#dc2626");
-      stroke.setAttribute("stroke-width", "7");
-      stroke.setAttribute("stroke-linecap", "round");
-      stroke.setAttribute("opacity", "0.70");
-      stroke.style.pointerEvents = "none";
-      n.parentNode?.insertBefore(stroke, n.nextSibling);
+      if (!best || d.length > best.d.length) best = { node: n, d };
     });
+    if (!best) return;
+    const { node: chosen, d } = best as { node: SVGPathElement; d: string };
+    const stroke = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    stroke.setAttribute("data-bond-hover", "1");
+    stroke.setAttribute("d", d);
+    stroke.setAttribute("fill", "none");
+    stroke.setAttribute("stroke", "#dc2626");
+    stroke.setAttribute("stroke-width", "7");
+    stroke.setAttribute("stroke-linecap", "round");
+    stroke.setAttribute("opacity", "0.70");
+    stroke.style.pointerEvents = "none";
+    chosen.parentNode?.insertBefore(stroke, chosen.nextSibling);
   }, [hoveredBondIdx, svg, bondList]);
 
 
@@ -1138,62 +1182,76 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     });
   }, [highlightAtoms, svg, smartsCategoryColor, smartsMatchSets, bondList]);
 
-  // SELECTION halo — strong amber filled circle behind every atom in
-  // `selected`, PLUS a top-right atom-number badge so the user can see
-  // exactly which atom indices they've picked without having to glance at
-  // the right-rail row labels. Driven by both shift-click in the SVG AND
-  // row-click in the atoms rail. Single source of truth = `selected` Set.
+  // SELECTION highlight — ONE signal per selected atom: the SAME atom-
+  // index number RDKit drew on the diagram gets a rounded amber pill
+  // behind it + amber text color. No separate badge, no disc, no halo —
+  // the user sees exactly the digit they were already looking at, just
+  // emphasized. Falls back to a soft amber circle at the geometric atom
+  // position only if RDKit's index text wasn't found (compact mode etc).
   useEffect(() => {
     const host = svgHostRef.current;
     if (!host) return;
     const svgEl = host.querySelector("svg");
     if (!svgEl) return;
+    // Clean up prior selection markers AND restore any text we mutated
     svgEl.querySelectorAll('[data-selected="1"]').forEach((n) => n.remove());
+    svgEl.querySelectorAll<SVGTextElement>('[data-selected-text="1"]').forEach((t) => {
+      const origFill = t.getAttribute("data-orig-fill");
+      const origWeight = t.getAttribute("data-orig-weight");
+      if (origFill) t.setAttribute("fill", origFill); else t.removeAttribute("fill");
+      if (origWeight) t.setAttribute("font-weight", origWeight); else t.removeAttribute("font-weight");
+      t.removeAttribute("data-orig-fill");
+      t.removeAttribute("data-orig-weight");
+      t.removeAttribute("data-selected-text");
+    });
     if (selected.size === 0) return;
     for (const idx of selected) {
+      const txt = atomIdxText.current.get(idx);
+      if (txt) {
+        // Highlight the existing index label IN PLACE — pill behind +
+        // amber text color + bold.
+        let bbox: DOMRect;
+        try { bbox = txt.getBBox(); } catch { continue; }
+        const padX = 5;
+        const padY = 2;
+        const pill = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        pill.setAttribute("data-selected", "1");
+        pill.setAttribute("x", String(bbox.x - padX));
+        pill.setAttribute("y", String(bbox.y - padY));
+        pill.setAttribute("width", String(bbox.width + padX * 2));
+        pill.setAttribute("height", String(bbox.height + padY * 2));
+        pill.setAttribute("rx", "5");
+        pill.setAttribute("fill", "#f59e0b");
+        pill.setAttribute("opacity", "0.95");
+        pill.style.pointerEvents = "none";
+        // Insert pill RIGHT BEFORE the text so it sits behind it.
+        txt.parentNode?.insertBefore(pill, txt);
+        // Mutate text → white + bold; stash originals for clean restore.
+        const origFill = txt.getAttribute("fill") || "";
+        const origWeight = txt.getAttribute("font-weight") || "";
+        txt.setAttribute("data-orig-fill", origFill);
+        txt.setAttribute("data-orig-weight", origWeight);
+        txt.setAttribute("data-selected-text", "1");
+        txt.setAttribute("fill", "white");
+        txt.setAttribute("font-weight", "800");
+        continue;
+      }
+      // FALLBACK — no RDKit index text found for this atom (e.g. when
+      // the diagram is rendered without addAtomIndices). Draw a
+      // minimal amber ring at the atom position. Single visual, no
+      // separate badge.
       const _pos = getAtomXY(idx);
       if (!_pos) continue;
-      const cx = _pos.x;
-      const cy = _pos.y;
-      // Filled disc behind atom — amber, ~70% opacity. Inserted at the
-      // FRONT of the SVG so atom labels render ABOVE it.
-      const disc = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      disc.setAttribute("data-selected", "1");
-      disc.setAttribute("cx", String(cx));
-      disc.setAttribute("cy", String(cy));
-      disc.setAttribute("r", "11");
-      disc.setAttribute("fill", "rgba(245,158,11,0.32)");
-      disc.setAttribute("stroke", "#f59e0b");
-      disc.setAttribute("stroke-width", "2");
-      disc.style.pointerEvents = "none";
-      svgEl.insertBefore(disc, svgEl.firstChild?.nextSibling ?? null);
-      // Atom-NUMBER badge — small filled circle with the atom index,
-      // anchored top-right of the halo. Same pattern as the SMARTS-hit
-      // badges so the visual vocabulary is consistent. Appended (not
-      // inserted at front) so the badge sits ABOVE the disc + atom label.
-      const badgeBg = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      badgeBg.setAttribute("data-selected", "1");
-      badgeBg.setAttribute("cx", String(cx + 11));
-      badgeBg.setAttribute("cy", String(cy - 11));
-      badgeBg.setAttribute("r", "7.5");
-      badgeBg.setAttribute("fill", "#f59e0b");
-      badgeBg.setAttribute("stroke", "#fff");
-      badgeBg.setAttribute("stroke-width", "1.2");
-      badgeBg.style.pointerEvents = "none";
-      svgEl.appendChild(badgeBg);
-      const badgeTxt = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      badgeTxt.setAttribute("data-selected", "1");
-      badgeTxt.setAttribute("x", String(cx + 11));
-      badgeTxt.setAttribute("y", String(cy - 11));
-      badgeTxt.setAttribute("text-anchor", "middle");
-      badgeTxt.setAttribute("dominant-baseline", "central");
-      badgeTxt.setAttribute("font-size", "9");
-      badgeTxt.setAttribute("font-weight", "800");
-      badgeTxt.setAttribute("font-family", "var(--lys-font-mono), monospace");
-      badgeTxt.setAttribute("fill", "white");
-      badgeTxt.style.pointerEvents = "none";
-      badgeTxt.textContent = String(idx);
-      svgEl.appendChild(badgeTxt);
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("data-selected", "1");
+      ring.setAttribute("cx", String(_pos.x));
+      ring.setAttribute("cy", String(_pos.y));
+      ring.setAttribute("r", "11");
+      ring.setAttribute("fill", "rgba(245,158,11,0.20)");
+      ring.setAttribute("stroke", "#f59e0b");
+      ring.setAttribute("stroke-width", "2");
+      ring.style.pointerEvents = "none";
+      svgEl.insertBefore(ring, svgEl.firstChild?.nextSibling ?? null);
     }
   }, [selected, svg]);
 
