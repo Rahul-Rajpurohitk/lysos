@@ -34,6 +34,7 @@ import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { WorkflowPhaseTracker } from "./playground/WorkflowPhaseTracker";
 import { ReportBuilderCard } from "./playground/ReportBuilderCard";
+import { ValidatedTargetsCard } from "./playground/ValidatedTargetsCard";
 import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
@@ -1361,6 +1362,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       /> },
                     { id: "pathogen-intel", title: "Pathogen intel · profile", body:
                       <PathogenIntelCard apiBase={apiBase} pathogen={selectedPathogen} /> },
+                    { id: "validated-targets", title: "Validated targets · curated PDBs",
+                      body:
+                      <ValidatedTargetsCard apiBase={apiBase} pathogen={selectedPathogen} /> },
                     { id: "antibiotic-ref", title: "Antibiotic reference · canonical corpus", size: 2, body:
                       <AntibioticReferenceCard
                         apiBase={apiBase}
