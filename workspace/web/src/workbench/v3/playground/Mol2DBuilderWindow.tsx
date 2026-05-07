@@ -226,7 +226,6 @@ const ACTOR_COLOR: Record<string, string> = {
 
 export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, onLoadFromLibrary }: Props) {
   const [svg, setSvg] = useState<string>("");
-  const [error, setError] = useState<string>("");
   const [violation, setViolation] = useState<Violation | null>(null);
   // Whole-molecule diagnostics (incomplete atoms after a bond-break, etc).
   // Polled whenever SMILES changes; the rail + SVG highlight from this.
@@ -355,9 +354,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         }),
       });
       if (!r.ok) {
-        const txt = await r.text();
-        setError(`bond ${r.status}: ${txt.slice(0, 80)}`);
-        setTimeout(() => setError(""), 2200);
+        showViolation(await parseError(r, "drag_bond_failed"));
         return;
       }
       const d = await r.json();
@@ -368,8 +365,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         });
       }
     } catch (e: any) {
-      setError(`drag-bond error: ${e?.message ?? e}`);
-      setTimeout(() => setError(""), 2200);
+      showViolation({ code: "network_error", message: `drag-bond network error: ${e?.message ?? e}` });
     }
   }
 
@@ -422,8 +418,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     let cancelled = false;
     fetch(`${apiBase}/workbench/molecule/2d/${b64}?w=480&h=340`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d) => { if (!cancelled) { setSvg(d.svg ?? ""); setError(""); } })
-      .catch((err) => { if (!cancelled) { setError(`2D render failed: ${err}`); setSvg(""); } });
+      .then((d) => { if (!cancelled) { setSvg(d.svg ?? ""); setViolation(null); } })
+      .catch((err) => {
+        if (cancelled) return;
+        setSvg("");
+        showViolation({ code: "render_failed",
+          message: `2D render failed (status ${err})`,
+          hint: "RDKit could not draw this structure. Check for unbalanced rings or invalid chirality.",
+          suggested_fix: "undo last edit",
+        });
+      });
     return () => { cancelled = true; };
   }, [smiles, apiBase]);
 
@@ -433,10 +437,15 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     if (!host) return;
     const root = injectSvgSafely(host, svg);
     if (!root) return;
+    // RDKit emits class="bond-0 atom-0 atom-1" on BOND paths — they share
+    // the "atom-" substring with real atom elements. Exclude any element
+    // that also has a "bond-" class so atom handlers only fire on real
+    // atoms (text labels, ellipses), not on bond paths.
     const atoms = root.querySelectorAll("[class^='atom-'], [class*=' atom-']");
     const handlers: Array<{ node: Element; type: string; fn: (e: Event) => void }> = [];
     atoms.forEach((node) => {
       const cls = node.getAttribute("class") || "";
+      if (/(^|\s)bond-/.test(cls)) return;  // skip bond paths
       const m = cls.match(/atom-(\d+)/);
       if (!m) return;
       const idx = parseInt(m[1], 10);
@@ -931,8 +940,11 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         body.new_element = params.new_element ?? "C";
         body.bond_order = "single";
       } else {
-        setError(`unsupported op: ${op}`);
-        setTimeout(() => setError(""), 1800);
+        showViolation({
+          code: "unsupported_op",
+          message: `unsupported op: ${op}`,
+          hint: "ChemKnowledgeCard sent an op the dispatcher doesn't recognize.",
+        }, 2400);
         return;
       }
       const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
@@ -941,9 +953,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         body: JSON.stringify(body),
       });
       if (!r.ok) {
-        const txt = await r.text();
-        setError(`edit ${r.status}: ${txt.slice(0, 80)}`);
-        setTimeout(() => setError(""), 2200);
+        showViolation(await parseError(r, "edit_failed"));
         return;
       }
       const d = await r.json();
@@ -951,8 +961,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         onMoleculeEdit?.(d.smiles, { op, atom_idx: atomIdx, label: params.label });
       }
     } catch (e: any) {
-      setError(`edit error: ${e?.message ?? e}`);
-      setTimeout(() => setError(""), 2200);
+      showViolation({ code: "network_error", message: `edit network error: ${e?.message ?? e}` });
     }
   }
 
@@ -1115,13 +1124,6 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 {smiles ? "rendering…" : "no candidate yet · pick a scaffold"}
               </div>
             )}
-          {error && (
-            <div style={{
-              position: "absolute", bottom: 6, left: "50%", transform: "translateX(-50%)",
-              fontSize: 10, color: "#dc2626", fontFamily: "var(--lys-font-mono)",
-              background: "rgba(255,255,255,0.95)", padding: "2px 6px", borderRadius: 4,
-            }}>{error}</div>
-          )}
           {/* Violation toast — structured, replaces simple `error` string.
               Shows code + message + hint + suggested fix as an action button. */}
           {violation && (() => {
@@ -1371,7 +1373,6 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               }
             } catch (exc: any) {
               showViolation({ code: "network_error", message: `${label} failed: ${exc?.message ?? exc}` });
-              setTimeout(() => setError(""), 2200);
             }
           }}
           onReplaceSmiles={async (newSmiles, label) => {
@@ -1458,9 +1459,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                     }),
                   });
                   if (!r.ok) {
-                    const txt = await r.text();
-                    setError(`bond ${r.status}: ${txt.slice(0, 80)}`);
-                    setTimeout(() => setError(""), 2200);
+                    showViolation(await parseError(r, "add_bond_failed"));
                     return;
                   }
                   const d = await r.json();
@@ -1473,8 +1472,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                     setSelected(new Set());
                   }
                 } catch (exc: any) {
-                  setError(`bond error: ${exc?.message ?? exc}`);
-                  setTimeout(() => setError(""), 2200);
+                  showViolation({ code: "network_error", message: `bond network error: ${exc?.message ?? exc}` });
                 }
               }}
               style={{
