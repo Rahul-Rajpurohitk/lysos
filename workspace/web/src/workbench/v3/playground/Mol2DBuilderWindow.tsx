@@ -4457,22 +4457,61 @@ function PropertiesStrip(p: PropertiesStripProps) {
     Na: "#a855f7", Mg: "#c084fc", Ca: "#c084fc", K: "#a855f7",
   };
 
+  // Track the strip's rendered width so we can switch between 4-col,
+  // 2-col, and stacked layouts. Pure CSS minmax can't do this because
+  // the grid breaks when the parent narrows below the sum of column
+  // minimums — historically that caused the right portion of the strip
+  // (PATTERNS + CLOSEST) to clip behind the right rail. ResizeObserver
+  // gives us actual width, then we pick the layout that fits.
+  const stripBodyRef = useRef<HTMLDivElement>(null);
+  const [stripW, setStripW] = useState<number>(0);
+  useEffect(() => {
+    const el = stripBodyRef.current;
+    if (!el) return;
+    setStripW(el.getBoundingClientRect().width);
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) setStripW(e.contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Three breakpoints — picked so each column stays readable rather than
+  // compressed to illegibility:
+  //   • wide   (≥1080) — 4 columns side-by-side, classic dashboard read
+  //   • medium (720-1079) — 2 columns × 2 rows, properties+build top,
+  //     patterns+closest bottom; strip grows taller to accommodate
+  //   • narrow (<720) — full stack, single column scrolling vertically
+  const layout: "wide" | "medium" | "narrow" =
+    stripW >= 1080 ? "wide" : stripW >= 720 ? "medium" : "narrow";
+  const gridTemplate =
+    layout === "wide"
+      ? "minmax(0, 2.2fr) minmax(120px, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.6fr)"
+      : layout === "medium"
+      ? "minmax(0, 1.6fr) minmax(120px, 1fr)"
+      : "minmax(0, 1fr)";
+  // Strip height — when content needs to wrap (medium/narrow), give it
+  // more vertical real estate so nothing gets clipped. The body div
+  // itself is `overflow: auto`, so users can scroll if a tiny window
+  // really shrinks below all comfort.
+  const expandedH =
+    layout === "wide" ? 240 : layout === "medium" ? 360 : 460;
+
   return (
     <div style={{
       flexShrink: 0,
       borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
-      // Bumped from 200 → 240 so the 4 sections aren't congested.
-      // Each section also has its own internal scroll for overflow.
-      maxHeight: collapsed ? 28 : 240,
+      maxHeight: collapsed ? 28 : expandedH,
       transition: "max-height 0.20s ease-out",
       overflow: "hidden",
     }}>
-      {/* Header — single row, mono uppercase, collapse arrow + subtle */}
+      {/* Header — single row, mono uppercase, collapse arrow + subtle.
+          Subtitle adapts to the active layout so the user sees what
+          rhythm the strip is using right now. */}
       <div
         onClick={() => setCollapsed((c) => !c)}
-        title="Properties · build state · patterns found · closest known. Click to collapse."
+        title="Properties · build state · patterns found · closest known. Click to collapse. Layout adapts to width: 4 cols → 2 cols → stacked."
         style={{
           padding: "5px 10px",
           fontSize: 9, fontFamily: "var(--lys-font-mono)",
@@ -4488,34 +4527,55 @@ function PropertiesStrip(p: PropertiesStripProps) {
         <span style={{ opacity: 0.6, textTransform: "none", letterSpacing: 0,
           fontFamily: "var(--lys-font-body)" }}>
           medchem props · build state · patterns · closest known
+          {layout !== "wide" && (
+            <span style={{ marginLeft: 6, fontSize: 8.5,
+              opacity: 0.7, fontFamily: "var(--lys-font-mono)",
+              letterSpacing: "0.04em", textTransform: "uppercase" }}>
+              · {layout}
+            </span>
+          )}
         </span>
       </div>
       {!collapsed && (
-        <div style={{ flex: 1, overflow: "hidden",
-          // Wider Properties column, fixed-width Build State, flexible
-          // Patterns + Closest. Total min ~960px which comfortably fits
-          // in the center column (chem 1700w − rail 320w − borders).
+        <div ref={stripBodyRef} style={{
+          // overflow:auto on body so vertical scroll appears only if the
+          // current layout's content exceeds expandedH. Horizontal scroll
+          // never appears because columns now use minmax(0, ...) — they
+          // shrink to fit instead of pushing past the parent.
+          flex: 1, overflow: "auto",
           display: "grid",
-          gridTemplateColumns: "minmax(380px, 2.2fr) 150px minmax(220px, 1.4fr) minmax(240px, 1.6fr)",
+          gridTemplateColumns: gridTemplate,
           gap: 0,
         }}>
-          {/* COL 1 — wraps PropertiesCard. `overflow: auto` was forcing
-              a scrollbar even when content fits (composition moved out
-              to col 2 → col 1 has plenty of room). Switch to hidden so
-              the scrollbar only appears when truly overflowing. */}
-          <div style={{ overflow: "hidden",
-            borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))" }}>
+          {/* COL 1 — PropertiesCard wrapper. `min-width: 0` lets the grid
+              column shrink below the card's natural width without
+              pushing horizontal overflow. */}
+          <div style={{ minWidth: 0, overflow: "hidden",
+            borderRight: layout === "wide"
+              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
+              : "none",
+            borderBottom: layout !== "wide"
+              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
+              : "none",
+          }}>
             {p.children}
           </div>
           {/* COL 2 — BUILD STATE + COMPOSITION stacked. Composition was
               previously a row inside the main Properties column and
               forced internal scroll. Moved here so small content
               (1-3 element chips) sits compactly next to BUILD STATE
-              counts, and the main Properties column stays scroll-free. */}
+              counts, and the main Properties column stays scroll-free.
+              `min-width: 0` permits the grid column to shrink below
+              the chips' natural width without overflowing horizontally. */}
           <div
             title="Build state + composition · live counts of what you've assembled. Atoms = heavy atoms only. Frag>1 = disconnected. Composition lists each element + its count."
-            style={{ padding: "5px 8px", overflow: "auto", minWidth: 160,
-            borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+            style={{ padding: "5px 8px", overflow: "hidden", minWidth: 0,
+            borderRight: layout === "wide"
+              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
+              : "none",
+            borderBottom: layout !== "wide"
+              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
+              : "none",
             display: "flex", flexDirection: "column", gap: 6 }}>
             {/* Sub-block: BUILD STATE */}
             <div>
@@ -4572,11 +4632,19 @@ function PropertiesStrip(p: PropertiesStripProps) {
                   on the SVG. Color-coded by category (acid-base red,
                   aromatic purple, antibiotic-warhead green, etc.).
               (b) ACTIVE / TRAIL — manual SMARTS queries the user runs
-                  via the top-nav 🔍 dock. */}
+                  via the top-nav 🔍 dock. The previous `maxWidth: 320`
+                  cap was removed — it artificially compressed this
+                  column even when there was empty grid space available,
+                  causing chips to wrap into a vertical mess. */}
           <div
             title="Patterns found · structural motifs in this candidate. Auto-detected pulls from the 41-preset SMARTS library and shows what's already there. Click any chip to highlight matching atoms in the 2D viewer."
-            style={{ padding: "5px 8px", overflow: "auto", minWidth: 240, maxWidth: 320,
-            borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+            style={{ padding: "5px 8px", overflow: "hidden", minWidth: 0,
+            borderRight: layout === "wide"
+              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
+              : "none",
+            borderBottom: layout === "narrow"
+              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
+              : "none",
             display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
@@ -4674,10 +4742,14 @@ function PropertiesStrip(p: PropertiesStripProps) {
               </div>
             ))}
           </div>
-          {/* COL 4 — CLOSEST KNOWN matches */}
+          {/* COL 4 — CLOSEST KNOWN matches. Like COL 3, the previous
+              `minWidth: 240` was a hard floor that prevented the strip
+              from shrinking gracefully — replaced with `minWidth: 0`.
+              Drug names use ellipsis when narrow; the full name is in
+              the tooltip. */}
           <div
             title="Closest known antibiotic · top-3 Tanimoto similarity matches against the curated 30+ antibiotic library (Morgan-2 fingerprints). Color-coded by drug class. ≥95% means you've effectively built a known drug; lower = analog space."
-            style={{ padding: "5px 8px", overflow: "auto", minWidth: 240,
+            style={{ padding: "5px 8px", overflow: "hidden", minWidth: 0,
             display: "flex", flexDirection: "column", gap: 3 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",

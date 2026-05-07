@@ -140,7 +140,13 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
             amber = violation, red = severe). Tooltip per tile shows the
             threshold + medchem rationale. */}
         <PropSection label="drug-likeness" subtitle="Lipinski Ro5 KPIs">
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)",
+          {/* `auto-fit, minmax(64px, 1fr)` lets the 4 hero tiles wrap
+              into 2×2 (or any other arrangement) when the parent column
+              shrinks — instead of crushing each tile below the readable
+              width or pushing the row off-screen. Each tile floors at
+              64px so the value text stays legible. */}
+          <div style={{ display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(64px, 1fr))",
             gap: 4, padding: "0 6px 4px" }}>
             <MiniTile label="MW" value={data.molecular_weight.toFixed(0)} unit="Da"
               color={data.molecular_weight < 500 ? "#10b981" : "#d97706"}
