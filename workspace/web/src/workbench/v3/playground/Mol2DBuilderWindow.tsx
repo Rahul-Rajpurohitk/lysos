@@ -391,7 +391,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
 
   // Poll /chem/bonds whenever SMILES changes — needed to map a bond
   // click on the SVG back to a bond_index for /molecule/edit break_bond.
-  const [bondList, setBondList] = useState<{ bond_idx: number; atom_a: number; atom_b: number; order: string; in_ring: boolean }[]>([]);
+  const [bondList, setBondList] = useState<BondMeta[]>([]);
+  const [hoveredBondIdx, setHoveredBondIdx] = useState<number | null>(null);
+  const [recentlyBroken, setRecentlyBroken] = useState<Set<number>>(new Set());
   useEffect(() => {
     if (!smiles) { setBondList([]); return; }
     let cancelled = false;
@@ -438,19 +440,25 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     const root = injectSvgSafely(host, svg);
     if (!root) return;
     // RDKit emits class="bond-0 atom-0 atom-1" on BOND paths — they share
-    // the "atom-" substring with real atom elements. Exclude any element
-    // that also has a "bond-" class so atom handlers only fire on real
-    // atoms (text labels, ellipses), not on bond paths.
+    // the "atom-" substring with real atom elements. We need both gestures:
+    //   • atom labels (no bond- class) → mousedown (drag-start) + click (select)
+    //   • bond paths (has bond- class) → mousedown (drag-start using first atom-N)
+    //                                  + bond-click (break) — handled in second loop
+    // This way pure-carbon atoms (which RDKit doesn't draw as separate text
+    // elements) remain draggable through their bond paths, and clicking a
+    // bond breaks it without also opening the atom popover.
     const atoms = root.querySelectorAll("[class^='atom-'], [class*=' atom-']");
     const handlers: Array<{ node: Element; type: string; fn: (e: Event) => void }> = [];
     atoms.forEach((node) => {
       const cls = node.getAttribute("class") || "";
-      if (/(^|\s)bond-/.test(cls)) return;  // skip bond paths
+      const isBondPath = /(^|\s)bond-/.test(cls);
       const m = cls.match(/atom-(\d+)/);
       if (!m) return;
       const idx = parseInt(m[1], 10);
       (node as HTMLElement).style.cursor = "grab";
 
+      // mousedown — always wired, lets the user drag-to-bond from any atom
+      // (heteroatom label or carbon via bond path).
       const onMouseDown = (e: Event) => {
         const me = e as MouseEvent;
         if (me.shiftKey || me.button !== 0) return;
@@ -459,32 +467,34 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         setDragStart(idx);
         (node as HTMLElement).style.cursor = "grabbing";
       };
+      node.addEventListener("mousedown", onMouseDown);
+      handlers.push({ node, type: "mousedown", fn: onMouseDown });
 
-      const onClick = (e: Event) => {
-        e.stopPropagation();
-        const me = e as MouseEvent;
-        // Shift-click toggles multi-select (for bond creation between two atoms)
-        if (me.shiftKey) {
-          setSelected((cur) => {
-            const next = new Set(cur);
-            if (next.has(idx)) next.delete(idx);
-            else next.add(idx);
-            return next;
-          });
-          return;
-        }
-        // Viewport-fixed coords; renderer clamps so the popover never
-        // overflows the screen edges (handled at render time).
-        setPop({ atomIdx: idx, x: me.clientX, y: me.clientY });
-      };
+      // click — only on REAL atom labels (heteroatoms). On bond paths the
+      // click is handled by the bond-click handler below (break_bond).
+      if (!isBondPath) {
+        const onClick = (e: Event) => {
+          e.stopPropagation();
+          const me = e as MouseEvent;
+          if (me.shiftKey) {
+            setSelected((cur) => {
+              const next = new Set(cur);
+              if (next.has(idx)) next.delete(idx);
+              else next.add(idx);
+              return next;
+            });
+            return;
+          }
+          setPop({ atomIdx: idx, x: me.clientX, y: me.clientY });
+        };
+        node.addEventListener("click", onClick);
+        handlers.push({ node, type: "click", fn: onClick });
+      }
+
       const onEnter = () => onCursorHover?.(idx);
       const onLeave = () => onCursorHover?.(null);
-      node.addEventListener("mousedown", onMouseDown);
-      node.addEventListener("click", onClick);
       node.addEventListener("mouseenter", onEnter);
       node.addEventListener("mouseleave", onLeave);
-      handlers.push({ node, type: "mousedown", fn: onMouseDown });
-      handlers.push({ node, type: "click", fn: onClick });
       handlers.push({ node, type: "mouseenter", fn: onEnter });
       handlers.push({ node, type: "mouseleave", fn: onLeave });
     });
@@ -497,13 +507,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       if (!m) return;
       const bondIdx = parseInt(m[1], 10);
       (node as HTMLElement).style.cursor = "pointer";
-      const onBondHover = () => {
-        (node as SVGElement & { style: CSSStyleDeclaration }).style.filter =
-          "drop-shadow(0 0 4px #dc2626) drop-shadow(0 0 2px #dc2626)";
-      };
-      const onBondLeave = () => {
-        (node as SVGElement & { style: CSSStyleDeclaration }).style.filter = "";
-      };
+      // SVG bond hover → drive the central hoveredBondIdx state. That state
+      // is the single source of truth for ALL bond hover affordances —
+      // both the SVG glow (via the hoveredBondIdx useEffect) and the
+      // BondsRail row highlight react to it.
+      const onBondHover = () => { setHoveredBondIdx(bondIdx); };
+      const onBondLeave = () => { setHoveredBondIdx((cur) => cur === bondIdx ? null : cur); };
       const onBondClick = (e: Event) => {
         e.stopPropagation();
         const me = e as MouseEvent;
@@ -532,9 +541,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     return () => handlers.forEach(({ node, type, fn }) => node.removeEventListener(type, fn));
   }, [svg, onCursorHover, bondList]);
 
-  // Break a bond via /molecule/edit op:break_bond. Used by SVG bond clicks.
+  // Break a bond via /molecule/edit op:break_bond. Used by SVG bond clicks
+  // AND by the AtomsRail bond row delete button. Captures the bond's two
+  // endpoint atoms BEFORE deletion, then pulses them for 4s on the SVG so
+  // the user sees exactly which atoms just lost a bond. RDKit auto-fills
+  // implicit H, so the diagnostics-driven incomplete-atom highlight rarely
+  // fires after a break — this client-side recently-broken pulse is the
+  // primary visual feedback.
   const breakBond = async (bondIdx: number) => {
     if (!smiles) return;
+    const bondMeta = bondList.find((b) => b.bond_idx === bondIdx);
     try {
       const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
         method: "POST",
@@ -547,9 +563,20 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       }
       const d = await r.json();
       if (d.smiles) {
+        // Mark the two endpoints as recently broken — they'll pulse amber
+        // on the new SVG until the timeout clears them.
+        if (bondMeta) {
+          const endpoints = new Set<number>([bondMeta.atom_a, bondMeta.atom_b]);
+          setRecentlyBroken(endpoints);
+          setTimeout(() => setRecentlyBroken((cur) => {
+            const next = new Set(cur);
+            for (const idx of endpoints) next.delete(idx);
+            return next;
+          }), 4000);
+        }
         onMoleculeEdit?.(d.smiles, {
-          op: "break_bond", atom_idx: 0,
-          label: `break bond ${bondIdx}`,
+          op: "break_bond", atom_idx: bondMeta?.atom_a ?? 0,
+          label: `break bond ${bondIdx} (atoms ${bondMeta?.atom_a}–${bondMeta?.atom_b})`,
         });
       }
     } catch (exc: any) {
@@ -781,6 +808,65 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       svgEl.appendChild(ring);
     }
   }, [diagnostics, svg]);
+
+  // Recently-broken-bond endpoint pulse — amber dashed ring on the two
+  // atoms whose bond was just severed. Fires immediately on break_bond,
+  // clears after 4s. Complements the diagnostics-driven red pulse for
+  // cases where RDKit auto-fills implicit H (most carbon-carbon breaks).
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-recent-break="1"]').forEach((n) => n.remove());
+    if (!recentlyBroken.size) return;
+    for (const idx of recentlyBroken) {
+      const target = svgEl.querySelector(`[class*="atom-${idx}"]`);
+      if (!target) continue;
+      const bbox = (target as SVGGraphicsElement).getBBox?.();
+      if (!bbox) continue;
+      const cx = bbox.x + bbox.width / 2;
+      const cy = bbox.y + bbox.height / 2;
+      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      ring.setAttribute("data-recent-break", "1");
+      ring.setAttribute("cx", String(cx));
+      ring.setAttribute("cy", String(cy));
+      ring.setAttribute("r", "13");
+      ring.setAttribute("fill", "none");
+      ring.setAttribute("stroke", "#f59e0b");
+      ring.setAttribute("stroke-width", "2");
+      ring.setAttribute("stroke-dasharray", "3,2");
+      ring.setAttribute("opacity", "0.95");
+      ring.style.pointerEvents = "none";
+      const animR = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+      animR.setAttribute("attributeName", "r");
+      animR.setAttribute("values", "10;16;10");
+      animR.setAttribute("dur", "0.9s");
+      animR.setAttribute("repeatCount", "indefinite");
+      ring.appendChild(animR);
+      svgEl.appendChild(ring);
+    }
+  }, [recentlyBroken, svg]);
+
+  // Hovered-bond glow — driven by hoveredBondIdx (set from rail row hover).
+  // The SVG bond-mouseenter handler also sets this directly via onHoverBond
+  // wiring, so glow appears on both rail-hover and SVG-hover.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll("[class^='bond-'], [class*=' bond-']").forEach((n) => {
+      const cls = n.getAttribute("class") || "";
+      const m = cls.match(/bond-(\d+)/);
+      if (!m) return;
+      const idx = parseInt(m[1], 10);
+      const el = n as SVGElement & { style: CSSStyleDeclaration };
+      el.style.filter = (idx === hoveredBondIdx)
+        ? "drop-shadow(0 0 4px #dc2626) drop-shadow(0 0 2px #dc2626)"
+        : "";
+    });
+  }, [hoveredBondIdx, svg, bondList]);
 
   // SMARTS pattern match overlay — green pulse halos on matched atoms.
   useEffect(() => {
@@ -1397,6 +1483,13 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               showViolation({ code: "network_error", message: `replace failed: ${exc?.message ?? exc}` });
             }
           }}
+          bonds={bondList}
+          hoveredBondIdx={hoveredBondIdx}
+          onHoverBond={(idx) => setHoveredBondIdx(idx)}
+          onBreakBond={(idx) => { void breakBond(idx); }}
+          incompleteAtomIdxs={new Set((diagnostics?.incomplete_atoms || [])
+            .map((v) => v.atom_idx).filter((x): x is number => x != null))}
+          recentlyBrokenAtomIdxs={recentlyBroken}
         />
         {pop && smiles && createPortal(
           <div data-chem-pop style={{
@@ -1890,6 +1983,15 @@ function tagChip(active: boolean, color: string): React.CSSProperties {
    Click row → toggles selection in the SVG (mirrors shift-click).
    Hover row → fires onHoverAtom which broadcasts cursor presence.
    ───────────────────────────────────────────────────────────────────── */
+interface BondMeta {
+  bond_idx: number;
+  atom_a: number;
+  atom_b: number;
+  order: string;
+  in_ring: boolean;
+  is_aromatic?: boolean;
+}
+
 interface AtomsRailProps {
   apiBase: string;
   smiles: string | null;
@@ -1904,6 +2006,13 @@ interface AtomsRailProps {
   onAttachFragment?: (anchorIdx: number, fragmentSmiles: string, label: string, bondOrder?: "single" | "double" | "aromatic") => void;
   onAttachFG?: (anchorIdx: number, fgName: string, label: string) => void;
   onReplaceSmiles?: (newSmiles: string, label: string) => void;
+  // Bonds — passed in from parent (lifted state, single source of truth).
+  bonds?: BondMeta[];
+  hoveredBondIdx?: number | null;
+  incompleteAtomIdxs?: Set<number>;
+  recentlyBrokenAtomIdxs?: Set<number>;
+  onHoverBond?: (idx: number | null) => void;
+  onBreakBond?: (bondIdx: number) => void;
 }
 
 interface ElementInfo {
@@ -2117,7 +2226,7 @@ function AtomsRail(p: AtomsRailProps) {
 
   return (
     <div style={{
-      width: 268, flexShrink: 0,
+      width: 320, flexShrink: 0,
       borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
@@ -2218,21 +2327,32 @@ function AtomsRail(p: AtomsRailProps) {
           const isSelected = p.selected.has(a.idx);
           const isHover = p.hoverIdx === a.idx;
           const fullName = ELEMENT_NAMES[a.element] ?? a.element;
+          const isIncomplete = p.incompleteAtomIdxs?.has(a.idx) ?? false;
+          const isRecentlyBroken = p.recentlyBrokenAtomIdxs?.has(a.idx) ?? false;
+          // Border color priority: incomplete > recently-broken > selected
+          const borderColor = isIncomplete ? "#dc2626"
+                            : isRecentlyBroken ? "#f59e0b"
+                            : isSelected ? "#f59e0b"
+                            : "transparent";
+          const rowBg = isIncomplete ? "rgba(220,38,38,0.06)"
+                      : isRecentlyBroken ? "rgba(245,158,11,0.06)"
+                      : isSelected ? "rgba(245,158,11,0.08)"
+                      : isHover ? "rgba(16,185,129,0.04)"
+                      : "transparent";
           return (
             <div key={a.idx}
               data-row-idx={a.idx}
               onClick={() => p.onSelectAtom(a.idx)}
               onMouseEnter={() => p.onHoverAtom(a.idx)}
               onMouseLeave={() => p.onHoverAtom(null)}
-              title={`Atom ${a.idx} · ${fullName} (Z=${a.atomic_number}, ${a.atomic_mass} g/mol) · ${a.hybridization || "—"} · ${a.degree} heavy bonds + ${a.n_hydrogens} H · ${a.free_valence} free slot${a.free_valence === 1 ? "" : "s"}`}
+              title={`Atom ${a.idx} · ${fullName} (Z=${a.atomic_number}, ${a.atomic_mass} g/mol) · ${a.hybridization || "—"} · ${a.degree} heavy bonds + ${a.n_hydrogens} H · ${a.free_valence} free slot${a.free_valence === 1 ? "" : "s"}${isIncomplete ? " · ⚠ incomplete (under-valent)" : ""}${isRecentlyBroken ? " · recently broken" : ""}`}
               style={{
                 position: "relative",
                 display: "flex", flexDirection: "column", gap: 2,
                 padding: "4px 8px",
                 borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.025))",
-                borderLeft: isSelected ? `3px solid #f59e0b` : "3px solid transparent",
-                background: isSelected ? "rgba(245,158,11,0.08)"
-                          : isHover ? "rgba(16,185,129,0.04)" : "transparent",
+                borderLeft: `3px solid ${borderColor}`,
+                background: rowBg,
                 cursor: "pointer",
                 fontFamily: "var(--lys-font-mono)",
                 transition: "background 0.10s",
@@ -2360,6 +2480,18 @@ function AtomsRail(p: AtomsRailProps) {
           </div>
         )}
       </div>
+      {/* BONDS section — every bond is a row, click × to break, click row
+          to highlight in the SVG. Bonds are shared between two atoms; the
+          row visualizes that as `atom_a — glyph — atom_b`. Same actions
+          available to the agent through /molecule/edit op:break_bond. */}
+      <BondsRail
+        bonds={p.bonds || []}
+        hoveredBondIdx={p.hoveredBondIdx ?? null}
+        onHoverBond={p.onHoverBond}
+        onBreakBond={p.onBreakBond}
+        elementColor={ELEMENT_COLOR}
+        atoms={atoms}
+      />
       {/* Build Tools — fills the bottom space of the rail with concrete
           building blocks the user (and the agent) can attach to the
           currently-selected atom. Three tabs: Fragments, Rings, SMILES. */}
@@ -2601,6 +2733,177 @@ function iconBtnStyle(color: string, opacity: number = 1): React.CSSProperties {
     fontFamily: "var(--lys-font-mono)",
     transition: "background 0.10s, opacity 0.10s",
   };
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   BondsRail — collapsible list of every bond in the molecule. Lives
+   below the AtomsRail in the right panel.
+
+   Each row visualizes the shared-between-atoms nature of bonds:
+   `[idx] [atom_a element]——atom_b · glyph · ring? aromatic? × break`
+
+   Click × to break the bond (same /molecule/edit op:break_bond used by
+   the SVG bond-click). Hover row to glow the bond on the SVG (the parent
+   wires hoveredBondIdx ↔ SVG via useEffect).
+
+   The row click is the click-based path the user prefers: even for
+   atom selection, click row → highlights both endpoints visually.
+   ───────────────────────────────────────────────────────────────────── */
+interface BondsRailProps {
+  bonds: BondMeta[];
+  hoveredBondIdx: number | null;
+  onHoverBond?: (idx: number | null) => void;
+  onBreakBond?: (idx: number) => void;
+  elementColor: Record<string, string>;
+  atoms: AtomRow[];
+}
+
+const BOND_GLYPH_RAIL: Record<string, string> = {
+  single:   "—",
+  double:   "=",
+  triple:   "≡",
+  aromatic: "⌬",
+};
+
+function BondsRail(p: BondsRailProps) {
+  const [collapsed, setCollapsed] = useState(false);
+  const ringCount = p.bonds.filter((b) => b.in_ring).length;
+  const aromCount = p.bonds.filter((b) => b.is_aromatic).length;
+  return (
+    <div style={{
+      flex: "0 0 auto",
+      maxHeight: 240,
+      display: "flex", flexDirection: "column",
+      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      background: "var(--lys-bg, #fafafa)",
+      overflow: "hidden",
+    }}>
+      {/* Header — collapsible, shows bond count + ring/aromatic counts */}
+      <div
+        title="Bonds in the current candidate · click any row to highlight in 2D · × to break · click bond in SVG to break too"
+        onClick={() => setCollapsed((c) => !c)}
+        style={{
+          padding: "5px 8px",
+          fontSize: 9, fontFamily: "var(--lys-font-mono)",
+          color: "var(--lys-text-faint)",
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          borderBottom: collapsed ? "none" : "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+          display: "flex", alignItems: "center", gap: 5,
+          cursor: "pointer",
+          userSelect: "none",
+        }}>
+        <span style={{ fontSize: 9, opacity: 0.6 }}>{collapsed ? "▶" : "▼"}</span>
+        <span style={{ fontWeight: 700 }}>bonds</span>
+        <span style={{ color: "#0891b2", fontWeight: 700 }}>{p.bonds.length}</span>
+        <span style={{ flex: 1 }} />
+        {ringCount > 0 && (
+          <span style={{ padding: "0 5px", borderRadius: 3,
+            background: "rgba(8,145,178,0.10)", color: "#0891b2", fontWeight: 700 }}>
+            {ringCount} ring
+          </span>
+        )}
+        {aromCount > 0 && (
+          <span style={{ padding: "0 5px", borderRadius: 3,
+            background: "rgba(168,85,247,0.10)", color: "#a855f7", fontWeight: 700 }}>
+            {aromCount} arom
+          </span>
+        )}
+      </div>
+      {!collapsed && (
+        <div style={{ flex: 1, overflow: "auto" }}>
+          {p.bonds.length === 0 ? (
+            <div style={{ padding: "10px 8px", textAlign: "center",
+              fontSize: 9.5, color: "var(--lys-text-faint)",
+              fontFamily: "var(--lys-font-mono)" }}>
+              no bonds
+            </div>
+          ) : p.bonds.map((b) => {
+            const aEl = p.atoms.find((a) => a.idx === b.atom_a)?.element ?? "?";
+            const bEl = p.atoms.find((a) => a.idx === b.atom_b)?.element ?? "?";
+            const aColor = p.elementColor[aEl] ?? "#374151";
+            const bColor = p.elementColor[bEl] ?? "#374151";
+            const isHover = p.hoveredBondIdx === b.bond_idx;
+            const orderColor = b.is_aromatic ? "#a855f7"
+                             : b.order === "double" ? "#dc2626"
+                             : b.order === "triple" ? "#ea580c"
+                             : "#374151";
+            return (
+              <div key={b.bond_idx}
+                onMouseEnter={() => p.onHoverBond?.(b.bond_idx)}
+                onMouseLeave={() => p.onHoverBond?.(null)}
+                title={`Bond ${b.bond_idx} · atom ${b.atom_a}(${aEl}) ${BOND_GLYPH_RAIL[b.order] ?? b.order} atom ${b.atom_b}(${bEl})${b.in_ring ? " · in ring" : ""}${b.is_aromatic ? " · aromatic" : ""}`}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "3px 8px",
+                  fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                  borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.025))",
+                  background: isHover ? "rgba(220,38,38,0.06)" : "transparent",
+                  cursor: "pointer",
+                  transition: "background 0.10s",
+                }}>
+                <span style={{ fontSize: 8, color: "var(--lys-text-faint)",
+                  minWidth: 14, textAlign: "right", fontWeight: 600 }}>
+                  {b.bond_idx}
+                </span>
+                {/* atom_a element bubble */}
+                <span style={{
+                  width: 14, height: 14, borderRadius: "50%",
+                  background: aColor, color: "white",
+                  display: "grid", placeItems: "center",
+                  fontSize: 8, fontWeight: 700, flexShrink: 0,
+                }}>{aEl}</span>
+                <span style={{ fontSize: 8, color: "var(--lys-text-faint)" }}>
+                  {b.atom_a}
+                </span>
+                {/* bond glyph */}
+                <span style={{
+                  fontSize: 13, fontWeight: 800,
+                  color: orderColor, lineHeight: 1,
+                  padding: "0 2px",
+                }}>{BOND_GLYPH_RAIL[b.order] ?? b.order}</span>
+                {/* atom_b element bubble */}
+                <span style={{
+                  width: 14, height: 14, borderRadius: "50%",
+                  background: bColor, color: "white",
+                  display: "grid", placeItems: "center",
+                  fontSize: 8, fontWeight: 700, flexShrink: 0,
+                }}>{bEl}</span>
+                <span style={{ fontSize: 8, color: "var(--lys-text-faint)" }}>
+                  {b.atom_b}
+                </span>
+                {b.in_ring && (
+                  <span style={{ fontSize: 7, padding: "0 3px", borderRadius: 2,
+                    background: "rgba(8,145,178,0.10)", color: "#0891b2",
+                    fontWeight: 700 }}>r</span>
+                )}
+                <span style={{ flex: 1 }} />
+                {/* break-bond × — disable for aromatic ring bonds (would shatter the ring) */}
+                <button type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (b.is_aromatic && b.in_ring) return;
+                    p.onBreakBond?.(b.bond_idx);
+                  }}
+                  disabled={b.is_aromatic && b.in_ring}
+                  title={b.is_aromatic && b.in_ring
+                    ? `Cannot break aromatic ring bond — would shatter the ring`
+                    : `Break bond ${b.bond_idx} (atoms ${b.atom_a}↔${b.atom_b})`}
+                  style={{
+                    border: 0, background: "transparent",
+                    cursor: (b.is_aromatic && b.in_ring) ? "not-allowed" : "pointer",
+                    padding: "0 5px",
+                    color: "#dc2626",
+                    opacity: (b.is_aromatic && b.in_ring) ? 0.25 : (isHover ? 1 : 0.55),
+                    fontSize: 12, lineHeight: 1, fontWeight: 700,
+                    transition: "opacity 0.10s",
+                  }}>×</button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─────────────────────────────────────────────────────────────────────

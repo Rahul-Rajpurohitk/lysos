@@ -560,5 +560,76 @@ Search bars, submission bars, fragment chips must all be visible without
 internal scroll. The chem container default height was bumped 1320 →
 1620 to accommodate the BuildTools panel below the atoms rail.
 
-Version: 1.3 (May 7 2026)
+### 11.9 Click-first interaction model (v1.4)
+
+User preference: drag-and-drop is NOT required. Every gesture must have
+a click path on BOTH the SVG visual AND the right-side rail. The agent
+calls the same endpoints either way, so the user/agent contract stays
+identical regardless of which input modality the human uses.
+
+**Click parity matrix:**
+
+| Action | SVG click | Rail click | Endpoint |
+|---|---|---|---|
+| Select atom | click heteroatom label | click atoms-rail row | (UI state) |
+| Multi-select | shift-click atom | shift-click row | (UI state) |
+| Add atom (any element) | (atoms-rail '+ atom' → palette) | '+ atom' → palette | edit add_atom_at |
+| Swap element | atom popover → swap | row '⇆' → palette | edit swap_element |
+| Add neighbor | atom popover → +X | row '+' → palette | edit add_atom_at |
+| Delete atom | (in popover) | row '×' | edit delete_atom |
+| Add bond | shift-click 2 atoms → toolbar | shift-click rows → toolbar | edit add_bond |
+| Break bond | click bond glyph | bonds-rail row '×' | edit break_bond |
+| Attach FG | (BuildTools fragments tab) | BuildTools fragments tab | edit add_functional_group_at |
+| Attach ring | (BuildTools rings tab) | BuildTools rings tab | edit attach_fragment |
+| Replace SMILES | n/a | BuildTools SMILES tab | replace |
+
+Drag-to-bond remains as a secondary gesture (mousedown atom A → mouseup
+atom B) but no critical workflow depends on it.
+
+### 11.10 Bonds rail · `BondsRail` component
+
+A new section sits between the atoms list and the BuildTools panel.
+Each row visualizes the shared-between-atoms nature of bonds:
+
+```
+[idx] ⓒ atom_a — glyph — ⓒ atom_b · [r] · ×
+```
+
+- **Click row** → highlight bond on SVG (drives `hoveredBondIdx`)
+- **× button** → break bond (`/molecule/edit op:break_bond`)
+- **Aromatic ring bonds** are visually disabled (button greyed) — clicking
+  them would shatter the ring; the violation toast guides the user to
+  delete an atom from the ring instead.
+- **Header collapses** if the user wants more space for atoms.
+
+Driven by `GET /chem/bonds/{smiles_b64}`. Same endpoint the agent uses
+to enumerate bonds before suggesting a break.
+
+### 11.11 Visual feedback channels
+
+The 2D viewer overlay system has 4 distinct ring/halo channels, each
+keyed to a different state source:
+
+| Channel | Color | Trigger | Animation |
+|---|---|---|---|
+| Selected atom | amber border | `selected: Set<number>` | static |
+| Multi-cursor (per-actor) | teal/red/blue | `cursors: Record<actor, ...>` | static |
+| SMARTS hit | green | `smartsHits: number[]` | pulse |
+| Recently broken | amber dashed | `recentlyBroken` (4s after break) | pulse |
+| Incomplete (under-valent) | red dashed | `diagnostics.incomplete_atoms` | pulse |
+| Hovered bond | red glow | `hoveredBondIdx` (rail OR SVG) | static |
+
+The atoms-rail rows ALSO color their left border to match: incomplete
+atoms get red border + red-tinted bg; recently-broken atoms get amber
+border + amber bg. So the same state is visible whether the user is
+looking at the structure or the inventory list.
+
+### 11.12 Rail width — 320 px
+
+Bumped from 268 to 320 to accommodate the bonds list rows (which
+visualize two atom bubbles + glyph + chips + delete in a single row).
+The 2D viewer SVG still has plenty of width budget (chem container is
+1500 wide, rail 320, leaving ~1180 for the SVG).
+
+Version: 1.4 (May 8 2026)
 
