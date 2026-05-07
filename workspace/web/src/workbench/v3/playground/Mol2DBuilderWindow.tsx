@@ -2958,8 +2958,11 @@ function BondsRail(p: BondsRailProps) {
   const tripleCount = p.bonds.filter((b) => b.order === "triple").length;
   return (
     <div style={{
-      flex: "0 0 auto",
-      maxHeight: 240,
+      // When expanded, BondsRail flexes equally with atoms + build.
+      // When collapsed, shrinks to header height. The user wanted
+      // equal space distribution across the open sub-sections.
+      flex: collapsed ? "0 0 auto" : "1 1 0",
+      minHeight: collapsed ? 0 : 80,
       display: "flex", flexDirection: "column",
       borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
       background: "var(--lys-bg, #fafafa)",
@@ -3598,7 +3601,7 @@ interface LibraryDockProps {
 
 function LibraryDock(p: LibraryDockProps) {
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
+  const [tags, setTags] = useState<{ tag: string; count: number }[]>([]);
   const [activeTag, setActiveTag] = useState("");
   const [query, setQuery] = useState("");
   const [showSave, setShowSave] = useState(false);
@@ -3611,9 +3614,12 @@ function LibraryDock(p: LibraryDockProps) {
       .then((r) => r.ok ? r.json() : { entries: [] })
       .then((d) => setEntries(d.entries || []))
       .catch(() => setEntries([]));
+    // Backend returns [{tag, count}, ...] (NOT bare strings) — was a
+    // breaking mismatch that crashed the whole panel with .toLowerCase
+    // on undefined.
     fetch(`${p.apiBase}/workbench/library/tags`)
       .then((r) => r.ok ? r.json() : { tags: [] })
-      .then((d) => setTags(d.tags || []))
+      .then((d) => setTags(Array.isArray(d.tags) ? d.tags : []))
       .catch(() => setTags([]));
     fetch(`${p.apiBase}/workbench/molecule/drug-class-colors`)
       .then((r) => r.ok ? r.json() : { colors: {} })
@@ -3654,12 +3660,20 @@ function LibraryDock(p: LibraryDockProps) {
 
   return (
     <div style={{
-      flex: "0 0 360px",
-      maxWidth: 360,
+      // OVERLAY mode (was flex push). Absolute-positioned inside the
+      // body row so the SVG center column never resizes when the dock
+      // opens — the diagram stays at its default viewport size. The
+      // dock floats over the leftmost 360px with backdrop blur.
+      position: "absolute",
+      top: 0, left: 0, bottom: 0,
+      width: 360,
       display: "flex", flexDirection: "column",
-      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-      background: "var(--lys-bg-2, #ffffff)",
+      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+      background: "rgba(255,255,255,0.96)",
+      backdropFilter: "blur(8px)",
+      boxShadow: "4px 0 16px rgba(15,23,42,0.08)",
       overflow: "hidden",
+      zIndex: 30,
       animation: "slideInLeft 0.18s ease-out",
     }}>
       <DockHeader title="Library" count={entries.length} icon="📚" color="#10b981" onClose={p.onClose}
@@ -3703,16 +3717,13 @@ function LibraryDock(p: LibraryDockProps) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
             <button type="button" onClick={() => setActiveTag("")}
               style={tagChip(!activeTag, "#10b981")}>all · {entries.length}</button>
-            {tags.map((t) => {
-              const cnt = entries.filter((e) => e.tags.includes(t)).length;
-              return (
-                <button key={t} type="button"
-                  onClick={() => setActiveTag(activeTag === t ? "" : t)}
-                  style={tagChip(activeTag === t, "#10b981")}>
-                  {t} · {cnt}
-                </button>
-              );
-            })}
+            {tags.map((t) => (
+              <button key={t.tag} type="button"
+                onClick={() => setActiveTag(activeTag === t.tag ? "" : t.tag)}
+                style={tagChip(activeTag === t.tag, "#10b981")}>
+                {t.tag} · {t.count}
+              </button>
+            ))}
           </div>
         )}
       </div>
@@ -3812,12 +3823,17 @@ function SmartsDock(p: SmartsDockProps) {
 
   return (
     <div style={{
-      flex: "0 0 360px",
-      maxWidth: 360,
+      // OVERLAY mode — absolute-positioned, doesn't resize the SVG.
+      position: "absolute",
+      top: 0, left: 0, bottom: 0,
+      width: 360,
       display: "flex", flexDirection: "column",
-      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-      background: "var(--lys-bg-2, #ffffff)",
+      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+      background: "rgba(255,255,255,0.96)",
+      backdropFilter: "blur(8px)",
+      boxShadow: "4px 0 16px rgba(15,23,42,0.08)",
       overflow: "hidden",
+      zIndex: 30,
       animation: "slideInLeft 0.18s ease-out",
     }}>
       <DockHeader title="SMARTS" count={p.smartsHits.length} icon="🔍" color="#0891b2" onClose={p.onClose}
@@ -4014,7 +4030,9 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
       borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
-      maxHeight: collapsed ? 28 : 200,
+      // Bumped from 200 → 240 so the 4 sections aren't congested.
+      // Each section also has its own internal scroll for overflow.
+      maxHeight: collapsed ? 28 : 240,
       transition: "max-height 0.20s ease-out",
       overflow: "hidden",
     }}>
@@ -4049,7 +4067,9 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
             {p.children}
           </div>
           {/* COL 2 — BUILD STATE chips */}
-          <div style={{ padding: "5px 8px", overflow: "auto", minWidth: 130,
+          <div
+            title="Build state · live counts of what you've assembled in the 2D viewer. Atoms = heavy atoms only (Hs implicit). Frag count > 1 means the molecule is disconnected and needs a bridge bond. Charge ≠ 0 indicates ionizable / counterion-needed."
+            style={{ padding: "5px 8px", overflow: "auto", minWidth: 140,
             borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
             display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
@@ -4069,7 +4089,9 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
             ) : null}
           </div>
           {/* COL 3 — PATTERNS FOUND */}
-          <div style={{ padding: "5px 8px", overflow: "auto", minWidth: 200, maxWidth: 240,
+          <div
+            title="Pattern findings · structural motifs you've located via SMARTS substructure search. The active query (if any) is shown at top with hit count; below is a recent history of past queries (last 4). Use the 🔍 SMARTS top-nav to run a new query."
+            style={{ padding: "5px 8px", overflow: "auto", minWidth: 220, maxWidth: 260,
             borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
             display: "flex", flexDirection: "column", gap: 3 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -4115,7 +4137,9 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
             ))}
           </div>
           {/* COL 4 — CLOSEST KNOWN matches */}
-          <div style={{ padding: "5px 8px", overflow: "auto", minWidth: 220,
+          <div
+            title="Closest known antibiotic · top-3 Tanimoto similarity matches against the curated 30+ antibiotic library (Morgan-2 fingerprints). Color-coded by drug class. ≥95% means you've effectively built a known drug; lower = analog space."
+            style={{ padding: "5px 8px", overflow: "auto", minWidth: 240,
             display: "flex", flexDirection: "column", gap: 3 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
