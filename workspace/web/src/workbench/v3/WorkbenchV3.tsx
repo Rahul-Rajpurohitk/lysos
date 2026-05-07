@@ -128,6 +128,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // SMARTS match highlight — atoms returned by SMARTSMatchCard, shown as
   // green halo overlay in the 2D builder
   const [smartsHighlight] = useState<number[] | null>(null);
+  // Service 1 — 3D Target-Ligand Theater pose data. The Theater window
+  // computes pose + binding/clashing atoms, and the 2D builder reflects
+  // them as halos so the user sees the SAME atom-level signal in both
+  // views. Single source of truth = WorkbenchV3 state.
+  const [poseBindingAtoms, setPoseBindingAtoms] = useState<number[]>([]);
+  const [poseClashingAtoms, setPoseClashingAtoms] = useState<number[]>([]);
   // Filter state for navbar buttons across containers
   const [drugClassFilter, setDrugClassFilter] = useState<string>("");
   const [scoringPreset, setScoringPreset] = useState<"default" | "mic" | "admet" | "novel">("default");
@@ -1119,7 +1125,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "3d", title: "3D molecule theater · drag-edit", expandedH: 520, body:
+                    { id: "3d", title: "3D molecule theater · target picker · contacts", expandedH: 520, body:
                       <Mol3DTheaterWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
@@ -1134,6 +1140,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                             logLabel: `[3D edit ${opLabel}]`,
                           });
                         }}
+                        onPoseChange={(pose) => {
+                          // Bridge pose → 2D builder halos. Same atom indices,
+                          // both views: green=binding, red=clashing.
+                          setPoseBindingAtoms(pose?.binding_atoms ?? []);
+                          setPoseClashingAtoms(pose?.clashing_atoms ?? []);
+                        }}
                       /> },
                     { id: "2d", title: "2D molecule builder · atoms · bonds · properties", expandedH: 860, body:
                       <Mol2DBuilderWindow
@@ -1142,6 +1154,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         pathogen={selectedPathogen}
                         cursors={livePlayground.cursors}
                         highlightAtoms={smartsHighlight}
+                        bindingAtoms={poseBindingAtoms}
+                        clashingAtoms={poseClashingAtoms}
                         onLoadFromLibrary={(smi, name) => {
                           loadSmilesIntoCanvas(smi, {
                             createdBy: "user",
@@ -1387,6 +1401,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           composite: 0, agent: "user" } as any,
                       ]);
                     }}
+                    onPoseChange={(pose) => {
+                      setPoseBindingAtoms(pose?.binding_atoms ?? []);
+                      setPoseClashingAtoms(pose?.clashing_atoms ?? []);
+                    }}
                   />,
                 },
                 "2d": {
@@ -1396,6 +1414,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     apiBase={apiBase}
                     smiles={currentSmiles}
                     pathogen={selectedPathogen}
+                    bindingAtoms={poseBindingAtoms}
+                    clashingAtoms={poseClashingAtoms}
                     onMoleculeEdit={(newSmi, edit) => {
                       setEvents((p) => [
                         ...p,

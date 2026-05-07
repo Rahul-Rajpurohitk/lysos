@@ -30,6 +30,14 @@ interface Props {
   onCursorHover?: (atomIdx: number | null) => void;
   /** Optional external highlight (rare — SMARTS match is now handled internally) */
   highlightAtoms?: number[] | null;
+  /** Service 1 — atoms that make binding contacts (≤4Å) with the selected
+   *  3D target. Rendered as green halos so the user sees the SAME atom
+   *  signal in 2D that the 3D theater is showing in pose space. */
+  bindingAtoms?: number[];
+  /** Service 1 — atoms that clash (≤1.5Å) with target heavy atoms.
+   *  Rendered as red halos. Critic agent uses this to identify which
+   *  atom edits are required to relieve steric strain. */
+  clashingAtoms?: number[];
   /** Open the user's saved-molecules library popover. Implemented by parent
    *  via portal so we can share the same library state across cards. */
   onLoadFromLibrary?: (smi: string, name: string) => void;
@@ -234,7 +242,7 @@ const ACTOR_COLOR: Record<string, string> = {
   user: "#f59e0b",
 };
 
-export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, onLoadFromLibrary, propertiesPanel }: Props) {
+export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, bindingAtoms, clashingAtoms, onLoadFromLibrary, propertiesPanel }: Props) {
   const [svg, setSvg] = useState<string>("");
   const [violation, setViolation] = useState<Violation | null>(null);
   // Whole-molecule diagnostics (incomplete atoms after a bond-break, etc).
@@ -1272,6 +1280,64 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       svgEl.insertBefore(ring, svgEl.firstChild?.nextSibling ?? null);
     }
   }, [selected, svg]);
+
+  // POSE halos — green for binding atoms (≤4Å contacts with target),
+  // red for clashing atoms (≤1.5Å steric clash). Driven by Service 1's
+  // /chem/place-in-pocket result piped through WorkbenchV3 → bindingAtoms
+  // / clashingAtoms props. The agent reads the SAME atom signal here as
+  // it sees in the 3D theater contacts panel — single source of truth.
+  // Drawn BEHIND atom labels (insertBefore) so labels stay readable.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-pose-binding="1"]').forEach((n) => n.remove());
+    svgEl.querySelectorAll('[data-pose-clashing="1"]').forEach((n) => n.remove());
+    // Binding atoms — green ring (subtle, doesn't fight selection halo)
+    if (bindingAtoms && bindingAtoms.length > 0) {
+      for (const idx of bindingAtoms) {
+        const pos = getAtomXY(idx);
+        if (!pos) continue;
+        const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        ring.setAttribute("data-pose-binding", "1");
+        ring.setAttribute("cx", String(pos.x));
+        ring.setAttribute("cy", String(pos.y));
+        ring.setAttribute("r", "9");
+        ring.setAttribute("fill", "rgba(16,185,129,0.14)");
+        ring.setAttribute("stroke", "#10b981");
+        ring.setAttribute("stroke-width", "1.5");
+        ring.style.pointerEvents = "none";
+        svgEl.insertBefore(ring, svgEl.firstChild?.nextSibling ?? null);
+      }
+    }
+    // Clashing atoms — red dashed ring + pulsing glow (more attention-grabbing,
+    // the agent should see and want to fix these)
+    if (clashingAtoms && clashingAtoms.length > 0) {
+      for (const idx of clashingAtoms) {
+        const pos = getAtomXY(idx);
+        if (!pos) continue;
+        const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        ring.setAttribute("data-pose-clashing", "1");
+        ring.setAttribute("cx", String(pos.x));
+        ring.setAttribute("cy", String(pos.y));
+        ring.setAttribute("r", "11");
+        ring.setAttribute("fill", "rgba(220,38,38,0.10)");
+        ring.setAttribute("stroke", "#dc2626");
+        ring.setAttribute("stroke-width", "2");
+        ring.setAttribute("stroke-dasharray", "3,2");
+        ring.style.pointerEvents = "none";
+        // Pulse — same animation pattern as recently-broken / SMARTS hits
+        const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+        anim.setAttribute("attributeName", "opacity");
+        anim.setAttribute("values", "0.55;1;0.55");
+        anim.setAttribute("dur", "1.2s");
+        anim.setAttribute("repeatCount", "indefinite");
+        ring.appendChild(anim);
+        svgEl.insertBefore(ring, svgEl.firstChild?.nextSibling ?? null);
+      }
+    }
+  }, [bindingAtoms, clashingAtoms, svg]);
 
   // RAIL-HOVER halo — temporary cyan ring on the atom currently hovered
   // in the right-rail atoms list. Lighter than selection so the two

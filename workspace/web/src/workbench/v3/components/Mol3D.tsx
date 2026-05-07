@@ -13,6 +13,11 @@ interface Mol3DProps {
    *  SMILES upward via this callback. WorkbenchV3 then injects it as a
    *  `candidate_added` event so the agents debate the user's edit.  */
   onMoleculeEdit?: (newSmiles: string, op: EditOp) => void;
+  /** Override the pathogen-default PDB. Used by Mol3DTheaterWindow when
+   *  the user picks a specific target from the curated PATHOGEN_TARGETS
+   *  map (e.g. PBP2a vs MurA for MRSA). When set, takes precedence over
+   *  the legacy PATHOGEN_PDB default. */
+  pdbOverride?: string | null;
 }
 
 type EditOp =
@@ -43,7 +48,7 @@ const PATHOGEN_PDB: Record<string, string> = {
   NGono: "3FIH",
 };
 
-export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit }: Mol3DProps) {
+export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }: Mol3DProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const stageObj = useRef<any>(null);
   const proteinComp = useRef<any>(null);
@@ -156,10 +161,17 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit }: Mol3DProps)
     return "✂ bond";
   }
 
-  // Update PDB when pathogen changes
+  // Update PDB when pathogen OR explicit override changes.
+  // Override wins — Mol3DTheaterWindow's target picker uses this to drive
+  // which curated target (PBP2a vs MurA for MRSA, InhA vs DprE1 for Mtb,
+  // etc.) the chemistry agent reasons against.
   useEffect(() => {
-    setPdb(PATHOGEN_PDB[pathogen] ?? "5DPX");
-  }, [pathogen]);
+    if (pdbOverride) {
+      setPdb(pdbOverride);
+    } else {
+      setPdb(PATHOGEN_PDB[pathogen] ?? "5DPX");
+    }
+  }, [pathogen, pdbOverride]);
 
   // Load protein
   useEffect(() => {
