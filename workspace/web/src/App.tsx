@@ -265,7 +265,7 @@ function ControlPanel({
       </div>
       <div className="mt-5 flex items-center justify-between gap-3">
         <div className="text-xs text-slate-500 font-mono">
-          model: <span className="text-slate-300">rahul24raj/lysos-rl</span> ·{" "}
+          model: <span className="text-slate-300">rahul24raj/lysos-base-dpo</span> ·{" "}
           mi300x · gemma-4-31b
         </div>
         <button

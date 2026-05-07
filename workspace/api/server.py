@@ -145,7 +145,7 @@ def _get_generator():
         log.info("Cold-start: loading Lysos model (this may take 30-60s)")
         from src.inference.generate import LysosGenerator
 
-        model_id = os.environ.get("LYSOS_MODEL_ID", "rahul24raj/lysos-rl")
+        model_id = os.environ.get("LYSOS_MODEL_ID", "rahul24raj/lysos-base-dpo")
         adapter_id = os.environ.get("LYSOS_ADAPTER_ID")
         _GENERATOR = LysosGenerator(model_id=model_id, adapter_id=adapter_id)
         # Trigger model load now so first design() call is hot
@@ -271,7 +271,7 @@ _STARTED = time.time()
 async def health() -> HealthResponse:
     return HealthResponse(
         status="ok",
-        model=os.environ.get("LYSOS_MODEL_ID", "rahul24raj/lysos-rl"),
+        model=os.environ.get("LYSOS_MODEL_ID", "rahul24raj/lysos-base-dpo"),
         loaded=_GENERATOR is not None,
         uptime_s=time.time() - _STARTED,
     )
@@ -339,7 +339,7 @@ async def design(req: DesignRequest) -> DesignResponse:
         n_total=len(candidates),
         n_returned=len(top),
         elapsed_s=elapsed,
-        model=os.environ.get("LYSOS_MODEL_ID", "rahul24raj/lysos-rl"),
+        model=os.environ.get("LYSOS_MODEL_ID", "rahul24raj/lysos-base-dpo"),
         candidates=[
             CandidateOut(
                 smiles=c.smiles,

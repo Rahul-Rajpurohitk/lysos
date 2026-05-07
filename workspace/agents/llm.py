@@ -405,8 +405,12 @@ class LysosEndpoint(VLLMEndpoint):
         api_key: Optional[str] = None,
         **kwargs,
     ):
+        # Default model = `lysos-base-dpo` (Stage 2.5 DPO merged into Gemma-4-31B,
+        # served from MI300X via /shared-docker/lysos/models/lysos-dpo-merged/).
+        # Override with LYSOS_MODEL_ID env if running against a different
+        # checkpoint or HF Hub artifact.
         super().__init__(
-            model=model or os.environ.get("LYSOS_MODEL_ID", "rahul24raj/lysos-rl"),
+            model=model or os.environ.get("LYSOS_MODEL_ID", "lysos-base-dpo"),
             base_url=base_url or os.environ.get(
                 "LYSOS_INFERENCE_URL", "http://localhost:8000/v1"
             ),
