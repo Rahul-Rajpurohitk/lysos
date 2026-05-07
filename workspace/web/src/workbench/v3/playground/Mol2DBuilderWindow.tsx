@@ -4054,69 +4054,46 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
     }
   }, [p.smarts, p.smartsHits.length]);
 
+  // ──────────────────────────────────────────────────────────────────
+  // INFRA · single combined fetch via /molecule/state replaces THREE
+  // separate per-SMILES requests (match-known + auto-patterns +
+  // properties). One round-trip → all four sections (match,
+  // patterns, build-state, composition) update in lockstep. Stops
+  // request races + cuts ~3× backend load on every edit.
+  // ──────────────────────────────────────────────────────────────────
+  const [autoPatterns, setAutoPatterns] = useState<AutoPatternHit[]>([]);
+  const [elementCounts, setElementCounts] = useState<Record<string, number>>({});
   useEffect(() => {
-    if (!p.smiles) { setMatch(null); return; }
+    if (!p.smiles) {
+      setMatch(null); setAutoPatterns([]); setElementCounts({});
+      return;
+    }
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const url = `/api/v3/workbench/molecule/match-known?smiles=${encodeURIComponent(p.smiles!)}&top_k=3`;
+        const include = "auto_patterns,match_known,properties";
+        const url = `${p.apiBase}/workbench/molecule/state?smiles=${encodeURIComponent(p.smiles!)}&include=${include}&top_k=3`;
         const r = await fetch(url);
         if (!r.ok) return;
         const d = await r.json();
-        if (!cancelled) setMatch(d);
+        if (cancelled) return;
+        setAutoPatterns(d.auto_patterns?.matches ?? []);
+        setMatch(d.match_known
+          ? { matches: d.match_known.matches, best: d.match_known.best }
+          : null);
+        setElementCounts(d.properties?.element_counts ?? {});
       } catch {/*noop*/}
-    }, 300);
+    }, 250);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [p.smiles]);
+  }, [p.smiles, p.apiBase]);
 
+  // Drug-class colors — loaded once per mount, never changes.
   useEffect(() => {
-    fetch("/api/v3/workbench/molecule/drug-class-colors")
+    fetch(`${p.apiBase}/workbench/molecule/drug-class-colors`)
       .then((r) => r.ok ? r.json() : { colors: {} })
       .then((d) => setClassColors(d.colors || {}))
       .catch(() => {/*noop*/});
-  }, []);
-
-  // AUTO-detect SMARTS patterns — runs every preset against the
-  // current SMILES and returns ones that match. Polled on every
-  // SMILES change (debounced 250ms). The user sees the patterns
-  // their structure already contains without having to click each
-  // preset. Click any chip to highlight matched atoms in the 2D.
-  const [autoPatterns, setAutoPatterns] = useState<AutoPatternHit[]>([]);
-  useEffect(() => {
-    if (!p.smiles) { setAutoPatterns([]); return; }
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const url = `${p.apiBase}/workbench/chem/auto-patterns?smiles=${encodeURIComponent(p.smiles!)}`;
-        const r = await fetch(url);
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!cancelled) setAutoPatterns(d.matches || []);
-      } catch {/*noop*/}
-    }, 250);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [p.smiles, p.apiBase]);
-
-  // Element composition — fetched separately so the Build State column
-  // can stack BUILD STATE + COMPOSITION sub-blocks. PropertiesCard no
-  // longer renders composition; small content (1-3 chips) sits better
-  // here next to atoms/bonds counts and saves vertical space in the
-  // main properties column.
-  const [elementCounts, setElementCounts] = useState<Record<string, number>>({});
-  useEffect(() => {
-    if (!p.smiles) { setElementCounts({}); return; }
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        const url = `${p.apiBase}/workbench/molecule/properties?smiles=${encodeURIComponent(p.smiles!)}`;
-        const r = await fetch(url);
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!cancelled) setElementCounts(d.element_counts || {});
-      } catch {/*noop*/}
-    }, 250);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [p.smiles, p.apiBase]);
+  }, [p.apiBase]);
 
   // Element color palette (synced with PropertiesCard / AtomsRail).
   const ELEMENT_COLOR_BPS: Record<string, string> = {

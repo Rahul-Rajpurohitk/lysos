@@ -2681,6 +2681,200 @@ SMARTS_CATEGORY_COLOR: dict[str, str] = {
 }
 
 
+@router.get("/molecule/state")
+async def molecule_state(
+    smiles: str,
+    include: str = "diagnostics,bonds,auto_patterns,match_known,properties",
+    top_k: int = 3,
+) -> Dict[str, Any]:
+    """Combined endpoint that returns ALL the per-molecule state the
+    frontend needs in ONE round-trip. The chem container previously
+    polled /chem/diagnostics, /chem/bonds, /chem/auto-patterns,
+    /molecule/match-known, /molecule/properties on every SMILES change
+    — five separate requests racing each other. This consolidates them
+    so the entire panel updates in one network hop.
+
+    `include` is a comma-separated list of slices to compute. Omit
+    sections to save backend work (e.g. include=diagnostics,bonds).
+
+    Output keys (only present if requested + computed):
+      - diagnostics: same as /chem/diagnostics
+      - bonds:        same as /chem/bonds
+      - auto_patterns: same as /chem/auto-patterns
+      - match_known:  same as /molecule/match-known
+      - properties:   same as /molecule/properties (medchem stack)
+    """
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, detail=_violation(
+            "unparseable_smiles", f"unparseable SMILES: {smiles}"))
+
+    wanted = {s.strip() for s in include.split(",") if s.strip()}
+    out: Dict[str, Any] = {"smiles": smiles, "n_atoms": mol.GetNumAtoms(),
+                            "n_bonds": mol.GetNumBonds()}
+
+    # ---- diagnostics ----
+    if "diagnostics" in wanted:
+        incomplete: list[Dict[str, Any]] = []
+        for atom in mol.GetAtoms():
+            sym = atom.GetSymbol()
+            max_v = _DEFAULT_VALENCE.get(sym, 0)
+            if max_v == 0:
+                continue
+            adjusted_max = max_v + atom.GetFormalCharge()
+            explicit = atom.GetExplicitValence()
+            n_h = atom.GetTotalNumHs()
+            total = explicit + n_h
+            if total < adjusted_max - 1:
+                incomplete.append(_violation(
+                    "atom_under_valent",
+                    f"atom {atom.GetIdx()} ({sym}) has only {total} bonds; expected {adjusted_max}",
+                    hint=f"{sym} normally forms {adjusted_max} bonds.",
+                    atom_idx=atom.GetIdx(),
+                    suggested_fix=f"add a bond on atom {atom.GetIdx()}",
+                ))
+        total_charge = sum(a.GetFormalCharge() for a in mol.GetAtoms())
+        charge_warnings: list[Dict[str, Any]] = []
+        if abs(total_charge) > 0:
+            charge_warnings.append(_violation(
+                "non_zero_total_charge", f"total formal charge = {total_charge:+d}",
+                hint="Most drugs are net-neutral.",
+                suggested_fix="add a counterion or balance the charge"))
+        frags = Chem.GetMolFrags(mol)
+        n_frags = len(frags)
+        fragment_warnings: list[Dict[str, Any]] = []
+        fragment_atom_ids: list[list[int]] = [list(f) for f in frags]
+        main_frag_idx = max(range(n_frags), key=lambda i: len(frags[i])) if n_frags else 0
+        broken_off_atom_ids: list[int] = []
+        if n_frags > 1:
+            for i, f in enumerate(frags):
+                if i != main_frag_idx:
+                    broken_off_atom_ids.extend(list(f))
+            fragment_warnings.append(_violation(
+                "disconnected_fragments",
+                f"molecule has {n_frags} disconnected fragments",
+                hint="A bond was broken without reconnection.",
+                suggested_fix="reconnect with add_bond"))
+        if n_frags > 1 or incomplete:
+            status_tier = "block"
+            status_label = (f"{n_frags} fragments" if n_frags > 1
+                            else f"{len(incomplete)} under-valent")
+        elif charge_warnings:
+            status_tier, status_label = "warn", f"charge {total_charge:+d}"
+        else:
+            status_tier, status_label = "ok", "valid"
+        out["diagnostics"] = {
+            "is_valid": (not incomplete) and (n_frags == 1),
+            "n_atoms": mol.GetNumAtoms(),
+            "n_bonds": mol.GetNumBonds(),
+            "n_fragments": n_frags,
+            "total_formal_charge": total_charge,
+            "incomplete_atoms": incomplete,
+            "charge_warnings": charge_warnings,
+            "fragment_warnings": fragment_warnings,
+            "all_violations": incomplete + charge_warnings + fragment_warnings,
+            "fragment_atom_ids": fragment_atom_ids,
+            "main_fragment_idx": main_frag_idx,
+            "broken_off_atom_ids": broken_off_atom_ids,
+            "status_tier": status_tier,
+            "status_label": status_label,
+        }
+
+    # ---- bonds ----
+    if "bonds" in wanted:
+        bonds: list[dict] = []
+        for b in mol.GetBonds():
+            bt = b.GetBondType()
+            order = "double" if bt == Chem.BondType.DOUBLE else \
+                    "triple" if bt == Chem.BondType.TRIPLE else \
+                    "aromatic" if bt == Chem.BondType.AROMATIC else "single"
+            bonds.append({
+                "bond_idx": b.GetIdx(), "atom_a": b.GetBeginAtomIdx(),
+                "atom_b": b.GetEndAtomIdx(), "order": order,
+                "in_ring": b.IsInRing(), "is_aromatic": b.GetIsAromatic(),
+            })
+        out["bonds"] = {"bonds": bonds, "n_bonds": len(bonds)}
+
+    # ---- auto_patterns ----
+    if "auto_patterns" in wanted:
+        hits: list[dict] = []
+        for preset in SMARTS_PRESETS:
+            try:
+                patt = Chem.MolFromSmarts(preset["pattern"])
+                if patt is None:
+                    continue
+                matches = mol.GetSubstructMatches(patt)
+                if not matches:
+                    continue
+                atom_idxs = sorted({i for m in matches for i in m})
+                hits.append({
+                    "label": preset["label"], "pattern": preset["pattern"],
+                    "category": preset["category"],
+                    "color": SMARTS_CATEGORY_COLOR.get(preset["category"], "#6b7280"),
+                    "hit_count": len(matches), "atom_idxs": atom_idxs,
+                })
+            except Exception:  # noqa: BLE001
+                continue
+        cat_order = list(SMARTS_CATEGORY_COLOR.keys())
+        hits.sort(key=lambda h: (cat_order.index(h["category"])
+                                 if h["category"] in cat_order else 99, h["label"]))
+        out["auto_patterns"] = {
+            "matches": hits, "count": len(hits),
+            "total_presets_checked": len(SMARTS_PRESETS),
+        }
+
+    # ---- match_known ----
+    if "match_known" in wanted:
+        try:
+            from rdkit import DataStructs
+            from rdkit.Chem import AllChem
+            cand_fp = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+            scored: list[tuple] = []
+            for ref in ANTIBIOTIC_REFERENCE:
+                rmol = Chem.MolFromSmiles(ref["smiles"])
+                if rmol is None:
+                    continue
+                rfp = AllChem.GetMorganFingerprintAsBitVect(rmol, 2, nBits=2048)
+                sim = DataStructs.TanimotoSimilarity(cand_fp, rfp)
+                scored.append((sim, ref))
+            scored.sort(key=lambda x: x[0], reverse=True)
+            matches = [{
+                "name": ref["name"], "drug_class": ref["drug_class"],
+                "mechanism": ref["mechanism"], "targets": ref["targets"],
+                "year": ref["year"], "smiles": ref["smiles"],
+                "similarity": round(sim, 4), "is_exact": sim >= 0.999,
+            } for sim, ref in scored[:top_k]]
+            out["match_known"] = {
+                "matches": matches, "best": matches[0] if matches else None,
+                "is_known": bool(matches and matches[0]["similarity"] >= 0.95),
+            }
+        except Exception:  # noqa: BLE001
+            out["match_known"] = {"matches": [], "best": None, "is_known": False}
+
+    # ---- properties (lightweight: only element_counts + key fields) ----
+    if "properties" in wanted:
+        try:
+            from rdkit.Chem import Descriptors
+            element_counts: Dict[str, int] = {}
+            for a in mol.GetAtoms():
+                sym = a.GetSymbol()
+                element_counts[sym] = element_counts.get(sym, 0) + 1
+            out["properties"] = {
+                "element_counts": element_counts,
+                "molecular_weight": round(Descriptors.MolWt(mol), 2),
+                "n_heavy_atoms": mol.GetNumHeavyAtoms(),
+                "n_rings": mol.GetRingInfo().NumRings(),
+            }
+        except Exception:  # noqa: BLE001
+            out["properties"] = {"element_counts": {}}
+
+    return out
+
+
 @router.get("/chem/auto-patterns")
 async def chem_auto_patterns(smiles: str) -> Dict[str, Any]:
     """Run EVERY curated SMARTS preset against the candidate and return
