@@ -218,6 +218,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem resistance router not loaded: %s", exc)
 
+# Chemistry pareto — Service 3: Multi-Candidate Pareto Lab
+try:
+    from .chem_pareto import router as chem_pareto_router
+    app.include_router(chem_pareto_router, prefix="/workbench")
+    log.info("Chem pareto routes loaded (/workbench/chem/session/{sid}/candidates, /pareto, /axes)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem pareto router not loaded: %s", exc)
+
 # Chemistry sandbox — agent-driven molecular edits with reward delta
 try:
     from .sandbox import router as sandbox_router

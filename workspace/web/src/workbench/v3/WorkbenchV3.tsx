@@ -31,6 +31,7 @@ import { ArtifactPanel, type ArtifactDoc } from "./panels/ArtifactPanel";
 import { PlaygroundCanvas, type WindowLayout, type Viewport } from "./playground/PlaygroundCanvas";
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
+import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { RewardRadarWindow } from "./playground/RewardRadarWindow";
 import { AgentReasoningTraceWindow } from "./playground/AgentReasoningTraceWindow";
 import { Mol2DBuilderWindow } from "./playground/Mol2DBuilderWindow";
@@ -1164,6 +1165,17 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         smiles={currentSmiles}
                         pdbId={selectedPdbId}
                         onVulnerableChange={(atoms) => setVulnerableAtoms(atoms)}
+                      /> },
+                    { id: "pareto-lab", title: "Pareto lab · multi-candidate frontier",
+                      expandedH: 480, body:
+                      <ParetoLabCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: "[pareto · load]",
+                        })}
                       /> },
                     { id: "2d", title: "2D molecule builder · atoms · bonds · properties", expandedH: 860, body:
                       <Mol2DBuilderWindow
