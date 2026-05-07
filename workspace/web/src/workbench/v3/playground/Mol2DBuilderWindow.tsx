@@ -1511,14 +1511,37 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             onClose={() => setSmartsOpen(false)}
           />
         )}
-        {/* CENTER COLUMN — SVG diagram on TOP, Properties stacked BELOW.
-            The diagram stays close-to-square in the upper portion; the
-            properties section sits compactly underneath, aligned to the
-            same UI vocabulary as the right rail (mono fonts, colored
-            chips, compact rows). Right rail is a sibling of this
-            center column. */}
+        {/* CENTER COLUMN — Properties strip on TOP, SVG diagram BELOW.
+            The KPI tiles + build counts + patterns + closest-known
+            matches sit as a compact dashboard ABOVE the molecule, so
+            the prominent numbers (MW · LogP · TPSA · QED) read as the
+            header line for whatever structure the user is editing.
+            The diagram fills the remaining column height beneath, and
+            the right rail is a sibling of this center column. */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column",
           minWidth: 0, overflow: "hidden" }}>
+        {/* Properties strip ABOVE the SVG, inside the center column.
+            Compact: KPI tiles + recent SMARTS-finds + closest-known
+            match. Collapsible header so the user can tuck it away
+            and let the diagram fill the column. */}
+        {propertiesPanel && (
+          <PropertiesStrip
+            apiBase={apiBase}
+            smiles={smiles}
+            smartsHits={smartsHits}
+            smarts={smarts}
+            diagnostics={diagnostics}
+            bondsCount={bondList.length}
+            onSelectPattern={(pattern, categoryColor) => {
+              // Click on an auto-detected pattern chip → run SMARTS so
+              // the matched atoms + bonds light up in the 2D viewer
+              // tinted with the category's color.
+              setSmarts(pattern);
+              runSmartsMatch(pattern, categoryColor);
+            }}>
+            {propertiesPanel}
+          </PropertiesStrip>
+        )}
         {/* SVG area — molecule scales to fit, never scrolls, never clips */}
         <div style={{ flex: 1, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
           {svg
@@ -1617,28 +1640,6 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </div>
           )}
         </div>
-        {/* Properties strip BELOW the SVG, inside the center column.
-            Compact: KPI tiles + recent SMARTS-finds + closest-known
-            match. Collapsible header so the user can tuck it away
-            and let the diagram fill the column. */}
-        {propertiesPanel && (
-          <BottomPropertiesStrip
-            apiBase={apiBase}
-            smiles={smiles}
-            smartsHits={smartsHits}
-            smarts={smarts}
-            diagnostics={diagnostics}
-            bondsCount={bondList.length}
-            onSelectPattern={(pattern, categoryColor) => {
-              // Click on an auto-detected pattern chip → run SMARTS so
-              // the matched atoms + bonds light up in the 2D viewer
-              // tinted with the category's color.
-              setSmarts(pattern);
-              runSmartsMatch(pattern, categoryColor);
-            }}>
-            {propertiesPanel}
-          </BottomPropertiesStrip>
-        )}
         </div>
         {/* Atoms rail — embedded list of all atoms with element + valence + edit chips */}
         <AtomsRail
@@ -4259,17 +4260,17 @@ function DockHeader({ title, count, icon, color, onClose, description, rightActi
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   BottomPropertiesStrip — horizontal strip BELOW the SVG inside the
+   PropertiesStrip — horizontal strip ABOVE the SVG inside the
    center column. Compact KPI tiles + build counts + smart-pattern
-   trail + closest-known matches, arranged side-by-side so the diagram
-   stays in primary attention space above. Header collapses to a
-   single 28px row when the user wants the diagram to fill the column.
+   trail + closest-known matches, arranged side-by-side as a header
+   dashboard for the molecule. Header collapses to a single 28px row
+   when the user wants the diagram to fill the column.
 
    Visual language matches the right-rail BondsRail header (mono
    uppercase + faint subtle right-aligned subtitle), so the chem
    container has one consistent UI dialect across all sub-panels.
    ───────────────────────────────────────────────────────────────────── */
-interface BottomPropertiesStripProps {
+interface PropertiesStripProps {
   apiBase: string;
   smiles: string | null;
   smartsHits: number[];
@@ -4292,7 +4293,7 @@ interface AutoPatternHit {
   atom_idxs: number[];
 }
 
-function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
+function PropertiesStrip(p: PropertiesStripProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [match, setMatch] = useState<{
     matches: { name: string; drug_class: string; similarity: number }[];
@@ -4369,7 +4370,7 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
   return (
     <div style={{
       flexShrink: 0,
-      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+      borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
       // Bumped from 200 → 240 so the 4 sections aren't congested.
@@ -4645,7 +4646,7 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
 }
 
 // SectionHeader was previously used by LeftPropertiesPanel (removed in
-// favor of the horizontal BottomPropertiesStrip). Kept for future reuse
+// favor of the horizontal PropertiesStrip). Kept for future reuse
 // across other panels that need the same mono uppercase + subtle layout.
 // @ts-expect-error — kept for future reuse, intentionally unused now.
 function SectionHeader({ label, subtle }: { label: string; subtle?: string }) {
