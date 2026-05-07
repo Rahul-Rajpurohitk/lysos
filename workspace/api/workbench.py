@@ -2681,6 +2681,60 @@ SMARTS_CATEGORY_COLOR: dict[str, str] = {
 }
 
 
+@router.get("/chem/auto-patterns")
+async def chem_auto_patterns(smiles: str) -> Dict[str, Any]:
+    """Run EVERY curated SMARTS preset against the candidate and return
+    ONLY the ones that match. Used by the Properties panel to auto-
+    surface "patterns found so far" without the user having to click
+    each preset. The agent uses this to know which structural classes
+    the candidate already contains.
+
+    Output: list of {label, pattern, category, color, hit_count, atom_idxs}.
+    Sorted by category then label for stable rendering.
+    """
+    try:
+        from rdkit import Chem
+    except ImportError:
+        raise HTTPException(503, "RDKit not available")
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise HTTPException(422, detail=_violation(
+            "unparseable_smiles", f"unparseable SMILES: {smiles}"))
+    hits: List[Dict[str, Any]] = []
+    for preset in SMARTS_PRESETS:
+        try:
+            patt = Chem.MolFromSmarts(preset["pattern"])
+            if patt is None:
+                continue
+            matches = mol.GetSubstructMatches(patt)
+            if not matches:
+                continue
+            # Flatten atom indices across all unique matches
+            atom_idxs = sorted({i for m in matches for i in m})
+            hits.append({
+                "label": preset["label"],
+                "pattern": preset["pattern"],
+                "category": preset["category"],
+                "color": SMARTS_CATEGORY_COLOR.get(preset["category"], "#6b7280"),
+                "hit_count": len(matches),
+                "atom_idxs": atom_idxs,
+            })
+        except Exception:  # noqa: BLE001
+            continue
+    # Stable order: category then label
+    cat_order = list(SMARTS_CATEGORY_COLOR.keys())
+    hits.sort(key=lambda h: (cat_order.index(h["category"]) if h["category"] in cat_order else 99, h["label"]))
+    by_category: Dict[str, List[Dict[str, Any]]] = {}
+    for h in hits:
+        by_category.setdefault(h["category"], []).append(h)
+    return {
+        "matches": hits,
+        "by_category": by_category,
+        "count": len(hits),
+        "total_presets_checked": len(SMARTS_PRESETS),
+    }
+
+
 @router.get("/chem/smarts-presets")
 async def chem_smarts_presets() -> Dict[str, Any]:
     """Curated SMARTS catalog with category + color. The frontend SMARTS

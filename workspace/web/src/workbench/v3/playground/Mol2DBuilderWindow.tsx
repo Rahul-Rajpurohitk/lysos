@@ -1381,11 +1381,18 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             and let the diagram fill the column. */}
         {propertiesPanel && (
           <BottomPropertiesStrip
+            apiBase={apiBase}
             smiles={smiles}
             smartsHits={smartsHits}
             smarts={smarts}
             diagnostics={diagnostics}
-            bondsCount={bondList.length}>
+            bondsCount={bondList.length}
+            onSelectPattern={(pattern) => {
+              // Click on an auto-detected pattern chip → run SMARTS so
+              // the matched atoms light up in the 2D viewer.
+              setSmarts(pattern);
+              runSmartsMatch(pattern);
+            }}>
             {propertiesPanel}
           </BottomPropertiesStrip>
         )}
@@ -4006,12 +4013,26 @@ function DockHeader({ title, count, icon, color, onClose, description, rightActi
    container has one consistent UI dialect across all sub-panels.
    ───────────────────────────────────────────────────────────────────── */
 interface BottomPropertiesStripProps {
+  apiBase: string;
   smiles: string | null;
   smartsHits: number[];
   smarts: string;
   diagnostics: any;
   bondsCount: number;
+  /** Click handler when an auto-detected pattern chip is clicked.
+   *  Wires through to Mol2DBuilderWindow's setSmarts + runSmartsMatch
+   *  so the matched atoms light up in the SVG. */
+  onSelectPattern?: (pattern: string) => void;
   children: React.ReactNode;  // PropertiesCard
+}
+
+interface AutoPatternHit {
+  label: string;
+  pattern: string;
+  category: string;
+  color: string;
+  hit_count: number;
+  atom_idxs: number[];
 }
 
 function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
@@ -4054,6 +4075,27 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
       .then((d) => setClassColors(d.colors || {}))
       .catch(() => {/*noop*/});
   }, []);
+
+  // AUTO-detect SMARTS patterns — runs every preset against the
+  // current SMILES and returns ones that match. Polled on every
+  // SMILES change (debounced 250ms). The user sees the patterns
+  // their structure already contains without having to click each
+  // preset. Click any chip to highlight matched atoms in the 2D.
+  const [autoPatterns, setAutoPatterns] = useState<AutoPatternHit[]>([]);
+  useEffect(() => {
+    if (!p.smiles) { setAutoPatterns([]); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const url = `${p.apiBase}/workbench/chem/auto-patterns?smiles=${encodeURIComponent(p.smiles!)}`;
+        const r = await fetch(url);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setAutoPatterns(d.matches || []);
+      } catch {/*noop*/}
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [p.smiles, p.apiBase]);
 
   return (
     <div style={{
@@ -4124,38 +4166,98 @@ function BottomPropertiesStrip(p: BottomPropertiesStripProps) {
               </div>
             ) : null}
           </div>
-          {/* COL 3 — PATTERNS FOUND */}
+          {/* COL 3 — PATTERNS FOUND. Two sub-blocks:
+              (a) AUTO-detected — every preset that already matches the
+                  current SMILES. Each chip clickable → highlights atoms
+                  on the SVG. Color-coded by category (acid-base red,
+                  aromatic purple, antibiotic-warhead green, etc.).
+              (b) ACTIVE / TRAIL — manual SMARTS queries the user runs
+                  via the top-nav 🔍 dock. */}
           <div
-            title="Pattern findings · structural motifs you've located via SMARTS substructure search. The active query (if any) is shown at top with hit count; below is a recent history of past queries (last 4). Use the 🔍 SMARTS top-nav to run a new query."
-            style={{ padding: "5px 8px", overflow: "auto", minWidth: 220, maxWidth: 260,
+            title="Patterns found · structural motifs in this candidate. Auto-detected pulls from the 41-preset SMARTS library and shows what's already there. Click any chip to highlight matching atoms in the 2D viewer."
+            style={{ padding: "5px 8px", overflow: "auto", minWidth: 240, maxWidth: 320,
             borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-            display: "flex", flexDirection: "column", gap: 3 }}>
+            display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
                 color: "var(--lys-text-faint)", letterSpacing: "0.06em",
                 textTransform: "uppercase", fontWeight: 700, flex: 1 }}>
-                patterns
+                patterns found
               </span>
+              {autoPatterns.length > 0 && (
+                <span title={`${autoPatterns.length} preset${autoPatterns.length === 1 ? "" : "s"} match`}
+                  style={{ fontSize: 8.5, padding: "1px 5px", borderRadius: 999,
+                  background: "#10b981", color: "white", fontWeight: 700,
+                  fontFamily: "var(--lys-font-mono)" }}>
+                  auto · {autoPatterns.length}
+                </span>
+              )}
               {p.smartsHits.length > 0 && (
-                <span style={{ fontSize: 8.5, padding: "1px 5px", borderRadius: 999,
+                <span title={`${p.smartsHits.length} atoms matched by active query`}
+                  style={{ fontSize: 8.5, padding: "1px 5px", borderRadius: 999,
                   background: "#0891b2", color: "white", fontWeight: 700,
                   fontFamily: "var(--lys-font-mono)" }}>
-                  {p.smartsHits.length}
+                  ⚡ {p.smartsHits.length}
                 </span>
               )}
             </div>
+            {/* Auto-detected pattern chips, color-coded by SMARTS category */}
+            {autoPatterns.length === 0 ? (
+              <div style={{ fontSize: 9, color: "var(--lys-text-faint)",
+                fontFamily: "var(--lys-font-body)", lineHeight: 1.4 }}>
+                {p.smiles ? "No SMARTS presets match this structure yet."
+                          : "Build or load a candidate to auto-detect patterns."}
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                {autoPatterns.map((h) => (
+                  <button key={h.label} type="button"
+                    onClick={() => p.onSelectPattern?.(h.pattern)}
+                    title={`${h.label} · ${h.category} · ${h.hit_count} match${h.hit_count === 1 ? "" : "es"} on atoms ${h.atom_idxs.slice(0, 8).join(",")}${h.atom_idxs.length > 8 ? "…" : ""}\n\nClick to highlight on the 2D viewer.\n\nPattern: ${h.pattern}`}
+                    style={{
+                      fontSize: 9, padding: "2px 7px", borderRadius: 999,
+                      border: `1px solid ${h.color}40`,
+                      background: `${h.color}10`,
+                      color: h.color,
+                      fontFamily: "var(--lys-font-body)",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex", alignItems: "center", gap: 3,
+                      transition: "background 0.10s, transform 0.10s",
+                    }}
+                    onMouseEnter={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = `${h.color}25`;
+                    }}
+                    onMouseLeave={(e) => {
+                      (e.currentTarget as HTMLButtonElement).style.background = `${h.color}10`;
+                    }}>
+                    {h.label}
+                    {h.hit_count > 1 && (
+                      <span style={{ fontSize: 8, opacity: 0.7,
+                        fontFamily: "var(--lys-font-mono)" }}>×{h.hit_count}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Active manual SMARTS query — distinguished as a callout */}
             {p.smarts && p.smartsHits.length > 0 && (
-              <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+              <div style={{
+                marginTop: 2,
+                fontSize: 9, fontFamily: "var(--lys-font-mono)",
                 color: "#0891b2", wordBreak: "break-all", lineHeight: 1.3,
                 padding: "2px 5px", borderLeft: "2px solid #0891b2",
                 background: "rgba(8,145,178,0.06)" }}>
+                <span style={{ opacity: 0.6, marginRight: 3 }}>⚡ active:</span>
                 {p.smarts}
               </div>
             )}
-            {smartsTrail.length === 0 && !p.smarts && (
-              <div style={{ fontSize: 9, color: "var(--lys-text-faint)",
-                fontFamily: "var(--lys-font-body)", lineHeight: 1.4 }}>
-                Run a SMARTS query to log findings.
+            {smartsTrail.length > 0 && (
+              <div style={{ marginTop: 2,
+                fontSize: 8, color: "var(--lys-text-faint)",
+                fontFamily: "var(--lys-font-mono)",
+                letterSpacing: "0.04em", textTransform: "uppercase" }}>
+                recent
               </div>
             )}
             {smartsTrail.map((t, i) => (
