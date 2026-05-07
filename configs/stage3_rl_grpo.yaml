@@ -1,189 +1,137 @@
-# Stage 3 — RL with verifiable rewards via GRPO.
-#
-# Group Relative Policy Optimization (DeepSeek-R1 style).
-# No value model. Uses reference model + reward function over groups of samples.
-#
-# Memory-bound: holds policy + reference + tokenizer + reward predictor + KV cache.
-# This is THE Stage where MI300X 192GB is mandatory.
-#
-# Targets: Small 1x MI300X for ~15-25 hours.
-
 _inherit: base.yaml
-
 run_name: stage3-rl-grpo-lysos-rl
 description: GRPO with multi-objective verifiable rewards on top of Stage 2
-
-# -----------------------------------------------------------------------------
-# Model — Stage 2.5 DPO output is the canonical entry point.
-# If 2.5 was skipped, override at CLI:
-#   --override model.base_id=rahul24raj/lysos-base \
-#   --override model.reference_model_id=rahul24raj/lysos-base
-# -----------------------------------------------------------------------------
 model:
   base_id: rahul24raj/lysos-base-dpo
-  reference_model_id: rahul24raj/lysos-base-dpo  # frozen reference for KL
-  beta: 0.04                                      # KL coefficient
-
-# -----------------------------------------------------------------------------
-# Data — prompts only (RL generates responses)
-# -----------------------------------------------------------------------------
+  reference_model_id: rahul24raj/lysos-base-dpo
+  beta: 0.1
 dataset:
-  source: local
-  # v1 → 12,000 baseline prompts
-  # v2 → resistome-enriched + heavier negative/edit/red-team coverage
-  # v3 → DEFAULT: full Workbench-brief enrichment (resistome + structural target +
-  #              first-line therapy + lit snippet + constraint profile + novelty gate)
+  source: hub
   path: data/processed/amr-rl-prompts-v3
   hub_id: rahul24raj/lysos-rl-prompts-v3
   split_train: train
   split_eval: valid
   prompt_field: prompt
   max_prompt_length: 2048
-  max_completion_length: 1024
-
-# -----------------------------------------------------------------------------
-# GRPO-specific config
-# -----------------------------------------------------------------------------
+  max_completion_length: 512
 rl:
   algorithm: grpo
-  group_size: 8                # generate 8 candidates per prompt
+  group_size: 8
   num_generations: 8
-  temperature: 1.0
-  top_p: 0.95
+  temperature: 0.8
+  top_p: 0.9
   top_k: 0
   generation_batch_size: 16
-  use_vllm: false              # set true if vllm-rocm integrated
+  use_vllm: false
   reward_clip:
     enabled: true
     min: -1.0
-    max: 2.0
+    max: 1.5
   advantage:
     normalize: true
-    type: group                # group-relative (GRPO core)
-
-# -----------------------------------------------------------------------------
-# Reward function (multi-objective, weighted sum)
-# Weights sum to 1.0
-# -----------------------------------------------------------------------------
+    type: group
 reward:
-  # 12-component reward stack (audit recommendation #31). Weights recalibrated
-  # so existing components retain ~70% of total signal; new components add
-  # diversity without crowding out the dominant MIC + drug-likeness signal.
   components:
-    - name: validity
-      weight: 0.05            # rdkit can parse → 1.0, else 0.0
-      module: src.eval.rewards.validity:smiles_valid
-    - name: structural_alerts
-      weight: 0.05            # PAINS + Brenk + NIH + Lipinski + Veber rules
-      module: src.eval.rewards.structural_alerts:structural_alerts_score
-    - name: predicted_mic
-      weight: 0.20            # XGBoost MIC predictor (Morgan FP + 8-pathogen one-hot)
-      module: src.eval.rewards.activity:predict_mic
-      args:
-        target_pathogen: MRSA
-    - name: drug_likeness_qed
-      weight: 0.10
-      module: src.eval.rewards.drug_likeness:qed_score
-    - name: synthesizability
-      weight: 0.10
-      module: src.eval.rewards.synth:sa_score
-    - name: hemolysis_safety
-      weight: 0.10
-      module: src.eval.rewards.safety:hemolysis_inverse
-    - name: novelty
-      weight: 0.08           # Tanimoto on ECFP4 vs known-antibiotic-canonical
-      module: src.eval.rewards.novelty:tanimoto_distance_to_known
-      args:
-        reference_set: data/processed/known-antibiotics-canonical.parquet
-        threshold: 0.6
-    - name: embedding_novelty
-      weight: 0.07           # Gemini Embedding 2 cosine distance vs pre-computed
-                              # 30,743 reference vectors at
-                              # artifacts/embeddings/known-antibiotics-gemini-2.parquet
-                              # (RETRIEVAL_QUERY task type at runtime; document side
-                              # baked offline). Live-embed fallback if cache absent.
-      module: src.eval.rewards.embedding_novelty:embedding_novelty
-      args:
-        reference_set: data/processed/known-antibiotics-canonical.parquet
-        threshold: 0.6
-    # NEW components (audit #31)
-    - name: boltz2_pose_conf
-      weight: 0.10           # 3D pose confidence from Boltz-2 (ipTM/pTM)
-                              # Reads pose-confidence cache populated by
-                              # scripts/run_boltz2_sweep.py (per pathogen target)
-      module: src.eval.rewards.boltz2_pose:pose_confidence
-      args:
-        cache_path: data/processed/boltz2_poses_cache.parquet
-        target_pathogen: MRSA
-        fallback: 0.5         # if cache miss, return mid-value (no signal, no penalty)
-    - name: spectrum_breadth
-      weight: 0.05            # predicted active across ≥3 priority pathogens
-      module: src.eval.rewards.spectrum:multi_pathogen_breadth
-      args:
-        pathogens: [MRSA, Mtb, EColi-CRE, KpneuCRE, Abaum, Paer, VRE, NGono]
-        active_threshold_log_mic: 0.7    # MIC < 5 µg/mL
-        min_pathogens_active: 3
-    - name: resistance_robustness
-      weight: 0.05            # predicted to evade ≥2 known resistance mechanisms
-                              # via predict_resistance_escape model heuristic
-      module: src.eval.rewards.resistance:robustness_score
-      args:
-        target_pathogen: MRSA
-        min_evaded_mechanisms: 2
-    - name: pareto_entry
-      weight: 0.05            # binary: enters frontier vs prior batch
-                              # Encourages exploration along Pareto front
-      module: src.eval.rewards.pareto:pareto_entry_bonus
-      args:
-        objectives: [predicted_mic, drug_likeness_qed, novelty, hemolysis_safety]
-        history_path: ./checkpoints/stage3-rl-grpo/pareto_history.json
-
-  # If a reward component crashes, what to return for that sample
+  - name: validity
+    weight: 0.05
+    module: src.eval.rewards.validity:smiles_valid
+  - name: structural_alerts
+    weight: 0.05
+    module: src.eval.rewards.structural_alerts:structural_alerts_score
+  - name: predicted_mic
+    weight: 0.2
+    module: src.eval.rewards.activity:predict_mic
+    args:
+      target_pathogen: MRSA
+  - name: drug_likeness_qed
+    weight: 0.15
+    module: src.eval.rewards.drug_likeness:qed_score
+  - name: synthesizability
+    weight: 0.1
+    module: src.eval.rewards.synth:sa_score
+  - name: hemolysis_safety
+    weight: 0.15
+    module: src.eval.rewards.safety:hemolysis_inverse
+  - name: novelty
+    weight: 0.08
+    module: src.eval.rewards.novelty:tanimoto_distance_to_known
+    args:
+      reference_set: data/processed/known-antibiotics-canonical.parquet
+      threshold: 0.6
+  - name: embedding_novelty
+    weight: 0.07
+    module: src.eval.rewards.embedding_novelty:embedding_novelty
+    args:
+      reference_set: data/processed/known-antibiotics-canonical.parquet
+      threshold: 0.6
+  - name: boltz2_pose_conf
+    weight: 0.0
+    module: src.eval.rewards.boltz2_pose:pose_confidence
+    args:
+      cache_path: data/processed/boltz2_poses_cache.parquet
+      target_pathogen: MRSA
+      fallback: 0.5
+  - name: spectrum_breadth
+    weight: 0.05
+    module: src.eval.rewards.spectrum:multi_pathogen_breadth
+    args:
+      pathogens:
+      - MRSA
+      - Mtb
+      - EColi-CRE
+      - KpneuCRE
+      - Abaum
+      - Paer
+      - VRE
+      - NGono
+      active_threshold_log_mic: 0.7
+      min_pathogens_active: 3
+  - name: resistance_robustness
+    weight: 0.05
+    module: src.eval.rewards.resistance:robustness_score
+    args:
+      target_pathogen: MRSA
+      min_evaded_mechanisms: 2
+  - name: pareto_entry
+    weight: 0.05
+    module: src.eval.rewards.pareto:pareto_entry_bonus
+    args:
+      objectives:
+      - predicted_mic
+      - drug_likeness_qed
+      - novelty
+      - hemolysis_safety
+      history_path: ./checkpoints/stage3-rl-grpo/pareto_history.json
   on_error:
     return: 0.0
     log_warning: true
-
-# -----------------------------------------------------------------------------
-# Training overrides for RL
-# -----------------------------------------------------------------------------
 training:
   output_dir: ./checkpoints/stage3-rl-grpo
-  num_train_epochs: 1          # RL: small # of epochs, lots of steps per epoch
-  per_device_train_batch_size: 1   # RL is memory-heavy
+  num_train_epochs: 1
+  per_device_train_batch_size: 1
   gradient_accumulation_steps: 16
-  learning_rate: 5.0e-7        # very low LR for RL
-  warmup_ratio: 0.0
-  max_steps: 2000              # cap; we stop on convergence anyway
-  eval_steps: 100
-  save_steps: 200
+  learning_rate: 1.0e-07
+  warmup_ratio: 0.05
+  max_steps: 700
+  eval_steps: 50
+  save_steps: 25
   logging_steps: 5
-
-# -----------------------------------------------------------------------------
-# PEFT
-# -----------------------------------------------------------------------------
+  max_grad_norm: 1.0
 peft:
-  r: 32                        # smaller LoRA on top of Stage 2 base
+  r: 32
   alpha: 64
-  load_existing_adapter: rahul24raj/lysos-base-dpo  # use Stage 2.5 DPO adapter
-
-# -----------------------------------------------------------------------------
-# Hub
-# -----------------------------------------------------------------------------
+  load_existing_adapter: rahul24raj/lysos-base-dpo
 hub:
   push_to_hub: true
   hub_model_id: rahul24raj/lysos-rl
-  push_strategy: checkpoint     # push every save_steps interval (200) — survives VM crashes
-  private: true                  # private until eval-stable
-
-# -----------------------------------------------------------------------------
-# Wandb
-# -----------------------------------------------------------------------------
+  push_strategy: checkpoint
+  private: true
 wandb:
   tags:
-    - amd-mi300x
-    - gemma-4
-    - lablab-2026
-    - stage3
-    - rl
-    - grpo
-    - amr
+  - amd-mi300x
+  - gemma-4
+  - lablab-2026
+  - stage3
+  - rl
+  - grpo
+  - amr

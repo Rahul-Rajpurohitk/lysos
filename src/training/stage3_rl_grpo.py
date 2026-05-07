@@ -179,6 +179,16 @@ def main() -> int:
             reference.config.use_cache = False
         except Exception:
             pass
+    # === FIX (2026-05-07 audit) ===
+    # Reference must mirror the policy initialization (base + DPO merged)
+    # so KL(policy || reference) at step 0 measures intra-policy drift,
+    # not the gap between two pre-trained-different models. Without this,
+    # KL diverges to 10^9 within 30 steps regardless of LR/beta.
+    if existing:
+        log.info("Loading + merging Stage 2 LoRA into REFERENCE: %s", existing)
+        reference = PeftModel.from_pretrained(reference, existing)
+        reference = reference.merge_and_unload()
+        log.info("Reference now byte-aligned with merged-policy base weights")
     for p in reference.parameters():
         p.requires_grad_(False)
     reference.train(False)
