@@ -68,6 +68,7 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
   useEffect(() => {
     if (!stageRef.current) return;
     let stage: any = null;
+    let resizeObs: ResizeObserver | null = null;
     (async () => {
       try {
         const NGL = await import("ngl");
@@ -94,11 +95,24 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
           const atomIdx = pick.atom.index;
           handleAtomEdit(op, atomIdx, pick.bond?.index);
         });
+
+        // Resize observer — when the parent container's dimensions change
+        // (e.g. switching whiteboard ↔ tabs, the pane being resized via
+        // Allotment, etc.) NGL needs handleResize() to read the new
+        // canvas bounds. Without this the viewer renders at its initial
+        // 0×0 / stale dimensions and looks empty.
+        if (stageRef.current) {
+          resizeObs = new ResizeObserver(() => {
+            try { stage?.handleResize?.(); } catch { /* noop */ }
+          });
+          resizeObs.observe(stageRef.current);
+        }
       } catch (e: any) {
         setError(`NGL init failed: ${e.message}`);
       }
     })();
     return () => {
+      try { resizeObs?.disconnect(); } catch { /* noop */ }
       if (stage) stage.dispose();
     };
   }, []);

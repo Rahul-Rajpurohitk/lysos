@@ -1210,7 +1210,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "3d", title: "3D molecule theater · target picker · contacts", expandedH: 520, body:
+                    { id: "3d", title: "3D molecule theater · target picker · contacts", size: 2, expandedH: 520, body:
                       <Mol3DTheaterWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
@@ -1234,7 +1234,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         onTargetChange={(pdbId) => setSelectedPdbId(pdbId)}
                       /> },
                     { id: "resistance-escape", title: "Resistance escape · per-atom vulnerability map",
-                      expandedH: 540, body:
+                      size: 2, expandedH: 540, body:
                       <ResistanceEscapeMapCard
                         apiBase={apiBase}
                         smiles={currentSmiles}
@@ -1252,7 +1252,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           logLabel: "[pareto · load]",
                         })}
                       /> },
-                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", expandedH: 860, body:
+                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", size: 2, expandedH: 860, body:
                       <Mol2DBuilderWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}

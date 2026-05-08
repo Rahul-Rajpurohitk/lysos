@@ -117,10 +117,12 @@ export function TabbedView({ groups, actions }: Props) {
         <div style={{ flex: 1 }} />
       </div>
 
-      {/* Active tab body — vertical scroll, sub-containers stack full-width */}
+      {/* Active tab body — vertical scroll, sub-containers stack full-width.
+          Tight horizontal padding (12px) so content lives close to the
+          chat-divider on the left and the viewport edge on the right. */}
       <div style={{
         flex: 1, overflowY: "auto", overflowX: "hidden",
-        padding: "0 28px 32px",
+        padding: "0 14px 20px",
         background: "var(--lys-bg, #fafafa)",
       }}>
         {!active && (
@@ -170,14 +172,14 @@ function CardsStack({ cards }: { cards: CardSpec[] }) {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 20 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, paddingTop: 12 }}>
       {rows.map((row, idx) => (
         <div
           key={idx}
           style={row.kind === "pair" ? {
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
-            gap: 24,
+            gap: 16,
           } : undefined}
         >
           {row.cards.map((c) => <CardSection key={c.id} card={c} />)}
@@ -188,37 +190,33 @@ function CardsStack({ cards }: { cards: CardSpec[] }) {
 }
 
 function CardSection({ card }: { card: CardSpec }) {
-  // Heuristic: bulky containers (3D theater, builder, scoring radar)
-  // have expandedH ≥ 480. Use that as their natural height so they're
-  // visible at a glance. Smaller cards size to content.
+  // Bulky containers (3D theater, 2D builder, scoring radar) get their
+  // natural height so they're visible at a glance. Compact cards just
+  // size to their content.
   const naturalH = card.expandedH ?? 320;
   const isBulky = naturalH >= 460;
   return (
     <section
       style={{
         background: "transparent",
-        // Borderless — no box around the section. Just header + content.
-        // The hairline below the header gives visual rhythm without a
-        // boxy frame around every panel.
         display: "flex",
         flexDirection: "column",
         height: isBulky ? naturalH : "auto",
         minHeight: isBulky ? 360 : undefined,
-        // overflow visible so child diagrams can render without clipping
-        // their own internal toolbars/legends.
         overflow: "visible",
       }}
     >
+      {/* Compact, low-weight section header — Claude minimal style. */}
       <header style={{
         display: "flex", alignItems: "center",
-        paddingBottom: 8,
-        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
-        marginBottom: 10,
+        paddingBottom: 4,
+        marginBottom: 6,
         flexShrink: 0,
       }}>
         <span style={{
-          fontSize: 12.5, fontFamily: "var(--lys-font-body)",
-          fontWeight: 600, color: "var(--lys-text, #0f172a)",
+          fontSize: 10.5, fontFamily: "var(--lys-font-mono, ui-monospace)",
+          fontWeight: 500, color: "var(--lys-text-faint, #94a3b8)",
+          letterSpacing: "0.02em",
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
         }}>
           {card.title || card.id}
@@ -229,9 +227,10 @@ function CardSection({ card }: { card: CardSpec }) {
         style={{
           flex: isBulky ? 1 : undefined,
           minHeight: 0,
-          // Bulky panels manage their own internal scroll. Compact ones
-          // grow naturally.
-          overflow: isBulky ? "hidden" : "visible",
+          // auto so internal content can scroll within the card if it
+          // overflows its natural height — fixes the "scroll not working"
+          // bug in tab mode. Compact cards stay overflow-visible.
+          overflow: isBulky ? "auto" : "visible",
         }}
       >
         {card.body}

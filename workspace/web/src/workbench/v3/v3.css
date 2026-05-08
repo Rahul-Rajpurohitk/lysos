@@ -101,100 +101,103 @@
   gap: 8px;
 }
 
+/* All header controls share one height + radius family. The aim is a
+   single visual rhythm across the bar — pills, iters, ghost icons, and
+   the Start CTA all line up with no jarring offsets. */
 .lys-header__btn-primary {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 28px;
-  padding: 0 11px;
+  height: 26px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+  border-radius: 5px;
+  background: #10b981;
   color: white;
-  font-weight: 500;
-  font-size: 12px;
+  font-weight: 600;
+  font-size: 11.5px;
   cursor: pointer;
-  transition: transform 0.12s, box-shadow 0.12s;
-  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.22);
+  transition: background 0.12s;
 }
 .lys-header__btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 1px 2px rgba(16, 185, 129, 0.4), 0 6px 18px rgba(16, 185, 129, 0.3);
+  background: #059669;
 }
 .lys-header__btn-primary:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: not-allowed;
 }
 .lys-header__btn-primary--running {
-  background: linear-gradient(180deg, #94a3b8 0%, #64748b 100%);
-  box-shadow: none;
+  background: #64748b;
 }
 
 .lys-header__btn-ghost {
   display: grid;
   place-items: center;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 5px;
   background: transparent;
-  color: var(--lys-text-dim);
+  color: var(--lys-text-faint);
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
 .lys-header__btn-ghost:hover {
-  background: var(--lys-bg-hover, rgba(0, 0, 0, 0.05));
+  background: rgba(0, 0, 0, 0.04);
   color: var(--lys-text);
 }
 
 .lys-header__iters {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
+  gap: 5px;
+  height: 26px;
   padding: 0 8px;
   border: 0;
-  border-radius: 7px;
-  background: var(--lys-bg-hover, rgba(0, 0, 0, 0.04));
+  border-radius: 5px;
+  background: transparent;
+  transition: background 0.12s;
 }
+.lys-header__iters:hover { background: rgba(0, 0, 0, 0.04); }
 .lys-header__iters-label {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--lys-text-faint);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
+  font-weight: 500;
 }
 .lys-header__iters-input {
-  width: 32px;
+  width: 22px;
   background: transparent;
   border: 0;
   outline: 0;
   color: var(--lys-text);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   text-align: center;
 }
 
-/* ===== Pill selector ===== */
+/* ===== Pill selector — same chassis as iters/ghost so everything aligns ===== */
 .lys-pill-selector { position: relative; }
 .lys-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
+  gap: 5px;
+  height: 26px;
+  padding: 0 9px;
   width: 100%;
   border: 0;
-  border-radius: 7px;
+  border-radius: 5px;
   background: transparent;
   color: var(--lys-text);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   font-family: inherit;
   transition: background 0.12s;
   justify-content: space-between;
 }
-.lys-pill:hover { background: var(--lys-bg-hover, rgba(0, 0, 0, 0.05)); }
-.lys-pill--wide { min-width: 280px; gap: 10px; }
+.lys-pill:hover { background: rgba(0, 0, 0, 0.04); }
+.lys-pill--wide { min-width: 260px; gap: 8px; }
 .lys-pill__menu {
   position: absolute;
   top: calc(100% + 4px);
@@ -227,12 +230,13 @@
 .lys-pathogen-picker { position: relative; }
 .lys-pathogen-picker__code {
   font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
   color: var(--lys-accent);
   font-family: var(--lys-font-mono);
+  letter-spacing: 0.02em;
 }
 .lys-pathogen-picker__name {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--lys-text-dim);
   flex: 1;
   text-align: left;
