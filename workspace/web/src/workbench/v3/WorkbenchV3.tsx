@@ -1126,9 +1126,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               Same WindowGroup[] config feeds both modes. */}
           <Allotment.Pane minSize={360} preferredSize={760}>
             <div style={{ width: "100%", height: "100%", position: "relative" }}>
-              {/* Floating view-mode toggle (top-right, above content). */}
+              {/* Floating view-mode toggle. Top-LEFT so it doesn't collide
+                  with PlaygroundCanvas's zoom/reset chip (top-right, z:1000)
+                  and stays visible in tab mode too. */}
               <div style={{
-                position: "absolute", top: 8, right: 12, zIndex: 200,
+                position: "absolute", top: 8, left: 12, zIndex: 1100,
                 display: "inline-flex",
                 background: "var(--lys-bg-2, #ffffff)",
                 border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
