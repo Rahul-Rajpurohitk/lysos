@@ -286,19 +286,49 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
 
 // Section header with mono uppercase label + faint subtitle. Same
 // vocabulary as the right-rail BondsRail / atoms-rail section headers.
-function PropSection({ label, subtitle, children }: {
+// Click the header to toggle open/closed. Default open. Each section
+// remembers its state in localStorage scoped by its `label` so the user
+// can collapse Build State once and have it stay collapsed across
+// reloads.
+function PropSection({ label, subtitle, children, defaultOpen = true }: {
   label: string; subtitle?: string; children: React.ReactNode;
+  defaultOpen?: boolean;
 }) {
+  const storageKey = `lys-prop-section:${label}`;
+  const [open, setOpen] = useState<boolean>(() => {
+    try {
+      const v = localStorage.getItem(storageKey);
+      if (v === "0") return false;
+      if (v === "1") return true;
+    } catch {/*noop*/}
+    return defaultOpen;
+  });
+  const toggle = () => {
+    setOpen((o) => {
+      const next = !o;
+      try { localStorage.setItem(storageKey, next ? "1" : "0"); } catch {/*noop*/}
+      return next;
+    });
+  };
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{
-        padding: "5px 8px 3px",
-        fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-        color: "var(--lys-text-faint)",
-        letterSpacing: "0.06em", textTransform: "uppercase",
-        display: "flex", alignItems: "center", gap: 5,
-        background: "var(--lys-bg, #fafafa)",
-      }}>
+      <button
+        type="button"
+        onClick={toggle}
+        title={`${open ? "Collapse" : "Expand"} ${label}`}
+        style={{
+          all: "unset", cursor: "pointer",
+          padding: "5px 8px 3px",
+          fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+          color: "var(--lys-text-faint)",
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          display: "flex", alignItems: "center", gap: 5,
+          background: "var(--lys-bg, #fafafa)",
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--lys-text)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--lys-text-faint)"; }}
+      >
+        <span style={{ fontSize: 7, opacity: 0.6, width: 7 }}>{open ? "▼" : "▶"}</span>
         <span style={{ fontWeight: 700 }}>{label}</span>
         {subtitle && (
           <>
@@ -309,8 +339,8 @@ function PropSection({ label, subtitle, children }: {
             </span>
           </>
         )}
-      </div>
-      {children}
+      </button>
+      {open && children}
     </div>
   );
 }

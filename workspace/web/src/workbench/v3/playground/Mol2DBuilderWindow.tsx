@@ -4733,8 +4733,11 @@ function PropertiesStrip(p: PropertiesStripProps) {
         }}>
           {/* COL 1 — PropertiesCard wrapper. `min-width: 0` lets the grid
               column shrink below the card's natural width without
-              pushing horizontal overflow. */}
-          <div style={{ minWidth: 0, overflow: "hidden",
+              pushing horizontal overflow. overflow:auto (NOT hidden)
+              so the IDENTIFIERS section's SMILES line — which appears
+              after several other sections — is reachable via scroll
+              instead of clipped silently. */}
+          <div style={{ minWidth: 0, overflow: "auto",
             borderRight: layout === "wide"
               ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
               : "none",

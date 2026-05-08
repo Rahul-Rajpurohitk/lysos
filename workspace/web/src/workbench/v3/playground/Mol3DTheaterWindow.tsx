@@ -28,7 +28,7 @@
  *   /workbench/chem/place-in-pocket        → on SMILES + selectedTarget change
  *   onPoseChange(binding[], clashing[])    → bubble up to WorkbenchV3 → 2D
  */
-import { Fragment, useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Target, RefreshCw } from "lucide-react";
 import { Mol3D } from "../components/Mol3D";
 
@@ -374,12 +374,11 @@ export function Mol3DTheaterWindow(p: Props) {
             Key contacts · top 8
           </div>
           <div style={{
-            // Single grid for the whole list — columns line up across
-            // rows. Order: residue (64px) | atom (54px) | tier (44px) | distance (right-aligned).
-            display: "grid",
-            gridTemplateColumns: "64px 54px 44px 1fr",
-            rowGap: 1, columnGap: 8,
-            alignItems: "center",
+            // Vertical stack of rows. Each row is its own flex
+            // container with continuous bg tint — the previous CSS-
+            // grid attempt produced 4 disconnected segments because
+            // the grid columnGap interrupts the row background.
+            display: "flex", flexDirection: "column", gap: 2,
           }}>
           {pose.key_contacts.slice(0, 8).map((c) => {
             // Classify each contact by biology, not by simple "closer = better".
@@ -408,46 +407,47 @@ export function Mol3DTheaterWindow(p: Props) {
             } as const;
             const t = TIER[tier];
             const title = `Ligand atom ${c.ligand_atom_idx} (${c.ligand_element}) → ${c.residue} at ${c.distance_a}Å — ${t.label}`;
-            // Each row is 4 grid cells. Background spans all 4 via a
-            // ::before-style trick — we paint bg on every cell of the
-            // row so the tint is continuous, not 4 segments.
-            const cellBg = t.bg;
-            const cellPadV = "3px";
-            const baseCell: React.CSSProperties = {
-              background: cellBg,
-              padding: `${cellPadV} 0`,
-            };
             return (
-              <Fragment key={`${c.residue}-${c.ligand_atom_idx}`}>
-                <span title={title} style={{
-                  ...baseCell,
-                  paddingLeft: 6, borderRadius: "3px 0 0 3px",
+              <div
+                key={`${c.residue}-${c.ligand_atom_idx}`}
+                title={title}
+                style={{
+                  display: "flex", alignItems: "center",
+                  gap: 8,
+                  padding: "4px 8px",
+                  background: t.bg,
+                  borderRadius: 4,
+                  // Vertical accent stripe on the left in the tier
+                  // colour — it's the strongest signal because the
+                  // eye scans the leftmost column first.
+                  borderLeft: `3px solid ${t.fg}`,
+                }}>
+                <span style={{
                   fontWeight: 700, color: "#0891b2",
+                  width: 56, flexShrink: 0,
                 }}>
                   {c.residue}
                 </span>
-                <span title={title} style={{
-                  ...baseCell,
+                <span style={{
+                  width: 50, flexShrink: 0,
                   color: "var(--lys-text-dim)", fontSize: 9.5,
                 }}>
                   a{c.ligand_atom_idx}({c.ligand_element})
                 </span>
-                <span title={title} style={{
-                  ...baseCell,
+                <span style={{
+                  width: 40, flexShrink: 0,
                   fontSize: 8, fontWeight: 700, letterSpacing: "0.05em",
                   color: t.fg,
                 }}>
                   {t.label}
                 </span>
-                <span title={title} style={{
-                  ...baseCell,
-                  paddingRight: 6, borderRadius: "0 3px 3px 0",
-                  textAlign: "right",
+                <span style={{
+                  flex: 1, textAlign: "right",
                   color: t.fg, fontWeight: 700,
                 }}>
                   {c.distance_a}Å
                 </span>
-              </Fragment>
+              </div>
             );
           })}
           </div>
