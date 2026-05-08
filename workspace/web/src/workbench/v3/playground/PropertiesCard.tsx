@@ -139,10 +139,12 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
             amber = violation, red = severe). Tooltip per tile shows the
             threshold + medchem rationale. */}
         <PropSection label="drug-likeness" subtitle="Lipinski Ro5 KPIs">
-          {/* Flex-wrap inline pills. Reads as a row of metrics, not a
-              dashboard of cards. Wraps to 2 lines if column is narrow
-              instead of crushing tile widths. */}
-          <div style={{ display: "flex", flexWrap: "wrap",
+          {/* 4-col responsive grid so the four KPIs spread evenly across
+              the row instead of clustering on the left with empty space
+              on the right. minmax(70px, 1fr) wraps to 2×2 below ~300px
+              parent width. */}
+          <div style={{ display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(70px, 1fr))",
             gap: 4, padding: "0 6px 4px", alignItems: "center" }}>
             <MiniTile label="MW" value={data.molecular_weight.toFixed(0)} unit="Da"
               color={data.molecular_weight < 500 ? "#10b981" : "#d97706"}

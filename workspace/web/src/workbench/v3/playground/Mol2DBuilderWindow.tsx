@@ -1958,7 +1958,13 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             <>
               <button
                 type="button"
-                onClick={() => setPropsOverlayOpen((o) => !o)}
+                onClick={() => {
+                  // Mutually exclusive — opening Properties closes Build
+                  // and vice-versa. Avoids the dual-card overlap at the
+                  // top of the diagram.
+                  setBuildOverlayOpen(false);
+                  setPropsOverlayOpen((o) => !o);
+                }}
                 title="Properties — drug-likeness, rule compliance, structure, identifiers"
                 style={{
                   position: "absolute", top: 8, left: 8, zIndex: 55,
@@ -1997,7 +2003,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               closest-known. Same chrome as Properties button. */}
           <button
             type="button"
-            onClick={() => setBuildOverlayOpen((o) => !o)}
+            onClick={() => {
+              setPropsOverlayOpen(false);
+              setBuildOverlayOpen((o) => !o);
+            }}
             title="Build — state, composition, patterns, closest known antibiotic"
             style={{
               position: "absolute", top: 8, right: 8, zIndex: 55,
@@ -2049,6 +2058,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                   runSmartsMatch(pattern, categoryColor);
                 }}
                 hideProperties
+                hideHeader
                 forceLayout="narrow"
               >
                 {null}
@@ -4713,6 +4723,11 @@ interface PropertiesStripProps {
    *  layout. Useful when rendered inside a fixed-width overlay where
    *  the natural ResizeObserver-derived width would be misleading. */
   forceLayout?: "wide" | "medium" | "narrow";
+  /** When true, skip the inner "INSIGHTS · …" collapsible header.
+   *  Used when this strip is rendered inside the diagram's BUILD
+   *  overlay — the overlay's own button already labels it, so the
+   *  inner header is just chrome-on-chrome. */
+  hideHeader?: boolean;
 }
 
 interface AutoPatternHit {
@@ -4865,8 +4880,10 @@ function PropertiesStrip(p: PropertiesStripProps) {
       overflow: "hidden",
     }}>
       {/* Header — single row, mono uppercase, collapse arrow + subtle.
-          Subtitle adapts to the active layout so the user sees what
-          rhythm the strip is using right now. */}
+          Skipped entirely when hideHeader is set (e.g. inside the
+          diagram's BUILD overlay where the parent button already
+          labels the card). */}
+      {!p.hideHeader && (
       <div
         onClick={() => setCollapsed((c) => !c)}
         title="Properties · build state · patterns found · closest known. Click to collapse. Layout adapts to width: 4 cols → 2 cols → stacked."
@@ -4894,6 +4911,7 @@ function PropertiesStrip(p: PropertiesStripProps) {
           )}
         </span>
       </div>
+      )}
       {!collapsed && (
         <div ref={stripBodyRef} style={{
           // overflow:auto on body so vertical scroll appears only if the
@@ -5099,9 +5117,12 @@ function PropertiesStrip(p: PropertiesStripProps) {
                 textTransform: "uppercase", fontWeight: 700, flex: 1 }}>
                 closest known
               </span>
+              {/* Section-level top match % — fixed width so it
+                  vertically aligns with the per-row %s below. */}
               {match?.best && (
                 <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-                  color: "var(--lys-text-faint)" }}>
+                  color: "var(--lys-text-faint)",
+                  width: 36, textAlign: "right", flexShrink: 0 }}>
                   {(match.best.similarity * 100).toFixed(0)}%
                 </span>
               )}
@@ -5125,12 +5146,17 @@ function PropertiesStrip(p: PropertiesStripProps) {
                 }}>
                   <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                     <span style={{ fontSize: 9.5, fontWeight: i === 0 ? 700 : 500,
-                      color: "var(--lys-text)", flex: 1,
+                      color: "var(--lys-text)", flex: 1, minWidth: 0,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {m.name}
                     </span>
-                    <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
-                      color: c, fontWeight: 700 }}>
+                    {/* Fixed-width % column — tabular-nums + right-align
+                        so 6%/7%/15%/100% all line up by their right
+                        edge, matching the section-header %. */}
+                    <span style={{ fontSize: 10, fontFamily: "var(--lys-font-mono)",
+                      color: c, fontWeight: 700,
+                      width: 36, textAlign: "right", flexShrink: 0,
+                      fontVariantNumeric: "tabular-nums" }}>
                       {pct.toFixed(0)}%
                     </span>
                   </div>
