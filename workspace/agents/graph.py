@@ -140,6 +140,34 @@ def _designer_message(state: WorkbenchState) -> dict:
 def _critic_message(state: WorkbenchState) -> dict:
     cand = state.candidates[-1]
     constraints_block = _format_constraints(state)
+    # Service 1 / Service 2 — biology block. Only included when target is
+    # available (i.e., place_in_pocket + map_resistance_vulnerability ran
+    # successfully against the pathogen's preferred PDB).
+    biology_block = ""
+    if cand.pdb_target and cand.pose_score is not None:
+        biology_block = (
+            f"\n### Target binding (vs {cand.pdb_target})\n"
+            f"- pose_score: {cand.pose_score:.3f}\n"
+            f"- contacts: {cand.n_contacts}, clashes: {cand.n_clashes}\n"
+            f"- binding atoms: {cand.binding_atoms[:8]}\n"
+            f"- clashing atoms: {cand.clashing_atoms[:5]}\n"
+        )
+        if cand.key_contacts_summary:
+            biology_block += f"- key contacts: {cand.key_contacts_summary}\n"
+        if cand.robustness_score is not None:
+            biology_block += (
+                f"\n### Resistance escape\n"
+                f"- robustness_score: {cand.robustness_score:.3f} (1.0 = no known clinical mutations defeat this)\n"
+                f"- n_escape_vectors: {cand.n_escape_vectors}\n"
+            )
+            if cand.top_escape_summary:
+                biology_block += f"- top vulnerabilities: {cand.top_escape_summary}\n"
+            biology_block += (
+                "\nNOTE: when n_escape_vectors > 0, the WEAKEST DIMENSION is "
+                "resistance robustness, NOT a chemistry score. Recommend "
+                "an atom edit that hardens the most vulnerable atom.\n"
+            )
+
     return {
         "role": "user",
         "content": (
@@ -153,12 +181,15 @@ def _critic_message(state: WorkbenchState) -> dict:
             f"- structural_alerts: {cand.scores.structural_alerts:.3f}\n"
             f"- hemolysis_safety: {cand.scores.hemolysis_safety:.3f}\n"
             f"- novelty: {cand.scores.novelty:.3f}\n"
-            f"- embedding_novelty: {cand.scores.embedding_novelty:.3f}\n\n"
+            f"- embedding_novelty: {cand.scores.embedding_novelty:.3f}\n"
+            f"{biology_block}\n"
             f"### Active constraints\n{constraints_block}\n\n"
             f"Iteration {state.iteration}/{state.max_iterations}.\n\n"
-            "Identify the SINGLE weakest component and recommend one "
-            "transformation. If composite ≥ 0.80 OR ≥3 prior iterations, "
-            "output VERDICT: ACCEPT.\n\n"
+            "Identify the SINGLE weakest dimension (chemistry OR biology — "
+            "binding score, escape vulnerability, or composite component) "
+            "and recommend one transformation. If composite ≥ 0.80 AND "
+            "n_escape_vectors == 0 (or unavailable), OR ≥3 prior "
+            "iterations, output VERDICT: ACCEPT.\n\n"
             "Format:\n"
             "```\n"
             "WEAKNESS: <component> (current=<v>, target=<v>)\n"
@@ -484,9 +515,84 @@ async def run_score_candidate(
     if sim_rec.get("result"):
         cand.similar_to = [m["name"] for m in sim_rec["result"].get("matches", [])[:3]]
 
+    # ── Service 1 — auto-fire place_in_pocket against the pathogen's
+    #    preferred default target. Populates pose_score + binding/clashing
+    #    atoms on the candidate so the Critic + Strategist can reason
+    #    about target binding without needing to call the tool themselves.
+    pdb_id = _preferred_pdb_for_pathogen(state.target_pathogen)
+    if pdb_id:
+        cand.pdb_target = pdb_id
+        try:
+            pose_rec = await _dispatch_tool(
+                state, "place_in_pocket",
+                {"smiles": smiles, "pdb_id": pdb_id},
+                agent, emit,
+            )
+            pose = pose_rec.get("result")
+            if pose:
+                cand.pose_score = float(pose.get("pose_score", 0.0))
+                cand.n_contacts = int(pose.get("n_contacts", 0))
+                cand.n_clashes = int(pose.get("n_clashes", 0))
+                cand.binding_atoms = list(pose.get("binding_atoms", []))
+                cand.clashing_atoms = list(pose.get("clashing_atoms", []))
+                kc = pose.get("key_contacts", [])
+                if kc:
+                    cand.key_contacts_summary = ", ".join(
+                        f"{c['residue']}@{c['distance_a']}Å"
+                        for c in kc[:4]
+                    )
+        except Exception as exc:  # noqa: BLE001
+            log.debug("auto place_in_pocket failed: %s", exc)
+
+    # ── Service 2 — auto-fire resistance escape map against same target.
+    #    Populates robustness_score + n_escape_vectors + top vulnerable
+    #    atoms so the Critic can identify which atoms to harden, and the
+    #    Strategist can BRANCH when escape vectors > 5.
+    if pdb_id:
+        try:
+            esc_rec = await _dispatch_tool(
+                state, "map_resistance_vulnerability",
+                {"smiles": smiles, "pdb_id": pdb_id},
+                agent, emit,
+            )
+            esc = esc_rec.get("result")
+            if esc:
+                cand.robustness_score = float(esc.get("robustness_score", 0.0))
+                cand.n_escape_vectors = int(esc.get("n_escape_vectors", 0))
+                vulns = esc.get("vulnerable_atoms", [])
+                cand.top_vulnerable_atoms = [v["atom_idx"] for v in vulns[:3]]
+                if vulns:
+                    parts = []
+                    for v in vulns[:3]:
+                        m = v.get("top_mutation", {})
+                        parts.append(
+                            f"atom {v['atom_idx']}→{m.get('wt','?')}{m.get('position','?')}{m.get('mutant','?')}"
+                            f" ({m.get('drug_class','')[:18]})"
+                        )
+                    cand.top_escape_summary = "; ".join(parts)
+        except Exception as exc:  # noqa: BLE001
+            log.debug("auto map_resistance_vulnerability failed: %s", exc)
+
     state.add_candidate(cand)
     await emit({"type": "candidate_added", "data": cand.model_dump(mode="json")})
     return cand
+
+
+def _preferred_pdb_for_pathogen(pathogen: str) -> Optional[str]:
+    """Return the preferred-default PDB ID for the pathogen's target list,
+    or None if no curated targets exist. Used by run_score_candidate to
+    auto-attach Service 1+2 outputs to every candidate."""
+    try:
+        from workspace.api.chem_3d import PATHOGEN_TARGETS
+        targets = PATHOGEN_TARGETS.get(pathogen, [])
+        if not targets:
+            return None
+        for t in targets:
+            if t.get("preferred_default"):
+                return t["pdb_id"]
+        return targets[0]["pdb_id"]
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -603,18 +709,40 @@ async def run_strategist_decide(
     elif state.iteration >= state.max_iterations:
         decision = "TERMINATE"
         reason = f"max iterations {state.max_iterations} reached"
-    elif state.candidates[-1].scores.composite >= 0.80:
-        decision = "TERMINATE"
-        reason = f"composite {state.candidates[-1].scores.composite:.3f} ≥ 0.80"
-    elif _detect_plateau(state):
-        decision = "BRANCH"
-        reason = (
-            f"plateau detected: last {PLATEAU_WINDOW} candidates within "
-            f"Δcomposite < {PLATEAU_DELTA}. Recommending scaffold-hop."
-        )
     else:
-        decision = "CONTINUE"
-        reason = f"composite {state.candidates[-1].scores.composite:.3f} < 0.80"
+        latest = state.candidates[-1]
+        composite = latest.scores.composite
+        n_escape = latest.n_escape_vectors  # may be None when no PDB target available
+        # Termination — composite must be high AND no clinical escape vectors.
+        # An antibiotic with composite=0.85 but 6 escape vectors fails in clinic.
+        if composite >= 0.80 and (n_escape is None or n_escape == 0):
+            decision = "TERMINATE"
+            reason = (
+                f"composite {composite:.3f} ≥ 0.80 and no clinical escape vectors"
+                if n_escape == 0 else
+                f"composite {composite:.3f} ≥ 0.80 (no resistance data available)"
+            )
+        # Branch on resistance vulnerability — even good chemistry must be hardened
+        elif n_escape is not None and n_escape >= 5:
+            decision = "BRANCH"
+            reason = (
+                f"{n_escape} clinical escape vectors detected (≥5 threshold) — "
+                f"current scaffold is highly evolvable. Recommending scaffold-hop."
+            )
+        # Branch on chemistry plateau (existing logic)
+        elif _detect_plateau(state):
+            decision = "BRANCH"
+            reason = (
+                f"plateau detected: last {PLATEAU_WINDOW} candidates within "
+                f"Δcomposite < {PLATEAU_DELTA}. Recommending scaffold-hop."
+            )
+        else:
+            decision = "CONTINUE"
+            extras = []
+            if n_escape is not None:
+                extras.append(f"{n_escape} escape vectors")
+            extras_str = (" · " + ", ".join(extras)) if extras else ""
+            reason = f"composite {composite:.3f} < 0.80{extras_str}"
 
     state.add_message(AgentMessage(
         role="strategist",

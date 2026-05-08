@@ -50,6 +50,22 @@ class Candidate(BaseModel):
     notes: list[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Service 1 — Target-Ligand Theater attached to the candidate. Set by
+    # run_score_candidate after auto-firing place_in_pocket.
+    pdb_target: Optional[str] = None
+    pose_score: Optional[float] = None
+    n_contacts: Optional[int] = None
+    n_clashes: Optional[int] = None
+    binding_atoms: list[int] = Field(default_factory=list)
+    clashing_atoms: list[int] = Field(default_factory=list)
+    key_contacts_summary: Optional[str] = None  # short text the Critic reads
+
+    # Service 2 — Resistance Escape Map attached to the candidate.
+    robustness_score: Optional[float] = None  # 1 - max(escape) ; higher = more robust
+    n_escape_vectors: Optional[int] = None  # atoms with escape_score > 0.3
+    top_vulnerable_atoms: list[int] = Field(default_factory=list)
+    top_escape_summary: Optional[str] = None  # e.g. "atom 2 → K382Q ceftaroline-R"
+
 
 # ---------------------------------------------------------------------------
 # Agent messages + tool calls
