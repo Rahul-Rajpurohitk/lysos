@@ -1131,33 +1131,29 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     if (!svgEl) return;
     svgEl.querySelectorAll('[data-bond-hover="1"]').forEach((n) => n.remove());
     if (hoveredBondIdx == null) return;
-    // Pick the longest (outer) path among the matching bond paths.
-    // Path length proxy: |d| string length — outer paths have more
-    // segments than inner stripes. This avoids ever drawing the
-    // overlay on the short inner-stripe path that sits between the
-    // two parallel lines of an aromatic bond.
-    let best: { node: SVGPathElement; d: string } | null = null;
-    svgEl.querySelectorAll<SVGPathElement>("[class^='bond-'], [class*=' bond-']").forEach((n) => {
-      const cls = n.getAttribute("class") || "";
-      const m = cls.match(/bond-(\d+)/);
-      if (!m) return;
-      if (parseInt(m[1], 10) !== hoveredBondIdx) return;
-      const d = n.getAttribute("d") || "";
+    // Draw a red overlay on EVERY path that carries the bond-N class —
+    // not just the longest. Aromatic bonds are rendered as 2-3 parallel
+    // path segments and the previous "longest only" heuristic could
+    // skip an outer segment, leaving a partial highlight or none at
+    // all on certain bonds. Using `[class~="bond-N"]` (whole-word
+    // match) avoids accidentally catching bond-10 / bond-11 when
+    // hovering bond 1.
+    const matches = svgEl.querySelectorAll<SVGPathElement>(`[class~="bond-${hoveredBondIdx}"]`);
+    if (!matches.length) return;
+    matches.forEach((chosen) => {
+      const d = chosen.getAttribute("d") || "";
       if (!d) return;
-      if (!best || d.length > best.d.length) best = { node: n, d };
+      const stroke = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      stroke.setAttribute("data-bond-hover", "1");
+      stroke.setAttribute("d", d);
+      stroke.setAttribute("fill", "none");
+      stroke.setAttribute("stroke", "#dc2626");
+      stroke.setAttribute("stroke-width", "6");
+      stroke.setAttribute("stroke-linecap", "round");
+      stroke.setAttribute("opacity", "0.55");
+      stroke.style.pointerEvents = "none";
+      chosen.parentNode?.insertBefore(stroke, chosen.nextSibling);
     });
-    if (!best) return;
-    const { node: chosen, d } = best as { node: SVGPathElement; d: string };
-    const stroke = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    stroke.setAttribute("data-bond-hover", "1");
-    stroke.setAttribute("d", d);
-    stroke.setAttribute("fill", "none");
-    stroke.setAttribute("stroke", "#dc2626");
-    stroke.setAttribute("stroke-width", "7");
-    stroke.setAttribute("stroke-linecap", "round");
-    stroke.setAttribute("opacity", "0.70");
-    stroke.style.pointerEvents = "none";
-    chosen.parentNode?.insertBefore(stroke, chosen.nextSibling);
   }, [hoveredBondIdx, svg, bondList]);
 
 
