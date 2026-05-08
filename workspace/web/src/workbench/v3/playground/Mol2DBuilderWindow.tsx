@@ -562,21 +562,43 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     atomIdxText.current = idxMap;
   }, [svg]);
 
-  // Helper: get atom (cx, cy) — uses the parsed map; falls back to
-  // querySelector + getBBox for safety on weird SVGs.
+  // Helper: get atom (cx, cy). PREFERS a fresh DOM lookup over the
+  // cached map because the cache can lag the live SVG by one frame
+  // when RDKit re-emits, AND because for disconnected fragments
+  // (e.g., [BeH] alone) the cached map can mismatch positions.
+  //
+  // Strategy:
+  //   1. Try [data-atom-hit="N"] — our own click-target, guaranteed
+  //      to sit at the correct geometric atom centre.
+  //   2. Fall back to [class~="atom-N"] — whole-word class match
+  //      (not prefix-match like atom-1 catching atom-10/-11/-12 by
+  //      accident). The ~= attribute selector is the right tool.
+  //   3. Finally fall back to the cached map.
   const getAtomXY = (idx: number): { x: number; y: number } | null => {
-    const p = atomPositions.current.get(idx);
-    if (p) return p;
     const host = svgHostRef.current;
-    if (!host) return null;
-    const svgEl = host.querySelector("svg");
-    if (!svgEl) return null;
-    const target = svgEl.querySelector(`[class^="atom-${idx}"], [class*=" atom-${idx} "]`);
-    if (!target) return null;
-    try {
-      const bbox = (target as SVGGraphicsElement).getBBox();
-      return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
-    } catch { return null; }
+    const svgEl = host?.querySelector("svg") ?? null;
+    if (svgEl) {
+      // 1. Own data-atom-hit — these are the invisible click circles
+      //    we stamp on top of the SVG, and they sit exactly at the
+      //    geometric atom centre. Authoritative.
+      const hit = svgEl.querySelector(`[data-atom-hit="${idx}"]`);
+      if (hit) {
+        try {
+          const bbox = (hit as SVGGraphicsElement).getBBox();
+          return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
+        } catch {/*noop*/}
+      }
+      // 2. Whole-word class match — prevents atom-1 matching atom-10.
+      const target = svgEl.querySelector(`[class~="atom-${idx}"]`);
+      if (target) {
+        try {
+          const bbox = (target as SVGGraphicsElement).getBBox();
+          return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
+        } catch {/*noop*/}
+      }
+    }
+    // 3. Cached map fallback.
+    return atomPositions.current.get(idx) ?? null;
   };
 
   // Inject SVG and stamp default cursors on bond paths.
@@ -975,11 +997,24 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       flagged.add(idx);
     }
     if (!flagged.size) return;
+    // Per-atom reason map — atoms in non-main fragments are "isolated",
+    // atoms in incomplete_atoms[] are "under-valent" (rdkit valence
+    // violation). Some atoms can be both.
+    const reasonByAtom = new Map<number, "isolated" | "under-valent" | "issue">();
+    for (const v of (diagnostics.incomplete_atoms || [])) {
+      if (v.atom_idx != null) reasonByAtom.set(v.atom_idx, "under-valent");
+    }
+    for (const idx of (diagnostics.broken_off_atom_ids || [])) {
+      reasonByAtom.set(idx, reasonByAtom.has(idx) ? "issue" : "isolated");
+    }
     for (const idx of flagged) {
       const _pos = getAtomXY(idx);
       if (!_pos) continue;
       const cx = _pos.x;
       const cy = _pos.y;
+      const reason = reasonByAtom.get(idx) ?? "issue";
+
+      // Pulsing red dashed ring on the atom centre.
       const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       ring.setAttribute("data-incomplete", "1");
       ring.setAttribute("cx", String(cx));
@@ -1004,6 +1039,37 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       animO.setAttribute("repeatCount", "indefinite");
       ring.appendChild(animO);
       svgEl.appendChild(ring);
+
+      // Reason label above the ring — tells the user WHY the atom
+      // is flagged (isolated vs under-valent), not just THAT it is.
+      const labelText = reason === "isolated" ? "isolated"
+                       : reason === "under-valent" ? "needs bond"
+                       : "issue";
+      const labelBg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      labelBg.setAttribute("data-incomplete", "1");
+      const labelW = labelText.length * 5.5 + 8;
+      labelBg.setAttribute("x", String(cx - labelW / 2));
+      labelBg.setAttribute("y", String(cy - 32));
+      labelBg.setAttribute("width", String(labelW));
+      labelBg.setAttribute("height", "12");
+      labelBg.setAttribute("rx", "2");
+      labelBg.setAttribute("fill", "#dc2626");
+      labelBg.setAttribute("opacity", "0.92");
+      labelBg.style.pointerEvents = "none";
+      svgEl.appendChild(labelBg);
+      const labelEl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      labelEl.setAttribute("data-incomplete", "1");
+      labelEl.setAttribute("x", String(cx));
+      labelEl.setAttribute("y", String(cy - 23));
+      labelEl.setAttribute("font-size", "8");
+      labelEl.setAttribute("font-family", "SF Mono, monospace");
+      labelEl.setAttribute("font-weight", "700");
+      labelEl.setAttribute("fill", "white");
+      labelEl.setAttribute("text-anchor", "middle");
+      labelEl.style.pointerEvents = "none";
+      labelEl.style.letterSpacing = "0.04em";
+      labelEl.textContent = labelText.toUpperCase();
+      svgEl.appendChild(labelEl);
     }
   }, [diagnostics, svg]);
 
