@@ -218,7 +218,26 @@ async def predict_resistance(req: PredictResistanceRequest) -> dict:
         "n_total_known_mutations": len(mutations),
         "n_residues_with_contacts": len(contact_by_resid),
         "summary": (
-            f"{n_escape_vectors} atom(s) vulnerable to known clinical mutations; "
-            f"robustness={robustness_score:.2f}"
+            # Distinguish "no contact-residue overlaps with clinical mutations
+            # at all" (truly robust) from "overlaps exist but escape scores
+            # are below the 0.3 vulnerability threshold". The earlier wording
+            # "0 atom(s) vulnerable" was misleading when the heatmap shows
+            # weak overlaps because escape_score was sub-threshold.
+            f"robust against the {len(mutations)} curated clinical mutation"
+            f"{'' if len(mutations) == 1 else 's'} for this target — "
+            f"no overlap above 0.30 escape threshold; robustness={robustness_score:.2f}"
+            if n_escape_vectors == 0 and len(vulnerable_atoms) == 0
+            else (
+                f"{n_escape_vectors} atom(s) above the 0.30 escape threshold; "
+                f"top vulnerability score={vulnerable_atoms[0]['escape_score']:.2f}; "
+                f"robustness={robustness_score:.2f}"
+                if n_escape_vectors > 0
+                else (
+                    f"{len(vulnerable_atoms)} sub-threshold weak spot"
+                    f"{'' if len(vulnerable_atoms) == 1 else 's'} (escape "
+                    f"< 0.30); top score={vulnerable_atoms[0]['escape_score']:.2f}; "
+                    f"robustness={robustness_score:.2f}"
+                )
+            )
         ),
     }

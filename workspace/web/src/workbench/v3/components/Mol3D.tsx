@@ -69,9 +69,28 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
     if (!stageRef.current) return;
     let stage: any = null;
     let resizeObs: ResizeObserver | null = null;
+    let cancelled = false;
+
+    // Wait for the stage container to have real dimensions before
+    // initializing NGL. If we init at 0×0, NGL caches a broken WebGL
+    // context that handleResize/autoView can't fully recover from.
+    // This is the root cause of the empty-viewer bug in tab mode.
+    const waitForSize = (): Promise<void> => new Promise((resolve) => {
+      const check = () => {
+        if (cancelled) return resolve();
+        const r = stageRef.current?.getBoundingClientRect();
+        if (r && r.width >= 50 && r.height >= 50) return resolve();
+        requestAnimationFrame(check);
+      };
+      check();
+    });
+
     (async () => {
       try {
+        await waitForSize();
+        if (cancelled) return;
         const NGL = await import("ngl");
+        if (cancelled) return;
         stage = new NGL.Stage(stageRef.current!, {
           backgroundColor: "#ffffff",
           quality: "medium",
@@ -85,7 +104,6 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
         stage.signals.clicked.add((pick: any) => {
           const op = armedOpRef.current;
           if (!op || !smilesRef.current) return;
-          // Only accept clicks on the ligand component (not the protein)
           if (!pick || !pick.atom || !ligandComp.current) return;
           if (pick.component !== ligandComp.current) {
             setEditStatus("click on the ligand atoms only");
@@ -96,10 +114,8 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
           handleAtomEdit(op, atomIdx, pick.bond?.index);
         });
 
-        // Resize observer — when the parent container's dimensions change
-        // (whiteboard ↔ tabs switch, Allotment drag, viewport resize)
-        // NGL needs handleResize() to re-read canvas bounds AND we need
-        // stage.autoView() to re-fit the camera.
+        // ResizeObserver — handles parent resizes after init (Allotment
+        // drag, whiteboard ↔ tabs switch, viewport resize).
         if (stageRef.current) {
           let resizeRaf = 0;
           resizeObs = new ResizeObserver(() => {
@@ -107,9 +123,6 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
             resizeRaf = requestAnimationFrame(() => {
               try {
                 stage?.handleResize?.();
-                // Stage-level autoView fits ALL loaded components in
-                // one call. Animated duration so the camera actually
-                // updates instead of no-op'ing.
                 stage?.autoView?.(300);
               } catch { /* noop */ }
             });
@@ -121,6 +134,7 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
       }
     })();
     return () => {
+      cancelled = true;
       try { resizeObs?.disconnect(); } catch { /* noop */ }
       if (stage) stage.dispose();
     };
@@ -486,22 +500,41 @@ function RepSelect({ value, onChange }: { value: Representation; onChange: (v: R
       </button>
       {open && (
         <div style={{
-          position: "absolute", top: "100%", right: 0, marginTop: 4,
-          background: "var(--lys-bg-2)",
-          border: "1px solid var(--lys-border-strong)",
-          borderRadius: 8, padding: 4, zIndex: 100,
-          boxShadow: "var(--lys-shadow-lg)",
+          position: "absolute", top: "calc(100% + 4px)", right: 0,
+          background: "var(--lys-bg-2, #ffffff)",
+          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.08))",
+          borderRadius: 6, padding: 3, zIndex: 100, minWidth: 110,
+          boxShadow: "0 8px 20px rgba(15,23,42,0.08)",
         }}>
-          {opts.map((o) => (
-            <button
-              key={o}
-              className={clsx("lys-3d-btn", o === value && "lys-3d-btn--active")}
-              style={{ display: "flex", width: 100 }}
-              onClick={() => { onChange(o); setOpen(false); }}
-            >
-              {o}
-            </button>
-          ))}
+          {opts.map((o) => {
+            const active = o === value;
+            return (
+              <button
+                key={o}
+                onClick={() => { onChange(o); setOpen(false); }}
+                style={{
+                  display: "block", width: "100%",
+                  padding: "6px 10px",
+                  border: 0,
+                  background: active ? "var(--lys-accent-soft, rgba(16,185,129,0.10))" : "transparent",
+                  color: active ? "#047857" : "var(--lys-text)",
+                  fontSize: 11.5, fontFamily: "inherit",
+                  textAlign: "left",
+                  borderRadius: 4,
+                  cursor: "pointer",
+                  fontWeight: active ? 600 : 400,
+                }}
+                onMouseEnter={(e) => {
+                  if (!active) (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.04)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!active) (e.currentTarget as HTMLElement).style.background = "transparent";
+                }}
+              >
+                {o}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
