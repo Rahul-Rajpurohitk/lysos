@@ -299,17 +299,19 @@ export function Mol3DTheaterWindow(p: Props) {
         )}
       </div>
 
-      {/* ─── TOP-RIGHT: Pose score + contacts/clashes counter ─────── */}
+      {/* ─── BELOW-TOOLBAR-RIGHT: Pose score + contacts/clashes ─────
+          Sits underneath the Mol3D toolbar's right edge instead of
+          fighting it for the same row. Floats over the viewer. */}
       {pose && (
         <div
           title="Pose quality from /chem/place-in-pocket — geometric placement of the candidate in the active site (no rotation search). Uses 4Å contact / 1.5Å clash thresholds."
           style={{
-            position: "absolute", top: 8, right: 8, zIndex: 60,
-            padding: "5px 10px",
+            position: "absolute", top: 44, right: 8, zIndex: 60,
+            padding: "4px 9px",
             background: pc.bg, border: `1px solid ${pc.border}`,
-            borderRadius: 6, backdropFilter: "blur(8px)",
-            display: "inline-flex", alignItems: "center", gap: 8,
-            fontFamily: "var(--lys-font-mono)", fontSize: 10.5,
+            borderRadius: 5, backdropFilter: "blur(8px)",
+            display: "inline-flex", alignItems: "center", gap: 7,
+            fontFamily: "var(--lys-font-mono)", fontSize: 10,
             color: pc.fg, fontWeight: 700,
           }}>
           <span>pose {poseScore.toFixed(2)}</span>

@@ -97,13 +97,26 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
         });
 
         // Resize observer — when the parent container's dimensions change
-        // (e.g. switching whiteboard ↔ tabs, the pane being resized via
-        // Allotment, etc.) NGL needs handleResize() to read the new
-        // canvas bounds. Without this the viewer renders at its initial
-        // 0×0 / stale dimensions and looks empty.
+        // (whiteboard ↔ tabs switch, Allotment drag, viewport resize)
+        // NGL needs handleResize() to re-read canvas bounds AND we need
+        // autoView() to re-center the camera. Without autoView, stale
+        // camera positions can leave the viewer looking empty even
+        // though components are loaded.
         if (stageRef.current) {
+          let resizeRaf = 0;
           resizeObs = new ResizeObserver(() => {
-            try { stage?.handleResize?.(); } catch { /* noop */ }
+            // Coalesce multiple resize events into one frame
+            if (resizeRaf) cancelAnimationFrame(resizeRaf);
+            resizeRaf = requestAnimationFrame(() => {
+              try {
+                stage?.handleResize?.();
+                // Re-center camera. If the molecule loaded into a
+                // 0-sized canvas earlier, this brings it into view now
+                // that we have real dimensions.
+                proteinComp.current?.autoView?.(0);
+                ligandComp.current?.autoView?.(0);
+              } catch { /* noop */ }
+            });
           });
           resizeObs.observe(stageRef.current);
         }
@@ -201,6 +214,18 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
         proteinComp.current = comp;
         applyRepresentation(comp, representation, wireframe);
         comp.autoView();
+        // Belt-and-suspenders: if the stage was created before its
+        // container had real dimensions (common in tab mode where the
+        // 3D card mounts inside an Allotment pane that resizes after
+        // mount), the initial autoView() runs on a 0×0 canvas and the
+        // viewer looks empty. Re-fit on the next two frames once layout
+        // has settled.
+        requestAnimationFrame(() => {
+          try { stage.handleResize?.(); comp.autoView(0); } catch {/*noop*/}
+          setTimeout(() => {
+            try { stage.handleResize?.(); comp.autoView(0); } catch {/*noop*/}
+          }, 200);
+        });
       })
       .catch((e: any) => setError(`PDB ${pdb} load failed: ${e.message}`));
   }, [pdb]);
@@ -295,43 +320,32 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Toolbar — only edit ops + display toggles. Target/PDB info is
+          shown by the parent Mol3DTheaterWindow's top-LEFT picker overlay,
+          and SMILES lives in the 2D builder, so we don't repeat them
+          here. Keeps the toolbar compact and one row only. */}
       <div style={{
-        padding: "6px 12px",
-        borderBottom: "1px solid var(--lys-border)",
+        padding: "0 12px 0 152px",   // left padding clears the target picker
+                                      // overlay; pose chip lives below the
+                                      // toolbar so right side is free.
+        height: 36,
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
         display: "flex",
         alignItems: "center",
-        gap: 8,
+        justifyContent: "flex-end",
+        gap: 6,
         fontSize: 11,
         color: "var(--lys-text-dim)",
+        background: "var(--lys-bg-2)",
       }}>
-        <span style={{
-          fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-accent)",
-          fontWeight: 600,
-        }}>3D</span>
-        <span style={{ fontFamily: "var(--lys-font-mono)" }}>{pdb}</span>
-        <ChevronDown size={12} />
-        <span style={{
-          fontFamily: "var(--lys-font-mono)",
-          fontSize: 10,
-          color: "var(--lys-text-faint)",
-          maxWidth: 200,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}>
-          {smiles ?? "—"}
-        </span>
-        <div style={{ flex: 1 }} />
-
         {/* Drag-edit chemistry palette: arm an op then click a ligand atom.
             Greyed out until a SMILES is loaded. */}
         <div style={{
           display: "flex",
           alignItems: "center",
-          gap: 2,
-          marginRight: 6,
-          padding: "0 4px",
+          gap: 1,
+          marginRight: 4,
+          padding: 0,
           opacity: smiles ? 1 : 0.45,
         }} aria-disabled={!smiles}>
           {ARMED_OPS.map((o) => {
