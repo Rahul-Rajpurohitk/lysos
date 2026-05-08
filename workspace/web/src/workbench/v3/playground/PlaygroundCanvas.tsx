@@ -94,7 +94,7 @@ const SNAP = 8; // 8px grid
 export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [panning, setPanning] = useState(false);
-  const panStart = useRef<{ mx: number; my: number; pan: { x: number; y: number } } | null>(null);
+  // panMouseStartRef declared lower; legacy panStart removed.
 
   // Extreme-smooth wheel handling. The lag was from React reconciliation
   // on every viewport change. New strategy:
@@ -122,6 +122,13 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
     if (!el) return;
     const v = liveViewportRef.current;
     el.style.transform = `translate3d(${v.pan.x}px, ${v.pan.y}px, 0) scale(${v.zoom})`;
+    // Keep the dot-grid background synced with the pan/zoom too,
+    // otherwise the cards drift while the grid stays put.
+    const stage = stageRef.current;
+    if (stage) {
+      stage.style.backgroundSize = `${24 * v.zoom}px ${24 * v.zoom}px`;
+      stage.style.backgroundPosition = `${v.pan.x}px ${v.pan.y}px`;
+    }
   }
 
   useEffect(() => {
@@ -252,33 +259,75 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
     return () => window.removeEventListener("keydown", onKey);
   }, [p.layout, p.onViewportChange]);
 
-  // Background drag-pan
-  function onBgMouseDown(e: React.MouseEvent) {
-    if (e.target !== stageRef.current && e.target !== e.currentTarget) return;
+  // Pan — RAF+ref pattern matching wheel handler. The OLD path called
+  // p.onViewportChange() on every mousemove, forcing a full React tree
+  // re-render of every group + card on every pixel of drag → ~10fps when
+  // many cards are open. New path: mutate liveViewportRef + DOM transform
+  // directly during drag, only flush to React state on mouseup. 60fps
+  // regardless of card count.
+  //
+  // Pan triggers:
+  //   • Background mouse-down (click empty grid area)
+  //   • Middle-mouse-button anywhere on canvas
+  //   • Space + left-drag anywhere (Figma-style)
+  const spaceDownRef = useRef(false);
+  const panMouseStartRef = useRef<{ mx: number; my: number; pan: { x: number; y: number } } | null>(null);
+
+  function startPan(e: React.MouseEvent | MouseEvent) {
     setPanning(true);
-    panStart.current = {
+    panMouseStartRef.current = {
       mx: e.clientX,
       my: e.clientY,
-      pan: { ...p.viewport.pan },
+      pan: { ...liveViewportRef.current.pan },
     };
   }
+
+  function onBgMouseDown(e: React.MouseEvent) {
+    // Background empty-area click → pan
+    if (e.target === stageRef.current || e.target === e.currentTarget) {
+      if (e.button === 0) startPan(e);
+      return;
+    }
+    // Middle-mouse-button (button 1) or space+left → pan from anywhere
+    if (e.button === 1 || (e.button === 0 && spaceDownRef.current)) {
+      e.preventDefault();
+      startPan(e);
+    }
+  }
+
+  // Wire pan-active mouse handlers to window so dragging off-canvas keeps tracking
   useEffect(() => {
     if (!panning) return;
     const onMove = (e: MouseEvent) => {
-      if (!panStart.current) return;
-      const dx = e.clientX - panStart.current.mx;
-      const dy = e.clientY - panStart.current.my;
-      p.onViewportChange({
-        ...p.viewport,
+      const start = panMouseStartRef.current;
+      if (!start) return;
+      const dx = e.clientX - start.mx;
+      const dy = e.clientY - start.my;
+      // Mutate the ref + DOM transform directly — NO React re-render
+      const v = liveViewportRef.current;
+      liveViewportRef.current = {
+        ...v,
         pan: {
-          x: panStart.current.pan.x + dx,
-          y: panStart.current.pan.y + dy,
+          x: start.pan.x + dx,
+          y: start.pan.y + dy,
         },
-      });
+      };
+      applyTransform();
+      // Also live-shift the background grid pattern position. We can do
+      // this via inline CSS variable so the grid follows without
+      // forcing a React re-render.
+      const stage = stageRef.current;
+      if (stage) {
+        stage.style.backgroundPosition =
+          `${liveViewportRef.current.pan.x}px ${liveViewportRef.current.pan.y}px`;
+      }
     };
     const onUp = () => {
       setPanning(false);
-      panStart.current = null;
+      panMouseStartRef.current = null;
+      // Flush final viewport to React state. ONLY happens once at end of
+      // drag, not per-pixel.
+      p.onViewportChange(liveViewportRef.current);
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
@@ -286,7 +335,36 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
     };
-  }, [panning, p.viewport, p.onViewportChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panning]);
+
+  // Spacebar press = pan-mode override (cursor + drag-from-anywhere)
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !spaceDownRef.current) {
+        // Don't capture space when typing in inputs
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" ||
+                       target.isContentEditable)) return;
+        spaceDownRef.current = true;
+        const stage = stageRef.current;
+        if (stage) stage.style.cursor = panning ? "grabbing" : "grab";
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        spaceDownRef.current = false;
+        const stage = stageRef.current;
+        if (stage) stage.style.cursor = panning ? "grabbing" : "default";
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [panning]);
 
   return (
     <div
@@ -306,8 +384,11 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
       }}
     >
       {/* GPU-accelerated transform layer — translate3d + will-change.
-          DOM-mutated directly during wheel events for buttery-smooth pan/
-          zoom; React state only updates after 80ms of input quiet. */}
+          DOM-mutated directly during wheel/drag events for buttery-smooth
+          pan/zoom; React state only updates after 80ms of input quiet (zoom)
+          or on mouseup (drag). NO CSS transition — every continuous input
+          frame would otherwise lag behind by transition-duration. cmd+0/
+          cmd+1 jumps; user gets a clean reset rather than a laggy animate. */}
       <div
         ref={transformLayerRef}
         style={{
