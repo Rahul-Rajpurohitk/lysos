@@ -278,6 +278,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   const [smartsLoading, setSmartsLoading] = useState(false);
   // Library popover state
   const [libraryOpen, setLibraryOpen] = useState(false);
+  // Diagram-overlay insights — instead of a bottom strip below the SVG,
+  // we float two collapsible cards on the diagram itself. "Properties"
+  // opens drug-likeness / rule / structure / identifiers; "Build"
+  // opens build-state / composition / patterns / closest-known.
+  const [propsOverlayOpen, setPropsOverlayOpen] = useState(false);
+  const [buildOverlayOpen, setBuildOverlayOpen] = useState(false);
   const libraryBtnRef = useRef<HTMLButtonElement | null>(null);
   // SMARTS dock state (top-nav button → docked left-side panel)
   const [smartsOpen, setSmartsOpen] = useState(false);
@@ -1946,29 +1952,116 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               ⚠ {diagnostics.incomplete_atoms.length} incomplete atom{diagnostics.incomplete_atoms.length === 1 ? "" : "s"} · pulsing red — needs reconnection
             </div>
           )}
-        </div>
-        {/* Properties strip — sits BELOW the SVG inside the center column.
-            Compact KPI dashboard (medchem props · build state · patterns ·
-            closest known) with a responsive 4/2/1-column layout that
-            adapts to the strip's actual width. Collapsible header. */}
-        {propertiesPanel && (
-          <PropertiesStrip
-            apiBase={apiBase}
-            smiles={smiles}
-            smartsHits={smartsHits}
-            smarts={smarts}
-            diagnostics={diagnostics}
-            bondsCount={bondList.length}
-            onSelectPattern={(pattern, categoryColor) => {
-              // Click on an auto-detected pattern chip → run SMARTS so
-              // the matched atoms + bonds light up in the 2D viewer
-              // tinted with the category's color.
-              setSmarts(pattern);
-              runSmartsMatch(pattern, categoryColor);
+
+          {/* ─── DIAGRAM OVERLAY: Properties button (top-LEFT) ─────────
+              Click → expands a card with drug-likeness, rule compliance,
+              structure, and identifiers. Card lives ON the diagram (not
+              as a separate sub-container below it). Same overlay pattern
+              the 3D theater uses for target-picker / pose chip / contacts. */}
+          {propertiesPanel && (
+            <>
+              <button
+                type="button"
+                onClick={() => setPropsOverlayOpen((o) => !o)}
+                title="Properties — drug-likeness, rule compliance, structure, identifiers"
+                style={{
+                  position: "absolute", top: 8, left: 8, zIndex: 55,
+                  padding: "4px 9px",
+                  background: propsOverlayOpen ? "var(--lys-text, #0f172a)" : "rgba(255,255,255,0.92)",
+                  color: propsOverlayOpen ? "white" : "var(--lys-text)",
+                  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+                  borderRadius: 5, backdropFilter: "blur(8px)",
+                  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+                  fontFamily: "var(--lys-font-mono)", fontSize: 9.5, fontWeight: 700,
+                  letterSpacing: "0.04em", textTransform: "uppercase",
+                  cursor: "pointer",
+                  display: "inline-flex", alignItems: "center", gap: 5,
+                }}>
+                <span style={{ fontSize: 7, opacity: 0.7 }}>{propsOverlayOpen ? "▼" : "▶"}</span>
+                properties
+              </button>
+              {propsOverlayOpen && (
+                <div style={{
+                  position: "absolute", top: 36, left: 8, zIndex: 54,
+                  width: 380, maxWidth: "calc(100% - 16px)", maxHeight: "calc(100% - 50px)",
+                  background: "rgba(255,255,255,0.96)",
+                  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+                  borderRadius: 6, backdropFilter: "blur(10px)",
+                  boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+                  overflow: "auto",
+                }}>
+                  {propertiesPanel}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ─── DIAGRAM OVERLAY: Build button (top-RIGHT) ────────────
+              Click → expands a card with build state, composition, patterns,
+              closest-known. Same chrome as Properties button. */}
+          <button
+            type="button"
+            onClick={() => setBuildOverlayOpen((o) => !o)}
+            title="Build — state, composition, patterns, closest known antibiotic"
+            style={{
+              position: "absolute", top: 8, right: 8, zIndex: 55,
+              padding: "4px 9px",
+              background: buildOverlayOpen ? "var(--lys-text, #0f172a)" : "rgba(255,255,255,0.92)",
+              color: buildOverlayOpen ? "white" : "var(--lys-text)",
+              border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+              borderRadius: 5, backdropFilter: "blur(8px)",
+              boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+              fontFamily: "var(--lys-font-mono)", fontSize: 9.5, fontWeight: 700,
+              letterSpacing: "0.04em", textTransform: "uppercase",
+              cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 5,
             }}>
-            {propertiesPanel}
-          </PropertiesStrip>
-        )}
+            <span style={{ fontSize: 7, opacity: 0.7 }}>{buildOverlayOpen ? "▼" : "▶"}</span>
+            build
+            {diagnostics && (
+              <span style={{
+                marginLeft: 3, padding: "0 4px", borderRadius: 999,
+                background: diagnostics.n_fragments > 1 ? "#dc2626" : "#10b981",
+                color: "white", fontSize: 8, fontWeight: 700,
+              }}>
+                {(diagnostics as any).n_atoms ?? 0}a · {bondList.length}b
+              </span>
+            )}
+          </button>
+          {buildOverlayOpen && (
+            <div style={{
+              position: "absolute", top: 36, right: 8, zIndex: 54,
+              width: 380, maxWidth: "calc(100% - 16px)", maxHeight: "calc(100% - 50px)",
+              background: "rgba(255,255,255,0.96)",
+              border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+              borderRadius: 6, backdropFilter: "blur(10px)",
+              boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+              overflow: "auto",
+            }}>
+              {/* Render the existing PropertiesStrip but skip the
+                  properties column — we want only build state + comp +
+                  patterns + closest known here. */}
+              <PropertiesStrip
+                apiBase={apiBase}
+                smiles={smiles}
+                smartsHits={smartsHits}
+                smarts={smarts}
+                diagnostics={diagnostics}
+                bondsCount={bondList.length}
+                onSelectPattern={(pattern, categoryColor) => {
+                  setSmarts(pattern);
+                  runSmartsMatch(pattern, categoryColor);
+                }}
+                hideProperties
+                forceLayout="narrow"
+              >
+                {null}
+              </PropertiesStrip>
+            </div>
+          )}
+        </div>
+        {/* Bottom Insights strip dropped — Properties + Build are now
+            collapsible overlays on the 2D diagram itself (above). */}
         </div>
         {/* Atoms rail — embedded list of all atoms with element + valence + edit chips */}
         <AtomsRail
@@ -4615,6 +4708,15 @@ interface PropertiesStripProps {
    *  so the matched atoms light up in the SVG. */
   onSelectPattern?: (pattern: string, categoryColor?: string) => void;
   children: React.ReactNode;  // PropertiesCard
+  /** When true, drop the Properties (col 1) sub-panel and render only
+   *  build state + composition + patterns + closest-known. Used by the
+   *  Build overlay on the 2D diagram, which doesn't want to duplicate
+   *  the Properties content (that lives in its own overlay). */
+  hideProperties?: boolean;
+  /** When set, skip the responsive width detection and force this
+   *  layout. Useful when rendered inside a fixed-width overlay where
+   *  the natural ResizeObserver-derived width would be misleading. */
+  forceLayout?: "wide" | "medium" | "narrow";
 }
 
 interface AutoPatternHit {
@@ -4724,14 +4826,24 @@ function PropertiesStrip(p: PropertiesStripProps) {
   //   • medium (720-1079) — 2 columns × 2 rows, properties+build top,
   //     patterns+closest bottom; strip grows taller to accommodate
   //   • narrow (<720) — full stack, single column scrolling vertically
-  const layout: "wide" | "medium" | "narrow" =
-    stripW >= 1080 ? "wide" : stripW >= 720 ? "medium" : "narrow";
-  const gridTemplate =
-    layout === "wide"
-      ? "minmax(0, 2.2fr) minmax(120px, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.6fr)"
-      : layout === "medium"
-      ? "minmax(0, 1.6fr) minmax(120px, 1fr)"
-      : "minmax(0, 1fr)";
+  const layout: "wide" | "medium" | "narrow" = p.forceLayout ?? (
+    stripW >= 1080 ? "wide" : stripW >= 720 ? "medium" : "narrow"
+  );
+  // When Properties col is hidden (build-only overlay), drop one column
+  // from each layout's grid template — otherwise the empty col-1 leaves
+  // a wide gap on the left.
+  const hideProps = !!p.hideProperties;
+  const gridTemplate = hideProps
+    ? (layout === "wide"
+        ? "minmax(120px, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.6fr)"
+        : layout === "medium"
+        ? "minmax(120px, 1fr) minmax(0, 1fr)"
+        : "minmax(0, 1fr)")
+    : (layout === "wide"
+        ? "minmax(0, 2.2fr) minmax(120px, 0.8fr) minmax(0, 1.4fr) minmax(0, 1.6fr)"
+        : layout === "medium"
+        ? "minmax(0, 1.6fr) minmax(120px, 1fr)"
+        : "minmax(0, 1fr)");
   // Strip height — when content needs to wrap (medium/narrow), give it
   // more vertical real estate so nothing gets clipped. The body div
   // itself is `overflow: auto`, so users can scroll if a tiny window
@@ -4797,13 +4909,15 @@ function PropertiesStrip(p: PropertiesStripProps) {
           gridTemplateColumns: gridTemplate,
           gap: 0,
         }}>
-          {/* COL 1 — PropertiesCard wrapper. NO column borders — the
-              user wants Insights to feel like ONE panel, not 4 stitched-
-              together columns. Sub-sections rely only on their tiny
-              uppercase labels for visual rhythm. */}
-          <div style={{ minWidth: 0, overflow: "auto" }}>
-            {p.children}
-          </div>
+          {/* COL 1 — PropertiesCard wrapper. Skipped when hideProperties
+              is set (e.g. when this strip is rendered inside the 2D
+              diagram's BUILD overlay — the Properties data lives in its
+              own overlay and we don't want to duplicate it). */}
+          {!hideProps && (
+            <div style={{ minWidth: 0, overflow: "auto" }}>
+              {p.children}
+            </div>
+          )}
           {/* COL 2 — BUILD STATE + COMPOSITION stacked. Composition was
               previously a row inside the main Properties column and
               forced internal scroll. Moved here so small content
