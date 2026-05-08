@@ -887,6 +887,182 @@ class DatasetsCommand(Command):
         return CommandResult(output="\n".join(lines), data={"datasets": rows})
 
 
+# ───────────────────────────────────────────────────────────────────────
+# Service 1/2/3 — chem dashboard slash commands
+# Wire the user-typed chat path to the same endpoints the workbench cards
+# call. So "/theater 1VQQ" gives them the same data the 3D Theater card
+# is showing, but as a chat artifact they can save / share.
+# ───────────────────────────────────────────────────────────────────────
+
+class TheaterCommand(Command):
+    """`/theater {smiles?} {pdb_id?}` — place candidate in target active site."""
+    def __init__(self):
+        super().__init__(
+            name="theater",
+            description="3D Target-Ligand Theater — place candidate in target active site",
+            type=CommandType.LOCAL,
+            argument_hint="[smiles] [pdb_id]",
+            aliases=["pose"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        parts = args.strip().split() if args.strip() else []
+        smiles: Optional[str] = None
+        pdb_id: Optional[str] = None
+        for p in parts:
+            if p.upper().startswith(("1", "2", "3", "4", "5", "6", "7", "8", "9")) and len(p) == 4:
+                pdb_id = p.upper()
+            else:
+                smiles = p
+        if not smiles:
+            smiles = ctx.active_smiles
+        if not smiles:
+            return CommandResult(error="Usage: /theater <smiles> <pdb_id>  (or set an active candidate first)")
+        if not pdb_id:
+            # default to the pathogen's preferred target
+            try:
+                from workspace.api.chem_3d import PATHOGEN_TARGETS
+                ts = PATHOGEN_TARGETS.get(ctx.active_target or "MRSA", [])
+                pdb_id = next((t["pdb_id"] for t in ts if t.get("preferred_default")), ts[0]["pdb_id"] if ts else None)
+            except Exception:
+                pdb_id = None
+        if not pdb_id:
+            return CommandResult(error="No PDB ID — set a pathogen via /set-target or specify a PDB explicitly.")
+        try:
+            from workspace.api.chem_3d import place_in_pocket as _ep, PlaceInPocketRequest, _find_target_meta
+            result = await _ep(PlaceInPocketRequest(smiles=smiles, pdb_id=pdb_id))
+            meta = _find_target_meta(pdb_id) or {}
+            md = [
+                f"### 🎯 Target-Ligand Theater · {meta.get('short_name', pdb_id)} ({pdb_id})",
+                "",
+                f"**Pathogen**: {meta.get('pathogen', '—')}  ·  **Mechanism**: {meta.get('mechanism', '—')}",
+                f"**Pose score**: {result['pose_score']:.3f}  ·  **Contacts**: {result['n_contacts']}  ·  **Clashes**: {result['n_clashes']}",
+                "",
+                f"**Binding atoms**: {result['binding_atoms']}",
+                f"**Clashing atoms**: {result['clashing_atoms']}",
+                "",
+                "**Top contacts**:",
+            ]
+            for c in result["key_contacts"][:6]:
+                md.append(f"- `{c['residue']}` (chain {c['chain']}) ↔ atom {c['ligand_atom_idx']}({c['ligand_element']}) — {c['distance_a']} Å")
+            return CommandResult(
+                output="\n".join(md),
+                data={"smiles": smiles, "pdb_id": pdb_id, "pose": result},
+                follow_ups=[
+                    f"/escape {pdb_id}",
+                    "/score",
+                    f"/explain {meta.get('short_name', '')}",
+                ],
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"theater failed: {exc}")
+
+
+class EscapeCommand(Command):
+    """`/escape {pdb_id?}` — predict per-atom resistance vulnerability."""
+    def __init__(self):
+        super().__init__(
+            name="escape",
+            description="Resistance escape map — per-atom vulnerability vs known clinical mutations",
+            type=CommandType.LOCAL,
+            argument_hint="[pdb_id]",
+            aliases=["resistance-map"],
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        smiles = ctx.active_smiles
+        if not smiles:
+            return CommandResult(error="Set an active candidate first (load from library or run /design).")
+        parts = args.strip().split() if args.strip() else []
+        pdb_id: Optional[str] = parts[0].upper() if parts else None
+        if not pdb_id:
+            try:
+                from workspace.api.chem_3d import PATHOGEN_TARGETS
+                ts = PATHOGEN_TARGETS.get(ctx.active_target or "MRSA", [])
+                pdb_id = next((t["pdb_id"] for t in ts if t.get("preferred_default")), ts[0]["pdb_id"] if ts else None)
+            except Exception:
+                pdb_id = None
+        if not pdb_id:
+            return CommandResult(error="No PDB ID — set a pathogen via /set-target or specify a PDB explicitly.")
+        try:
+            from workspace.api.chem_resistance import predict_resistance as _ep, PredictResistanceRequest
+            result = await _ep(PredictResistanceRequest(smiles=smiles, pdb_id=pdb_id))
+            md = [
+                f"### 🛡️ Resistance escape map · {result['target_name']}",
+                "",
+                f"**Pathogen**: {result['pathogen']}  ·  **PDB**: {pdb_id}",
+                f"**Robustness**: {result['robustness_score']:.3f}  ·  **Escape vectors**: {result['n_escape_vectors']}",
+                f"**Known clinical mutations checked**: {result['n_total_known_mutations']}",
+                "",
+                f"**Summary**: {result['summary']}",
+                "",
+            ]
+            if result["vulnerable_atoms"]:
+                md.append("**Top vulnerable atoms**:")
+                for v in result["vulnerable_atoms"][:5]:
+                    m = v["top_mutation"]
+                    md.append(
+                        f"- atom **{v['atom_idx']}** → escape **{v['escape_score']:.2f}** "
+                        f"via `{m['wt']}{m['position']}{m['mutant']}` ({m['drug_class']})"
+                    )
+            else:
+                md.append("✓ No clinical-resistance vulnerabilities detected for this candidate.")
+            return CommandResult(
+                output="\n".join(md),
+                data={"pdb_id": pdb_id, "resistance": result},
+                follow_ups=["/edit", "/sar"],
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"escape failed: {exc}")
+
+
+class ParetoCommand(Command):
+    """`/pareto {x?} {y?}` — show current Pareto frontier of session candidates."""
+    def __init__(self):
+        super().__init__(
+            name="pareto",
+            description="Multi-candidate Pareto frontier on selected axes",
+            type=CommandType.LOCAL,
+            argument_hint="[x_axis] [y_axis]",
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        sid = ctx.session_id
+        if not sid:
+            return CommandResult(error="No active session.")
+        parts = args.strip().split() if args.strip() else []
+        x_axis = parts[0] if len(parts) > 0 else "predicted_mic"
+        y_axis = parts[1] if len(parts) > 1 else "composite_reward"
+        try:
+            from workspace.api.chem_pareto import session_pareto
+            result = await session_pareto(sid=sid, x=x_axis, y=y_axis)
+            md = [
+                f"### 📊 Pareto frontier · {result['x_axis_meta']['label']} vs {result['y_axis_meta']['label']}",
+                "",
+                f"**Total candidates**: {result['stats']['n_total']}  ·  "
+                f"**With scores**: {result['stats']['n_with_scores']}  ·  "
+                f"**Pareto-optimal**: {result['stats']['n_pareto']}",
+                "",
+            ]
+            if result["pareto_set"]:
+                md.append("**Pareto-optimal candidates**:")
+                for cid in result["pareto_set"]:
+                    pt = next((p for p in result["all_points"] if p["candidate_id"] == cid), None)
+                    if pt:
+                        md.append(
+                            f"- `{pt['smiles'][:50]}{'…' if len(pt['smiles']) > 50 else ''}` "
+                            f"({pt['created_by']}) — x={pt['x_value']:.3f}, y={pt['y_value']:.3f}"
+                        )
+            else:
+                md.append("_No Pareto-optimal candidates yet (need at least one with scores on both axes)._")
+            return CommandResult(
+                output="\n".join(md),
+                data={"pareto": result},
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"pareto failed: {exc}")
+
+
 def create_default_registry() -> CommandRegistry:
     """Build the production registry. Add new commands here."""
     r = CommandRegistry()
@@ -913,6 +1089,10 @@ def create_default_registry() -> CommandRegistry:
         ComplexCommand(),
         TraceCommand(),
         DatasetsCommand(),
+        # Service 1/2/3 — chem dashboard slash commands
+        TheaterCommand(),
+        EscapeCommand(),
+        ParetoCommand(),
     ]:
         r.register(cmd)
     return r
