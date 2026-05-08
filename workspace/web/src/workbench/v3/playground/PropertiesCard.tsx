@@ -233,47 +233,40 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
         )}
 
         {/* SECTION 6 · IDENTIFIERS · canonical SMILES + SA score.
-            SMILES wraps on long strings (break-all on this monospace
-            string so it never overflows its parent column).  Click to
-            copy. SA score sits below to keep the row compact. */}
+            One row. SMILES grows; SA pinned right with fixed width so
+            it doesn't drift into a second line. Click SMILES to copy. */}
         <PropSection label="identifiers" subtitle="canonical · synth-access">
           <div style={{ padding: "2px 6px 6px",
-            display: "flex", flexDirection: "column", gap: 4,
+            display: "flex", gap: 8, alignItems: "baseline",
             fontSize: 10, fontFamily: "var(--lys-font-mono)" }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-              <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5,
-                letterSpacing: "0.04em", textTransform: "uppercase",
-                flexShrink: 0 }}>SMILES</span>
-              <button
-                type="button"
-                title={`${data.canonical_smiles} — click to copy`}
-                onClick={() => {
-                  try { void navigator.clipboard.writeText(data.canonical_smiles); } catch {/*noop*/}
-                }}
-                style={{
-                  flex: 1, minWidth: 0,
-                  textAlign: "left",
-                  border: 0, padding: 0, background: "transparent",
-                  cursor: "pointer", color: "var(--lys-text)",
-                  fontFamily: "inherit", fontSize: 10,
-                  // Wrap long SMILES instead of clipping. Important
-                  // for real candidates which can hit 80+ chars.
-                  wordBreak: "break-all", whiteSpace: "normal",
-                  lineHeight: 1.35,
-                }}>
-                {data.canonical_smiles}
-              </button>
-            </div>
+            <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5,
+              letterSpacing: "0.04em", textTransform: "uppercase",
+              flexShrink: 0 }}>SMILES</span>
+            <button
+              type="button"
+              title={`${data.canonical_smiles} — click to copy`}
+              onClick={() => {
+                try { void navigator.clipboard.writeText(data.canonical_smiles); } catch {/*noop*/}
+              }}
+              style={{
+                flex: 1, minWidth: 0,
+                textAlign: "left",
+                border: 0, padding: 0, background: "transparent",
+                cursor: "pointer", color: "var(--lys-text)",
+                fontFamily: "inherit", fontSize: 10,
+                wordBreak: "break-all", whiteSpace: "normal",
+                lineHeight: 1.35,
+              }}>
+              {data.canonical_smiles}
+            </button>
             {data.sa_score > 0 && (
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <span title={`Synthetic Accessibility Score (Ertl 2009). 1=easy, 10=hard. ${data.sa_score < 4 ? "Easy synthesis." : data.sa_score < 6 ? "Moderate." : "Difficult."}`}
-                  style={{ flexShrink: 0, color: "var(--lys-text-faint)",
-                    fontSize: 9 }}>
-                  SA <span style={{ color: data.sa_score < 4 ? "#10b981" : data.sa_score < 6 ? "#d97706" : "#dc2626", fontWeight: 700 }}>
-                    {data.sa_score.toFixed(2)}
-                  </span>
+              <span title={`Synthetic Accessibility Score (Ertl 2009, RDKit). 1 = easy synthesis · 10 = very difficult. Currently ${data.sa_score.toFixed(2)} — ${data.sa_score < 4 ? "easy" : data.sa_score < 6 ? "moderate" : "difficult"}.`}
+                style={{ flexShrink: 0, color: "var(--lys-text-faint)",
+                  fontSize: 9, alignSelf: "baseline" }}>
+                SA <span style={{ color: data.sa_score < 4 ? "#059669" : data.sa_score < 6 ? "#d97706" : "#dc2626", fontWeight: 700 }}>
+                  {data.sa_score.toFixed(2)}
                 </span>
-              </div>
+              </span>
             )}
           </div>
         </PropSection>

@@ -2023,15 +2023,23 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             }}>
             <span style={{ fontSize: 7, opacity: 0.7 }}>{buildOverlayOpen ? "▼" : "▶"}</span>
             build
-            {diagnostics && (
-              <span style={{
-                marginLeft: 3, padding: "0 4px", borderRadius: 999,
-                background: diagnostics.n_fragments > 1 ? "#dc2626" : "#10b981",
-                color: "white", fontSize: 8, fontWeight: 700,
-              }}>
-                {(diagnostics as any).n_atoms ?? 0}a · {bondList.length}b
-              </span>
-            )}
+            {diagnostics && (() => {
+              // Toned-down status pill on the BUILD button. Solid bright
+              // green looked harsh next to the dark button bg; use a
+              // muted tint with colored text instead.
+              const ok = diagnostics.n_fragments <= 1;
+              const fg = ok ? "#34d399" : "#fca5a5";
+              return (
+                <span style={{
+                  marginLeft: 3, padding: "0 5px", borderRadius: 3,
+                  background: "rgba(255,255,255,0.10)",
+                  color: fg, fontSize: 8, fontWeight: 700,
+                  letterSpacing: "0.03em",
+                }}>
+                  {(diagnostics as any).n_atoms ?? 0}a·{bondList.length}b
+                </span>
+              );
+            })()}
           </button>
           {buildOverlayOpen && (
             <div style={{
@@ -5014,16 +5022,17 @@ function PropertiesStrip(p: PropertiesStripProps) {
               </span>
               {autoPatterns.length > 0 && (
                 <span title={`${autoPatterns.length} preset${autoPatterns.length === 1 ? "" : "s"} match`}
-                  style={{ fontSize: 8.5, padding: "1px 5px", borderRadius: 999,
-                  background: "#10b981", color: "white", fontWeight: 700,
+                  style={{ fontSize: 8.5, padding: "1px 6px", borderRadius: 3,
+                  background: "rgba(16,185,129,0.10)", color: "#059669",
+                  fontWeight: 700, letterSpacing: "0.02em",
                   fontFamily: "var(--lys-font-mono)" }}>
                   auto · {autoPatterns.length}
                 </span>
               )}
               {p.smartsHits.length > 0 && (
                 <span title={`${p.smartsHits.length} atoms matched by active query`}
-                  style={{ fontSize: 8.5, padding: "1px 5px", borderRadius: 999,
-                  background: "#0891b2", color: "white", fontWeight: 700,
+                  style={{ fontSize: 8.5, padding: "1px 6px", borderRadius: 3,
+                  background: "rgba(8,145,178,0.10)", color: "#0e7490", fontWeight: 700,
                   fontFamily: "var(--lys-font-mono)" }}>
                   ⚡ {p.smartsHits.length}
                 </span>
