@@ -2959,7 +2959,9 @@ function AtomsRail(p: AtomsRailProps) {
     return (
       <div style={{
         width: 28, flexShrink: 0,
-        borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+        // Rail now lives on the LEFT, so the boundary edge is on the
+        // RIGHT side of this collapsed strip. Border flipped accordingly.
+        borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
         background: "var(--lys-bg, #fafafa)",
         display: "flex", flexDirection: "column", alignItems: "center",
         cursor: "pointer", userSelect: "none",
@@ -2975,7 +2977,7 @@ function AtomsRail(p: AtomsRailProps) {
           color: "var(--lys-text-faint)",
           letterSpacing: "0.06em", textTransform: "uppercase",
           fontWeight: 700,
-        }}>◀ atoms · bonds · build</div>
+        }}>▶ atoms · bonds · build</div>
       </div>
     );
   }
@@ -2983,7 +2985,9 @@ function AtomsRail(p: AtomsRailProps) {
   return (
     <div style={{
       width: 320, flexShrink: 0,
-      borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+      // Rail now lives on the LEFT, so its boundary edge is on the
+      // RIGHT side of the rail (between rail and SVG).
+      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
       background: "var(--lys-bg, #fafafa)",
       display: "flex", flexDirection: "column",
       overflow: "hidden",
@@ -3017,7 +3021,7 @@ function AtomsRail(p: AtomsRailProps) {
             cursor: "pointer", padding: "0 4px",
             color: "var(--lys-text-faint)",
             fontSize: 11, lineHeight: 1, fontWeight: 700,
-          }}>▶▶</button>
+          }}>◀◀</button>
         {p.smiles && p.onAddAtom && (
           <button type="button"
             ref={addBtnRef}
