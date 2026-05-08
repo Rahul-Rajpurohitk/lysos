@@ -17,7 +17,7 @@
  * state. The card pushes vulnerableAtoms[] up via onVulnerableChange so the
  * 2D builder can paint orange halos on those exact atoms.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useState, Fragment } from "react";
 import { Shield, RefreshCw, AlertTriangle } from "lucide-react";
 
 interface TopMutation {
@@ -250,10 +250,10 @@ export function ResistanceEscapeMapCard({ apiBase, smiles, pdbId, onVulnerableCh
                   {data.all_residue_scores[p].wt}{p}
                 </div>
               ))}
-              {/* AA rows */}
+              {/* AA rows — Fragment with key since we yield row-label + N cells per iteration */}
               {aas.map((aa) => (
-                <>
-                  <div key={`row-${aa}`} style={{
+                <Fragment key={`aa-${aa}`}>
+                  <div style={{
                     textAlign: "right", padding: "0 4px",
                     fontSize: 7.5, color: "var(--lys-text-faint)",
                     fontWeight: 700,
@@ -287,7 +287,7 @@ export function ResistanceEscapeMapCard({ apiBase, smiles, pdbId, onVulnerableCh
                       />
                     );
                   })}
-                </>
+                </Fragment>
               ))}
             </div>
 
