@@ -140,14 +140,11 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
             amber = violation, red = severe). Tooltip per tile shows the
             threshold + medchem rationale. */}
         <PropSection label="drug-likeness" subtitle="Lipinski Ro5 KPIs">
-          {/* `auto-fit, minmax(64px, 1fr)` lets the 4 hero tiles wrap
-              into 2×2 (or any other arrangement) when the parent column
-              shrinks — instead of crushing each tile below the readable
-              width or pushing the row off-screen. Each tile floors at
-              64px so the value text stays legible. */}
-          <div style={{ display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(64px, 1fr))",
-            gap: 4, padding: "0 6px 4px" }}>
+          {/* Flex-wrap inline pills. Reads as a row of metrics, not a
+              dashboard of cards. Wraps to 2 lines if column is narrow
+              instead of crushing tile widths. */}
+          <div style={{ display: "flex", flexWrap: "wrap",
+            gap: 4, padding: "0 6px 4px", alignItems: "center" }}>
             <MiniTile label="MW" value={data.molecular_weight.toFixed(0)} unit="Da"
               color={data.molecular_weight < 500 ? "#10b981" : "#d97706"}
               tip={`Molecular weight (Daltons). Lipinski Ro5: < 500 Da. Currently ${data.molecular_weight.toFixed(1)} Da · ${data.molecular_weight < 500 ? "passes" : "fails"}.`} />
@@ -286,61 +283,33 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
 
 // Section header with mono uppercase label + faint subtitle. Same
 // vocabulary as the right-rail BondsRail / atoms-rail section headers.
-// Click the header to toggle open/closed. Default open. Each section
-// remembers its state in localStorage scoped by its `label` so the user
-// can collapse Build State once and have it stay collapsed across
-// reloads.
-function PropSection({ label, subtitle, children, defaultOpen = true }: {
+// Sub-section headers are NOT individually collapsible — only the
+// top-level Insights/Properties container collapses. This is what
+// makes it feel like an insights panel rather than a settings tree.
+function PropSection({ label, subtitle, children }: {
   label: string; subtitle?: string; children: React.ReactNode;
-  defaultOpen?: boolean;
 }) {
-  const storageKey = `lys-prop-section:${label}`;
-  const [open, setOpen] = useState<boolean>(() => {
-    try {
-      const v = localStorage.getItem(storageKey);
-      if (v === "0") return false;
-      if (v === "1") return true;
-    } catch {/*noop*/}
-    return defaultOpen;
-  });
-  const toggle = () => {
-    setOpen((o) => {
-      const next = !o;
-      try { localStorage.setItem(storageKey, next ? "1" : "0"); } catch {/*noop*/}
-      return next;
-    });
-  };
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
-      <button
-        type="button"
-        onClick={toggle}
-        title={`${open ? "Collapse" : "Expand"} ${label}`}
-        style={{
-          all: "unset", cursor: "pointer",
-          padding: "5px 8px 3px",
-          fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-faint)",
-          letterSpacing: "0.06em", textTransform: "uppercase",
-          display: "flex", alignItems: "center", gap: 5,
-          background: "var(--lys-bg, #fafafa)",
-        }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--lys-text)"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = "var(--lys-text-faint)"; }}
-      >
-        <span style={{ fontSize: 7, opacity: 0.6, width: 7 }}>{open ? "▼" : "▶"}</span>
+      <div style={{
+        padding: "4px 8px 2px",
+        fontSize: 8, fontFamily: "var(--lys-font-mono)",
+        color: "var(--lys-text-faint)",
+        letterSpacing: "0.06em", textTransform: "uppercase",
+        display: "flex", alignItems: "center", gap: 5,
+      }}>
         <span style={{ fontWeight: 700 }}>{label}</span>
         {subtitle && (
           <>
             <span style={{ flex: 1 }} />
-            <span style={{ opacity: 0.65, textTransform: "none",
-              letterSpacing: 0, fontFamily: "var(--lys-font-body)" }}>
+            <span style={{ opacity: 0.55, textTransform: "none",
+              letterSpacing: 0, fontFamily: "var(--lys-font-body)", fontSize: 9 }}>
               {subtitle}
             </span>
           </>
         )}
-      </button>
-      {open && children}
+      </div>
+      {children}
     </div>
   );
 }
@@ -398,27 +367,36 @@ function InlineStat({ label, value, tip }: { label: string; value: string; tip?:
   );
 }
 
-// Compact mini-tile for hero row (smaller than full Tile)
+// Compact insight pill — single horizontal pill, label inline with value.
+// Replaces the previous "big tile" treatment that made the section feel
+// like a dashboard. 4 of these fit comfortably on a single row at any
+// reasonable column width. Color tints the value + a 2px left bar; the
+// rest of the pill stays neutral so the panel reads as a row of
+// inline metrics, not a row of stat-cards.
 function MiniTile({ label, value, unit, color, tip }: {
   label: string; value: string; unit: string; color: string; tip?: string;
 }) {
   return (
-    <div title={tip} style={{
-      padding: "5px 7px", borderRadius: 5,
-      background: `${color}10`, borderLeft: `3px solid ${color}`,
-      display: "flex", flexDirection: "column", gap: 0,
+    <span title={tip} style={{
+      padding: "2px 8px 2px 7px",
+      borderRadius: 3,
+      borderLeft: `2px solid ${color}`,
+      background: "var(--lys-bg, #fafafa)",
+      display: "inline-flex", alignItems: "baseline", gap: 5,
+      fontFamily: "var(--lys-font-mono)",
       cursor: tip ? "help" : "default",
+      minWidth: 0,
     }}>
-      <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
-        fontFamily: "var(--lys-font-mono)", letterSpacing: "0.04em",
-        textTransform: "uppercase", lineHeight: 1.2 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: 700, color, lineHeight: 1.2,
-        fontFamily: "var(--lys-font-mono)" }}>
+      <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
+        letterSpacing: "0.04em", textTransform: "uppercase",
+        fontWeight: 600 }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, color,
+        whiteSpace: "nowrap" }}>
         {value}
         {unit && <span style={{ fontSize: 8, fontWeight: 500,
           color: "var(--lys-text-faint)", marginLeft: 2 }}>{unit}</span>}
-      </div>
-    </div>
+      </span>
+    </span>
   );
 }
 
