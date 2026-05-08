@@ -730,3 +730,266 @@ Verified e2e:
 
 Version: 1.5 (May 9 2026)
 
+
+
+---
+
+## 13. Antimicrobial-specific services (v1.6 — May 7 2026)
+
+The Chemistry container gained 3 new antimicrobial-specific services on
+top of the v1.5 baseline. Each service has both a FastAPI endpoint AND a
+@tool registered for agent use, AND a workbench card. Backend → tool →
+UI is the same data triangle the chem_workbench tools follow.
+
+### 13.1 Service 1 — 3D Target-Ligand Theater
+
+Drops a candidate molecule into the active site of a curated pathogen
+target via geometric placement (RDKit ETKDG conformer + centroid →
+pocket-center translation). Returns binding atoms, clashing atoms,
+contact residues at distances. **Fast (~1s, no GPU).** Meant for the
+inner agent loop where every edit needs a fresh contact map.
+
+Endpoints:
+- `GET  /workbench/chem/targets/{pathogen}` — curated multi-target list
+- `GET  /workbench/chem/target/{pdb_id}` — structure summary + active site
+- `GET  /workbench/chem/target/{pdb_id}/raw` — raw PDB text for NGL
+- `POST /workbench/chem/place-in-pocket` — placement + contact analysis
+
+Tool: `place_in_pocket(smiles, pdb_id) → {pose_score, n_contacts,
+n_clashes, binding_atoms, clashing_atoms, key_contacts, ligand_xyz}`
+
+Curated PATHOGEN_TARGETS (8 pathogens × 1-2 PDBs each):
+- MRSA      → 1VQQ (PBP2a, default), 1A2N (MurA)
+- Mtb       → 2X22 (InhA, default), 4FDO (DprE1)
+- EColi-CRE → 5UL8 (KPC-2)
+- KpneuCRE  → 3SPU (NDM-1)
+- Abaum     → 7M4F (OXA-23)
+- Paer      → 5TJX (DNA gyrase B)
+- VRE       → 1MWS (PBP5, default), 1E4E (VanA)
+- NGono     → 5XFT (PBP2)
+
+UI: `Mol3DTheaterWindow` with target picker + pose HUD + key-contacts
+panel. Binding atoms paint GREEN halos on the 2D builder; clashing atoms
+paint RED halos. Same atoms, both views.
+
+### 13.2 Service 2 — Resistance-Escape Vulnerability Map
+
+For a candidate × target, predicts which clinical resistance mutations
+would defeat it. Cross-references contacts (from Service 1) with a
+curated CARD subset (~64 clinical mutations across 10 PDB targets).
+Returns per-atom escape scores + the mutation predicted to defeat each
+vulnerable atom + drug-class context.
+
+Endpoints:
+- `GET  /workbench/chem/resistance/known/{pdb_id}` — curated mutations
+- `POST /workbench/chem/resistance/predict` — per-atom escape map
+
+Tool: `map_resistance_vulnerability(smiles, pdb_id) → {robustness_score,
+n_escape_vectors, vulnerable_atoms[], top_mutation, summary}`
+
+Algorithm:
+- escape_score = clinical_frequency × distance_factor
+- frequency from {very_high:0.95, high:0.80, moderate:0.55, low:0.30,
+  rare:0.18, very_rare:0.06} via curated CARD subset
+- distance_factor: 1.0 within 2.5Å of contact, linearly to 0.5 at 4Å
+- Self-killing mutations (catalytic-residue knockouts) appropriately
+  scored LOW because bacteria don't evolve them clinically.
+
+Robustness = 1 - max(per-atom escape). Used by Strategist as a BRANCH
+trigger when n_escape_vectors >= 5.
+
+UI: `ResistanceEscapeMapCard` with heatmap (residue × mutation_aa),
+red borders on cells matching known clinical mutations. Vulnerable atoms
+paint ORANGE dashed halos on the 2D builder with pulse animation.
+
+### 13.3 Service 3 — Multi-Candidate Pareto Lab
+
+Live Pareto frontier across all candidates explored in the session, on
+any axis pair from the 10-axis registry (composite_reward, predicted_mic,
+drug_likeness_qed, synthesizability, novelty, hemolysis_safety, validity,
+structural_alerts, boltz2_pose_conf, binding_affinity).
+
+Endpoints:
+- `GET /workbench/chem/session/{sid}/axes` — axis registry (label, direction, source)
+- `GET /workbench/chem/session/{sid}/candidates` — all candidates with axis values
+- `GET /workbench/chem/session/{sid}/pareto?x=&y=` — Pareto frontier on selected axes
+
+Tool: `pareto_summary(session_id, x_axis, y_axis) → {n_total, n_pareto,
+dominant_candidates}` (planned wrapper; for now access via endpoint).
+
+Strategist uses pareto signal to detect "no Pareto improvement in 5
+iterations → BRANCH".
+
+UI: `ParetoLabCard` with scatter plot, axis pickers, click-to-load
+candidates into the 2D builder. Pareto-optimal points get green halos +
+connected frontier line.
+
+---
+
+## 14. Workflow phases (medchem protocol the agents traverse)
+
+The Agents container now visualizes the workflow as a 6-phase strip:
+
+```
+SCOPE → ANCHOR → DESIGN → VALIDATE → STRESS-TEST → REPORT
+```
+
+Phase derivation (heuristic, deterministic):
+| Phase | Trigger | Tools used |
+|---|---|---|
+| SCOPE | session start | (config) |
+| ANCHOR | resistome lookup OR first candidate | get_pathogen_resistome, find_active_against_mdr, find_similar_drugs |
+| DESIGN | first score_molecule call | score_molecule, edit_molecule, replace_smiles, transform_structure |
+| VALIDATE | place_in_pocket OR map_resistance_vulnerability fires | place_in_pocket, map_resistance_vulnerability, predict_admet, compare_molecules |
+| STRESS_TEST | predict_resistance_escape fires | predict_resistance_escape, red_team |
+| REPORT | terminal | snapshot_all, render_report |
+
+Endpoint: `GET /workbench/sessions/{sid}/workflow` returns current phase
++ per-phase counts + transition log. Auto-refresh every 5s in the UI.
+
+When `run_score_candidate` runs, it auto-fires `place_in_pocket` and
+`map_resistance_vulnerability` against the pathogen's preferred default
+PDB target (PBP2a for MRSA, NDM-1 for KpneuCRE, etc.). This means
+candidates get pose + escape data attached AUTOMATICALLY without the
+agent needing to call those tools — and the workflow phase auto-
+transitions DESIGN → VALIDATE on every iteration.
+
+---
+
+## 15. Agent biology-aware reasoning (v1.6)
+
+The Critic prompt now includes a BIOLOGY block (in addition to the
+chemistry score breakdown):
+
+```
+### Target binding (vs <pdb_id>)
+- pose_score: 0.27
+- contacts: 140, clashes: 6
+- binding atoms: [...]
+- clashing atoms: [...]
+- key contacts: SER365@1.84A, LYS247@1.6A, ...
+
+### Resistance escape
+- robustness_score: 0.66
+- n_escape_vectors: 1
+- top vulnerabilities: atom 2→K382Q (ceftaroline)
+
+NOTE: when n_escape_vectors > 0, the WEAKEST DIMENSION is resistance
+robustness, NOT a chemistry score.
+```
+
+Strategist termination rule:
+- TERMINATE: composite ≥ 0.80 AND n_escape_vectors == 0
+- BRANCH: n_escape_vectors ≥ 5 (current scaffold is highly evolvable)
+- BRANCH: 3-iter composite plateau (existing rule)
+- CONTINUE: otherwise
+
+This is the distinguishing antimicrobial constraint — even good chemistry
+must be hardened against resistance evolution. Vancomycin → vanA,
+ceftaroline → K382Q PBP2a are the canonical failures Strategist now
+guards against.
+
+---
+
+## 16. Slash commands · chem dashboard surface (v1.6)
+
+Three new commands wire chat-typed input to the Service 1/2/3 endpoints:
+
+```
+/theater [smiles] [pdb_id]            — place candidate in target active site
+                                        (alias /pose)
+/escape [pdb_id]                      — per-atom resistance vulnerability
+                                        (alias /resistance-map)
+/pareto [x_axis] [y_axis]             — Pareto frontier on session candidates
+```
+
+Each command:
+- Defaults pdb_id from PATHOGEN_TARGETS preferred-default if not provided
+- Defaults smiles from ctx.active_smiles if not provided
+- Returns markdown artifact + structured data + sensible follow-ups
+
+Total command count: 25 (was 22).
+
+---
+
+## 17. Bidirectional 2D ↔ services contract (v1.6)
+
+The 2D builder is the central operating table. Three services orbit it.
+Each service:
+1. CONSUMES the current SMILES from the 2D builder
+2. RETURNS structured data the agent reasons about
+3. WRITES per-atom halos BACK to the 2D builder
+
+| Service | Halo color | Meaning |
+|---|---|---|
+| Service 1 — pose | green ring | atom binds target |
+| Service 1 — pose | red ring | atom clashes |
+| Service 2 — escape | orange dashed pulse | atom vulnerable to mutation |
+| Selection (existing) | amber pill | selected by user/agent |
+| SMARTS hit (existing) | category color | matched substructure |
+| Rail-hover (existing) | cyan dashed | rail-row hovered |
+
+Single source of truth: WorkbenchV3 state holds `poseBindingAtoms[]`,
+`poseClashingAtoms[]`, `vulnerableAtoms[]`. 3D Theater + Resistance Escape
+Map cards push to that state; the 2D builder reads from it.
+
+---
+
+## 18. Inference-time best-of-N (Stage 3 GRPO substitute, v1.6)
+
+Stage 3 GRPO RL was attempted but hit recurring KL explosions due to
+bf16 precision + reward sparsity (4 failed runs documented in
+`docs/STAGE3_GRPO_AUDIT.md`). The substitute is inference-time best-of-N
+reward-guided generation:
+
+1. Designer runs the full anchored tool-use loop → primary candidate
+2. N-1 sampling variations from the same prompt at temperature 0.95
+   (parallel via asyncio.gather, no tool-use)
+3. Score all N via score_molecule
+4. Pick top-1 by composite reward
+5. Log runners-up + score distribution
+
+Activated by `LYSOS_BEST_OF_N` env (default 3, 1 = legacy single-shot).
+Same reward stack drives selection at inference time that DPO trained
+against at alignment time. Continuity from training → deployment.
+
+UI: AgentReasoningTraceWindow renders `best_of_n_explored` events as
+expandable entries showing all N candidates' composite scores and the
+selected one.
+
+---
+
+## 19. Updated tool catalog (v1.6 · 37 tools across 7 categories)
+
+| Category | Count | Tools added in v1.6 |
+|---|---|---|
+| chem_workbench | 10 | (no change since v1.5) |
+| amr | 6 | + map_resistance_vulnerability (Service 2) |
+| scoring | 6 | (no change) |
+| structural | 4 | + place_in_pocket (Service 1) |
+| knowledge | 5 | (no change) |
+| generative | 4 | (no change) |
+| sandbox | 2 | (no change) |
+| **TOTAL** | **37** | (was 35) |
+
+Future planned additions (post-hackathon):
+- pareto_summary tool wrapper (currently accessed via endpoint only)
+- snapshot_all tool wrapper for Report container
+- render_report tool wrapper for export
+
+---
+
+## 20. Container layout (v1.6, 5 containers)
+
+| Container | What lives here |
+|---|---|
+| Chemistry | 2D builder + 3D Theater + Resistance Escape Map + Pareto Lab + properties + library + atoms/bonds rails |
+| Knowledge | Pathogen profile + Validated Targets + Antibiotic Reference + drug-class taxonomy |
+| Scoring | 12-axis breakdown with 🟢/🟡/🔴 honesty stamps + radar |
+| Agents | Workflow Phase Tracker + Reasoning Chain (real think→tool→result) + roster + metrics + action log |
+| Report | Snapshot Builder + HTML preview + Markdown/JSON/PDF export · replaces Live; audit trail moves into this container |
+
+Live as a separate container has been removed. System status (WS connection
+dot, agent count, pending jobs) moves to a top status bar (planned).
+
+Version: 1.6 (May 7 2026)

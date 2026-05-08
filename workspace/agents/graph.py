@@ -303,10 +303,22 @@ async def run_designer(
     once the model emits PROPOSAL: <SMILES>."""
     reg = _registry()
     designer_tool_names = [
+        # Anchor / context (called BEFORE proposing)
         "get_pathogen_resistome", "find_active_against_mdr",
         "find_similar_drugs", "check_resistance_genes",
-        "find_target_structure", "score_molecule", "predict_admet",
+        "find_target_structure",
+        # Score + chemistry property tools
+        "score_molecule", "predict_admet",
         "explain_mechanism",
+        # Service 1 — 3D pose validation. Designer can call BEFORE proposing
+        # to test scaffold geometry against the active site.
+        "place_in_pocket",
+        # Service 2 — resistance-escape pre-check. Designer can call to
+        # verify scaffold class isn't trivially defeated by clinical mutations.
+        "map_resistance_vulnerability",
+        "predict_resistance_escape",
+        # Building / mutation tools (rarely Designer; included for completeness)
+        "scaffold_hop",
     ]
     tools = [reg.get(n).schema() for n in designer_tool_names if reg.get(n)]
     # Anthropic-style tool spec
