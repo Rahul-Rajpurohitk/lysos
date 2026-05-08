@@ -29,6 +29,7 @@ import { GraphPanel as _GraphPanel } from "./panels/GraphPanel";
 void _RadarPanel; void _ParetoPanel; void _SynthPanel; void _LineagePanel; void _GraphPanel;
 import { ArtifactPanel, type ArtifactDoc } from "./panels/ArtifactPanel";
 import { PlaygroundCanvas, type WindowLayout, type Viewport } from "./playground/PlaygroundCanvas";
+import { TabbedView } from "./playground/TabbedView";
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
@@ -267,6 +268,21 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   }
   function setPlayViewport(v: Viewport) {
     setPlaygroundViewports((m) => ({ ...m, [activeChatId]: v }));
+  }
+
+  // View mode — "whiteboard" (PlaygroundCanvas, all containers floating) vs
+  // "tabs" (TabbedView, one container at a time, Claude-style). Stored in
+  // localStorage so user's pick persists across reloads. Both modes render
+  // the same WindowGroup[] config — just different layouts.
+  const [viewMode, _setViewMode] = useState<"whiteboard" | "tabs">(() => {
+    try {
+      const v = localStorage.getItem("lys-viewmode");
+      return v === "tabs" ? "tabs" : "whiteboard";
+    } catch { return "whiteboard"; }
+  });
+  function setViewMode(v: "whiteboard" | "tabs") {
+    _setViewMode(v);
+    try { localStorage.setItem("lys-viewmode", v); } catch { /* noop */ }
   }
 
   // Live playground WebSocket — one connection per active chat tab.
@@ -1104,21 +1120,55 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
             />
           </Allotment.Pane>
 
-          {/* RIGHT — Playground canvas (the only non-chat surface).
-              Infinite zoomable whiteboard with floating, draggable, resizable
-              windows. Default layout: 3D top-left, 2D bottom-left, Radar
-              top-right, Agent trace bottom-right. Per-chat-tab layouts. */}
+          {/* RIGHT — Playground area. Two view modes (toggleable):
+              · "whiteboard"  — infinite zoomable canvas with floating cards
+              · "tabs"        — Claude-style one-container-at-a-time tabs
+              Same WindowGroup[] config feeds both modes. */}
           <Allotment.Pane minSize={360} preferredSize={760}>
-            <PlaygroundCanvas
-              viewport={playViewport}
-              onViewportChange={setPlayViewport}
-              onFocus={(id) => {
-                const maxZ = Math.max(...Object.values(playGroupLayout).map((l) => l.z));
-                setPlayGroupLayoutItem(id, { ...playGroupLayout[id], z: maxZ + 1 });
-              }}
-              groupLayout={playGroupLayout}
-              onGroupLayoutChange={setPlayGroupLayoutItem}
-              groups={[
+            <div style={{ width: "100%", height: "100%", position: "relative" }}>
+              {/* Floating view-mode toggle (top-right, above content). */}
+              <div style={{
+                position: "absolute", top: 8, right: 12, zIndex: 200,
+                display: "inline-flex",
+                background: "var(--lys-bg-2, #ffffff)",
+                border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+                borderRadius: 6,
+                boxShadow: "0 2px 6px rgba(15,23,42,0.08)",
+                fontFamily: "var(--lys-font-mono)", fontSize: 9.5,
+                overflow: "hidden",
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("whiteboard")}
+                  title="Whiteboard mode — infinite canvas, drag/zoom, all containers visible"
+                  style={{
+                    padding: "5px 10px",
+                    background: viewMode === "whiteboard" ? "#0891b2" : "transparent",
+                    color: viewMode === "whiteboard" ? "white" : "var(--lys-text-faint)",
+                    border: 0, cursor: "pointer", fontWeight: 700,
+                    letterSpacing: "0.04em", textTransform: "uppercase",
+                  }}>
+                  whiteboard
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode("tabs")}
+                  title="Tabs mode — one container at a time, properly arranged grid"
+                  style={{
+                    padding: "5px 10px",
+                    background: viewMode === "tabs" ? "#0891b2" : "transparent",
+                    color: viewMode === "tabs" ? "white" : "var(--lys-text-faint)",
+                    border: 0, cursor: "pointer", fontWeight: 700,
+                    letterSpacing: "0.04em", textTransform: "uppercase",
+                  }}>
+                  tabs
+                </button>
+              </div>
+            {(() => {
+              // IIFE so we can declare playgroundGroups once and feed it
+              // to either renderer. Cheap (re-evaluated each render), but
+              // identical to the previous inline-array cost.
+              const playgroundGroups: any[] = [
                 {
                   id: "chem",
                   category: "Chemistry",
@@ -1420,8 +1470,21 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       <ArtifactPanel doc={artifactDoc} /> },
                   ],
                 },
-              ]}
-              windows={{
+              ];
+              return viewMode === "tabs" ? (
+                <TabbedView groups={playgroundGroups} />
+              ) : (
+                <PlaygroundCanvas
+                  viewport={playViewport}
+                  onViewportChange={setPlayViewport}
+                  onFocus={(id) => {
+                    const maxZ = Math.max(...Object.values(playGroupLayout).map((l) => l.z));
+                    setPlayGroupLayoutItem(id, { ...playGroupLayout[id], z: maxZ + 1 });
+                  }}
+                  groupLayout={playGroupLayout}
+                  onGroupLayoutChange={setPlayGroupLayoutItem}
+                  groups={playgroundGroups}
+                  windows={{
                 "3d": {
                   title: "3D molecule theater",
                   category: "Chemistry",
@@ -1505,6 +1568,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 },
               }}
             />
+              );
+            })()}
+            </div>
           </Allotment.Pane>
         </Allotment>
       </div>
