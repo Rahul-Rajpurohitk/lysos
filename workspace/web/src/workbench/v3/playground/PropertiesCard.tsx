@@ -234,28 +234,48 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
           </PropSection>
         )}
 
-        {/* SECTION 6 · IDENTIFIERS · canonical SMILES + SA score. */}
+        {/* SECTION 6 · IDENTIFIERS · canonical SMILES + SA score.
+            SMILES wraps on long strings (break-all on this monospace
+            string so it never overflows its parent column).  Click to
+            copy. SA score sits below to keep the row compact. */}
         <PropSection label="identifiers" subtitle="canonical · synth-access">
           <div style={{ padding: "2px 6px 6px",
-            display: "flex", gap: 8, alignItems: "baseline",
+            display: "flex", flexDirection: "column", gap: 4,
             fontSize: 10, fontFamily: "var(--lys-font-mono)" }}>
-            <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5,
-              letterSpacing: "0.04em", textTransform: "uppercase",
-              flexShrink: 0 }}>SMILES</span>
-            <span title={data.canonical_smiles}
-              style={{ flex: 1, minWidth: 0,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                color: "var(--lys-text)" }}>
-              {data.canonical_smiles}
-            </span>
+            <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+              <span style={{ color: "var(--lys-text-faint)", fontSize: 8.5,
+                letterSpacing: "0.04em", textTransform: "uppercase",
+                flexShrink: 0 }}>SMILES</span>
+              <button
+                type="button"
+                title={`${data.canonical_smiles} — click to copy`}
+                onClick={() => {
+                  try { void navigator.clipboard.writeText(data.canonical_smiles); } catch {/*noop*/}
+                }}
+                style={{
+                  flex: 1, minWidth: 0,
+                  textAlign: "left",
+                  border: 0, padding: 0, background: "transparent",
+                  cursor: "pointer", color: "var(--lys-text)",
+                  fontFamily: "inherit", fontSize: 10,
+                  // Wrap long SMILES instead of clipping. Important
+                  // for real candidates which can hit 80+ chars.
+                  wordBreak: "break-all", whiteSpace: "normal",
+                  lineHeight: 1.35,
+                }}>
+                {data.canonical_smiles}
+              </button>
+            </div>
             {data.sa_score > 0 && (
-              <span title={`Synthetic Accessibility Score (Ertl 2009). 1=easy, 10=hard. ${data.sa_score < 4 ? "Easy synthesis." : data.sa_score < 6 ? "Moderate." : "Difficult."}`}
-                style={{ flexShrink: 0, color: "var(--lys-text-faint)",
-                  fontSize: 9 }}>
-                SA <span style={{ color: data.sa_score < 4 ? "#10b981" : data.sa_score < 6 ? "#d97706" : "#dc2626", fontWeight: 700 }}>
-                  {data.sa_score.toFixed(2)}
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <span title={`Synthetic Accessibility Score (Ertl 2009). 1=easy, 10=hard. ${data.sa_score < 4 ? "Easy synthesis." : data.sa_score < 6 ? "Moderate." : "Difficult."}`}
+                  style={{ flexShrink: 0, color: "var(--lys-text-faint)",
+                    fontSize: 9 }}>
+                  SA <span style={{ color: data.sa_score < 4 ? "#10b981" : data.sa_score < 6 ? "#d97706" : "#dc2626", fontWeight: 700 }}>
+                    {data.sa_score.toFixed(2)}
+                  </span>
                 </span>
-              </span>
+              </div>
             )}
           </div>
         </PropSection>

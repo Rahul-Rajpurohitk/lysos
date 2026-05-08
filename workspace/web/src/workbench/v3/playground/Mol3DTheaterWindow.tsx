@@ -370,28 +370,61 @@ export function Mol3DTheaterWindow(p: Props) {
           }}>
             Key contacts · top 8
           </div>
-          {pose.key_contacts.slice(0, 8).map((c) => (
-            <div
-              key={`${c.residue}-${c.ligand_atom_idx}`}
-              title={`Ligand atom ${c.ligand_atom_idx} (${c.ligand_element}) — ${c.distance_a}Å to ${c.residue}`}
-              style={{
-                display: "flex", alignItems: "center", gap: 4,
-                padding: "1px 0",
-              }}>
-              <span style={{ fontWeight: 700, color: "#0891b2", minWidth: 56 }}>
-                {c.residue}
-              </span>
-              <span style={{ flex: 1, color: "var(--lys-text-dim)", fontSize: 9 }}>
-                a{c.ligand_atom_idx}({c.ligand_element})
-              </span>
-              <span style={{
-                color: c.distance_a < 2.0 ? "#10b981" : c.distance_a < 3.0 ? "#0891b2" : "var(--lys-text-faint)",
-                fontWeight: 700,
-              }}>
-                {c.distance_a}Å
-              </span>
-            </div>
-          ))}
+          {pose.key_contacts.slice(0, 8).map((c) => {
+            // Classify each contact by biology, not by simple "closer = better".
+            // Backend thresholds: clash < 1.5Å, contact ≤ 4.0Å.
+            //   < 1.5Å        → clash (red) — atoms colliding, repulsive
+            //   1.5–2.5Å      → tight (deep green) — strong H-bond / salt bridge
+            //   2.5–3.5Å      → good  (green) — standard H-bond / vdW
+            //   3.5–4.0Å      → weak  (amber) — peripheral, low contribution
+            //   ≥ 4.0Å        → none  (grey)
+            // Atoms flagged in pose.clashing_atoms[] win over distance —
+            // they're authoritative since the backend resolved any
+            // distance ties.
+            const isClashAtom = pose.clashing_atoms.includes(c.ligand_atom_idx);
+            const tier =
+              isClashAtom || c.distance_a < 1.5 ? "clash"
+              : c.distance_a < 2.5 ? "tight"
+              : c.distance_a < 3.5 ? "good"
+              : c.distance_a < 4.0 ? "weak"
+              : "none";
+            const TIER = {
+              clash: { fg: "#dc2626", bg: "rgba(220,38,38,0.10)", label: "CLASH" },
+              tight: { fg: "#047857", bg: "rgba(5,150,105,0.10)",  label: "TIGHT" },
+              good:  { fg: "#10b981", bg: "rgba(16,185,129,0.08)", label: "GOOD"  },
+              weak:  { fg: "#ca8a04", bg: "rgba(202,138,4,0.10)",  label: "WEAK"  },
+              none:  { fg: "var(--lys-text-faint)", bg: "transparent", label: "—" },
+            } as const;
+            const t = TIER[tier];
+            return (
+              <div
+                key={`${c.residue}-${c.ligand_atom_idx}`}
+                title={`Ligand atom ${c.ligand_atom_idx} (${c.ligand_element}) → ${c.residue} at ${c.distance_a}Å — ${t.label}`}
+                style={{
+                  display: "flex", alignItems: "center", gap: 4,
+                  padding: "2px 4px",
+                  marginLeft: -4, marginRight: -4,
+                  background: t.bg,
+                  borderRadius: 3,
+                }}>
+                <span style={{ fontWeight: 700, color: "#0891b2", minWidth: 56 }}>
+                  {c.residue}
+                </span>
+                <span style={{ flex: 1, color: "var(--lys-text-dim)", fontSize: 9 }}>
+                  a{c.ligand_atom_idx}({c.ligand_element})
+                </span>
+                <span style={{
+                  fontSize: 7.5, fontWeight: 700, letterSpacing: "0.04em",
+                  color: t.fg, opacity: 0.85, marginRight: 4,
+                }}>{t.label}</span>
+                <span style={{
+                  color: t.fg, fontWeight: 700,
+                }}>
+                  {c.distance_a}Å
+                </span>
+              </div>
+            );
+          })}
           {pose.binding_atoms.length > 0 && (
             <div style={{
               fontSize: 8.5, color: "var(--lys-text-faint)",
