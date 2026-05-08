@@ -28,7 +28,7 @@
  *   /workbench/chem/place-in-pocket        → on SMILES + selectedTarget change
  *   onPoseChange(binding[], clashing[])    → bubble up to WorkbenchV3 → 2D
  */
-import { useEffect, useState, useRef } from "react";
+import { Fragment, useEffect, useState, useRef } from "react";
 import { Target, RefreshCw } from "lucide-react";
 import { Mol3D } from "../components/Mol3D";
 
@@ -351,25 +351,36 @@ export function Mol3DTheaterWindow(p: Props) {
         }}>pose error: {poseError}</div>
       )}
 
-      {/* ─── BOTTOM-RIGHT: Key contacts panel (top 8 residues) ───── */}
+      {/* ─── BOTTOM-RIGHT: Key contacts panel (top 8 residues) ─────
+          Laid out as a 4-column grid (residue | atom | tier | distance)
+          so values line up vertically across rows. Fixed column widths
+          stop the longest residue/distance from shifting the layout. */}
       {pose && pose.key_contacts.length > 0 && (
         <div style={{
           position: "absolute", bottom: 8, right: 8, zIndex: 50,
-          padding: "6px 8px",
-          background: "rgba(255,255,255,0.92)",
+          padding: "8px 10px 6px",
+          background: "rgba(255,255,255,0.95)",
           border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
           borderRadius: 6, backdropFilter: "blur(8px)",
-          maxWidth: 260, maxHeight: 180, overflow: "auto",
-          fontFamily: "var(--lys-font-mono)", fontSize: 9.5,
+          width: 300, maxHeight: 220, overflow: "auto",
+          fontFamily: "var(--lys-font-mono)", fontSize: 10,
           boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
         }}>
           <div style={{
             fontSize: 8.5, color: "var(--lys-text-faint)",
             letterSpacing: "0.06em", textTransform: "uppercase",
-            fontWeight: 700, marginBottom: 3,
+            fontWeight: 700, marginBottom: 6,
           }}>
             Key contacts · top 8
           </div>
+          <div style={{
+            // Single grid for the whole list — columns line up across
+            // rows. Order: residue (64px) | atom (54px) | tier (44px) | distance (right-aligned).
+            display: "grid",
+            gridTemplateColumns: "64px 54px 44px 1fr",
+            rowGap: 1, columnGap: 8,
+            alignItems: "center",
+          }}>
           {pose.key_contacts.slice(0, 8).map((c) => {
             // Classify each contact by biology, not by simple "closer = better".
             // Backend thresholds: clash < 1.5Å, contact ≤ 4.0Å.
@@ -396,35 +407,50 @@ export function Mol3DTheaterWindow(p: Props) {
               none:  { fg: "var(--lys-text-faint)", bg: "transparent", label: "—" },
             } as const;
             const t = TIER[tier];
+            const title = `Ligand atom ${c.ligand_atom_idx} (${c.ligand_element}) → ${c.residue} at ${c.distance_a}Å — ${t.label}`;
+            // Each row is 4 grid cells. Background spans all 4 via a
+            // ::before-style trick — we paint bg on every cell of the
+            // row so the tint is continuous, not 4 segments.
+            const cellBg = t.bg;
+            const cellPadV = "3px";
+            const baseCell: React.CSSProperties = {
+              background: cellBg,
+              padding: `${cellPadV} 0`,
+            };
             return (
-              <div
-                key={`${c.residue}-${c.ligand_atom_idx}`}
-                title={`Ligand atom ${c.ligand_atom_idx} (${c.ligand_element}) → ${c.residue} at ${c.distance_a}Å — ${t.label}`}
-                style={{
-                  display: "flex", alignItems: "center", gap: 4,
-                  padding: "2px 4px",
-                  marginLeft: -4, marginRight: -4,
-                  background: t.bg,
-                  borderRadius: 3,
+              <Fragment key={`${c.residue}-${c.ligand_atom_idx}`}>
+                <span title={title} style={{
+                  ...baseCell,
+                  paddingLeft: 6, borderRadius: "3px 0 0 3px",
+                  fontWeight: 700, color: "#0891b2",
                 }}>
-                <span style={{ fontWeight: 700, color: "#0891b2", minWidth: 56 }}>
                   {c.residue}
                 </span>
-                <span style={{ flex: 1, color: "var(--lys-text-dim)", fontSize: 9 }}>
+                <span title={title} style={{
+                  ...baseCell,
+                  color: "var(--lys-text-dim)", fontSize: 9.5,
+                }}>
                   a{c.ligand_atom_idx}({c.ligand_element})
                 </span>
-                <span style={{
-                  fontSize: 7.5, fontWeight: 700, letterSpacing: "0.04em",
-                  color: t.fg, opacity: 0.85, marginRight: 4,
-                }}>{t.label}</span>
-                <span style={{
+                <span title={title} style={{
+                  ...baseCell,
+                  fontSize: 8, fontWeight: 700, letterSpacing: "0.05em",
+                  color: t.fg,
+                }}>
+                  {t.label}
+                </span>
+                <span title={title} style={{
+                  ...baseCell,
+                  paddingRight: 6, borderRadius: "0 3px 3px 0",
+                  textAlign: "right",
                   color: t.fg, fontWeight: 700,
                 }}>
                   {c.distance_a}Å
                 </span>
-              </div>
+              </Fragment>
             );
           })}
+          </div>
           {pose.binding_atoms.length > 0 && (
             <div style={{
               fontSize: 8.5, color: "var(--lys-text-faint)",
