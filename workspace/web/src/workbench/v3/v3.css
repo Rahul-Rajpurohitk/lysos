@@ -798,6 +798,15 @@
   0%, 100% { opacity: 0.5; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.4); }
 }
+
+/* Used by inline `style={{animation: "spin 1s linear infinite"}}` on
+   loading icons (RefreshCw, Loader2) across the Service 1/2/3 cards
+   and the Workflow Phase Tracker. Without this keyframe defined globally
+   those icons stayed static. */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 .lys-toolcall__body {
   margin-top: 6px;
   font-family: var(--lys-font-mono);
