@@ -42,15 +42,13 @@
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 16px;
-  padding: 6px 14px;
+  gap: 14px;
+  padding: 4px 12px;
   background: var(--lys-bg);
-  /* Borderless top nav per redesign — Claude.ai-style single row.
-     A 1px hairline below from .lys-body's top can replace this if needed. */
   border-bottom: 1px solid var(--lys-border-faint, rgba(0,0,0,0.04));
   font-family: var(--lys-font-body);
   position: relative;
-  min-height: 44px;
+  min-height: 38px;
 }
 .lys-header__brand {
   display: flex;
@@ -58,15 +56,15 @@
   gap: 10px;
 }
 .lys-brandmark {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   background: linear-gradient(135deg, #16a34a 0%, #34d399 100%);
   display: grid;
   place-items: center;
   color: white;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 13px;
   position: relative;
 }
 .lys-brandmark__glyph {

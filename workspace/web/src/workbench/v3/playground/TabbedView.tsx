@@ -117,9 +117,10 @@ export function TabbedView({ groups, actions }: Props) {
         <div style={{ flex: 1 }} />
       </div>
 
-      {/* Active tab body */}
+      {/* Active tab body — vertical scroll, sub-containers stack full-width */}
       <div style={{
-        flex: 1, overflow: "auto", padding: 14,
+        flex: 1, overflowY: "auto", overflowX: "hidden",
+        padding: "0 28px 32px",
         background: "var(--lys-bg, #fafafa)",
       }}>
         {!active && (
@@ -128,7 +129,7 @@ export function TabbedView({ groups, actions }: Props) {
           </div>
         )}
         {active && (
-          <CardsGrid
+          <CardsStack
             cards={active.cards.filter((c) => c.slot !== "nav" && c.slot !== "topnav")}
           />
         )}
@@ -137,53 +138,104 @@ export function TabbedView({ groups, actions }: Props) {
   );
 }
 
-function CardsGrid({ cards }: { cards: CardSpec[] }) {
+/**
+ * CardsStack — borderless vertical flow.
+ *
+ * Each sub-container is its own full-width section, no card chrome (no
+ * border, no rounded corners, no shadow). Just a small header strip +
+ * content. Sub-containers are sized to fit their natural content (no
+ * clipping). Bulky business sub-containers like the 3D theater respect
+ * their `expandedH` so the user can see them at-a-glance, then scrolls
+ * down to reach the next sub-container.
+ *
+ * For pairs of compact (size:1) cards we drop into a 2-column grid so
+ * they share a row instead of stacking awkwardly.
+ */
+function CardsStack({ cards }: { cards: CardSpec[] }) {
+  // Walk cards and group consecutive size:1 into 2-col rows.
+  const rows: Array<{ kind: "single" | "pair"; cards: CardSpec[] }> = [];
+  let i = 0;
+  while (i < cards.length) {
+    const c = cards[i];
+    if (c.size !== 2) {
+      const next = cards[i + 1];
+      if (next && next.size !== 2) {
+        rows.push({ kind: "pair", cards: [c, next] });
+        i += 2;
+        continue;
+      }
+    }
+    rows.push({ kind: "single", cards: [c] });
+    i += 1;
+  }
+
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(440px, 1fr))",
-      gap: 12,
-      maxWidth: 1700,
-      margin: "0 auto",
-    }}>
-      {cards.map((c) => {
-        const span = c.size === 2 ? "1 / -1" : "auto";
-        const minH = c.expandedH ?? 360;
-        return (
-          <section
-            key={c.id}
-            style={{
-              gridColumn: span,
-              background: "var(--lys-bg-2, #ffffff)",
-              border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-              borderRadius: 6,
-              display: "flex",
-              flexDirection: "column",
-              minHeight: Math.min(minH, 720),
-              overflow: "hidden",
-            }}
-          >
-            {/* Card header — minimal, just title text */}
-            <header style={{
-              display: "flex", alignItems: "center",
-              padding: "8px 12px",
-              borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-              flexShrink: 0,
-            }}>
-              <span style={{
-                fontSize: 11.5, fontFamily: "var(--lys-font-body)",
-                fontWeight: 600, color: "var(--lys-text, #0f172a)",
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>
-                {c.title || c.id}
-              </span>
-            </header>
-            <div className="lys-card-body" style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-              {c.body}
-            </div>
-          </section>
-        );
-      })}
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, paddingTop: 20 }}>
+      {rows.map((row, idx) => (
+        <div
+          key={idx}
+          style={row.kind === "pair" ? {
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 24,
+          } : undefined}
+        >
+          {row.cards.map((c) => <CardSection key={c.id} card={c} />)}
+        </div>
+      ))}
     </div>
+  );
+}
+
+function CardSection({ card }: { card: CardSpec }) {
+  // Heuristic: bulky containers (3D theater, builder, scoring radar)
+  // have expandedH ≥ 480. Use that as their natural height so they're
+  // visible at a glance. Smaller cards size to content.
+  const naturalH = card.expandedH ?? 320;
+  const isBulky = naturalH >= 460;
+  return (
+    <section
+      style={{
+        background: "transparent",
+        // Borderless — no box around the section. Just header + content.
+        // The hairline below the header gives visual rhythm without a
+        // boxy frame around every panel.
+        display: "flex",
+        flexDirection: "column",
+        height: isBulky ? naturalH : "auto",
+        minHeight: isBulky ? 360 : undefined,
+        // overflow visible so child diagrams can render without clipping
+        // their own internal toolbars/legends.
+        overflow: "visible",
+      }}
+    >
+      <header style={{
+        display: "flex", alignItems: "center",
+        paddingBottom: 8,
+        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+        marginBottom: 10,
+        flexShrink: 0,
+      }}>
+        <span style={{
+          fontSize: 12.5, fontFamily: "var(--lys-font-body)",
+          fontWeight: 600, color: "var(--lys-text, #0f172a)",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>
+          {card.title || card.id}
+        </span>
+      </header>
+      <div
+        className="lys-card-body lys-tab-card-body"
+        style={{
+          flex: isBulky ? 1 : undefined,
+          minHeight: 0,
+          // Bulky panels manage their own internal scroll. Compact ones
+          // grow naturally.
+          overflow: isBulky ? "hidden" : "visible",
+        }}
+      >
+        {card.body}
+      </div>
+    </section>
   );
 }

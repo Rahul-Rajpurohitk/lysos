@@ -20,7 +20,7 @@
  *   cmd-0           → reset viewport
  *   cmd-1           → fit-to-windows
  */
-import { useEffect, useRef, useState, ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, ReactNode } from "react";
 import { Maximize2, Minimize2, X as IconX, Move } from "lucide-react";
 import { PlaygroundGroup, type GroupLayout, type CardSpec } from "./PlaygroundGroup";
 
@@ -87,7 +87,7 @@ export const CATEGORY_COLOR: Record<WindowCategory, string> = {
   Report:    "#0891b2",   // cyan — deliverable / export
 };
 
-const MIN_ZOOM = 0.3;
+const MIN_ZOOM = 0.18;   // low enough to fit-all 5 main containers (2432×3340 layout)
 const MAX_ZOOM = 2.5;
 const SNAP = 8; // 8px grid
 
@@ -203,7 +203,7 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
         // — 2× finer than the old 5% and FEELS continuous, not stepped.
         // Trackpad pinch sends fine deltaY (~1-2) → ~0.07-0.14% per event,
         // so pinch zoom is silky-smooth at unit-level granularity.
-        acc.zoomFactor *= Math.exp(-e.deltaY * 0.0007);
+        acc.zoomFactor *= Math.exp(-e.deltaY * 0.0014);   // 2x faster wheel zoom
       } else {
         acc.x += e.deltaX;
         acc.y += e.deltaY;
@@ -221,6 +221,49 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
     };
   }, [p.onViewportChange]);
 
+  // Fit-to-content: bounding box of all visible windows + groups → viewport
+  // that frames everything with PAD margin. Used by cmd-1 AND auto-mount.
+  const fitToContent = useCallback(() => {
+    const wins = p.layout ? Object.values(p.layout).filter((l) => l.visible) : [];
+    const grps = p.groupLayout ? Object.values(p.groupLayout) : [];
+    const all: Array<{ x: number; y: number; w: number; h: number }> = [...wins, ...grps];
+    if (!all.length) return;
+    const minX = Math.min(...all.map((l) => l.x));
+    const minY = Math.min(...all.map((l) => l.y));
+    const maxX = Math.max(...all.map((l) => l.x + l.w));
+    const maxY = Math.max(...all.map((l) => l.y + l.h));
+    const el = stageRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (r.width < 50 || r.height < 50) return; // not laid out yet
+    const PAD = 32;
+    const zX = (r.width - 2 * PAD) / (maxX - minX || 1);
+    const zY = (r.height - 2 * PAD) / (maxY - minY || 1);
+    const zoom = clamp(Math.min(zX, zY), MIN_ZOOM, MAX_ZOOM);
+    p.onViewportChange({
+      zoom,
+      pan: { x: PAD - minX * zoom, y: PAD - minY * zoom },
+    });
+  }, [p.layout, p.groupLayout, p.onViewportChange]);
+
+  // Auto-fit on first mount IF viewport is at default state. This means
+  // a fresh chat (or a viewport that was never customised) lands on a
+  // zoomed-out view of all main containers — not zoomed-in to one. Saved
+  // viewports survive untouched.
+  const didAutoFitRef = useRef(false);
+  useEffect(() => {
+    if (didAutoFitRef.current) return;
+    const v = p.viewport;
+    const isDefault = v.pan.x === 0 && v.pan.y === 0 && v.zoom === 1;
+    if (!isDefault) { didAutoFitRef.current = true; return; }
+    // Stage may not have layout yet — wait one frame.
+    const id = requestAnimationFrame(() => {
+      fitToContent();
+      didAutoFitRef.current = true;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [fitToContent, p.viewport]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -230,34 +273,12 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
       }
       if ((e.metaKey || e.ctrlKey) && e.key === "1") {
         e.preventDefault();
-        // Fit-to-content: union of visible windows + groups bounding boxes
-        const wins = p.layout ? Object.values(p.layout).filter((l) => l.visible) : [];
-        const grps = p.groupLayout ? Object.values(p.groupLayout) : [];
-        const all: Array<{ x: number; y: number; w: number; h: number }> = [...wins, ...grps];
-        if (!all.length) return;
-        const minX = Math.min(...all.map((l) => l.x));
-        const minY = Math.min(...all.map((l) => l.y));
-        const maxX = Math.max(...all.map((l) => l.x + l.w));
-        const maxY = Math.max(...all.map((l) => l.y + l.h));
-        const el = stageRef.current;
-        if (!el) return;
-        const r = el.getBoundingClientRect();
-        const PAD = 24;
-        const zX = (r.width - 2 * PAD) / (maxX - minX || 1);
-        const zY = (r.height - 2 * PAD) / (maxY - minY || 1);
-        const zoom = clamp(Math.min(zX, zY), MIN_ZOOM, MAX_ZOOM);
-        p.onViewportChange({
-          zoom,
-          pan: {
-            x: PAD - minX * zoom,
-            y: PAD - minY * zoom,
-          },
-        });
+        fitToContent();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [p.layout, p.onViewportChange]);
+  }, [fitToContent, p.onViewportChange]);
 
   // Pan — RAF+ref pattern matching wheel handler. The OLD path called
   // p.onViewportChange() on every mousemove, forcing a full React tree

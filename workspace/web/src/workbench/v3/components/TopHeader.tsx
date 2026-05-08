@@ -45,13 +45,11 @@ const AUTONOMIES: Autonomy[] = ["Co-pilot", "Auto", "Manual"];
 export function TopHeader(props: TopHeaderProps) {
   return (
     <header className="lys-header">
-      {/* Brand cluster */}
-      <div className="lys-header__brand">
+      {/* Brand cluster — icon-only to save horizontal space.
+          The product name + version live in a tooltip so they're still
+          discoverable, but we don't burn ~110px of nav for chrome. */}
+      <div className="lys-header__brand" title="Lysos · Workbench · v0.3">
         <BrandMark active={props.isRunning} />
-        <div className="lys-header__brand-text">
-          <div className="lys-header__brand-name">Lysos</div>
-          <div className="lys-header__brand-tag">Workbench · v0.3</div>
-        </div>
       </div>
 
       {/* Center cluster: pathogen + mode + autonomy + iters */}
