@@ -1210,48 +1210,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    { id: "3d", title: "3D molecule theater · target picker · contacts", size: 2, expandedH: 520, body:
-                      <Mol3DTheaterWindow
-                        apiBase={apiBase}
-                        smiles={currentSmiles}
-                        pathogen={selectedPathogen}
-                        onMoleculeEdit={(newSmi, op) => {
-                          const opLabel = op?.kind === "swap" ? `→${op.element}`
-                            : op?.kind === "methyl" ? "+CH₃"
-                            : op?.kind === "break" ? "✂ bond" : "edit";
-                          loadSmilesIntoCanvas(newSmi, {
-                            createdBy: "user",
-                            parentId: currentMoleculeId,
-                            logLabel: `[3D edit ${opLabel}]`,
-                          });
-                        }}
-                        onPoseChange={(pose) => {
-                          // Bridge pose → 2D builder halos. Same atom indices,
-                          // both views: green=binding, red=clashing.
-                          setPoseBindingAtoms(pose?.binding_atoms ?? []);
-                          setPoseClashingAtoms(pose?.clashing_atoms ?? []);
-                        }}
-                        onTargetChange={(pdbId) => setSelectedPdbId(pdbId)}
-                      /> },
-                    { id: "resistance-escape", title: "Resistance escape · per-atom vulnerability map",
-                      size: 2, expandedH: 540, body:
-                      <ResistanceEscapeMapCard
-                        apiBase={apiBase}
-                        smiles={currentSmiles}
-                        pdbId={selectedPdbId}
-                        onVulnerableChange={(atoms) => setVulnerableAtoms(atoms)}
-                      /> },
-                    { id: "pareto-lab", title: "Pareto lab · multi-candidate frontier",
-                      expandedH: 480, body:
-                      <ParetoLabCard
-                        apiBase={apiBase}
-                        sessionId={activeChatId}
-                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
-                          createdBy: "user",
-                          parentId: null,
-                          logLabel: "[pareto · load]",
-                        })}
-                      /> },
+                    // Order = medchem workflow: build → dock → resist-test → compare.
+                    // 1) 2D builder is the primary canvas: design / edit the
+                    //    molecule, with atoms/bonds/library/SMARTS embedded.
                     { id: "2d", title: "2D molecule builder · atoms · bonds · properties", size: 2, expandedH: 860, body:
                       <Mol2DBuilderWindow
                         apiBase={apiBase}
@@ -1291,18 +1252,61 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                             logLabel: `[2D edit ${edit.label} @${edit.atom_idx}]`,
                           });
                         }}
-                        // Properties panel is now MERGED INTO the 2D
-                        // container as a bottom collapsible sub-section.
-                        // No more separate sibling card — the chem
-                        // container has one cohesive screen for atoms +
-                        // bonds + build + props + status.
                         propertiesPanel={
                           <PropertiesCard apiBase={apiBase} smiles={currentSmiles} />
                         }
                       /> },
+                    // 2) 3D theater: place the same molecule into the validated
+                    //    target's active site, see binding/clashing contacts.
+                    { id: "3d", title: "3D molecule theater · target picker · contacts", size: 2, expandedH: 520, body:
+                      <Mol3DTheaterWindow
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        onMoleculeEdit={(newSmi, op) => {
+                          const opLabel = op?.kind === "swap" ? `→${op.element}`
+                            : op?.kind === "methyl" ? "+CH₃"
+                            : op?.kind === "break" ? "✂ bond" : "edit";
+                          loadSmilesIntoCanvas(newSmi, {
+                            createdBy: "user",
+                            parentId: currentMoleculeId,
+                            logLabel: `[3D edit ${opLabel}]`,
+                          });
+                        }}
+                        onPoseChange={(pose) => {
+                          // Bridge pose → 2D builder halos. Same atom indices,
+                          // both views: green=binding, red=clashing.
+                          setPoseBindingAtoms(pose?.binding_atoms ?? []);
+                          setPoseClashingAtoms(pose?.clashing_atoms ?? []);
+                        }}
+                        onTargetChange={(pdbId) => setSelectedPdbId(pdbId)}
+                      /> },
+                    // 3) Resistance escape: check the same molecule against the
+                    //    curated CARD subset of clinical mutations for this target.
+                    { id: "resistance-escape", title: "Resistance escape · per-atom vulnerability map",
+                      size: 2, expandedH: 540, body:
+                      <ResistanceEscapeMapCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pdbId={selectedPdbId}
+                        onVulnerableChange={(atoms) => setVulnerableAtoms(atoms)}
+                      /> },
+                    // 4) Pareto lab: compare this candidate against the rest
+                    //    of the session's frontier on the chosen objectives.
+                    { id: "pareto-lab", title: "Pareto lab · multi-candidate frontier",
+                      expandedH: 480, body:
+                      <ParetoLabCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: "[pareto · load]",
+                        })}
+                      /> },
+                    // (2D builder lives at top of this list — see above.)
                     // Atoms / Bonds / Build / Properties / Library / SMARTS
-                    // are ALL embedded inside the 2D container now. The
-                    // chem container is a single screen, not a tile-grid.
+                    // are ALL embedded inside the 2D container.
                   ],
                 },
                 {
