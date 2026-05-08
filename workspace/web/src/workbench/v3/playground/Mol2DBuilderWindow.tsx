@@ -4797,20 +4797,11 @@ function PropertiesStrip(p: PropertiesStripProps) {
           gridTemplateColumns: gridTemplate,
           gap: 0,
         }}>
-          {/* COL 1 — PropertiesCard wrapper. `min-width: 0` lets the grid
-              column shrink below the card's natural width without
-              pushing horizontal overflow. overflow:auto (NOT hidden)
-              so the IDENTIFIERS section's SMILES line — which appears
-              after several other sections — is reachable via scroll
-              instead of clipped silently. */}
-          <div style={{ minWidth: 0, overflow: "auto",
-            borderRight: layout === "wide"
-              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
-              : "none",
-            borderBottom: layout !== "wide"
-              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
-              : "none",
-          }}>
+          {/* COL 1 — PropertiesCard wrapper. NO column borders — the
+              user wants Insights to feel like ONE panel, not 4 stitched-
+              together columns. Sub-sections rely only on their tiny
+              uppercase labels for visual rhythm. */}
+          <div style={{ minWidth: 0, overflow: "auto" }}>
             {p.children}
           </div>
           {/* COL 2 — BUILD STATE + COMPOSITION stacked. Composition was
@@ -4823,12 +4814,6 @@ function PropertiesStrip(p: PropertiesStripProps) {
           <div
             title="Build state + composition · live counts of what you've assembled. Atoms = heavy atoms only. Frag>1 = disconnected. Composition lists each element + its count."
             style={{ padding: "5px 8px", overflow: "hidden", minWidth: 0,
-            borderRight: layout === "wide"
-              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
-              : "none",
-            borderBottom: layout !== "wide"
-              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
-              : "none",
             display: "flex", flexDirection: "column", gap: 6 }}>
             {/* Sub-block: BUILD STATE */}
             <div>
@@ -4892,12 +4877,6 @@ function PropertiesStrip(p: PropertiesStripProps) {
           <div
             title="Patterns found · structural motifs in this candidate. Auto-detected pulls from the 41-preset SMARTS library and shows what's already there. Click any chip to highlight matching atoms in the 2D viewer."
             style={{ padding: "5px 8px", overflow: "hidden", minWidth: 0,
-            borderRight: layout === "wide"
-              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
-              : "none",
-            borderBottom: layout === "narrow"
-              ? "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))"
-              : "none",
             display: "flex", flexDirection: "column", gap: 4 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",

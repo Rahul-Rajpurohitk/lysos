@@ -124,14 +124,13 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
     { name: "HBA", pass: data.h_bond_acceptors <= 10, value: String(data.h_bond_acceptors), unit: "", threshold: "≤ 10", explain: "H-bond acceptors (N, O) — too many → low membrane permeability" },
   ];
 
+  // Duplicate header dropped — the parent InsightsStrip already shows
+  // "INSIGHTS · medchem props · build state · patterns · closest known"
+  // at the top, so a redundant "PROPERTIES" sub-header inside this card
+  // just made everything feel like nested panels instead of one
+  // continuous insights surface.
   return (
     <div style={containerStyle}>
-      <Header
-        title={`properties · ${data.n_heavy_atoms} heavy · ${data.n_bonds} bonds`}
-        iconColor={data.lipinski_pass ? "var(--lys-accent, #10b981)" : "#d97706"}
-        onRefresh={refresh}
-        loading={loading}
-      />
       <div style={{ flex: 1, overflow: "hidden", display: "flex",
         flexDirection: "column" }}>
 
