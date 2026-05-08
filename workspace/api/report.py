@@ -60,6 +60,44 @@ async def snapshot_session(sid: str) -> dict:
     # Pathogen / target context — try first candidate's pathogen field, else session
     pathogen = mols[0].get("pathogen") or "MRSA"
 
+    # ── Service 1 + 2 enrichment: for each top candidate, fetch fresh
+    # pose + resistance data so the report carries the BIOLOGY context,
+    # not just chemistry scores. Uses the same endpoints the workbench
+    # cards consume. Failures are non-fatal — candidate falls back to
+    # chemistry-only display.
+    pdb_id = _preferred_pdb_for_pathogen(pathogen)
+    top3_enriched: list[dict] = []
+    for entry in top3:
+        smi = entry["mol"].get("smiles")
+        ext: dict = {"pose": None, "resistance": None, "pdb_id": pdb_id}
+        if smi and pdb_id:
+            try:
+                from .chem_3d import place_in_pocket as _ep_pose, PlaceInPocketRequest
+                pose = await _ep_pose(PlaceInPocketRequest(smiles=smi, pdb_id=pdb_id))
+                ext["pose"] = {
+                    "pose_score": pose.get("pose_score"),
+                    "n_contacts": pose.get("n_contacts"),
+                    "n_clashes": pose.get("n_clashes"),
+                    "binding_atoms": pose.get("binding_atoms", [])[:12],
+                    "clashing_atoms": pose.get("clashing_atoms", []),
+                    "key_contacts": pose.get("key_contacts", [])[:6],
+                }
+            except Exception:
+                pass
+            try:
+                from .chem_resistance import predict_resistance as _ep_res, PredictResistanceRequest
+                res = await _ep_res(PredictResistanceRequest(smiles=smi, pdb_id=pdb_id))
+                ext["resistance"] = {
+                    "robustness_score": res.get("robustness_score"),
+                    "n_escape_vectors": res.get("n_escape_vectors"),
+                    "vulnerable_atoms": res.get("vulnerable_atoms", [])[:5],
+                    "summary": res.get("summary"),
+                    "target_name": res.get("target_name"),
+                }
+            except Exception:
+                pass
+        top3_enriched.append(ext)
+
     # Workflow phase summary (heuristic from /workflow logic, kept inline so
     # this module doesn't depend on workbench.py routing)
     n_candidates = len(mols)
@@ -118,6 +156,10 @@ async def snapshot_session(sid: str) -> dict:
                 "composite": x["score"].get("composite"),
                 "components": x["score"].get("components", {}),
                 "model_used": x["score"].get("model_used"),
+                # Biology context (Service 1 + 2)
+                "pdb_target": top3_enriched[i].get("pdb_id"),
+                "pose": top3_enriched[i].get("pose"),
+                "resistance": top3_enriched[i].get("resistance"),
             }
             for i, x in enumerate(top3)
         ],
@@ -132,6 +174,21 @@ async def snapshot_session(sid: str) -> dict:
             n_candidates, n_score_actions, n_pocket, n_resistance, n_red_team,
         ),
     }
+
+
+def _preferred_pdb_for_pathogen(pathogen: str) -> Optional[str]:
+    """Mirror of the helper in graph.py — kept here to avoid circular import."""
+    try:
+        from .chem_3d import PATHOGEN_TARGETS
+        targets = PATHOGEN_TARGETS.get(pathogen, [])
+        if not targets:
+            return None
+        for t in targets:
+            if t.get("preferred_default"):
+                return t["pdb_id"]
+        return targets[0]["pdb_id"]
+    except Exception:
+        return None
 
 
 def _derive_phases_completed(n_cand: int, n_score: int, n_pocket: int,
@@ -249,6 +306,50 @@ def _render_markdown(snap: dict) -> str:
             except (ValueError, TypeError):
                 vstr = str(v)
             parts.append(f"| {k} | {vstr} |")
+
+        # Biology block — Service 1 (pose) + Service 2 (resistance)
+        pose = c.get("pose")
+        if pose:
+            parts.extend([
+                "",
+                f"**Target binding (vs `{c.get('pdb_target', '?')}`)**:",
+                "",
+                f"- pose_score: **{pose.get('pose_score')}** · contacts: {pose.get('n_contacts')} · clashes: {pose.get('n_clashes')}",
+                f"- binding atoms: `{pose.get('binding_atoms', [])}`",
+            ])
+            if pose.get("clashing_atoms"):
+                parts.append(f"- clashing atoms: `{pose.get('clashing_atoms')}`")
+            kc = pose.get("key_contacts", [])
+            if kc:
+                parts.append("")
+                parts.append("Key residue contacts:")
+                for k in kc:
+                    parts.append(
+                        f"- `{k.get('residue')}` (chain {k.get('chain')}) ↔ "
+                        f"atom {k.get('ligand_atom_idx')} ({k.get('ligand_element')}) — "
+                        f"{k.get('distance_a')} Å"
+                    )
+
+        res = c.get("resistance")
+        if res:
+            parts.extend([
+                "",
+                "**Resistance escape**:",
+                "",
+                f"- robustness_score: **{res.get('robustness_score')}** · escape vectors: **{res.get('n_escape_vectors')}**",
+                f"- {res.get('summary', '')}",
+            ])
+            vulns = res.get("vulnerable_atoms", [])
+            if vulns:
+                parts.append("")
+                parts.append("Top clinical vulnerabilities:")
+                for v in vulns[:3]:
+                    m = v.get("top_mutation", {})
+                    parts.append(
+                        f"- atom **{v.get('atom_idx')}** → escape **{v.get('escape_score'):.2f}** "
+                        f"via `{m.get('wt')}{m.get('position')}{m.get('mutant')}` "
+                        f"({m.get('drug_class', '')[:30]})"
+                    )
         parts.append("")
 
     parts.extend([

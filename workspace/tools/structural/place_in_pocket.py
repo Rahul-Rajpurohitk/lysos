@@ -67,13 +67,36 @@ class PlaceResult(BaseModel):
     expected_duration_ms=1500,
     needs_approval=False,
 )
-async def place_in_pocket(args: PlaceInput) -> PlaceResult:
+def place_in_pocket(smiles: str, pdb_id: str) -> PlaceResult:
     """Calls the /workbench/chem/place-in-pocket FastAPI endpoint via in-process
-    function call (avoids HTTP roundtrip when invoked from the agent harness)."""
+    function call (avoids HTTP roundtrip when invoked from the agent harness).
+
+    Tool.call dispatch passes kwargs from the parsed input_model, so this
+    function takes individual kwargs (not the Pydantic model itself).
+    Async endpoint is wrapped with asyncio.run since Tool.call is sync."""
+    import asyncio
     from workspace.api.chem_3d import place_in_pocket as _endpoint
     from workspace.api.chem_3d import PlaceInPocketRequest
 
-    result = await _endpoint(PlaceInPocketRequest(smiles=args.smiles, pdb_id=args.pdb_id))
+    coro = _endpoint(PlaceInPocketRequest(smiles=smiles, pdb_id=pdb_id))
+    try:
+        # If we're already inside an event loop (e.g. FastAPI request),
+        # need to use asyncio.run_coroutine_threadsafe or schedule via
+        # nest_asyncio. For tool-call dispatch from the agent harness
+        # which IS in an event loop, we use the running loop.
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Tool.call is sync but we're in async context — use a future
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+                fut = ex.submit(asyncio.run, coro)
+                result = fut.result(timeout=30)
+        else:
+            result = asyncio.run(coro)
+    except RuntimeError:
+        # No running loop; just use asyncio.run
+        result = asyncio.run(coro)
+
     return PlaceResult(
         pdb_id=result["pdb_id"],
         smiles=result["smiles"],

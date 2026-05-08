@@ -27,6 +27,7 @@ from .prompts import (
 from .state import (
     AgentMessage, Candidate, CandidateScores, ToolCallRecord, WorkbenchState,
 )
+from .tracing import traced, trace_tool
 
 log = logging.getLogger("workbench.agents.graph")
 
@@ -246,11 +247,15 @@ async def _dispatch_tool(
 ) -> dict:
     reg = _registry()
     t = reg.get(tool_name)
-    if t is None:
-        record = {"tool": tool_name, "args": args, "result": None,
-                  "error": f"unknown tool: {tool_name}", "duration_ms": 0}
-    else:
-        record = t.call(args)
+    # LangSmith tool span — no-op if LANGCHAIN_API_KEY not set
+    async with trace_tool(tool_name, args, agent=agent) as span:
+        if t is None:
+            record = {"tool": tool_name, "args": args, "result": None,
+                      "error": f"unknown tool: {tool_name}", "duration_ms": 0}
+        else:
+            record = t.call(args)
+        span["result"] = record.get("result")
+        span["error"] = record.get("error")
 
     tcr = ToolCallRecord(
         tool=tool_name, args=args, result=record.get("result"),
@@ -267,6 +272,7 @@ async def _dispatch_tool(
 # Strategist init — load resistome
 # ---------------------------------------------------------------------------
 
+@traced(name="strategist.init", run_type="chain")
 async def run_strategist_init(
     state: WorkbenchState,
     llm: LLMEndpoint,
@@ -294,6 +300,7 @@ async def run_strategist_init(
 # Designer — proper tool-use loop (multi-turn until SMILES emerges)
 # ---------------------------------------------------------------------------
 
+@traced(name="designer.tool_loop", run_type="chain")
 async def run_designer(
     state: WorkbenchState,
     llm: LLMEndpoint,
@@ -405,6 +412,7 @@ async def run_designer(
 #      see the exploration depth
 # Activated by env LYSOS_BEST_OF_N (default 1 = legacy single-shot).
 # ---------------------------------------------------------------------------
+@traced(name="designer.best_of_n", run_type="chain")
 async def run_designer_best_of_n(
     state: WorkbenchState,
     llm: LLMEndpoint,
@@ -499,6 +507,7 @@ async def run_designer_best_of_n(
 # Score a candidate
 # ---------------------------------------------------------------------------
 
+@traced(name="score_candidate", run_type="chain")
 async def run_score_candidate(
     state: WorkbenchState,
     smiles: str,
@@ -611,6 +620,7 @@ def _preferred_pdb_for_pathogen(pathogen: str) -> Optional[str]:
 # Critic — rate candidate, suggest transformation
 # ---------------------------------------------------------------------------
 
+@traced(name="critic.evaluate", run_type="chain")
 async def run_critic(
     state: WorkbenchState,
     llm: LLMEndpoint,
@@ -634,6 +644,7 @@ async def run_critic(
 # Editor — apply transformation, verify it improves composite
 # ---------------------------------------------------------------------------
 
+@traced(name="editor.transform", run_type="chain")
 async def run_editor(
     state: WorkbenchState,
     op: str,
@@ -711,6 +722,7 @@ def _detect_plateau(state: WorkbenchState, window: int = PLATEAU_WINDOW) -> bool
     return all(abs(d) < PLATEAU_DELTA for d in deltas)
 
 
+@traced(name="strategist.decide", run_type="chain")
 async def run_strategist_decide(
     state: WorkbenchState,
     emit: EventCallback,
