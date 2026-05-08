@@ -99,22 +99,18 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
         // Resize observer — when the parent container's dimensions change
         // (whiteboard ↔ tabs switch, Allotment drag, viewport resize)
         // NGL needs handleResize() to re-read canvas bounds AND we need
-        // autoView() to re-center the camera. Without autoView, stale
-        // camera positions can leave the viewer looking empty even
-        // though components are loaded.
+        // stage.autoView() to re-fit the camera.
         if (stageRef.current) {
           let resizeRaf = 0;
           resizeObs = new ResizeObserver(() => {
-            // Coalesce multiple resize events into one frame
             if (resizeRaf) cancelAnimationFrame(resizeRaf);
             resizeRaf = requestAnimationFrame(() => {
               try {
                 stage?.handleResize?.();
-                // Re-center camera. If the molecule loaded into a
-                // 0-sized canvas earlier, this brings it into view now
-                // that we have real dimensions.
-                proteinComp.current?.autoView?.(0);
-                ligandComp.current?.autoView?.(0);
+                // Stage-level autoView fits ALL loaded components in
+                // one call. Animated duration so the camera actually
+                // updates instead of no-op'ing.
+                stage?.autoView?.(300);
               } catch { /* noop */ }
             });
           });
@@ -213,19 +209,22 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
       .then((comp: any) => {
         proteinComp.current = comp;
         applyRepresentation(comp, representation, wireframe);
-        comp.autoView();
-        // Belt-and-suspenders: if the stage was created before its
-        // container had real dimensions (common in tab mode where the
-        // 3D card mounts inside an Allotment pane that resizes after
-        // mount), the initial autoView() runs on a 0×0 canvas and the
-        // viewer looks empty. Re-fit on the next two frames once layout
-        // has settled.
-        requestAnimationFrame(() => {
-          try { stage.handleResize?.(); comp.autoView(0); } catch {/*noop*/}
-          setTimeout(() => {
-            try { stage.handleResize?.(); comp.autoView(0); } catch {/*noop*/}
-          }, 200);
-        });
+        // Use STAGE-level autoView so the camera fits all loaded
+        // components (protein + any ligand). With an animated duration
+        // — autoView(0) sometimes no-ops; an animated transition forces
+        // the renderer to recompute the camera. The double-call (now
+        // + 250ms) handles the case where the canvas was 0-sized at
+        // init: by 250ms the Allotment pane has resized and the
+        // ResizeObserver has fired, so handleResize+autoView lands on
+        // a real canvas.
+        stage.handleResize?.();
+        stage.autoView?.(400);
+        setTimeout(() => {
+          try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
+        }, 250);
+        setTimeout(() => {
+          try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
+        }, 800);
       })
       .catch((e: any) => setError(`PDB ${pdb} load failed: ${e.message}`));
   }, [pdb]);
@@ -286,7 +285,14 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
         if (cancelled) return;
         ligandComp.current = comp;
         comp.addRepresentation("ball+stick", { multipleBond: true });
-        comp.autoView();
+        // Stage-level autoView fits BOTH protein + ligand together.
+        // Per-component autoView() on just the ligand would zoom to
+        // the tiny ligand and lose the protein context.
+        stage.handleResize?.();
+        stage.autoView?.(400);
+        setTimeout(() => {
+          try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
+        }, 200);
         setError(null);
       } catch (e: any) {
         if (!cancelled) setError(`load error: ${e?.message ?? e}`);
@@ -314,8 +320,10 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
   }
 
   function recenter() {
-    proteinComp.current?.autoView(800);
-    ligandComp.current?.autoView(800);
+    // Stage-level autoView fits all loaded components together — better
+    // than per-component autoView when both protein + ligand are loaded.
+    stageObj.current?.handleResize?.();
+    stageObj.current?.autoView?.(600);
   }
 
   return (
