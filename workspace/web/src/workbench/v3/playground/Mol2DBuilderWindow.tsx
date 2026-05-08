@@ -1851,7 +1851,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           Library + SMARTS panels NO LONGER overlay the molecule. They
           dock as left-side flex children, pushing the SVG rightward
           when open. Closing them returns the SVG to full width. */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "row", overflow: "hidden", minHeight: 0, position: "relative" }}>
+      {/* row-reverse so the AtomsRail/BondsRail (declared LAST in source
+          order) renders on the LEFT, while the SVG center column moves
+          to the RIGHT. The DockShell siblings (Library/SMARTS/Properties/
+          Build) are still absolute-positioned over the SVG, so they
+          don't get re-ordered by row-reverse. */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "row-reverse", overflow: "hidden", minHeight: 0, position: "relative" }}>
         {/* Library dock — appears only when libraryOpen */}
         {libraryOpen && onLoadFromLibrary && (
           <LibraryDock
@@ -4299,16 +4304,19 @@ function DockShell({ title, subtitle, accent, onClose, children }: {
   return (
     <div style={{
       position: "absolute",
-      top: 0, left: 0, bottom: 0,
+      // Pop from the RIGHT edge — the SVG diagram now lives on the
+      // right (rails moved to the left), so docks pop over the SVG
+      // side rather than the rail side.
+      top: 0, right: 0, bottom: 0,
       width: 360,
       display: "flex", flexDirection: "column",
-      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+      borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
       background: "rgba(255,255,255,0.96)",
       backdropFilter: "blur(8px)",
-      boxShadow: "4px 0 16px rgba(15,23,42,0.08)",
+      boxShadow: "-4px 0 16px rgba(15,23,42,0.08)",
       overflow: "hidden",
       zIndex: 30,
-      animation: "slideInLeft 0.18s ease-out",
+      animation: "slideInRight 0.18s ease-out",
     }}>
       <div style={{
         padding: "8px 10px",
@@ -4410,18 +4418,19 @@ function LibraryDock(p: LibraryDockProps) {
       // OVERLAY mode (was flex push). Absolute-positioned inside the
       // body row so the SVG center column never resizes when the dock
       // opens — the diagram stays at its default viewport size. The
-      // dock floats over the leftmost 360px with backdrop blur.
+      // SVG now lives on the RIGHT (after the rail/diagram swap), so
+      // the dock pops from the right edge over the SVG side.
       position: "absolute",
-      top: 0, left: 0, bottom: 0,
+      top: 0, right: 0, bottom: 0,
       width: 360,
       display: "flex", flexDirection: "column",
-      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+      borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
       background: "rgba(255,255,255,0.96)",
       backdropFilter: "blur(8px)",
-      boxShadow: "4px 0 16px rgba(15,23,42,0.08)",
+      boxShadow: "-4px 0 16px rgba(15,23,42,0.08)",
       overflow: "hidden",
       zIndex: 30,
-      animation: "slideInLeft 0.18s ease-out",
+      animation: "slideInRight 0.18s ease-out",
     }}>
       <DockHeader title="Library" count={entries.length} icon="📚" color="#10b981" onClose={p.onClose}
         description="Saved candidates, color-coded by drug class. Click any row to load it into the 2D viewer."
@@ -4571,17 +4580,18 @@ function SmartsDock(p: SmartsDockProps) {
   return (
     <div style={{
       // OVERLAY mode — absolute-positioned, doesn't resize the SVG.
+      // Pop from RIGHT to match the SVG's new right-side placement.
       position: "absolute",
-      top: 0, left: 0, bottom: 0,
+      top: 0, right: 0, bottom: 0,
       width: 360,
       display: "flex", flexDirection: "column",
-      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+      borderLeft: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
       background: "rgba(255,255,255,0.96)",
       backdropFilter: "blur(8px)",
-      boxShadow: "4px 0 16px rgba(15,23,42,0.08)",
+      boxShadow: "-4px 0 16px rgba(15,23,42,0.08)",
       overflow: "hidden",
       zIndex: 30,
-      animation: "slideInLeft 0.18s ease-out",
+      animation: "slideInRight 0.18s ease-out",
     }}>
       <DockHeader title="SMARTS" count={p.smartsHits.length} icon="🔍" color="#0891b2" onClose={p.onClose}
         description="Substructure pattern search — type a pattern (or click a preset) to highlight matching atoms in the 2D structure."
