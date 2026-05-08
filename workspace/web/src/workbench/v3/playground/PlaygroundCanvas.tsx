@@ -283,17 +283,45 @@ export function PlaygroundCanvas(p: PlaygroundCanvasProps) {
   }
 
   function onBgMouseDown(e: React.MouseEvent) {
-    // Background empty-area click → pan
+    // Only handle background empty-area click here. The middle-mouse +
+    // space+drag triggers run via a document-level CAPTURE-phase listener
+    // (see useEffect below) because cards inside the canvas call
+    // stopPropagation on their drag handlers — bubble-phase listeners
+    // would never see the event.
     if (e.target === stageRef.current || e.target === e.currentTarget) {
       if (e.button === 0) startPan(e);
-      return;
-    }
-    // Middle-mouse-button (button 1) or space+left → pan from anywhere
-    if (e.button === 1 || (e.button === 0 && spaceDownRef.current)) {
-      e.preventDefault();
-      startPan(e);
     }
   }
+
+  // Document-level capture-phase listener. Fires BEFORE any card's
+  // mousedown, so we can intercept middle-mouse / space+left from
+  // anywhere on the canvas — including over cards that stopPropagation.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onCaptureDown = (e: MouseEvent) => {
+      // Only intercept events that landed inside the canvas stage
+      if (!stage.contains(e.target as Node)) return;
+      // Skip if user is interacting with a form input
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+                t.isContentEditable)) return;
+      // Pan triggers:
+      //   1. Middle-mouse-button (button 1) — always
+      //   2. Spacebar held + left-button (button 0) — Figma-style
+      const isMiddle = e.button === 1;
+      const isSpaceDrag = e.button === 0 && spaceDownRef.current;
+      if (!isMiddle && !isSpaceDrag) return;
+      // Stop the event so cards don't ALSO start dragging themselves.
+      e.stopPropagation();
+      e.preventDefault();
+      startPan(e);
+    };
+    document.addEventListener("mousedown", onCaptureDown, { capture: true });
+    return () => {
+      document.removeEventListener("mousedown", onCaptureDown, { capture: true } as any);
+    };
+  }, []);
 
   // Wire pan-active mouse handlers to window so dragging off-canvas keeps tracking
   useEffect(() => {
