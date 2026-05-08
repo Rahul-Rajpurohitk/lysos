@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Allotment } from "allotment";
+import { Maximize2, LayoutGrid } from "lucide-react";
 import "allotment/dist/style.css";
 
 import { TopHeader } from "./components/TopHeader";
@@ -1126,47 +1127,66 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               Same WindowGroup[] config feeds both modes. */}
           <Allotment.Pane minSize={360} preferredSize={760}>
             <div style={{ width: "100%", height: "100%", position: "relative" }}>
-              {/* Floating view-mode toggle. Top-LEFT so it doesn't collide
-                  with PlaygroundCanvas's zoom/reset chip (top-right, z:1000)
-                  and stays visible in tab mode too. */}
-              <div style={{
-                position: "absolute", top: 8, left: 12, zIndex: 1100,
-                display: "inline-flex",
-                background: "var(--lys-bg-2, #ffffff)",
-                border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
-                borderRadius: 6,
-                boxShadow: "0 2px 6px rgba(15,23,42,0.08)",
-                fontFamily: "var(--lys-font-mono)", fontSize: 9.5,
-                overflow: "hidden",
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("whiteboard")}
-                  title="Whiteboard mode — infinite canvas, drag/zoom, all containers visible"
-                  style={{
-                    padding: "5px 10px",
-                    background: viewMode === "whiteboard" ? "#0891b2" : "transparent",
-                    color: viewMode === "whiteboard" ? "white" : "var(--lys-text-faint)",
-                    border: 0, cursor: "pointer", fontWeight: 700,
-                    letterSpacing: "0.04em", textTransform: "uppercase",
-                  }}>
-                  whiteboard
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("tabs")}
-                  title="Tabs mode — one container at a time, properly arranged grid"
-                  style={{
-                    padding: "5px 10px",
-                    background: viewMode === "tabs" ? "#0891b2" : "transparent",
-                    color: viewMode === "tabs" ? "white" : "var(--lys-text-faint)",
-                    border: 0, cursor: "pointer", fontWeight: 700,
-                    letterSpacing: "0.04em", textTransform: "uppercase",
-                  }}>
-                  tabs
-                </button>
-              </div>
+              {/* Tiny view-mode toggle — icon-only segmented control.
+                  In tabs mode it lives INSIDE the TabbedView tab strip
+                  (passed via the actions prop). In whiteboard mode it
+                  floats top-left here. Defined inside the IIFE below. */}
             {(() => {
+              const viewToggle = (
+                <div style={{
+                  display: "inline-flex",
+                  background: "transparent",
+                  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+                  borderRadius: 4,
+                  height: 22,
+                  overflow: "hidden",
+                }}>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("whiteboard")}
+                    title="Whiteboard"
+                    aria-label="Whiteboard mode"
+                    style={{
+                      width: 26, height: 22, padding: 0, border: 0, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: viewMode === "whiteboard" ? "var(--lys-text, #0f172a)" : "transparent",
+                      color: viewMode === "whiteboard" ? "white" : "var(--lys-text-faint, #94a3b8)",
+                      transition: "background 120ms, color 120ms",
+                    }}
+                  >
+                    <Maximize2 size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("tabs")}
+                    title="Tabs"
+                    aria-label="Tabs mode"
+                    style={{
+                      width: 26, height: 22, padding: 0, border: 0, cursor: "pointer",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      background: viewMode === "tabs" ? "var(--lys-text, #0f172a)" : "transparent",
+                      color: viewMode === "tabs" ? "white" : "var(--lys-text-faint, #94a3b8)",
+                      transition: "background 120ms, color 120ms",
+                    }}
+                  >
+                    <LayoutGrid size={11} />
+                  </button>
+                </div>
+              );
+              // Floating-toggle wrapper for whiteboard mode (tab mode hosts
+              // it inside the strip, no floating needed).
+              const floatingToggle = (
+                <div style={{
+                  position: "absolute", top: 8, left: 12, zIndex: 1100,
+                  background: "rgba(255,255,255,0.92)",
+                  backdropFilter: "blur(6px)",
+                  borderRadius: 5,
+                  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+                }}>
+                  {viewToggle}
+                </div>
+              );
+
               // IIFE so we can declare playgroundGroups once and feed it
               // to either renderer. Cheap (re-evaluated each render), but
               // identical to the previous inline-array cost.
@@ -1474,8 +1494,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 },
               ];
               return viewMode === "tabs" ? (
-                <TabbedView groups={playgroundGroups} />
+                <TabbedView groups={playgroundGroups} actions={viewToggle} />
               ) : (
+                <>
+                {floatingToggle}
                 <PlaygroundCanvas
                   viewport={playViewport}
                   onViewportChange={setPlayViewport}
@@ -1570,6 +1592,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 },
               }}
             />
+                </>
               );
             })()}
             </div>
