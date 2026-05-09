@@ -584,21 +584,36 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     const host = svgHostRef.current;
     const svgEl = host?.querySelector("svg") ?? null;
     if (svgEl) {
-      // 1. Own data-atom-hit — these are the invisible click circles
-      //    we stamp on top of the SVG, and they sit exactly at the
-      //    geometric atom centre. Authoritative.
-      const hit = svgEl.querySelector(`[data-atom-hit="${idx}"]`);
-      if (hit) {
+      // 1. Authoritative: our own invisible hit CIRCLE. We tag both
+      //    the circle AND the bare digit-text label with
+      //    data-atom-hit="N" (the digit needs to be clickable too)
+      //    — but the digit sits OFFSET from the geometric atom centre
+      //    by ~25-40px (RDKit deliberately shifts labels off the
+      //    atom for visibility). Prefer the SVGCircleElement, which
+      //    is guaranteed to be at the geometric centre. Iterate
+      //    matches and pick the circle if any exists.
+      const matches = svgEl.querySelectorAll(`[data-atom-hit="${idx}"]`);
+      let circle: SVGGraphicsElement | null = null;
+      let firstMatch: SVGGraphicsElement | null = null;
+      for (const m of Array.from(matches)) {
+        if (!firstMatch) firstMatch = m as SVGGraphicsElement;
+        if ((m as SVGElement).tagName === "circle") {
+          circle = m as SVGGraphicsElement;
+          break;
+        }
+      }
+      const target = circle ?? firstMatch;
+      if (target) {
         try {
-          const bbox = (hit as SVGGraphicsElement).getBBox();
+          const bbox = target.getBBox();
           return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
         } catch {/*noop*/}
       }
       // 2. Whole-word class match — prevents atom-1 matching atom-10.
-      const target = svgEl.querySelector(`[class~="atom-${idx}"]`);
-      if (target) {
+      const fallback = svgEl.querySelector(`[class~="atom-${idx}"]`);
+      if (fallback) {
         try {
-          const bbox = (target as SVGGraphicsElement).getBBox();
+          const bbox = (fallback as SVGGraphicsElement).getBBox();
           return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
         } catch {/*noop*/}
       }
