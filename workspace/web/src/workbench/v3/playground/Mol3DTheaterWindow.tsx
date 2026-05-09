@@ -133,9 +133,15 @@ export function Mol3DTheaterWindow(p: Props) {
   // default; click expands into a detail panel with mechanism,
   // targets, year, top-3 matches, and a reading guide.
   const [matchOpen, setMatchOpen] = useState<boolean>(false);
-  // Hovered Key-Contacts row → flashes the matching residue in the
-  // 3D viewer via hoverResidue prop on Mol3D. Cleared on mouseleave.
+  // Key Contacts → 3D viewer cross-link.
+  //   hoverContact   — fleeting (mouseenter/mouseleave). Lights up
+  //                    the matching residue while the cursor's on the row.
+  //   pinnedContact  — sticky (single click on a row). Stays highlighted
+  //                    until you click the same row again or click another.
+  // Pinned wins over hover for the displayed highlight.
   const [hoverContact, setHoverContact] = useState<{ resi: number; chain: string } | null>(null);
+  const [pinnedContact, setPinnedContact] = useState<{ resi: number; chain: string } | null>(null);
+  const activeContact = pinnedContact ?? hoverContact;
   // Resistance robustness — fetched from /chem/resistance/predict
   // when SMILES + target are set. Same backend Service 2 uses; we
   // surface the headline robustness score as a chip on the viewer
@@ -351,7 +357,7 @@ export function Mol3DTheaterWindow(p: Props) {
         pocketResidues={selectedTarget?.active_site_residues ?? []}
         pocketChain={selectedTarget?.active_site_chain ?? "A"}
         leftToolbarSlot={targetPickerSlot}
-        hoverResidue={hoverContact}
+        hoverResidue={activeContact}
       />
 
       {/* ─── (legacy floating target picker — now in the toolbar) ─── */}
@@ -681,25 +687,39 @@ export function Mol3DTheaterWindow(p: Props) {
             const resi = resiMatch ? parseInt(resiMatch[1], 10) : 0;
             const chain = c.chain || "A";
             const isHover = hoverContact?.resi === resi && hoverContact?.chain === chain;
+            const isPinned = pinnedContact?.resi === resi && pinnedContact?.chain === chain;
+            const isActive = isHover || isPinned;
             return (
               <div
                 key={`${c.residue}-${c.ligand_atom_idx}`}
-                title={title}
+                title={isPinned
+                  ? `${title}  (pinned — click again to unpin)`
+                  : `${title}  (click to pin highlight)`}
                 onMouseEnter={() => setHoverContact({ resi, chain })}
                 onMouseLeave={() => setHoverContact(null)}
+                onClick={() => {
+                  // Click toggles pinned state: same row → unpin,
+                  // different row → switch the pin.
+                  setPinnedContact((cur) => (
+                    cur?.resi === resi && cur?.chain === chain
+                      ? null
+                      : { resi, chain }
+                  ));
+                }}
                 style={{
                   display: "flex", alignItems: "center",
                   gap: 8,
                   padding: "4px 8px",
-                  background: isHover ? "rgba(245,158,11,0.12)" : t.bg,
+                  background: isActive ? "rgba(245,158,11,0.12)" : t.bg,
                   borderRadius: 4,
-                  // Vertical accent stripe on the left in the tier
-                  // colour (or amber when hovered) — it's the
-                  // strongest signal because the eye scans the
-                  // leftmost column first.
-                  borderLeft: `3px solid ${isHover ? "#f59e0b" : t.fg}`,
+                  // Pinned rows get a thicker, fully-saturated amber
+                  // bar so they read as 'sticky-active' even when the
+                  // cursor moves away. Hover-only rows get the same
+                  // amber but at the normal stripe width.
+                  borderLeft: `${isPinned ? 4 : 3}px solid ${isActive ? "#f59e0b" : t.fg}`,
+                  boxShadow: isPinned ? "inset 0 0 0 1px rgba(245,158,11,0.20)" : "none",
                   cursor: "pointer",
-                  transition: "background 0.10s, border-left-color 0.10s",
+                  transition: "background 0.10s, border-left-color 0.10s, border-left-width 0.10s",
                 }}>
                 <span style={{
                   fontWeight: 700, color: "#0891b2",
@@ -793,11 +813,18 @@ export function Mol3DTheaterWindow(p: Props) {
             <div style={{
               marginTop: 4,
               padding: "10px 12px",
-              background: "rgba(255,255,255,0.97)",
+              // Match the badge's lavender-glass treatment — same
+              // tc.bg tint as the trigger pill, with backdrop-blur
+              // so the protein behind shows through. Keeps the
+              // detail card visually wedded to the badge it
+              // expanded from instead of looking like a separate
+              // panel.
+              background: tc.bg,
               border: `1px solid ${tc.border}`,
               borderRadius: 6,
               boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
-              backdropFilter: "blur(8px)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
               fontFamily: "var(--lys-font-body)", fontSize: 10,
               color: "var(--lys-text)",
               display: "flex", flexDirection: "column", gap: 10,
