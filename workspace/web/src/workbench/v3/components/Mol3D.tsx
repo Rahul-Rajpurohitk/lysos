@@ -56,6 +56,13 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
   const stageObj = useRef<any>(null);
   const proteinComp = useRef<any>(null);
   const ligandComp = useRef<any>(null);
+  // Tracks the click-to-focus camera mode. 'overview' = both visible
+  // (autoView on stage). 'protein' = zoomed on protein. 'ligand' =
+  // zoomed on ligand. Re-clicking the focused component returns to
+  // 'overview'. Lives in a ref (not state) because the click handler
+  // is registered once at NGL stage init and we don't want to tear it
+  // down on every re-render.
+  const focusedRef = useRef<"overview" | "protein" | "ligand">("overview");
 
   const [representation, setRepresentation] = useState<Representation>("Cartoon");
   // Wireframe + Spin removed from the toolbar (pure viewer). Locked to
@@ -104,20 +111,52 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
         stageObj.current = stage;
         stage.setSpin(spin);
 
-        // Click-to-edit: when an op is armed AND the user clicks an atom on
-        // the ligand component, POST /workbench/molecule/edit and bubble the
-        // new canonical SMILES up. NGL's PickingProxy resolves click → atom.
+        // Click handler — two roles:
+        //   1. Edit mode (op armed): click ligand atom → apply edit
+        //      [legacy path; kept for future re-enabling. ARMED_OPS
+        //       removed from toolbar so this branch is currently
+        //       inert in normal use.]
+        //   2. Focus toggle (no op armed): click protein → zoom on
+        //      protein. Click ligand → zoom on ligand. Click empty
+        //      space OR re-click the currently-focused component →
+        //      zoom back out to fit both. NGL's `clicked` signal only
+        //      fires on a clean click (mouse didn't drag) so it
+        //      doesn't fight rotation.
         stage.signals.clicked.add((pick: any) => {
+          // Edit branch — preserved for future use.
           const op = armedOpRef.current;
-          if (!op || !smilesRef.current) return;
-          if (!pick || !pick.atom || !ligandComp.current) return;
-          if (pick.component !== ligandComp.current) {
-            setEditStatus("click on the ligand atoms only");
-            setTimeout(() => setEditStatus(null), 1500);
+          if (op && smilesRef.current && pick?.atom && ligandComp.current
+              && pick.component === ligandComp.current) {
+            handleAtomEdit(op, pick.atom.index, pick.bond?.index);
             return;
           }
-          const atomIdx = pick.atom.index;
-          handleAtomEdit(op, atomIdx, pick.bond?.index);
+
+          // Focus-toggle branch.
+          const target = pick?.component ?? null;
+          const focused = focusedRef.current;
+          if (!target) {
+            // Clicked background → reset to overview.
+            focusedRef.current = "overview";
+            try { stage.autoView?.(400); } catch {/*noop*/}
+            return;
+          }
+          // Re-click on currently-focused component → zoom out.
+          const isProtein = target === proteinComp.current;
+          const isLigand = target === ligandComp.current;
+          if ((isProtein && focused === "protein")
+              || (isLigand && focused === "ligand")) {
+            focusedRef.current = "overview";
+            try { stage.autoView?.(400); } catch {/*noop*/}
+            return;
+          }
+          // Otherwise focus on the clicked component.
+          if (isProtein) {
+            focusedRef.current = "protein";
+            try { proteinComp.current?.autoView?.(400); } catch {/*noop*/}
+          } else if (isLigand) {
+            focusedRef.current = "ligand";
+            try { ligandComp.current?.autoView?.(400); } catch {/*noop*/}
+          }
         });
 
         // ResizeObserver — handles parent resizes after init (Allotment
@@ -266,8 +305,10 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
         stage.handleResize?.();
         if (pocketOnly && ligandComp.current) {
           ligandComp.current.autoView?.(400);
+          focusedRef.current = "ligand";
         } else {
           stage.autoView?.(400);
+          focusedRef.current = "overview";
         }
       } catch {/*noop*/}
     };
