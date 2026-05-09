@@ -255,39 +255,16 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
     const stage = stageObj.current;
     if (!protein || !stage) return;
     applyRepresentation(protein, representation, wireframe);
-
-    // Fit camera to the visible content. When Pocket is ON, fit to
-    // the pocket-residue + ligand selection (tight zoom — the user
-    // wants to see them together close-up). When Pocket is OFF, fit
-    // to the full structure including the ligand.
+    // Single, simple camera refit — stage.autoView fits ALL loaded
+    // components together. Two-shot scheduling so the second call
+    // lands after async rep-creation has settled.
     const refit = () => {
       try {
         stage.handleResize?.();
-        if (pocketOnly && pocketResidues && pocketResidues.length) {
-          // NGL's component-level autoView accepts a selection in
-          // some versions. Try with the pocket selection — falls
-          // back to component default if API doesn't support sele.
-          const chain = pocketChain || "A";
-          const pocketSel = `(${pocketResidues.join(" or ")}) and :${chain}`;
-          try {
-            protein.autoView(pocketSel, 400);
-          } catch {
-            protein.autoView(400);
-          }
-          // Then expand zoom-out a touch so the ligand (separate
-          // component) is also visible. Use stage.autoView which
-          // unifies all components, but with a small delay so the
-          // protein-level autoView's camera settles first.
-          setTimeout(() => {
-            try { stage.autoView?.(300); } catch {/*noop*/}
-          }, 450);
-        } else {
-          stage.autoView?.(400);
-        }
+        stage.autoView?.(400);
       } catch {/*noop*/}
     };
     refit();
-    // Second pass after surface tessellator finishes (async web-worker).
     setTimeout(refit, 280);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [representation, wireframe, pocketOnly, pocketResidues?.join(","), pocketChain]);
@@ -365,40 +342,22 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
       ? `(${pocketResidues.join(" or ")}) and :${chain}`
       : "polymer";
 
-    // Full-protein view = always Cartoon (only rep that scales to a
-    // 800-residue polymer). The rep dropdown now applies to the
-    // POCKET HIGHLIGHT instead — picking Sticks renders the pocket
-    // residues as sticks (in green) over the cartoon; Surface gives
-    // a cavity-shape; Spheres gives a CPK ball view. So the dropdown
-    // is always meaningful — it controls how the pocket draws.
+    // Pocket OFF — single, simple render path that always works:
+    //   1. Full protein as cartoon (red ribbon)
+    //   2. Green ball+stick on the pocket residues so the binding
+    //      site is visible on the cartoon
+    // No rep-dropdown branching here; the dropdown only matters when
+    // Pocket is ON (close-up view). Keeping this minimal because the
+    // multi-rep stack we tried before could fail silently and leave
+    // the viewer empty.
     if (!pocketOnly) {
       comp.addRepresentation("cartoon", {
         sele: "polymer", colorScheme: "chainid", quality: "medium",
       });
       if (pocketResidues && pocketResidues.length) {
-        // Translucent green surface always on (the cavity shape — the "lock").
-        comp.addRepresentation("surface", {
-          sele: pocketSel, color: "#10b981", opacity: 0.18, useWorker: false,
+        comp.addRepresentation("licorice", {
+          sele: pocketSel, color: "#10b981", opacity: 0.95,
         });
-        // Pocket atom-detail layer — chosen by the rep dropdown.
-        if (rep === "Cartoon") {
-          // Cartoon picked → emphasise the pocket loop with thicker bright cartoon.
-          comp.addRepresentation("cartoon", {
-            sele: pocketSel, color: "#10b981", opacity: 1, quality: "high",
-          });
-          comp.addRepresentation("licorice", {
-            sele: pocketSel, color: "#10b981", opacity: 0.95,
-          });
-        } else if (rep === "Sticks") {
-          comp.addRepresentation("licorice", {
-            sele: pocketSel, color: "#10b981", opacity: 0.95,
-          });
-        } else if (rep === "Spheres") {
-          comp.addRepresentation("spacefill", {
-            sele: pocketSel, color: "#10b981", opacity: 0.85,
-          });
-        }
-        // For Surface, the surface above already does the work.
       }
     } else {
       // Pocket-only view — render JUST the active-site residues with
