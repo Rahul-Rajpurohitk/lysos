@@ -29,6 +29,11 @@ interface Mol3DProps {
    *  to inject the target picker into the toolbar row instead of as a
    *  floating overlay on the canvas. */
   leftToolbarSlot?: React.ReactNode;
+  /** Residue to flash a hover-highlight on. Set by the parent when the
+   *  user hovers a row in the Key Contacts panel — the matching
+   *  residue in the 3D viewer pulses orange so the user can see WHERE
+   *  that contact lives in space. Cleared on mouseleave. */
+  hoverResidue?: { resi: number; chain: string } | null;
 }
 
 type EditOp =
@@ -55,7 +60,7 @@ const PATHOGEN_PDB: Record<string, string> = {
   NGono: "3FIH",
 };
 
-export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, pocketResidues, pocketChain, leftToolbarSlot }: Mol3DProps) {
+export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, pocketResidues, pocketChain, leftToolbarSlot, hoverResidue }: Mol3DProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const stageObj = useRef<any>(null);
   const proteinComp = useRef<any>(null);
@@ -325,6 +330,33 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
   useEffect(() => {
     stageObj.current?.setSpin(spin);
   }, [spin]);
+
+  // Hover-highlight a single residue (driven by Key Contacts panel
+  // hover from Mol3DTheaterWindow). Adds an orange ball+stick + halo
+  // surface that flashes while hovered, removed on leave. The
+  // representations are tagged with reprList refs we hold ourselves
+  // so we can dispose them cleanly without disturbing the main reps.
+  const hoverRepsRef = useRef<any[]>([]);
+  useEffect(() => {
+    const protein = proteinComp.current;
+    if (!protein) return;
+    // Tear down any previous hover highlight reps.
+    for (const r of hoverRepsRef.current) {
+      try { protein.removeRepresentation(r); } catch {/*noop*/}
+    }
+    hoverRepsRef.current = [];
+    if (!hoverResidue) return;
+    const sel = `${hoverResidue.resi} and :${hoverResidue.chain}`;
+    try {
+      const lic = protein.addRepresentation("licorice", {
+        sele: sel, color: "#f59e0b", opacity: 1,
+      });
+      const sur = protein.addRepresentation("surface", {
+        sele: sel, color: "#f59e0b", opacity: 0.30, useWorker: false,
+      });
+      hoverRepsRef.current = [lic, sur];
+    } catch {/*noop*/}
+  }, [hoverResidue?.resi, hoverResidue?.chain]);
 
   // Load ligand from our /workbench/molecule/3d endpoint.
   // Stage may not be initialized yet on first SMILES change — poll briefly.

@@ -133,6 +133,9 @@ export function Mol3DTheaterWindow(p: Props) {
   // default; click expands into a detail panel with mechanism,
   // targets, year, top-3 matches, and a reading guide.
   const [matchOpen, setMatchOpen] = useState<boolean>(false);
+  // Hovered Key-Contacts row → flashes the matching residue in the
+  // 3D viewer via hoverResidue prop on Mol3D. Cleared on mouseleave.
+  const [hoverContact, setHoverContact] = useState<{ resi: number; chain: string } | null>(null);
   const [poseLoading, setPoseLoading] = useState(false);
   const [poseError, setPoseError] = useState<string>("");
   const lastSmilesRef = useRef<string>("");
@@ -320,6 +323,7 @@ export function Mol3DTheaterWindow(p: Props) {
         pocketResidues={selectedTarget?.active_site_residues ?? []}
         pocketChain={selectedTarget?.active_site_chain ?? "A"}
         leftToolbarSlot={targetPickerSlot}
+        hoverResidue={hoverContact}
       />
 
       {/* ─── (legacy floating target picker — now in the toolbar) ─── */}
@@ -604,20 +608,31 @@ export function Mol3DTheaterWindow(p: Props) {
             } as const;
             const t = TIER[tier];
             const title = `Ligand atom ${c.ligand_atom_idx} (${c.ligand_element}) → ${c.residue} at ${c.distance_a}Å — ${t.label}`;
+            // Parse "SER365" → 365 + chain "A" (default); chain
+            // override could come from the contact data later.
+            const resiMatch = c.residue.match(/(\d+)/);
+            const resi = resiMatch ? parseInt(resiMatch[1], 10) : 0;
+            const chain = c.chain || "A";
+            const isHover = hoverContact?.resi === resi && hoverContact?.chain === chain;
             return (
               <div
                 key={`${c.residue}-${c.ligand_atom_idx}`}
                 title={title}
+                onMouseEnter={() => setHoverContact({ resi, chain })}
+                onMouseLeave={() => setHoverContact(null)}
                 style={{
                   display: "flex", alignItems: "center",
                   gap: 8,
                   padding: "4px 8px",
-                  background: t.bg,
+                  background: isHover ? "rgba(245,158,11,0.12)" : t.bg,
                   borderRadius: 4,
                   // Vertical accent stripe on the left in the tier
-                  // colour — it's the strongest signal because the
-                  // eye scans the leftmost column first.
-                  borderLeft: `3px solid ${t.fg}`,
+                  // colour (or amber when hovered) — it's the
+                  // strongest signal because the eye scans the
+                  // leftmost column first.
+                  borderLeft: `3px solid ${isHover ? "#f59e0b" : t.fg}`,
+                  cursor: "pointer",
+                  transition: "background 0.10s, border-left-color 0.10s",
                 }}>
                 <span style={{
                   fontWeight: 700, color: "#0891b2",
