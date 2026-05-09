@@ -253,11 +253,21 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
   useEffect(() => {
     if (proteinComp.current) {
       applyRepresentation(proteinComp.current, representation, wireframe);
+      // Re-fit camera AFTER the new reps render. Without this the
+      // camera holds its old framing and the new reps end up
+      // off-centre (e.g. switching to Surface left blobs floating
+      // in the corner with the ligand miles away).
+      const stage = stageObj.current;
+      if (stage) {
+        // Two-shot — first immediately, then after the surface
+        // tessellator finishes (it's async via web-worker). Belt-
+        // and-suspenders.
+        try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
+        setTimeout(() => {
+          try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
+        }, 250);
+      }
     }
-    // Re-fire when pocket inputs change too — pocketOnly toggle, the
-    // residue list (changes when target switches), or the chain.
-    // Without these deps, clicking Pocket did nothing because the
-    // protein already had its representations attached at load time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [representation, wireframe, pocketOnly, pocketResidues?.join(","), pocketChain]);
 
@@ -358,15 +368,33 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
       }
     } else {
       // Pocket-only view — render JUST the active-site residues with
-      // the rep the user picked from the dropdown. This is where
-      // Sticks / Surface / Spheres are actually useful (close-up of
-      // 6-ish residues, atomic detail readable).
+      // the rep the user picked from the dropdown. PLUS a thin cartoon
+      // backbone of the surrounding residues (±5 around each pocket
+      // residue) so the pocket sits in spatial context, not floating
+      // as 6 disconnected blobs. Without this context, Surface looks
+      // like scattered bubbles instead of a recognizable cavity.
       const sel = pocketSel;
+      const contextResidues = pocketResidues && pocketResidues.length
+        ? Array.from(new Set(
+            pocketResidues.flatMap((r) => [r - 3, r - 2, r - 1, r, r + 1, r + 2, r + 3]),
+          ))
+        : [];
+      const contextSel = contextResidues.length
+        ? `(${contextResidues.join(" or ")}) and :${chain}`
+        : pocketSel;
+
+      // Thin grey cartoon for the surrounding loop — gives the user a
+      // backbone to anchor the pocket in 3D space.
+      comp.addRepresentation("cartoon", {
+        sele: contextSel, colorScheme: "uniform", color: "#94a3b8",
+        opacity: 0.55, quality: "medium",
+      });
+
       if (rep === "Cartoon") {
         comp.addRepresentation("cartoon", { sele: sel, colorScheme: "chainid", quality: "medium" });
         comp.addRepresentation("licorice", { sele: sel, color: "#10b981" });
       } else if (rep === "Surface") {
-        comp.addRepresentation("surface", { sele: sel, opacity: 0.6, colorScheme: "electrostatic" });
+        comp.addRepresentation("surface", { sele: sel, opacity: 0.55, colorScheme: "electrostatic" });
       } else if (rep === "Sticks") {
         comp.addRepresentation("licorice", { sele: sel, colorScheme: "element" });
       } else {
