@@ -504,7 +504,20 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     // 2) For atoms missing from step 1 (pure carbons), parse bond
     //    paths' "d" attribute. "M x1,y1 L x2,y2" → atom_a at start,
     //    atom_b at end. Class shape: "bond-N atom-A atom-B".
+    //
+    //    Aromatic / double bonds emit MULTIPLE paths per bond — an
+    //    outer line that connects atom centres + an inner stripe
+    //    that's offset and shorter. The previous code took the FIRST
+    //    encountered, which could be the inner stripe → atom positions
+    //    came out 1-2px off the real centres, exactly enough to drop
+    //    selection halos onto bond midpoints.
+    //
+    //    Fix: bucket every bond path by atom pair, then pick the
+    //    LONGEST 'd' string per bucket. Longest = outer line =
+    //    atom-to-atom geometry. Shorter inner stripe gets ignored.
     const dRe = /M\s*([\d.\-]+),?\s*([\d.\-]+).*?[L\s]\s*([\d.\-]+),?\s*([\d.\-]+)/i;
+    interface BondHit { aIdx: number; bIdx: number; d: string; len: number; x1: number; y1: number; x2: number; y2: number; }
+    const byPair = new Map<string, BondHit>();  // key "a-b" → longest hit
     svgEl.querySelectorAll<SVGGraphicsElement>("[class^='bond-']").forEach((el) => {
       const cls = el.getAttribute("class") || "";
       const am = cls.match(/atom-(\d+)\s+atom-(\d+)/);
@@ -516,9 +529,18 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       if (!dm) return;
       const x1 = parseFloat(dm[1]), y1 = parseFloat(dm[2]);
       const x2 = parseFloat(dm[3]), y2 = parseFloat(dm[4]);
-      if (!map.has(aIdx) && isFinite(x1) && isFinite(y1)) map.set(aIdx, { x: x1, y: y1 });
-      if (!map.has(bIdx) && isFinite(x2) && isFinite(y2)) map.set(bIdx, { x: x2, y: y2 });
+      if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
+      const key = `${aIdx}-${bIdx}`;
+      const len = d.length;  // proxy for outer-vs-inner; outer has more segments
+      const prev = byPair.get(key);
+      if (!prev || len > prev.len) {
+        byPair.set(key, { aIdx, bIdx, d, len, x1, y1, x2, y2 });
+      }
     });
+    for (const hit of byPair.values()) {
+      if (!map.has(hit.aIdx)) map.set(hit.aIdx, { x: hit.x1, y: hit.y1 });
+      if (!map.has(hit.bIdx)) map.set(hit.bIdx, { x: hit.x2, y: hit.y2 });
+    }
     atomPositions.current = map;
     // 3) Map RDKit's atom-index <text> elements to their atom indices,
     //    AND tag them as click targets. Without this, clicking on the
