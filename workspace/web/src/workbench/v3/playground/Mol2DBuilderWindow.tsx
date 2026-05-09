@@ -2026,8 +2026,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               style={{
                 position: "absolute", bottom: 8, left: 8, zIndex: 55,
                 padding: "5px 10px",
-                background: "rgba(15,23,42,0.06)",
-                border: "1px solid rgba(15,23,42,0.20)",
+                // Same lavender-glass treatment as the 3D NOVEL chip,
+                // just teal instead of purple so the two cards (props
+                // bottom-left vs build bottom-right) carry distinct
+                // accents but the same visual language.
+                background: "rgba(8,145,178,0.10)",
+                border: "1px solid rgba(8,145,178,0.35)",
                 borderRadius: 6,
                 backdropFilter: "blur(8px)",
                 boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
@@ -2039,9 +2043,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 fontFamily: "var(--lys-font-mono)", fontWeight: 800,
                 fontSize: 8.5, letterSpacing: "0.08em",
                 padding: "1px 4px", borderRadius: 2,
-                background: "#0f172a", color: "white",
+                background: "#0891b2", color: "white",
               }}>PROPS</span>
-              <span style={{ fontWeight: 600, fontSize: 10.5, color: "var(--lys-text)" }}>
+              <span style={{ fontWeight: 600, fontSize: 10.5, color: "#0e7490" }}>
                 drug-likeness · rules
               </span>
             </button>
@@ -2050,15 +2054,18 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             <div style={{
               position: "absolute", bottom: 8, left: 8, zIndex: 55,
               width: 360, maxHeight: "calc(100% - 16px)",
-              background: "rgba(255,255,255,0.97)",
-              border: "1px solid rgba(15,23,42,0.10)",
+              // Lavender-glass treatment matching the 3D NOVEL card,
+              // but in teal — translucent tint + backdrop blur so the
+              // protein/molecule behind shows through.
+              background: "rgba(8,145,178,0.10)",
+              border: "1px solid rgba(8,145,178,0.35)",
               borderRadius: 6,
               boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
               backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
               overflow: "hidden",
               display: "flex", flexDirection: "column",
             }}>
-              {/* Click-to-collapse header — entire row is the toggle. */}
               <div
                 onClick={() => setPropsOverlayOpen(false)}
                 title="Click to collapse"
@@ -2066,24 +2073,23 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                   padding: "6px 10px",
                   fontFamily: "var(--lys-font-mono)", fontSize: 9,
                   letterSpacing: "0.06em", textTransform: "uppercase",
-                  color: "var(--lys-text-faint)", fontWeight: 700,
-                  borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+                  color: "#0e7490", fontWeight: 700,
+                  borderBottom: "1px solid rgba(8,145,178,0.20)",
                   display: "flex", alignItems: "center", gap: 6,
                   cursor: "pointer", userSelect: "none",
-                  background: "rgba(15,23,42,0.04)",
                   flexShrink: 0,
                 }}>
                 <span style={{
                   fontFamily: "var(--lys-font-mono)", fontWeight: 800,
                   fontSize: 8.5, letterSpacing: "0.08em",
                   padding: "1px 4px", borderRadius: 2,
-                  background: "#0f172a", color: "white",
+                  background: "#0891b2", color: "white",
                 }}>PROPS</span>
                 <span>drug-likeness · rules · structure</span>
                 <span style={{ flex: 1 }} />
                 <span style={{ fontSize: 8, opacity: 0.7 }}>▼</span>
               </div>
-              <div style={{ flex: 1, overflow: "auto" }}>
+              <div style={{ flex: 1, overflow: "auto", background: "rgba(255,255,255,0.85)" }}>
                 {propertiesPanel}
               </div>
             </div>
@@ -2123,15 +2129,17 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             <div style={{
               position: "absolute", bottom: 8, right: 8, zIndex: 55,
               width: 360, maxHeight: "calc(100% - 16px)",
-              background: "rgba(255,255,255,0.97)",
-              border: "1px solid rgba(168,85,247,0.30)",
+              // Same lavender-glass treatment as the 3D NOVEL card,
+              // in purple. Translucent tint + backdrop blur.
+              background: "rgba(168,85,247,0.10)",
+              border: "1px solid rgba(168,85,247,0.35)",
               borderRadius: 6,
               boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
               backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
               overflow: "hidden",
               display: "flex", flexDirection: "column",
             }}>
-              {/* Click-to-collapse header — entire row is the toggle. */}
               <div
                 onClick={() => setBuildOverlayOpen(false)}
                 title="Click to collapse"
@@ -2139,11 +2147,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                   padding: "6px 10px",
                   fontFamily: "var(--lys-font-mono)", fontSize: 9,
                   letterSpacing: "0.06em", textTransform: "uppercase",
-                  color: "var(--lys-text-faint)", fontWeight: 700,
-                  borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+                  color: "#7c3aed", fontWeight: 700,
+                  borderBottom: "1px solid rgba(168,85,247,0.20)",
                   display: "flex", alignItems: "center", gap: 6,
                   cursor: "pointer", userSelect: "none",
-                  background: "rgba(168,85,247,0.06)",
                   flexShrink: 0,
                 }}>
                 <span style={{
@@ -2156,7 +2163,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 <span style={{ flex: 1 }} />
                 <span style={{ fontSize: 8, opacity: 0.7, color: "#7c3aed" }}>▼</span>
               </div>
-              <div style={{ flex: 1, overflow: "auto" }}>
+              <div style={{ flex: 1, overflow: "auto", background: "rgba(255,255,255,0.85)" }}>
               <PropertiesStrip
                 apiBase={apiBase}
                 smiles={smiles}
