@@ -406,12 +406,17 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
           sele: sel, opacity: 0.55, colorScheme: "electrostatic",
         });
       } else if (rep === "Sticks") {
+        // CPK / element colouring — carbon grey, oxygen red, nitrogen
+        // blue, sulfur yellow. Was 'chainid' which painted the entire
+        // single-chain protein uniform red — chemically meaningless
+        // and visually overwhelming.
         comp.addRepresentation("licorice", {
-          sele: sel, colorScheme: "chainid",
+          sele: sel, colorScheme: "element",
         });
       } else {
+        // Same CPK reasoning for spacefill view.
         comp.addRepresentation("spacefill", {
-          sele: sel, colorScheme: "chainid",
+          sele: sel, colorScheme: "element",
         });
       }
       if (pocketResidues && pocketResidues.length) {
