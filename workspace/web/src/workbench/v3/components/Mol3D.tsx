@@ -251,23 +251,44 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
 
   // Update representation when toggles change
   useEffect(() => {
-    if (proteinComp.current) {
-      applyRepresentation(proteinComp.current, representation, wireframe);
-      // Re-fit camera AFTER the new reps render. Without this the
-      // camera holds its old framing and the new reps end up
-      // off-centre (e.g. switching to Surface left blobs floating
-      // in the corner with the ligand miles away).
-      const stage = stageObj.current;
-      if (stage) {
-        // Two-shot — first immediately, then after the surface
-        // tessellator finishes (it's async via web-worker). Belt-
-        // and-suspenders.
-        try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
-        setTimeout(() => {
-          try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
-        }, 250);
-      }
-    }
+    const protein = proteinComp.current;
+    const stage = stageObj.current;
+    if (!protein || !stage) return;
+    applyRepresentation(protein, representation, wireframe);
+
+    // Fit camera to the visible content. When Pocket is ON, fit to
+    // the pocket-residue + ligand selection (tight zoom — the user
+    // wants to see them together close-up). When Pocket is OFF, fit
+    // to the full structure including the ligand.
+    const refit = () => {
+      try {
+        stage.handleResize?.();
+        if (pocketOnly && pocketResidues && pocketResidues.length) {
+          // NGL's component-level autoView accepts a selection in
+          // some versions. Try with the pocket selection — falls
+          // back to component default if API doesn't support sele.
+          const chain = pocketChain || "A";
+          const pocketSel = `(${pocketResidues.join(" or ")}) and :${chain}`;
+          try {
+            protein.autoView(pocketSel, 400);
+          } catch {
+            protein.autoView(400);
+          }
+          // Then expand zoom-out a touch so the ligand (separate
+          // component) is also visible. Use stage.autoView which
+          // unifies all components, but with a small delay so the
+          // protein-level autoView's camera settles first.
+          setTimeout(() => {
+            try { stage.autoView?.(300); } catch {/*noop*/}
+          }, 450);
+        } else {
+          stage.autoView?.(400);
+        }
+      } catch {/*noop*/}
+    };
+    refit();
+    // Second pass after surface tessellator finishes (async web-worker).
+    setTimeout(refit, 280);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [representation, wireframe, pocketOnly, pocketResidues?.join(","), pocketChain]);
 
@@ -344,27 +365,40 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
       ? `(${pocketResidues.join(" or ")}) and :${chain}`
       : "polymer";
 
-    // The full-protein view is ALWAYS cartoon — the previous design
-    // applied the rep dropdown to the whole polymer, so picking
-    // "Sticks" turned 800 protein atoms into licorice (unreadable).
-    // Cartoon is the only rep that scales to a full protein; the
-    // dropdown now controls the POCKET close-up rep instead.
+    // Full-protein view = always Cartoon (only rep that scales to a
+    // 800-residue polymer). The rep dropdown now applies to the
+    // POCKET HIGHLIGHT instead — picking Sticks renders the pocket
+    // residues as sticks (in green) over the cartoon; Surface gives
+    // a cavity-shape; Spheres gives a CPK ball view. So the dropdown
+    // is always meaningful — it controls how the pocket draws.
     if (!pocketOnly) {
-      // Full protein, always cartoon. Pocket residues highlighted in
-      // green so the user can SEE the binding site on the ribbon.
       comp.addRepresentation("cartoon", {
         sele: "polymer", colorScheme: "chainid", quality: "medium",
       });
       if (pocketResidues && pocketResidues.length) {
-        // Two-layer pocket highlight on top of the cartoon:
-        //   1. Green ball+stick of the active-site residues (atom detail)
-        //   2. Translucent green surface (the cavity shape — the "lock")
-        comp.addRepresentation("licorice", {
-          sele: pocketSel, color: "#10b981", opacity: 0.95,
-        });
+        // Translucent green surface always on (the cavity shape — the "lock").
         comp.addRepresentation("surface", {
-          sele: pocketSel, color: "#10b981", opacity: 0.20, useWorker: false,
+          sele: pocketSel, color: "#10b981", opacity: 0.18, useWorker: false,
         });
+        // Pocket atom-detail layer — chosen by the rep dropdown.
+        if (rep === "Cartoon") {
+          // Cartoon picked → emphasise the pocket loop with thicker bright cartoon.
+          comp.addRepresentation("cartoon", {
+            sele: pocketSel, color: "#10b981", opacity: 1, quality: "high",
+          });
+          comp.addRepresentation("licorice", {
+            sele: pocketSel, color: "#10b981", opacity: 0.95,
+          });
+        } else if (rep === "Sticks") {
+          comp.addRepresentation("licorice", {
+            sele: pocketSel, color: "#10b981", opacity: 0.95,
+          });
+        } else if (rep === "Spheres") {
+          comp.addRepresentation("spacefill", {
+            sele: pocketSel, color: "#10b981", opacity: 0.85,
+          });
+        }
+        // For Surface, the surface above already does the work.
       }
     } else {
       // Pocket-only view — render JUST the active-site residues with
