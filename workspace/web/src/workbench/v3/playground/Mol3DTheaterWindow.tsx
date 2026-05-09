@@ -233,16 +233,19 @@ export function Mol3DTheaterWindow(p: Props) {
         title="Pick the validated target this candidate is designed against"
         style={{
           padding: "2px 7px", height: 22,
-          background: pickerOpen ? "var(--lys-text, #0f172a)" : "transparent",
-          color: pickerOpen ? "white" : "var(--lys-text)",
-          border: `1px solid ${pickerOpen ? "var(--lys-text, #0f172a)" : "var(--lys-border-faint, rgba(0,0,0,0.08))"}`,
+          // Match 2D builder's navBtnStyle active treatment — 10%
+          // accent tint + accent border + accent text. No solid-dark
+          // fill (the design system doesn't use harsh black anywhere).
+          background: pickerOpen ? "rgba(8,145,178,0.10)" : "transparent",
+          color: pickerOpen ? "#0891b2" : "var(--lys-text-dim)",
+          border: `1px solid ${pickerOpen ? "#0891b2" : "var(--lys-border-faint, rgba(0,0,0,0.08))"}`,
           borderRadius: 4,
           display: "inline-flex", alignItems: "center", gap: 4,
           fontFamily: "inherit", fontSize: 9.5,
           cursor: "pointer",
           fontWeight: 500,
         }}>
-        <Target size={11} style={{ color: pickerOpen ? "#67e8f9" : "#0891b2" }} />
+        <Target size={11} style={{ color: "#0891b2" }} />
         <span>{selectedTarget?.short_name ?? "pick target"}</span>
         {selectedTarget && (
           <span style={{ fontSize: 8.5, opacity: 0.6 }}>
@@ -707,7 +710,7 @@ export function Mol3DTheaterWindow(p: Props) {
           {matchOpen && (
             <div style={{
               marginTop: 4,
-              padding: "8px 10px",
+              padding: "10px 12px",
               background: "rgba(255,255,255,0.97)",
               border: `1px solid ${tc.border}`,
               borderRadius: 6,
@@ -715,76 +718,112 @@ export function Mol3DTheaterWindow(p: Props) {
               backdropFilter: "blur(8px)",
               fontFamily: "var(--lys-font-body)", fontSize: 10,
               color: "var(--lys-text)",
-              display: "flex", flexDirection: "column", gap: 6,
+              display: "flex", flexDirection: "column", gap: 10,
             }}>
-              {/* Best match details */}
+              {/* Best match details — two-col grid: label | value.
+                  Labels right-aligned in mono, values left-aligned. */}
               <div>
                 <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
                   letterSpacing: "0.06em", textTransform: "uppercase",
                   fontFamily: "var(--lys-font-mono)", fontWeight: 700,
-                  marginBottom: 3 }}>
+                  marginBottom: 6 }}>
                   best match
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                    <span style={{ fontWeight: 700, fontSize: 11.5, color: tc.fg }}>
-                      {match.best.name}
-                    </span>
-                    <span style={{ fontFamily: "var(--lys-font-mono)",
-                      fontSize: 10, color: tc.fg, marginLeft: "auto", fontWeight: 700 }}>
-                      {(sim * 100).toFixed(0)}% similar
-                    </span>
-                  </div>
-                  <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
-                    <span style={{ fontFamily: "var(--lys-font-mono)" }}>class:</span>{" "}
-                    {match.best.drug_class}
-                  </div>
-                  <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
-                    <span style={{ fontFamily: "var(--lys-font-mono)" }}>mechanism:</span>{" "}
-                    {match.best.mechanism}
-                  </div>
+                {/* Header row: name + similarity */}
+                <div style={{
+                  display: "flex", alignItems: "baseline", gap: 6,
+                  marginBottom: 5,
+                }}>
+                  <span style={{ fontWeight: 700, fontSize: 12, color: tc.fg }}>
+                    {match.best.name}
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{
+                    fontFamily: "var(--lys-font-mono)",
+                    fontSize: 9.5, fontWeight: 700, color: tc.fg,
+                    fontVariantNumeric: "tabular-nums",
+                  }}>
+                    {(sim * 100).toFixed(0)}% similar
+                  </span>
+                </div>
+                {/* Details grid */}
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "60px 1fr",
+                  rowGap: 3, columnGap: 8,
+                  fontSize: 9.5,
+                }}>
+                  <span style={{ color: "var(--lys-text-faint)",
+                    fontFamily: "var(--lys-font-mono)",
+                    textAlign: "right" }}>class</span>
+                  <span style={{ color: "var(--lys-text)" }}>{match.best.drug_class}</span>
+
+                  <span style={{ color: "var(--lys-text-faint)",
+                    fontFamily: "var(--lys-font-mono)",
+                    textAlign: "right" }}>mechanism</span>
+                  <span style={{ color: "var(--lys-text)" }}>{match.best.mechanism}</span>
+
                   {match.best.targets && match.best.targets.length > 0 && (
-                    <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
-                      <span style={{ fontFamily: "var(--lys-font-mono)" }}>targets:</span>{" "}
-                      {match.best.targets.join(", ")}
-                    </div>
+                    <>
+                      <span style={{ color: "var(--lys-text-faint)",
+                        fontFamily: "var(--lys-font-mono)",
+                        textAlign: "right" }}>targets</span>
+                      <span style={{ color: "var(--lys-text)" }}>{match.best.targets.join(", ")}</span>
+                    </>
                   )}
                   {match.best.year > 0 && (
-                    <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
-                      <span style={{ fontFamily: "var(--lys-font-mono)" }}>year:</span>{" "}
-                      {match.best.year}
-                    </div>
+                    <>
+                      <span style={{ color: "var(--lys-text-faint)",
+                        fontFamily: "var(--lys-font-mono)",
+                        textAlign: "right" }}>year</span>
+                      <span style={{ color: "var(--lys-text)" }}>{match.best.year}</span>
+                    </>
                   )}
                 </div>
               </div>
 
-              {/* Top-3 matches table */}
+              {/* Top-3 matches as a neat ranked list — circular rank
+                  badge, drug name, percentage right-aligned. */}
               {match.matches && match.matches.length > 1 && (
                 <div>
                   <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
                     letterSpacing: "0.06em", textTransform: "uppercase",
                     fontFamily: "var(--lys-font-mono)", fontWeight: 700,
-                    marginBottom: 3 }}>
+                    marginBottom: 6 }}>
                     top {Math.min(3, match.matches.length)} matches
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                     {match.matches.slice(0, 3).map((m, i) => (
                       <div key={i} style={{
-                        display: "flex", alignItems: "baseline", gap: 6,
-                        fontSize: 10,
-                        padding: "2px 0",
+                        display: "flex", alignItems: "center", gap: 7,
+                        fontSize: 10.5,
+                        padding: "1px 0",
                       }}>
-                        <span style={{ width: 12, color: "var(--lys-text-faint)",
-                          fontFamily: "var(--lys-font-mono)", fontSize: 9 }}>
-                          {i + 1}.
+                        <span style={{
+                          width: 16, height: 16, flexShrink: 0,
+                          borderRadius: "50%",
+                          background: i === 0 ? tc.bg : "rgba(0,0,0,0.04)",
+                          color: i === 0 ? tc.fg : "var(--lys-text-faint)",
+                          display: "grid", placeItems: "center",
+                          fontFamily: "var(--lys-font-mono)",
+                          fontSize: 8.5, fontWeight: 700,
+                        }}>
+                          {i + 1}
                         </span>
-                        <span style={{ fontWeight: 600, flex: 1,
-                          color: i === 0 ? tc.fg : "var(--lys-text)" }}>
+                        <span style={{
+                          fontWeight: i === 0 ? 700 : 500,
+                          flex: 1,
+                          color: i === 0 ? tc.fg : "var(--lys-text)",
+                        }}>
                           {m.name}
                         </span>
                         <span style={{ fontFamily: "var(--lys-font-mono)",
-                          fontSize: 9.5, color: "var(--lys-text-dim)",
-                          fontVariantNumeric: "tabular-nums" }}>
+                          fontSize: 9.5,
+                          color: i === 0 ? tc.fg : "var(--lys-text-dim)",
+                          fontWeight: i === 0 ? 700 : 500,
+                          fontVariantNumeric: "tabular-nums",
+                          width: 32, textAlign: "right",
+                        }}>
                           {(m.similarity * 100).toFixed(0)}%
                         </span>
                       </div>
@@ -793,16 +832,22 @@ export function Mol3DTheaterWindow(p: Props) {
                 </div>
               )}
 
-              {/* Reading guide */}
+              {/* Reading guide — accented tip block instead of a bare
+                  hairline'd footer line. */}
               <div style={{
-                fontSize: 9, color: "var(--lys-text-faint)",
-                paddingTop: 4,
-                borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-                lineHeight: 1.4,
+                fontSize: 9.5, lineHeight: 1.45,
+                padding: "6px 9px",
+                borderRadius: 4,
+                background: tc.bg,
+                color: tc.fg,
+                display: "flex", alignItems: "flex-start", gap: 6,
               }}>
-                {sim < 0.30 ? "Novel scaffold — fresh design space, not a known drug clone."
-                 : sim < 0.70 ? "Moderate analog — shares chemistry with known drug; cross-resistance likely."
-                 : "Near-known — effectively a clone of an existing drug; patentability concern."}
+                <span style={{ fontWeight: 700, flexShrink: 0 }}>↳</span>
+                <span>
+                  {sim < 0.30 ? <><b>Novel scaffold.</b> Fresh design space — not a known-drug clone, patentability looks promising.</>
+                   : sim < 0.70 ? <><b>Moderate analog.</b> Shares chemistry with a known drug — watch for cross-resistance and freedom-to-operate.</>
+                   : <><b>Near-known.</b> Effectively a clone of an existing drug — patentability concern.</>}
+                </span>
               </div>
             </div>
           )}
