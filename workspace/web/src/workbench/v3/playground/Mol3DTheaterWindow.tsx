@@ -129,6 +129,10 @@ export function Mol3DTheaterWindow(p: Props) {
   // ribbon has the whole canvas; the binding-atom counter on the button
   // gives at-a-glance status without consuming layout space.
   const [contactsOpen, setContactsOpen] = useState<boolean>(false);
+  // Closest-known antibiotic badge — collapsed (compact pill) by
+  // default; click expands into a detail panel with mechanism,
+  // targets, year, top-3 matches, and a reading guide.
+  const [matchOpen, setMatchOpen] = useState<boolean>(false);
   const [poseLoading, setPoseLoading] = useState(false);
   const [poseError, setPoseError] = useState<string>("");
   const lastSmilesRef = useRef<string>("");
@@ -215,6 +219,93 @@ export function Mol3DTheaterWindow(p: Props) {
   } as const;
   const pc = POSE_COLORS[poseTier];
 
+  // Target picker — rendered as a button injected into Mol3D's
+  // toolbar via the leftToolbarSlot prop. Same JSX, just lives in
+  // the toolbar row now instead of a floating canvas overlay.
+  const targetPickerSlot = (
+    <div style={{
+      position: "relative",
+      display: "flex", alignItems: "center", gap: 6,
+    }}>
+      <button
+        type="button"
+        onClick={() => setPickerOpen((o) => !o)}
+        title="Pick the validated target this candidate is designed against"
+        style={{
+          padding: "3px 9px", height: 24,
+          background: pickerOpen ? "var(--lys-text, #0f172a)" : "transparent",
+          color: pickerOpen ? "white" : "var(--lys-text)",
+          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+          borderRadius: 5,
+          display: "inline-flex", alignItems: "center", gap: 5,
+          fontFamily: "var(--lys-font-mono)", fontSize: 10,
+          cursor: "pointer",
+          fontWeight: 700,
+        }}>
+        <Target size={11} style={{ color: pickerOpen ? "#67e8f9" : "#0891b2" }} />
+        <span>{selectedTarget?.short_name ?? "pick target"}</span>
+        {selectedTarget && (
+          <span style={{ fontSize: 9, opacity: 0.6 }}>
+            · {selectedTarget.pdb_id}
+          </span>
+        )}
+      </button>
+      {pickerOpen && targets.length > 0 && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", left: 0,
+          background: "white",
+          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+          borderRadius: 6,
+          boxShadow: "0 8px 24px rgba(15,23,42,0.18)",
+          minWidth: 320, maxWidth: 460, padding: 4,
+          zIndex: 100, fontFamily: "var(--lys-font-body)",
+        }}>
+          <div style={{
+            padding: "4px 8px", fontSize: 9, fontFamily: "var(--lys-font-mono)",
+            color: "var(--lys-text-faint)", letterSpacing: "0.06em",
+            textTransform: "uppercase", fontWeight: 700,
+            borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+          }}>
+            Validated targets · {p.pathogen}
+          </div>
+          {targets.map((t) => (
+            <button
+              key={t.pdb_id}
+              type="button"
+              onClick={() => { setSelectedTargetId(t.pdb_id); setPickerOpen(false); }}
+              title={t.clinical_note}
+              style={{
+                width: "100%", textAlign: "left",
+                padding: "6px 8px", border: 0, background: "transparent",
+                cursor: "pointer", borderRadius: 4,
+                display: "flex", flexDirection: "column", gap: 2,
+                borderLeft: `3px solid ${t.pdb_id === selectedTargetId ? "#0891b2" : "transparent"}`,
+              }}
+              onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(8,145,178,0.05)"; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontWeight: 700, fontSize: 11 }}>{t.short_name}</span>
+                <span style={{ fontFamily: "var(--lys-font-mono)", fontSize: 9, opacity: 0.6 }}>
+                  {t.pdb_id}
+                </span>
+                {t.preferred_default && (
+                  <span style={{
+                    fontSize: 8, padding: "0 5px", borderRadius: 999,
+                    background: "rgba(16,185,129,0.10)", color: "#059669",
+                    fontWeight: 700,
+                  }}>default</span>
+                )}
+              </div>
+              <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
+                {t.mechanism}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       <Mol3D
@@ -225,12 +316,13 @@ export function Mol3DTheaterWindow(p: Props) {
         pdbOverride={selectedTargetId}
         pocketResidues={selectedTarget?.active_site_residues ?? []}
         pocketChain={selectedTarget?.active_site_chain ?? "A"}
+        leftToolbarSlot={targetPickerSlot}
       />
 
-      {/* ─── TOP-LEFT: Target picker dropdown ──────────────────────── */}
+      {/* ─── (legacy floating target picker — now in the toolbar) ─── */}
       <div style={{
-        position: "absolute", top: 8, left: 8, zIndex: 60,
-        display: "flex", alignItems: "center", gap: 6,
+        position: "absolute", top: -9999, left: -9999, zIndex: 60,
+        display: "none",
       }}>
         <button
           type="button"
@@ -570,37 +662,150 @@ export function Mol3DTheaterWindow(p: Props) {
         );
       })()}
 
-      {/* ─── BOTTOM-LEFT: Closest known antibiotic match (kept) ──── */}
+      {/* ─── BOTTOM-LEFT: Closest known antibiotic match.
+            Compact pill by default, click to expand into a detail
+            panel with mechanism + targets + year + top-3 matches list. */}
       {p.smiles && match?.best && (
         <div
-          title="Top-K closest known antibiotic by Morgan-2 Tanimoto similarity"
           style={{
             position: "absolute", bottom: 8, left: 8,
-            padding: "5px 10px",
-            background: tc.bg,
-            border: `1px solid ${tc.border}`,
-            borderRadius: 6,
-            display: "flex", flexDirection: "column", gap: 2,
-            fontFamily: "var(--lys-font-body)", fontSize: 10.5,
-            color: tc.fg, backdropFilter: "blur(8px)",
-            zIndex: 50, maxWidth: 230,
-            boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+            zIndex: 50, maxWidth: 320,
           }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{
-              fontFamily: "var(--lys-font-mono)", fontWeight: 800,
-              fontSize: 8.5, letterSpacing: "0.08em",
-              padding: "1px 4px", borderRadius: 2,
-              background: tc.fg, color: "white",
-            }}>{tc.label}</span>
-            <span style={{ fontWeight: 700 }}>≈ {match.best.name}</span>
-            <span style={{ marginLeft: "auto", fontFamily: "var(--lys-font-mono)", fontWeight: 700 }}>
-              {(sim * 100).toFixed(0)}%
-            </span>
-          </div>
-          <div style={{ fontSize: 9, opacity: 0.85 }}>
-            {match.best.drug_class}
-          </div>
+          <button
+            type="button"
+            onClick={() => setMatchOpen((o) => !o)}
+            title="Click to see full match info"
+            style={{
+              padding: "5px 10px",
+              background: tc.bg,
+              border: `1px solid ${tc.border}`,
+              borderRadius: 6,
+              display: "flex", flexDirection: "column", gap: 2,
+              fontFamily: "var(--lys-font-body)", fontSize: 10.5,
+              color: tc.fg, backdropFilter: "blur(8px)",
+              boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+              cursor: "pointer",
+              textAlign: "left", width: "100%",
+            }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{
+                fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                fontSize: 8.5, letterSpacing: "0.08em",
+                padding: "1px 4px", borderRadius: 2,
+                background: tc.fg, color: "white",
+              }}>{tc.label}</span>
+              <span style={{ fontWeight: 700 }}>≈ {match.best.name}</span>
+              <span style={{ marginLeft: "auto", fontFamily: "var(--lys-font-mono)", fontWeight: 700 }}>
+                {(sim * 100).toFixed(0)}%
+              </span>
+            </div>
+            <div style={{ fontSize: 9, opacity: 0.85 }}>
+              {match.best.drug_class}
+            </div>
+          </button>
+
+          {matchOpen && (
+            <div style={{
+              marginTop: 4,
+              padding: "8px 10px",
+              background: "rgba(255,255,255,0.97)",
+              border: `1px solid ${tc.border}`,
+              borderRadius: 6,
+              boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+              backdropFilter: "blur(8px)",
+              fontFamily: "var(--lys-font-body)", fontSize: 10,
+              color: "var(--lys-text)",
+              display: "flex", flexDirection: "column", gap: 6,
+            }}>
+              {/* Best match details */}
+              <div>
+                <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+                  marginBottom: 3 }}>
+                  best match
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    <span style={{ fontWeight: 700, fontSize: 11.5, color: tc.fg }}>
+                      {match.best.name}
+                    </span>
+                    <span style={{ fontFamily: "var(--lys-font-mono)",
+                      fontSize: 10, color: tc.fg, marginLeft: "auto", fontWeight: 700 }}>
+                      {(sim * 100).toFixed(0)}% similar
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
+                    <span style={{ fontFamily: "var(--lys-font-mono)" }}>class:</span>{" "}
+                    {match.best.drug_class}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
+                    <span style={{ fontFamily: "var(--lys-font-mono)" }}>mechanism:</span>{" "}
+                    {match.best.mechanism}
+                  </div>
+                  {match.best.targets && match.best.targets.length > 0 && (
+                    <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
+                      <span style={{ fontFamily: "var(--lys-font-mono)" }}>targets:</span>{" "}
+                      {match.best.targets.join(", ")}
+                    </div>
+                  )}
+                  {match.best.year > 0 && (
+                    <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)" }}>
+                      <span style={{ fontFamily: "var(--lys-font-mono)" }}>year:</span>{" "}
+                      {match.best.year}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Top-3 matches table */}
+              {match.matches && match.matches.length > 1 && (
+                <div>
+                  <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
+                    letterSpacing: "0.06em", textTransform: "uppercase",
+                    fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+                    marginBottom: 3 }}>
+                    top {Math.min(3, match.matches.length)} matches
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                    {match.matches.slice(0, 3).map((m, i) => (
+                      <div key={i} style={{
+                        display: "flex", alignItems: "baseline", gap: 6,
+                        fontSize: 10,
+                        padding: "2px 0",
+                      }}>
+                        <span style={{ width: 12, color: "var(--lys-text-faint)",
+                          fontFamily: "var(--lys-font-mono)", fontSize: 9 }}>
+                          {i + 1}.
+                        </span>
+                        <span style={{ fontWeight: 600, flex: 1,
+                          color: i === 0 ? tc.fg : "var(--lys-text)" }}>
+                          {m.name}
+                        </span>
+                        <span style={{ fontFamily: "var(--lys-font-mono)",
+                          fontSize: 9.5, color: "var(--lys-text-dim)",
+                          fontVariantNumeric: "tabular-nums" }}>
+                          {(m.similarity * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Reading guide */}
+              <div style={{
+                fontSize: 9, color: "var(--lys-text-faint)",
+                paddingTop: 4,
+                borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+                lineHeight: 1.4,
+              }}>
+                {sim < 0.30 ? "Novel scaffold — fresh design space, not a known drug clone."
+                 : sim < 0.70 ? "Moderate analog — shares chemistry with known drug; cross-resistance likely."
+                 : "Near-known — effectively a clone of an existing drug; patentability concern."}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

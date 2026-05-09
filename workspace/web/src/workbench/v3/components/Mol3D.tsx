@@ -25,6 +25,10 @@ interface Mol3DProps {
    *  qualifier — without this we'd match the residue numbers across
    *  every chain. */
   pocketChain?: string;
+  /** Slot rendered at the LEFT of the toolbar — used by Mol3DTheaterWindow
+   *  to inject the target picker into the toolbar row instead of as a
+   *  floating overlay on the canvas. */
+  leftToolbarSlot?: React.ReactNode;
 }
 
 type EditOp =
@@ -51,7 +55,7 @@ const PATHOGEN_PDB: Record<string, string> = {
   NGono: "3FIH",
 };
 
-export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, pocketResidues, pocketChain }: Mol3DProps) {
+export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, pocketResidues, pocketChain, leftToolbarSlot }: Mol3DProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const stageObj = useRef<any>(null);
   const proteinComp = useRef<any>(null);
@@ -479,17 +483,19 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
               matters for binding analysis.
             - Recenter: re-fits the camera if the user pans/zooms away. */}
       <div style={{
-        padding: "0 12px 0 152px",
+        padding: "0 12px",
         height: 36,
         borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
         display: "flex",
         alignItems: "center",
-        justifyContent: "flex-end",
         gap: 6,
         fontSize: 11,
         color: "var(--lys-text-dim)",
         background: "var(--lys-bg-2)",
       }}>
+        {/* Left slot — target picker, injected by Mol3DTheaterWindow */}
+        {leftToolbarSlot}
+        <span style={{ flex: 1 }} />
         <RepSelect value={representation} onChange={setRepresentation} />
         <ToggleBtn icon={pocketOnly ? <Eye size={11} /> : <EyeOff size={11} />} label="Pocket" active={pocketOnly} onClick={() => setPocketOnly((p) => !p)} />
         <button onClick={recenter} className="lys-3d-btn" title="Recenter — re-fit the camera around the loaded protein + ligand">
