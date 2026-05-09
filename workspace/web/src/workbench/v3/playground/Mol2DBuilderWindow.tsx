@@ -584,32 +584,33 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     const host = svgHostRef.current;
     const svgEl = host?.querySelector("svg") ?? null;
     if (svgEl) {
-      // 1. Authoritative: our own invisible hit CIRCLE. We tag both
-      //    the circle AND the bare digit-text label with
-      //    data-atom-hit="N" (the digit needs to be clickable too)
-      //    — but the digit sits OFFSET from the geometric atom centre
-      //    by ~25-40px (RDKit deliberately shifts labels off the
-      //    atom for visibility). Prefer the SVGCircleElement, which
-      //    is guaranteed to be at the geometric centre. Iterate
-      //    matches and pick the circle if any exists.
-      const matches = svgEl.querySelectorAll(`[data-atom-hit="${idx}"]`);
-      let circle: SVGGraphicsElement | null = null;
-      let firstMatch: SVGGraphicsElement | null = null;
-      for (const m of Array.from(matches)) {
-        if (!firstMatch) firstMatch = m as SVGGraphicsElement;
-        if ((m as SVGElement).tagName === "circle") {
-          circle = m as SVGGraphicsElement;
-          break;
+      // 1. Authoritative: the invisible hit CIRCLE we draw at the
+      //    geometric atom centre. Use a CSS selector that ONLY matches
+      //    circle elements ('circle[data-atom-hit="N"]') so the
+      //    matching digit-text label (which we also tag with the same
+      //    data-attribute so clicks on the digit route to the atom) is
+      //    excluded by the tag-name part of the selector.
+      const circle = svgEl.querySelector(
+        `circle[data-atom-hit="${idx}"]`,
+      ) as SVGGraphicsElement | null;
+      if (circle) {
+        // Read cx/cy directly — most reliable. Falls back to bbox if
+        // the circle was created without those attributes for some reason.
+        const cx = parseFloat(circle.getAttribute("cx") || "");
+        const cy = parseFloat(circle.getAttribute("cy") || "");
+        if (isFinite(cx) && isFinite(cy)) {
+          return { x: cx, y: cy };
         }
-      }
-      const target = circle ?? firstMatch;
-      if (target) {
         try {
-          const bbox = target.getBBox();
+          const bbox = circle.getBBox();
           return { x: bbox.x + bbox.width / 2, y: bbox.y + bbox.height / 2 };
         } catch {/*noop*/}
       }
-      // 2. Whole-word class match — prevents atom-1 matching atom-10.
+      // 2. Cached map (built from heteroatom paths + bond-path "d" parsing).
+      const cached = atomPositions.current.get(idx);
+      if (cached) return cached;
+      // 3. Whole-word class match — prevents atom-1 matching atom-10.
+      //    Last resort because this can hit RDKit's offset digit label.
       const fallback = svgEl.querySelector(`[class~="atom-${idx}"]`);
       if (fallback) {
         try {
@@ -618,7 +619,6 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         } catch {/*noop*/}
       }
     }
-    // 3. Cached map fallback.
     return atomPositions.current.get(idx) ?? null;
   };
 
@@ -911,30 +911,41 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       const cy = _pos.y;
       centers.push({ idx, cx, cy });
 
-      // Selection ring
-      const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      ring.setAttribute("data-sel", "1");
-      ring.setAttribute("cx", String(cx));
-      ring.setAttribute("cy", String(cy));
-      ring.setAttribute("r", "10");
-      ring.setAttribute("fill", "rgba(245,158,11,0.10)");
-      ring.setAttribute("stroke", "#f59e0b");
-      ring.setAttribute("stroke-width", "2");
-      ring.style.pointerEvents = "none";
-      svgEl.appendChild(ring);
+      // Solid filled disc with a white outline + the selection-order
+      // number INSIDE the disc. Replaces the previous dashed-ring +
+      // separate offset badge — that scheme had two visual anchors
+      // (ring + tiny number floating above-right) that read as "two
+      // separate things" instead of "one selected atom". This is
+      // tighter, cleaner, and the number sits exactly on the atom so
+      // there's never any doubt which atom it labels.
+      const order = centers.length;  // 1-based selection index
+      const SEL_BG = "#f59e0b";       // amber 500
+      const SEL_BORDER = "#ffffff";
 
-      // Order badge (1, 2, 3...) showing the atom's position in the bond chain
-      const badge = document.createElementNS("http://www.w3.org/2000/svg", "text");
-      badge.setAttribute("data-sel", "1");
-      badge.setAttribute("x", String(cx + 12));
-      badge.setAttribute("y", String(cy - 12));
-      badge.setAttribute("font-size", "10");
-      badge.setAttribute("font-family", "SF Mono, monospace");
-      badge.setAttribute("font-weight", "700");
-      badge.setAttribute("fill", "#92400e");
-      badge.style.pointerEvents = "none";
-      badge.textContent = String(centers.length);
-      svgEl.appendChild(badge);
+      const disc = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      disc.setAttribute("data-sel", "1");
+      disc.setAttribute("cx", String(cx));
+      disc.setAttribute("cy", String(cy));
+      disc.setAttribute("r", "8");
+      disc.setAttribute("fill", SEL_BG);
+      disc.setAttribute("stroke", SEL_BORDER);
+      disc.setAttribute("stroke-width", "1.5");
+      disc.setAttribute("opacity", "0.92");
+      disc.style.pointerEvents = "none";
+      svgEl.appendChild(disc);
+
+      const num = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      num.setAttribute("data-sel", "1");
+      num.setAttribute("x", String(cx));
+      num.setAttribute("y", String(cy + 3.5));
+      num.setAttribute("font-size", "9.5");
+      num.setAttribute("font-family", "SF Mono, monospace");
+      num.setAttribute("font-weight", "700");
+      num.setAttribute("fill", "white");
+      num.setAttribute("text-anchor", "middle");
+      num.style.pointerEvents = "none";
+      num.textContent = String(order);
+      svgEl.appendChild(num);
     });
 
     // Ghost-line preview: connect the first two selected atoms with a dashed line
