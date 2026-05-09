@@ -2019,60 +2019,67 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </div>
           )}
 
-          {/* INVENTORY chip — single capsule top-RIGHT containing
-              all three labels (atoms / bonds / build). Click toggles
-              the shared rail panel; the rail's existing internal
-              section collapses let the user focus once it's open.
-              One chip = one click target, no overlap, dynamic-width
-              capsule that adapts to its content. */}
-          <button
-            type="button"
-            onClick={() => setRailOpen((o) => !o)}
-            title="Inventory — atoms · bonds · build (toggle rail)"
-            style={{
-              position: "absolute",
-              top: 8, right: 8, zIndex: 55,
-              padding: "5px 10px",
-              background: railOpen ? "rgba(99,102,241,0.20)" : "rgba(99,102,241,0.10)",
-              border: `1px solid ${railOpen ? "#6366f1" : "rgba(99,102,241,0.35)"}`,
-              borderRadius: 6,
-              backdropFilter: "blur(8px)",
-              boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
-              fontFamily: "var(--lys-font-body)",
-              cursor: "pointer",
-              display: "inline-flex", alignItems: "center", gap: 8,
-            }}>
-            <span style={{
-              fontFamily: "var(--lys-font-mono)", fontWeight: 800,
-              fontSize: 8.5, letterSpacing: "0.08em",
-              padding: "1px 4px", borderRadius: 2,
-              background: "#6366f1", color: "white",
-            }}>INV</span>
-            <span style={{ display: "inline-flex", alignItems: "center", gap: 6,
-              fontWeight: 600, fontSize: 9.5 }}>
-              <span style={{ color: "#10b981" }}>atoms</span>
-              <span style={{ opacity: 0.40 }}>·</span>
-              <span style={{ color: "#a855f7" }}>bonds</span>
-              <span style={{ opacity: 0.40 }}>·</span>
-              <span style={{ color: "#0891b2" }}>build</span>
-            </span>
-            <span style={{ fontSize: 8, opacity: 0.7, color: "#6366f1" }}>
-              {railOpen ? "▼" : "▶"}
-            </span>
-          </button>
+          {/* INV chip — BOTTOM-LEFT capsule with atoms / bonds / build
+              labels. When closed: pill. When open: expands into a
+              floating card containing the rail content (instead of
+              re-attaching as a side rail). */}
+          {!railOpen && (
+            <button
+              type="button"
+              onClick={() => {
+                setPropsOverlayOpen(false);
+                setBuildOverlayOpen(false);
+                setRailOpen(true);
+              }}
+              title="Inventory — atoms · bonds · build"
+              style={{
+                position: "absolute",
+                bottom: 8, left: 8, zIndex: 55,
+                padding: "5px 10px",
+                background: "rgba(99,102,241,0.10)",
+                border: "1px solid rgba(99,102,241,0.35)",
+                borderRadius: 6,
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+                fontFamily: "var(--lys-font-body)",
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 8,
+              }}>
+              <span style={{
+                fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                fontSize: 8.5, letterSpacing: "0.08em",
+                padding: "1px 4px", borderRadius: 2,
+                background: "#6366f1", color: "white",
+              }}>INV</span>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6,
+                fontWeight: 600, fontSize: 9.5 }}>
+                <span style={{ color: "#10b981" }}>atoms</span>
+                <span style={{ opacity: 0.40 }}>·</span>
+                <span style={{ color: "#a855f7" }}>bonds</span>
+                <span style={{ opacity: 0.40 }}>·</span>
+                <span style={{ color: "#0891b2" }}>build</span>
+              </span>
+              <span style={{ fontSize: 8, opacity: 0.7, color: "#6366f1" }}>▶</span>
+            </button>
+          )}
+          {/* INV expanded card — bottom-LEFT. The actual AtomsRail
+              render lives at its original sibling position (further
+              below in the JSX), wrapped in an absolute container so
+              when railOpen is true it floats here as an overlay
+              card instead of as a side rail. */}
 
           {/* PROPERTIES chip — bottom-LEFT capsule on the 2D canvas.
               Same pattern as the 3D viewer's NOVEL chip: collapsed
               shows a compact pill with a counter; click expands into
               a glassy floating card with the full PropertiesCard
               content. Click again or × to close. */}
-          {propertiesPanel && !propsOverlayOpen && (
+          {propertiesPanel && !propsOverlayOpen && !buildOverlayOpen && (
             <button
               type="button"
               onClick={() => { setBuildOverlayOpen(false); setPropsOverlayOpen(true); }}
               title="Properties — drug-likeness · rule compliance · structure · identifiers"
               style={{
-                position: "absolute", bottom: 8, left: 8, zIndex: 55,
+                position: "absolute", bottom: 8, right: 8, zIndex: 55,
                 padding: "5px 10px",
                 // Same lavender-glass treatment as the 3D NOVEL chip,
                 // just teal instead of purple so the two cards (props
@@ -2100,7 +2107,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           )}
           {propertiesPanel && propsOverlayOpen && (
             <div style={{
-              position: "absolute", bottom: 8, left: 8, zIndex: 55,
+              position: "absolute", bottom: 8, right: 8, zIndex: 55,
               width: 360, maxHeight: "calc(100% - 16px)",
               // Lavender-glass treatment matching the 3D NOVEL card,
               // but in teal — translucent tint + backdrop blur so the
@@ -2143,17 +2150,17 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </div>
           )}
 
-          {/* BUILD chip — bottom-LEFT, stacked ABOVE the PROPS chip
-              (PROPS is at bottom: 8, BUILD sits at bottom: 44). Same
-              lavender-glass pattern. Inline counter on the pill
-              ('6a · 6b') so totals are glanceable. */}
-          {!buildOverlayOpen && (
+          {/* BUILD chip — bottom-RIGHT, stacked ABOVE the PROPS chip
+              (PROPS at bottom: 8, BUILD at bottom: 44). Hidden when
+              either expanded card is showing so the chip can't sit
+              on top of an open card. */}
+          {!buildOverlayOpen && !propsOverlayOpen && (
             <button
               type="button"
               onClick={() => { setPropsOverlayOpen(false); setBuildOverlayOpen(true); }}
               title="Build — state · composition · patterns · closest known"
               style={{
-                position: "absolute", bottom: 44, left: 8, zIndex: 55,
+                position: "absolute", bottom: 44, right: 8, zIndex: 55,
                 padding: "5px 10px",
                 background: "rgba(168,85,247,0.10)",
                 border: "1px solid rgba(168,85,247,0.35)",
@@ -2177,10 +2184,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           )}
           {buildOverlayOpen && (
             <div style={{
-              position: "absolute", bottom: 8, left: 8, zIndex: 55,
+              // Bottom-RIGHT, same slot PROPS uses when it's open —
+              // mutually exclusive so they never overlap.
+              position: "absolute", bottom: 8, right: 8, zIndex: 55,
               width: 360, maxHeight: "calc(100% - 16px)",
-              // Same lavender-glass treatment as the 3D NOVEL card,
-              // in purple. Translucent tint + backdrop blur.
               background: "rgba(168,85,247,0.10)",
               border: "1px solid rgba(168,85,247,0.35)",
               borderRadius: 6,
@@ -2238,10 +2245,56 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         {/* Bottom Insights strip dropped — Properties + Build are now
             left-side toolbar docks (top of the 2D builder). */}
         </div>
-        {/* Atoms / Bonds / Build rail — hidden by default, opened by
-            chips on the canvas. The component itself is unchanged;
-            we just gate its render behind railOpen. */}
-        {railOpen && (<>
+        {/* Atoms / Bonds / Build rail. Hidden by default. When the
+            INV chip opens it (railOpen=true) we render it inside an
+            absolute-positioned overlay card at the SVG canvas's
+            bottom-left so it reads as a chip-card (matching the
+            PROPS / BUILD pattern), not as a persistent right rail. */}
+        {railOpen && (
+        <div style={{
+          position: "absolute", bottom: 8, left: 8, zIndex: 55,
+          width: 360, maxHeight: "calc(100% - 16px)",
+          background: "rgba(99,102,241,0.10)",
+          border: "1px solid rgba(99,102,241,0.35)",
+          borderRadius: 6,
+          boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          overflow: "hidden",
+          display: "flex", flexDirection: "column",
+          pointerEvents: "auto",
+        }}>
+          <div
+            onClick={() => setRailOpen(false)}
+            title="Click to collapse"
+            style={{
+              padding: "6px 10px",
+              fontFamily: "var(--lys-font-mono)", fontSize: 9,
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              color: "#6366f1", fontWeight: 700,
+              borderBottom: "1px solid rgba(99,102,241,0.20)",
+              display: "flex", alignItems: "center", gap: 8,
+              cursor: "pointer", userSelect: "none",
+              flexShrink: 0,
+            }}>
+            <span style={{
+              fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+              fontSize: 8.5, letterSpacing: "0.08em",
+              padding: "1px 4px", borderRadius: 2,
+              background: "#6366f1", color: "white",
+            }}>INV</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "#10b981" }}>atoms</span>
+              <span style={{ opacity: 0.40 }}>·</span>
+              <span style={{ color: "#a855f7" }}>bonds</span>
+              <span style={{ opacity: 0.40 }}>·</span>
+              <span style={{ color: "#0891b2" }}>build</span>
+            </span>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 8, opacity: 0.7 }}>▼</span>
+          </div>
+          <div style={{ flex: 1, overflow: "auto",
+            background: "rgba(255,255,255,0.92)" }}>
         <AtomsRail
           apiBase={apiBase}
           smiles={smiles}
@@ -2474,7 +2527,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             }
           }}
         />
-        </>)}
+          </div>
+        </div>
+        )}
         {pop && smiles && createPortal(
           <div data-chem-pop style={{
             position: "fixed",
