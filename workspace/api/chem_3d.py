@@ -387,6 +387,11 @@ async def list_targets(pathogen: str) -> dict:
                 "clinical_note": t["clinical_note"],
                 "drug_class_examples": t["drug_class_examples"],
                 "preferred_default": t.get("preferred_default", False),
+                # Active site geometry — used by the 3D viewer to focus
+                # the Pocket toggle on the binding region and to highlight
+                # the pocket residues on the cartoon.
+                "active_site_chain": t.get("active_site_chain", "A"),
+                "active_site_residues": t.get("active_site_residues", []),
             }
             for t in targets
         ],

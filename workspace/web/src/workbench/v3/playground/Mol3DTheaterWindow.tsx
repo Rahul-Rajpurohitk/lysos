@@ -40,6 +40,11 @@ interface CuratedTarget {
   clinical_note: string;
   drug_class_examples: string[];
   preferred_default: boolean;
+  /** Backend-curated active-site residue numbers + chain. Used to
+   *  drive the Pocket toggle (filter view to these residues) and the
+   *  pocket highlight overlay (color them green on the cartoon). */
+  active_site_chain?: string;
+  active_site_residues?: number[];
 }
 
 interface KeyContact {
@@ -218,6 +223,8 @@ export function Mol3DTheaterWindow(p: Props) {
         pathogen={p.pathogen}
         onMoleculeEdit={p.onMoleculeEdit}
         pdbOverride={selectedTargetId}
+        pocketResidues={selectedTarget?.active_site_residues ?? []}
+        pocketChain={selectedTarget?.active_site_chain ?? "A"}
       />
 
       {/* ─── TOP-LEFT: Target picker dropdown ──────────────────────── */}
@@ -303,6 +310,50 @@ export function Mol3DTheaterWindow(p: Props) {
           </div>
         )}
       </div>
+
+      {/* ─── BELOW-TOOLBAR-LEFT: Pocket info chip ─────────────────
+          Reads the curated active-site list for the selected target
+          and reports residue count + character (hydrophobic / polar /
+          mixed). Tells the user at a glance what kind of binding
+          environment the pocket offers without opening Key Contacts. */}
+      {selectedTarget?.active_site_residues && selectedTarget.active_site_residues.length > 0 && pose && (() => {
+        // Hydrophobic vs polar character — derived from the residues
+        // we know are in the pocket (key_contacts overlap with the
+        // curated active-site list). Hydrophobic: ALA, VAL, LEU, ILE,
+        // PHE, MET, TRP, PRO, GLY (loosely). Polar: SER, THR, TYR,
+        // ASN, GLN, HIS. Charged: LYS, ARG, ASP, GLU.
+        const HYDRO = new Set(["ALA","VAL","LEU","ILE","PHE","MET","TRP","PRO","GLY","CYS"]);
+        const POLAR = new Set(["SER","THR","TYR","ASN","GLN","HIS"]);
+        const CHARGED = new Set(["LYS","ARG","ASP","GLU"]);
+        let h = 0, p = 0, c = 0;
+        for (const k of pose.key_contacts.slice(0, 8)) {
+          const code = k.residue.slice(0, 3).toUpperCase();
+          if (HYDRO.has(code)) h++;
+          else if (POLAR.has(code)) p++;
+          else if (CHARGED.has(code)) c++;
+        }
+        const total = Math.max(1, h + p + c);
+        const character = h / total > 0.5 ? "hydrophobic" : c / total > 0.4 ? "charged" : p / total > 0.4 ? "polar" : "mixed";
+        const charColor = character === "hydrophobic" ? "#a16207" : character === "charged" ? "#7c3aed" : character === "polar" ? "#0891b2" : "#475569";
+        return (
+          <div
+            title={`Pocket character — ${h} hydrophobic · ${p} polar · ${c} charged residues among the top contacts. '${character}' tells you what kind of drug fits best (hydrophobic pocket → lipophilic drugs; polar pocket → H-bond rich drugs; charged → ionic drugs).`}
+            style={{
+              position: "absolute", top: 44, left: 8, zIndex: 60,
+              padding: "4px 9px",
+              background: "rgba(16,185,129,0.10)",
+              border: "1px solid rgba(16,185,129,0.30)",
+              borderRadius: 5, backdropFilter: "blur(8px)",
+              display: "inline-flex", alignItems: "center", gap: 7,
+              fontFamily: "var(--lys-font-mono)", fontSize: 10,
+              color: "#047857", fontWeight: 700,
+            }}>
+            <span>pocket {selectedTarget.active_site_residues.length}res</span>
+            <span style={{ opacity: 0.5, fontWeight: 500 }}>·</span>
+            <span style={{ color: charColor }}>{character}</span>
+          </div>
+        );
+      })()}
 
       {/* ─── BELOW-TOOLBAR-RIGHT: Pose score + contacts/clashes ─────
           Sits underneath the Mol3D toolbar's right edge instead of

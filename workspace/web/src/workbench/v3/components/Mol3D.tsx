@@ -16,6 +16,15 @@ interface Mol3DProps {
    *  map (e.g. PBP2a vs MurA for MRSA). When set, takes precedence over
    *  the legacy PATHOGEN_PDB default. */
   pdbOverride?: string | null;
+  /** Active-site residue numbers (PDB-numbered). When set, the Pocket
+   *  toggle filters the rendered protein to just these residues + the
+   *  ligand. Always rendered as a green highlight overlay so the
+   *  pocket is visible even in full-protein view. */
+  pocketResidues?: number[];
+  /** PDB chain identifier the active site lives on. NGL selection
+   *  qualifier — without this we'd match the residue numbers across
+   *  every chain. */
+  pocketChain?: string;
 }
 
 type EditOp =
@@ -42,7 +51,7 @@ const PATHOGEN_PDB: Record<string, string> = {
   NGono: "3FIH",
 };
 
-export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }: Mol3DProps) {
+export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, pocketResidues, pocketChain }: Mol3DProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const stageObj = useRef<any>(null);
   const proteinComp = useRef<any>(null);
@@ -245,7 +254,12 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
     if (proteinComp.current) {
       applyRepresentation(proteinComp.current, representation, wireframe);
     }
-  }, [representation, wireframe]);
+    // Re-fire when pocket inputs change too — pocketOnly toggle, the
+    // residue list (changes when target switches), or the chain.
+    // Without these deps, clicking Pocket did nothing because the
+    // protein already had its representations attached at load time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [representation, wireframe, pocketOnly, pocketResidues?.join(","), pocketChain]);
 
   // Update spin
   useEffect(() => {
@@ -315,18 +329,52 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
 
   function applyRepresentation(comp: any, rep: Representation, wire: boolean) {
     comp.removeAllRepresentations();
-    const sel = pocketOnly ? "polymer" : "polymer";
+    // Build NGL selection strings:
+    //   pocketSel  — just the active-site residues + chain. Used when
+    //                the user toggles Pocket on so we filter the view
+    //                to the binding region instead of the full protein.
+    //   mainSel    — what we render as the main protein representation
+    //                (full protein vs pocket-only).
+    const chain = pocketChain || "A";
+    const pocketSel = pocketResidues && pocketResidues.length
+      ? `(${pocketResidues.join(" or ")}) and :${chain}`
+      : "polymer";
+    const mainSel = pocketOnly ? pocketSel : "polymer";
+
     if (rep === "Cartoon") {
-      comp.addRepresentation("cartoon", { sele: sel, colorScheme: "chainid", quality: "medium" });
+      comp.addRepresentation("cartoon", { sele: mainSel, colorScheme: "chainid", quality: "medium" });
     } else if (rep === "Surface") {
-      comp.addRepresentation("surface", { sele: sel, opacity: 0.5, colorScheme: "electrostatic" });
+      comp.addRepresentation("surface", { sele: mainSel, opacity: 0.5, colorScheme: "electrostatic" });
     } else if (rep === "Sticks") {
-      comp.addRepresentation("licorice", { sele: sel });
+      comp.addRepresentation("licorice", { sele: mainSel });
     } else {
-      comp.addRepresentation("spacefill", { sele: sel });
+      comp.addRepresentation("spacefill", { sele: mainSel });
     }
+
+    // Pocket HIGHLIGHT — always-on green overlay on the active-site
+    // residues so the user can SEE where the pocket is, even when the
+    // full protein cartoon is rendered. Two layers:
+    //   1. Green ball+stick of the pocket residues (atomic detail)
+    //   2. Translucent green surface around the same residues (cavity
+    //      shape — the "lock" the drug fits into)
+    // Both are skipped in pocket-only mode since the main rep is
+    // already showing only those residues.
+    if (pocketResidues && pocketResidues.length && !pocketOnly) {
+      comp.addRepresentation("licorice", {
+        sele: pocketSel,
+        color: "#10b981",
+        opacity: 0.95,
+      });
+      comp.addRepresentation("surface", {
+        sele: pocketSel,
+        color: "#10b981",
+        opacity: 0.18,
+        useWorker: false,
+      });
+    }
+
     if (wire) {
-      comp.addRepresentation("backbone", { sele: sel, colorScheme: "uniform", color: "#8b949e" });
+      comp.addRepresentation("backbone", { sele: mainSel, colorScheme: "uniform", color: "#8b949e" });
     }
   }
 
