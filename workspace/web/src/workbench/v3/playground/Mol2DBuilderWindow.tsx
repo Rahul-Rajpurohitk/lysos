@@ -284,6 +284,12 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   // opens build-state / composition / patterns / closest-known.
   const [propsOverlayOpen, setPropsOverlayOpen] = useState(false);
   const [buildOverlayOpen, setBuildOverlayOpen] = useState(false);
+  // Atoms / Bonds / Build rail — was always-visible right side rail.
+  // Now hidden by default; opened via 3 capsule chips on the 2D
+  // canvas. All three chips toggle the same rail (the rail's
+  // internal sub-section collapses already let the user focus on
+  // one section at a time once it's open).
+  const [railOpen, setRailOpen] = useState<boolean>(false);
   const libraryBtnRef = useRef<HTMLButtonElement | null>(null);
   // SMARTS dock state (top-nav button → docked left-side panel)
   const [smartsOpen, setSmartsOpen] = useState(false);
@@ -2013,6 +2019,53 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </div>
           )}
 
+          {/* ATOMS / BONDS / BUILD chip rail — top-RIGHT row of capsules.
+              Replaces the old always-visible right side rail. Each
+              chip toggles the shared rail panel; once open the user
+              can use the rail's internal section collapses to focus.
+              All three chips look identical so the user can recognise
+              them as one control family. The chip becomes filled
+              when the rail is open. */}
+          {[
+            { key: "atoms", label: "ATOMS", accent: "#10b981", desc: "elements · valence" },
+            { key: "bonds", label: "BONDS", accent: "#a855f7", desc: "order · ring" },
+            { key: "build", label: "BUILD", accent: "#0891b2", desc: "fragments · rings · smiles" },
+          ].map((chip, i) => (
+            <button
+              key={chip.key}
+              type="button"
+              onClick={() => setRailOpen((o) => !o)}
+              title={`${chip.label} — ${chip.desc} (toggle rail)`}
+              style={{
+                position: "absolute",
+                top: 8,
+                right: 8 + i * 88,
+                zIndex: 55,
+                padding: "5px 10px",
+                background: railOpen
+                  ? `${chip.accent}20`
+                  : `${chip.accent}10`,
+                border: `1px solid ${railOpen ? chip.accent : `${chip.accent}55`}`,
+                borderRadius: 6,
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+                fontFamily: "var(--lys-font-body)",
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 6,
+              }}>
+              <span style={{
+                fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                fontSize: 8.5, letterSpacing: "0.08em",
+                padding: "1px 4px", borderRadius: 2,
+                background: chip.accent, color: "white",
+              }}>{chip.label}</span>
+              <span style={{ fontWeight: 600, fontSize: 9.5,
+                color: chip.accent, opacity: 0.85 }}>
+                {chip.desc}
+              </span>
+            </button>
+          ))}
+
           {/* PROPERTIES chip — bottom-LEFT capsule on the 2D canvas.
               Same pattern as the 3D viewer's NOVEL chip: collapsed
               shows a compact pill with a counter; click expands into
@@ -2188,7 +2241,10 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         {/* Bottom Insights strip dropped — Properties + Build are now
             left-side toolbar docks (top of the 2D builder). */}
         </div>
-        {/* Atoms rail — embedded list of all atoms with element + valence + edit chips */}
+        {/* Atoms / Bonds / Build rail — hidden by default, opened by
+            chips on the canvas. The component itself is unchanged;
+            we just gate its render behind railOpen. */}
+        {railOpen && (<>
         <AtomsRail
           apiBase={apiBase}
           smiles={smiles}
@@ -2421,6 +2477,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             }
           }}
         />
+        </>)}
         {pop && smiles && createPortal(
           <div data-chem-pop style={{
             position: "fixed",
