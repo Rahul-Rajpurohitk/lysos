@@ -2055,18 +2055,37 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               borderRadius: 6,
               boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
               backdropFilter: "blur(10px)",
-              overflow: "auto",
+              overflow: "hidden",
+              display: "flex", flexDirection: "column",
             }}>
-              <button
-                type="button"
+              {/* Click-to-collapse header — entire row is the toggle. */}
+              <div
                 onClick={() => setPropsOverlayOpen(false)}
-                title="Collapse"
+                title="Click to collapse"
                 style={{
-                  position: "absolute", top: 6, right: 6, zIndex: 1,
-                  border: 0, background: "transparent", cursor: "pointer",
-                  padding: 4, color: "var(--lys-text-faint)", fontSize: 14, lineHeight: 1,
-                }}>×</button>
-              {propertiesPanel}
+                  padding: "6px 10px",
+                  fontFamily: "var(--lys-font-mono)", fontSize: 9,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  color: "var(--lys-text-faint)", fontWeight: 700,
+                  borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+                  display: "flex", alignItems: "center", gap: 6,
+                  cursor: "pointer", userSelect: "none",
+                  background: "rgba(15,23,42,0.04)",
+                  flexShrink: 0,
+                }}>
+                <span style={{
+                  fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                  fontSize: 8.5, letterSpacing: "0.08em",
+                  padding: "1px 4px", borderRadius: 2,
+                  background: "#0f172a", color: "white",
+                }}>PROPS</span>
+                <span>drug-likeness · rules · structure</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 8, opacity: 0.7 }}>▼</span>
+              </div>
+              <div style={{ flex: 1, overflow: "auto" }}>
+                {propertiesPanel}
+              </div>
             </div>
           )}
 
@@ -2109,17 +2128,35 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               borderRadius: 6,
               boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
               backdropFilter: "blur(10px)",
-              overflow: "auto",
+              overflow: "hidden",
+              display: "flex", flexDirection: "column",
             }}>
-              <button
-                type="button"
+              {/* Click-to-collapse header — entire row is the toggle. */}
+              <div
                 onClick={() => setBuildOverlayOpen(false)}
-                title="Collapse"
+                title="Click to collapse"
                 style={{
-                  position: "absolute", top: 6, right: 6, zIndex: 1,
-                  border: 0, background: "transparent", cursor: "pointer",
-                  padding: 4, color: "var(--lys-text-faint)", fontSize: 14, lineHeight: 1,
-                }}>×</button>
+                  padding: "6px 10px",
+                  fontFamily: "var(--lys-font-mono)", fontSize: 9,
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  color: "var(--lys-text-faint)", fontWeight: 700,
+                  borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+                  display: "flex", alignItems: "center", gap: 6,
+                  cursor: "pointer", userSelect: "none",
+                  background: "rgba(168,85,247,0.06)",
+                  flexShrink: 0,
+                }}>
+                <span style={{
+                  fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                  fontSize: 8.5, letterSpacing: "0.08em",
+                  padding: "1px 4px", borderRadius: 2,
+                  background: "#a855f7", color: "white",
+                }}>BUILD</span>
+                <span>{diagnostics ? `${(diagnostics as any).n_atoms ?? 0}a · ${bondList.length}b` : "state · patterns"}</span>
+                <span style={{ flex: 1 }} />
+                <span style={{ fontSize: 8, opacity: 0.7, color: "#7c3aed" }}>▼</span>
+              </div>
+              <div style={{ flex: 1, overflow: "auto" }}>
               <PropertiesStrip
                 apiBase={apiBase}
                 smiles={smiles}
@@ -2137,6 +2174,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               >
                 {null}
               </PropertiesStrip>
+              </div>
             </div>
           )}
         </div>

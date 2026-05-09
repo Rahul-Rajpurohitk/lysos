@@ -631,7 +631,7 @@ export function Mol3DTheaterWindow(p: Props) {
         }}>
           <div
             onClick={() => setContactsOpen(false)}
-            title="Collapse"
+            title="Click to collapse"
             style={{
               padding: "8px 10px 6px",
               fontSize: 8.5, color: "var(--lys-text-faint)",
@@ -645,7 +645,6 @@ export function Mol3DTheaterWindow(p: Props) {
             <span style={{ fontSize: 7, opacity: 0.7 }}>▼</span>
             Key contacts · top 8
             <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 11, opacity: 0.6 }}>×</span>
           </div>
           <div style={{
             // Vertical stack of rows. Each row is its own flex
@@ -826,29 +825,20 @@ export function Mol3DTheaterWindow(p: Props) {
               fontFamily: "var(--lys-font-body)", fontSize: 10,
               color: "var(--lys-text)",
               display: "flex", flexDirection: "column", gap: 10,
-              position: "relative",
             }}>
-              {/* Close button — replaces the now-hidden pill as the
-                  way to collapse the detail card. */}
-              <button
-                type="button"
-                onClick={() => setMatchOpen(false)}
-                title="Collapse"
-                style={{
-                  position: "absolute", top: 6, right: 6,
-                  border: 0, background: "transparent",
-                  cursor: "pointer", padding: 4,
-                  color: tc.fg, opacity: 0.5,
-                  fontSize: 12, lineHeight: 1,
-                }}
-                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
-                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
-              >×</button>
-
-              {/* Best match details — two-col grid: label | value. */}
+              {/* Best match details — two-col grid: label | value.
+                  The whole header row is the click-to-collapse target;
+                  no separate × button. Chevron ▼ indicates the
+                  affordance. */}
               <div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6,
-                  marginBottom: 6 }}>
+                <div
+                  onClick={() => setMatchOpen(false)}
+                  title="Click to collapse"
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    marginBottom: 6,
+                    cursor: "pointer", userSelect: "none",
+                  }}>
                   <span style={{
                     fontFamily: "var(--lys-font-mono)", fontWeight: 800,
                     fontSize: 8.5, letterSpacing: "0.08em",
@@ -860,6 +850,8 @@ export function Mol3DTheaterWindow(p: Props) {
                     fontFamily: "var(--lys-font-mono)", fontWeight: 700 }}>
                     best match
                   </span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 9, color: tc.fg, opacity: 0.7 }}>▼</span>
                 </div>
                 {/* Header row: name + similarity */}
                 <div style={{
