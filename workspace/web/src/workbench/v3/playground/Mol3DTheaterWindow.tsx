@@ -776,49 +776,47 @@ export function Mol3DTheaterWindow(p: Props) {
             position: "absolute", bottom: 8, left: 8,
             zIndex: 50, maxWidth: 320,
           }}>
-          <button
-            type="button"
-            onClick={() => setMatchOpen((o) => !o)}
-            title="Click to see full match info"
-            style={{
-              padding: "5px 10px",
-              background: tc.bg,
-              border: `1px solid ${tc.border}`,
-              borderRadius: 6,
-              display: "flex", flexDirection: "column", gap: 2,
-              fontFamily: "var(--lys-font-body)", fontSize: 10.5,
-              color: tc.fg, backdropFilter: "blur(8px)",
-              boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
-              cursor: "pointer",
-              textAlign: "left", width: "100%",
-            }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{
-                fontFamily: "var(--lys-font-mono)", fontWeight: 800,
-                fontSize: 8.5, letterSpacing: "0.08em",
-                padding: "1px 4px", borderRadius: 2,
-                background: tc.fg, color: "white",
-              }}>{tc.label}</span>
-              <span style={{ fontWeight: 700 }}>≈ {match.best.name}</span>
-              <span style={{ marginLeft: "auto", fontFamily: "var(--lys-font-mono)", fontWeight: 700 }}>
-                {(sim * 100).toFixed(0)}%
-              </span>
-            </div>
-            <div style={{ fontSize: 9, opacity: 0.85 }}>
-              {match.best.drug_class}
-            </div>
-          </button>
+          {/* Compact pill — only when collapsed. When the user expands
+              the detail card we hide this pill so the card carries
+              the whole identity (avoids 'name shown twice' issue). */}
+          {!matchOpen && (
+            <button
+              type="button"
+              onClick={() => setMatchOpen(true)}
+              title="Click to see full match info"
+              style={{
+                padding: "5px 10px",
+                background: tc.bg,
+                border: `1px solid ${tc.border}`,
+                borderRadius: 6,
+                display: "flex", flexDirection: "column", gap: 2,
+                fontFamily: "var(--lys-font-body)", fontSize: 10.5,
+                color: tc.fg, backdropFilter: "blur(8px)",
+                boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+                cursor: "pointer",
+                textAlign: "left", width: "100%",
+              }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                  fontSize: 8.5, letterSpacing: "0.08em",
+                  padding: "1px 4px", borderRadius: 2,
+                  background: tc.fg, color: "white",
+                }}>{tc.label}</span>
+                <span style={{ fontWeight: 700 }}>≈ {match.best.name}</span>
+                <span style={{ marginLeft: "auto", fontFamily: "var(--lys-font-mono)", fontWeight: 700 }}>
+                  {(sim * 100).toFixed(0)}%
+                </span>
+              </div>
+              <div style={{ fontSize: 9, opacity: 0.85 }}>
+                {match.best.drug_class}
+              </div>
+            </button>
+          )}
 
           {matchOpen && (
             <div style={{
-              marginTop: 4,
               padding: "10px 12px",
-              // Match the badge's lavender-glass treatment — same
-              // tc.bg tint as the trigger pill, with backdrop-blur
-              // so the protein behind shows through. Keeps the
-              // detail card visually wedded to the badge it
-              // expanded from instead of looking like a separate
-              // panel.
               background: tc.bg,
               border: `1px solid ${tc.border}`,
               borderRadius: 6,
@@ -828,15 +826,40 @@ export function Mol3DTheaterWindow(p: Props) {
               fontFamily: "var(--lys-font-body)", fontSize: 10,
               color: "var(--lys-text)",
               display: "flex", flexDirection: "column", gap: 10,
+              position: "relative",
             }}>
-              {/* Best match details — two-col grid: label | value.
-                  Labels right-aligned in mono, values left-aligned. */}
+              {/* Close button — replaces the now-hidden pill as the
+                  way to collapse the detail card. */}
+              <button
+                type="button"
+                onClick={() => setMatchOpen(false)}
+                title="Collapse"
+                style={{
+                  position: "absolute", top: 6, right: 6,
+                  border: 0, background: "transparent",
+                  cursor: "pointer", padding: 4,
+                  color: tc.fg, opacity: 0.5,
+                  fontSize: 12, lineHeight: 1,
+                }}
+                onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.opacity = "1"; }}
+                onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.opacity = "0.5"; }}
+              >×</button>
+
+              {/* Best match details — two-col grid: label | value. */}
               <div>
-                <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
-                  letterSpacing: "0.06em", textTransform: "uppercase",
-                  fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+                <div style={{ display: "flex", alignItems: "center", gap: 6,
                   marginBottom: 6 }}>
-                  best match
+                  <span style={{
+                    fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                    fontSize: 8.5, letterSpacing: "0.08em",
+                    padding: "1px 4px", borderRadius: 2,
+                    background: tc.fg, color: "white",
+                  }}>{tc.label}</span>
+                  <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
+                    letterSpacing: "0.06em", textTransform: "uppercase",
+                    fontFamily: "var(--lys-font-mono)", fontWeight: 700 }}>
+                    best match
+                  </span>
                 </div>
                 {/* Header row: name + similarity */}
                 <div style={{

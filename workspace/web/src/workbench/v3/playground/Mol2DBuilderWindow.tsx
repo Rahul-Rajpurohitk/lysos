@@ -1732,42 +1732,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             SMARTS{smartsHits.length > 0 ? ` · ${smartsHits.length}` : ""}
           </span>
         </button>
-        {/* Properties trigger — left-side dock with drug-likeness, rule
-            compliance, structure, identifiers. Same pop-out pattern as
-            Library/SMARTS so all four toolbar buttons behave identically. */}
-        {propertiesPanel && (
-          <button
-            type="button"
-            onClick={() => {
-              setLibraryOpen(false);
-              setSmartsOpen(false);
-              setBuildOverlayOpen(false);
-              setPropsOverlayOpen((o) => !o);
-            }}
-            title="Properties — drug-likeness, rule compliance, structure, identifiers"
-            style={navBtnStyle(propsOverlayOpen, "#0f172a")}>
-            <span style={{ fontSize: 10, lineHeight: 1 }}>🧪</span>
-            <span style={{ textTransform: "none", letterSpacing: 0 }}>Properties</span>
-          </button>
-        )}
-        {/* Build trigger — left-side dock with build state, composition,
-            patterns, closest known. Inline atoms·bonds counter on the
-            button so the user can glance at totals without opening it. */}
-        <button
-          type="button"
-          onClick={() => {
-            setLibraryOpen(false);
-            setSmartsOpen(false);
-            setPropsOverlayOpen(false);
-            setBuildOverlayOpen((o) => !o);
-          }}
-          title="Build — state, composition, patterns, closest known antibiotic"
-          style={navBtnStyle(buildOverlayOpen, "#a855f7")}>
-          <span style={{ fontSize: 10, lineHeight: 1 }}>🧱</span>
-          <span style={{ textTransform: "none", letterSpacing: 0 }}>
-            Build{diagnostics ? ` · ${(diagnostics as any).n_atoms ?? 0}a/${bondList.length}b` : ""}
-          </span>
-        </button>
+        {/* Properties + Build moved from the toolbar onto the 2D canvas
+            itself — see chip overlays in the SVG container below.
+            Same pattern as the 3D viewer's NOVEL + KEY CONTACTS chips. */}
         <span style={{ flex: 1 }} />
         {/* Unified molecule status badge — single source of truth from
             /chem/diagnostics. Tier driven (ok/warn/block). Click to scroll
@@ -1930,47 +1897,9 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         {/* Properties dock — left-side pop-out, same chassis as
             Library/SMARTS. Renders the propertiesPanel (PropertiesCard)
             in a 360px column that pushes the SVG rightward when open. */}
-        {propsOverlayOpen && propertiesPanel && (
-          <DockShell
-            title="properties"
-            subtitle="drug-likeness · rules · structure · identifiers"
-            accent="#0f172a"
-            onClose={() => setPropsOverlayOpen(false)}
-          >
-            {propertiesPanel}
-          </DockShell>
-        )}
-        {/* Build dock — left-side pop-out with build state, composition,
-            patterns, closest-known. Renders PropertiesStrip in
-            hideProperties mode so we only get the build-side blocks. */}
-        {buildOverlayOpen && (
-          <DockShell
-            title="build"
-            subtitle={diagnostics
-              ? `${(diagnostics as any).n_atoms ?? 0} atoms · ${bondList.length} bonds${(diagnostics.n_fragments ?? 1) > 1 ? ` · ${diagnostics.n_fragments} frags` : ""}`
-              : ""}
-            accent="#a855f7"
-            onClose={() => setBuildOverlayOpen(false)}
-          >
-            <PropertiesStrip
-              apiBase={apiBase}
-              smiles={smiles}
-              smartsHits={smartsHits}
-              smarts={smarts}
-              diagnostics={diagnostics}
-              bondsCount={bondList.length}
-              onSelectPattern={(pattern, categoryColor) => {
-                setSmarts(pattern);
-                runSmartsMatch(pattern, categoryColor);
-              }}
-              hideProperties
-              hideHeader
-              forceLayout="narrow"
-            >
-              {null}
-            </PropertiesStrip>
-          </DockShell>
-        )}
+        {/* Properties + Build are canvas chips now (bottom-left and
+            bottom-right of the SVG container, see further below).
+            Their old DockShell side panels were removed. */}
         {/* CENTER COLUMN — SVG diagram on TOP, Properties strip BELOW.
             The molecule is the primary visual; KPI tiles + build counts
             + patterns + closest-known sit as a compact dashboard
@@ -2084,9 +2013,132 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </div>
           )}
 
-          {/* Properties + Build moved to top toolbar as left-side docks
-              (mutually exclusive with Library + SMARTS). The 2D canvas
-              is now overlay-free. */}
+          {/* PROPERTIES chip — bottom-LEFT capsule on the 2D canvas.
+              Same pattern as the 3D viewer's NOVEL chip: collapsed
+              shows a compact pill with a counter; click expands into
+              a glassy floating card with the full PropertiesCard
+              content. Click again or × to close. */}
+          {propertiesPanel && !propsOverlayOpen && (
+            <button
+              type="button"
+              onClick={() => { setBuildOverlayOpen(false); setPropsOverlayOpen(true); }}
+              title="Properties — drug-likeness · rule compliance · structure · identifiers"
+              style={{
+                position: "absolute", bottom: 8, left: 8, zIndex: 55,
+                padding: "5px 10px",
+                background: "rgba(15,23,42,0.06)",
+                border: "1px solid rgba(15,23,42,0.20)",
+                borderRadius: 6,
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+                fontFamily: "var(--lys-font-body)",
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 6,
+              }}>
+              <span style={{
+                fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                fontSize: 8.5, letterSpacing: "0.08em",
+                padding: "1px 4px", borderRadius: 2,
+                background: "#0f172a", color: "white",
+              }}>PROPS</span>
+              <span style={{ fontWeight: 600, fontSize: 10.5, color: "var(--lys-text)" }}>
+                drug-likeness · rules
+              </span>
+            </button>
+          )}
+          {propertiesPanel && propsOverlayOpen && (
+            <div style={{
+              position: "absolute", bottom: 8, left: 8, zIndex: 55,
+              width: 360, maxHeight: "calc(100% - 16px)",
+              background: "rgba(255,255,255,0.97)",
+              border: "1px solid rgba(15,23,42,0.10)",
+              borderRadius: 6,
+              boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+              backdropFilter: "blur(10px)",
+              overflow: "auto",
+            }}>
+              <button
+                type="button"
+                onClick={() => setPropsOverlayOpen(false)}
+                title="Collapse"
+                style={{
+                  position: "absolute", top: 6, right: 6, zIndex: 1,
+                  border: 0, background: "transparent", cursor: "pointer",
+                  padding: 4, color: "var(--lys-text-faint)", fontSize: 14, lineHeight: 1,
+                }}>×</button>
+              {propertiesPanel}
+            </div>
+          )}
+
+          {/* BUILD chip — bottom-RIGHT capsule. Same pattern. Inline
+              counter on the pill ('6a/6b') so totals are glanceable. */}
+          {!buildOverlayOpen && (
+            <button
+              type="button"
+              onClick={() => { setPropsOverlayOpen(false); setBuildOverlayOpen(true); }}
+              title="Build — state · composition · patterns · closest known"
+              style={{
+                position: "absolute", bottom: 8, right: 8, zIndex: 55,
+                padding: "5px 10px",
+                background: "rgba(168,85,247,0.10)",
+                border: "1px solid rgba(168,85,247,0.30)",
+                borderRadius: 6,
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+                fontFamily: "var(--lys-font-body)",
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 6,
+              }}>
+              <span style={{
+                fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+                fontSize: 8.5, letterSpacing: "0.08em",
+                padding: "1px 4px", borderRadius: 2,
+                background: "#a855f7", color: "white",
+              }}>BUILD</span>
+              <span style={{ fontWeight: 600, fontSize: 10.5, color: "#7c3aed" }}>
+                {diagnostics ? `${(diagnostics as any).n_atoms ?? 0}a · ${bondList.length}b` : "—"}
+              </span>
+            </button>
+          )}
+          {buildOverlayOpen && (
+            <div style={{
+              position: "absolute", bottom: 8, right: 8, zIndex: 55,
+              width: 360, maxHeight: "calc(100% - 16px)",
+              background: "rgba(255,255,255,0.97)",
+              border: "1px solid rgba(168,85,247,0.30)",
+              borderRadius: 6,
+              boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
+              backdropFilter: "blur(10px)",
+              overflow: "auto",
+            }}>
+              <button
+                type="button"
+                onClick={() => setBuildOverlayOpen(false)}
+                title="Collapse"
+                style={{
+                  position: "absolute", top: 6, right: 6, zIndex: 1,
+                  border: 0, background: "transparent", cursor: "pointer",
+                  padding: 4, color: "var(--lys-text-faint)", fontSize: 14, lineHeight: 1,
+                }}>×</button>
+              <PropertiesStrip
+                apiBase={apiBase}
+                smiles={smiles}
+                smartsHits={smartsHits}
+                smarts={smarts}
+                diagnostics={diagnostics}
+                bondsCount={bondList.length}
+                onSelectPattern={(pattern, categoryColor) => {
+                  setSmarts(pattern);
+                  runSmartsMatch(pattern, categoryColor);
+                }}
+                hideProperties
+                hideHeader
+                forceLayout="narrow"
+              >
+                {null}
+              </PropertiesStrip>
+            </div>
+          )}
         </div>
         {/* Bottom Insights strip dropped — Properties + Build are now
             left-side toolbar docks (top of the 2D builder). */}
@@ -4347,7 +4399,11 @@ function BuildTools(p: BuildToolsProps) {
  * reuse it for any future left-side pop-out without copy-pasting the
  * absolute-positioning + slide-in animation code.
  */
-function DockShell({ title, subtitle, accent, onClose, children }: {
+// DockShell — currently unused (Properties + Build moved off DockShell
+// into canvas chips). Kept for any future left-side pop-out needs.
+// @ts-expect-error: intentionally kept for future use
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _DockShell({ title, subtitle, accent, onClose, children }: {
   title: string; subtitle?: string; accent: string;
   onClose: () => void; children: React.ReactNode;
 }) {
