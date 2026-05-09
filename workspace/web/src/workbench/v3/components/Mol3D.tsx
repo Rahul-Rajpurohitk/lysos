@@ -483,13 +483,14 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
               matters for binding analysis.
             - Recenter: re-fits the camera if the user pans/zooms away. */}
       <div style={{
-        padding: "0 12px",
-        height: 36,
+        padding: "0 10px",
+        height: 32,
         borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
         display: "flex",
         alignItems: "center",
-        gap: 6,
-        fontSize: 11,
+        gap: 5,
+        fontFamily: "var(--lys-font-body)",
+        fontSize: 9.5,
         color: "var(--lys-text-dim)",
         background: "var(--lys-bg-2)",
       }}>

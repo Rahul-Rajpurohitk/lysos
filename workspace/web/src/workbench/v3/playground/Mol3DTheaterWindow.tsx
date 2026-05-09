@@ -232,20 +232,20 @@ export function Mol3DTheaterWindow(p: Props) {
         onClick={() => setPickerOpen((o) => !o)}
         title="Pick the validated target this candidate is designed against"
         style={{
-          padding: "3px 9px", height: 24,
+          padding: "2px 7px", height: 22,
           background: pickerOpen ? "var(--lys-text, #0f172a)" : "transparent",
           color: pickerOpen ? "white" : "var(--lys-text)",
-          border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
-          borderRadius: 5,
-          display: "inline-flex", alignItems: "center", gap: 5,
-          fontFamily: "var(--lys-font-mono)", fontSize: 10,
+          border: `1px solid ${pickerOpen ? "var(--lys-text, #0f172a)" : "var(--lys-border-faint, rgba(0,0,0,0.08))"}`,
+          borderRadius: 4,
+          display: "inline-flex", alignItems: "center", gap: 4,
+          fontFamily: "inherit", fontSize: 9.5,
           cursor: "pointer",
-          fontWeight: 700,
+          fontWeight: 500,
         }}>
         <Target size={11} style={{ color: pickerOpen ? "#67e8f9" : "#0891b2" }} />
         <span>{selectedTarget?.short_name ?? "pick target"}</span>
         {selectedTarget && (
-          <span style={{ fontSize: 9, opacity: 0.6 }}>
+          <span style={{ fontSize: 8.5, opacity: 0.6 }}>
             · {selectedTarget.pdb_id}
           </span>
         )}
