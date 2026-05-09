@@ -119,6 +119,11 @@ export function Mol3DTheaterWindow(p: Props) {
 
   // ─── Pose: place-in-pocket on SMILES + target change ───────────────
   const [pose, setPose] = useState<PoseResult | null>(null);
+  // Key Contacts panel — collapses to a single button at bottom-right
+  // until the user clicks to expand. Default closed so the protein
+  // ribbon has the whole canvas; the binding-atom counter on the button
+  // gives at-a-glance status without consuming layout space.
+  const [contactsOpen, setContactsOpen] = useState<boolean>(false);
   const [poseLoading, setPoseLoading] = useState(false);
   const [poseError, setPoseError] = useState<string>("");
   const lastSmilesRef = useRef<string>("");
@@ -351,27 +356,73 @@ export function Mol3DTheaterWindow(p: Props) {
         }}>pose error: {poseError}</div>
       )}
 
-      {/* ─── BOTTOM-RIGHT: Key contacts panel (top 8 residues) ─────
-          Laid out as a 4-column grid (residue | atom | tier | distance)
-          so values line up vertically across rows. Fixed column widths
-          stop the longest residue/distance from shifting the layout. */}
-      {pose && pose.key_contacts.length > 0 && (
+      {/* ─── BOTTOM-RIGHT: Key contacts panel ─────────────────────
+          Collapsible. Default: collapsed to a single button with the
+          binding-atoms count + a clash counter. Click to expand into
+          the full top-8 residue table. Click the header to collapse
+          back. Same affordance pattern as the 2D builder's Properties/
+          Build dock buttons. */}
+      {pose && pose.key_contacts.length > 0 && (() => {
+        if (!contactsOpen) {
+          return (
+            <button
+              type="button"
+              onClick={() => setContactsOpen(true)}
+              title={`Show top ${Math.min(8, pose.key_contacts.length)} residue contacts · ${pose.binding_atoms.length} binding atoms${pose.clashing_atoms.length > 0 ? ` · ${pose.clashing_atoms.length} clashing` : ""}`}
+              style={{
+                position: "absolute", bottom: 8, right: 8, zIndex: 50,
+                padding: "5px 10px",
+                background: "rgba(255,255,255,0.95)",
+                border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+                borderRadius: 5, backdropFilter: "blur(8px)",
+                boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
+                fontFamily: "var(--lys-font-mono)", fontSize: 9.5, fontWeight: 700,
+                letterSpacing: "0.04em", textTransform: "uppercase",
+                color: "var(--lys-text)",
+                cursor: "pointer",
+                display: "inline-flex", alignItems: "center", gap: 6,
+              }}>
+              <span style={{ fontSize: 7, opacity: 0.7 }}>▶</span>
+              key contacts
+              <span style={{
+                color: "#10b981", fontWeight: 700,
+              }}>{pose.binding_atoms.length}</span>
+              {pose.clashing_atoms.length > 0 && (
+                <span style={{ color: "#dc2626", fontWeight: 700 }}>
+                  · {pose.clashing_atoms.length} clash
+                </span>
+              )}
+            </button>
+          );
+        }
+        return (
         <div style={{
           position: "absolute", bottom: 8, right: 8, zIndex: 50,
-          padding: "8px 10px 6px",
+          padding: "0 0 6px",
           background: "rgba(255,255,255,0.95)",
           border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
           borderRadius: 6, backdropFilter: "blur(8px)",
-          width: 300, maxHeight: 220, overflow: "auto",
+          width: 300, maxHeight: 240, overflow: "auto",
           fontFamily: "var(--lys-font-mono)", fontSize: 10,
           boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
         }}>
-          <div style={{
-            fontSize: 8.5, color: "var(--lys-text-faint)",
-            letterSpacing: "0.06em", textTransform: "uppercase",
-            fontWeight: 700, marginBottom: 6,
-          }}>
+          <div
+            onClick={() => setContactsOpen(false)}
+            title="Collapse"
+            style={{
+              padding: "8px 10px 6px",
+              fontSize: 8.5, color: "var(--lys-text-faint)",
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              fontWeight: 700,
+              display: "flex", alignItems: "center", gap: 5,
+              cursor: "pointer", userSelect: "none",
+              borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+              marginBottom: 6,
+            }}>
+            <span style={{ fontSize: 7, opacity: 0.7 }}>▼</span>
             Key contacts · top 8
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 11, opacity: 0.6 }}>×</span>
           </div>
           <div style={{
             // Vertical stack of rows. Each row is its own flex
@@ -457,14 +508,16 @@ export function Mol3DTheaterWindow(p: Props) {
               marginTop: 4, paddingTop: 4,
               borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
             }}>
-              <span style={{ color: "#10b981", fontWeight: 700 }}>{pose.binding_atoms.length}</span> binding atoms
+              <span style={{ color: "#10b981", fontWeight: 700, paddingLeft: 10 }}>{pose.binding_atoms.length}</span>
+              <span style={{ paddingLeft: 4 }}>binding atoms</span>
               {pose.clashing_atoms.length > 0 && (
                 <> · <span style={{ color: "#dc2626", fontWeight: 700 }}>{pose.clashing_atoms.length}</span> clashing</>
               )}
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ─── BOTTOM-LEFT: Closest known antibiotic match (kept) ──── */}
       {p.smiles && match?.best && (

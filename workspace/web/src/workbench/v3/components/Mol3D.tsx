@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  ChevronDown, Eye, EyeOff, RotateCw, RefreshCw, Layers, Grid3x3,
-} from "lucide-react";
+import { ChevronDown, Eye, EyeOff, RefreshCw, Layers } from "lucide-react";
 import clsx from "clsx";
 
 interface Mol3DProps {
@@ -25,14 +23,10 @@ type EditOp =
   | { kind: "methyl" }
   | { kind: "break" };
 
-const ARMED_OPS: { id: string; label: string; op: EditOp }[] = [
-  { id: "swap-N",  label: "→N",   op: { kind: "swap", element: "N" } },
-  { id: "swap-O",  label: "→O",   op: { kind: "swap", element: "O" } },
-  { id: "swap-F",  label: "→F",   op: { kind: "swap", element: "F" } },
-  { id: "swap-Cl", label: "→Cl",  op: { kind: "swap", element: "Cl" } },
-  { id: "methyl",  label: "+CH₃", op: { kind: "methyl" } },
-  { id: "break",   label: "✂ bond", op: { kind: "break" } },
-];
+// ARMED_OPS removed — atom edits live in the 2D builder; the 3D
+// theater is a pure viewer now. EditOp type kept because the shared
+// onMoleculeEdit callback signature still references it (other 3D
+// integrations may bring back inline edits later).
 
 type Representation = "Cartoon" | "Surface" | "Sticks" | "Spheres";
 
@@ -55,9 +49,12 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
   const ligandComp = useRef<any>(null);
 
   const [representation, setRepresentation] = useState<Representation>("Cartoon");
-  const [wireframe, setWireframe] = useState(false);
+  // Wireframe + Spin removed from the toolbar (pure viewer). Locked to
+  // false; if a future feature wants them back, restore the toggles
+  // and re-introduce the setters.
+  const wireframe = false;
   const [pocketOnly, setPocketOnly] = useState(true);
-  const [spin, setSpin] = useState(false);
+  const spin = false;
   const [error, setError] = useState<string | null>(null);
   const [pdb, setPdb] = useState<string>(PATHOGEN_PDB[pathogen] ?? "5DPX");
   const [armedOpId, setArmedOpId] = useState<string | null>(null);
@@ -342,14 +339,22 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      {/* Toolbar — only edit ops + display toggles. Target/PDB info is
-          shown by the parent Mol3DTheaterWindow's top-LEFT picker overlay,
-          and SMILES lives in the 2D builder, so we don't repeat them
-          here. Keeps the toolbar compact and one row only. */}
+      {/* Toolbar — focused viewer controls only.
+          Removed (per user UX pass):
+            - Atom edit ops (→N/→O/→F/→Cl/+CH₃/✂ bond): editing happens in
+              the 2D builder; the 3D theater is for VIEWING the docked
+              pose. Editing here was confusing chrome with no clear benefit.
+            - Wireframe toggle: niche overlay representation that mostly
+              clutters the cartoon view.
+            - Spin toggle: decorative, not core to the viewer's job.
+          Kept:
+            - Cartoon/Surface/Sticks/Spheres dropdown — meaningful
+              representation choice for the protein.
+            - Pocket: focuses on the active site, the part that actually
+              matters for binding analysis.
+            - Recenter: re-fits the camera if the user pans/zooms away. */}
       <div style={{
-        padding: "0 12px 0 152px",   // left padding clears the target picker
-                                      // overlay; pose chip lives below the
-                                      // toolbar so right side is free.
+        padding: "0 12px 0 152px",
         height: 36,
         borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
         display: "flex",
@@ -360,62 +365,9 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride }
         color: "var(--lys-text-dim)",
         background: "var(--lys-bg-2)",
       }}>
-        {/* Drag-edit chemistry palette: arm an op then click a ligand atom.
-            Greyed out until a SMILES is loaded. */}
-        <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 1,
-          marginRight: 4,
-          padding: 0,
-          opacity: smiles ? 1 : 0.45,
-        }} aria-disabled={!smiles}>
-          {ARMED_OPS.map((o) => {
-            const active = armedOpId === o.id;
-            return (
-              <button
-                key={o.id}
-                disabled={!smiles}
-                onClick={() => {
-                  if (active) {
-                    setArmedOpId(null);
-                    armedOpRef.current = null;
-                  } else {
-                    setArmedOpId(o.id);
-                    armedOpRef.current = o.op;
-                    setEditStatus(`armed: ${o.label}. Click a ligand atom.`);
-                  }
-                }}
-                title={`${o.label} — click to arm, then click a ligand atom`}
-                style={{
-                  border: 0,
-                  background: active ? "var(--lys-accent)" : "transparent",
-                  color: active ? "white" : "var(--lys-text-dim)",
-                  fontFamily: "var(--lys-font-mono)",
-                  fontSize: 10.5,
-                  padding: "3px 6px",
-                  borderRadius: 5,
-                  cursor: smiles ? "pointer" : "not-allowed",
-                  transition: "background 0.12s, color 0.12s",
-                }}
-                onMouseEnter={(e) => {
-                  if (!active && smiles) e.currentTarget.style.background = "var(--lys-bg-hover, rgba(0,0,0,0.05))";
-                }}
-                onMouseLeave={(e) => {
-                  if (!active) e.currentTarget.style.background = "transparent";
-                }}
-              >
-                {o.label}
-              </button>
-            );
-          })}
-        </div>
-
         <RepSelect value={representation} onChange={setRepresentation} />
-        <ToggleBtn icon={<Grid3x3 size={11} />} label="Wireframe" active={wireframe} onClick={() => setWireframe((w) => !w)} />
         <ToggleBtn icon={pocketOnly ? <Eye size={11} /> : <EyeOff size={11} />} label="Pocket" active={pocketOnly} onClick={() => setPocketOnly((p) => !p)} />
-        <ToggleBtn icon={<RotateCw size={11} />} label="Spin" active={spin} onClick={() => setSpin((s) => !s)} />
-        <button onClick={recenter} className="lys-3d-btn" title="Recenter">
+        <button onClick={recenter} className="lys-3d-btn" title="Recenter — re-fit the camera around the loaded protein + ligand">
           <RefreshCw size={11} /> Recenter
         </button>
       </div>
