@@ -420,32 +420,22 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
         });
       }
     } else {
-      // Pocket-only view — render JUST the active-site residues with
-      // the rep the user picked from the dropdown. PLUS a thin cartoon
-      // backbone of the surrounding residues (±5 around each pocket
-      // residue) so the pocket sits in spatial context, not floating
-      // as 6 disconnected blobs. Without this context, Surface looks
-      // like scattered bubbles instead of a recognizable cavity.
+      // Pocket-only view — render JUST the active-site residues, no
+      // grey context backbone (user found it visually noisy and
+      // distracting). The ligand is the spatial anchor; pocket
+      // residues sit nearby in tight frame.
+      //
+      // Colouring: 'element' (CPK) so carbons are grey, nitrogens
+      // blue, oxygens red, sulfurs yellow. Way more readable than
+      // uniform green when the user is doing close-up inspection.
       const sel = pocketSel;
-      const contextResidues = pocketResidues && pocketResidues.length
-        ? Array.from(new Set(
-            pocketResidues.flatMap((r) => [r - 3, r - 2, r - 1, r, r + 1, r + 2, r + 3]),
-          ))
-        : [];
-      const contextSel = contextResidues.length
-        ? `(${contextResidues.join(" or ")}) and :${chain}`
-        : pocketSel;
-
-      // Thin grey cartoon for the surrounding loop — gives the user a
-      // backbone to anchor the pocket in 3D space.
-      comp.addRepresentation("cartoon", {
-        sele: contextSel, colorScheme: "uniform", color: "#94a3b8",
-        opacity: 0.55, quality: "medium",
-      });
-
       if (rep === "Cartoon") {
-        comp.addRepresentation("cartoon", { sele: sel, colorScheme: "chainid", quality: "medium" });
-        comp.addRepresentation("licorice", { sele: sel, color: "#10b981" });
+        comp.addRepresentation("cartoon", {
+          sele: sel, colorScheme: "residueindex", quality: "high",
+        });
+        comp.addRepresentation("licorice", {
+          sele: sel, colorScheme: "element",
+        });
       } else if (rep === "Surface") {
         comp.addRepresentation("surface", { sele: sel, opacity: 0.55, colorScheme: "electrostatic" });
       } else if (rep === "Sticks") {
