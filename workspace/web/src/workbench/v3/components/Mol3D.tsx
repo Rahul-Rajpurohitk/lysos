@@ -390,18 +390,30 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
       ? `(${pocketResidues.join(" or ")}) and :${chain}`
       : "polymer";
 
-    // Pocket OFF — single, simple render path that always works:
-    //   1. Full protein as cartoon (red ribbon)
-    //   2. Green ball+stick on the pocket residues so the binding
-    //      site is visible on the cartoon
-    // No rep-dropdown branching here; the dropdown only matters when
-    // Pocket is ON (close-up view). Keeping this minimal because the
-    // multi-rep stack we tried before could fail silently and leave
-    // the viewer empty.
+    // Pocket OFF — apply the rep dropdown to the FULL polymer so the
+    // user sees what they picked. Cartoon is the default and reads
+    // cleanly; Sticks/Spheres on 800 residues is dense but it's what
+    // the dropdown promised. Pocket residues always overlaid in green
+    // ball+stick so the binding site is visible regardless of rep.
     if (!pocketOnly) {
-      comp.addRepresentation("cartoon", {
-        sele: "polymer", colorScheme: "chainid", quality: "medium",
-      });
+      const sel = "polymer";
+      if (rep === "Cartoon") {
+        comp.addRepresentation("cartoon", {
+          sele: sel, colorScheme: "chainid", quality: "medium",
+        });
+      } else if (rep === "Surface") {
+        comp.addRepresentation("surface", {
+          sele: sel, opacity: 0.55, colorScheme: "electrostatic",
+        });
+      } else if (rep === "Sticks") {
+        comp.addRepresentation("licorice", {
+          sele: sel, colorScheme: "chainid",
+        });
+      } else {
+        comp.addRepresentation("spacefill", {
+          sele: sel, colorScheme: "chainid",
+        });
+      }
       if (pocketResidues && pocketResidues.length) {
         comp.addRepresentation("licorice", {
           sele: pocketSel, color: "#10b981", opacity: 0.95,
