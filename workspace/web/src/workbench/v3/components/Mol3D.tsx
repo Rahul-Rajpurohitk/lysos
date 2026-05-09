@@ -329,52 +329,53 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
 
   function applyRepresentation(comp: any, rep: Representation, wire: boolean) {
     comp.removeAllRepresentations();
-    // Build NGL selection strings:
-    //   pocketSel  — just the active-site residues + chain. Used when
-    //                the user toggles Pocket on so we filter the view
-    //                to the binding region instead of the full protein.
-    //   mainSel    — what we render as the main protein representation
-    //                (full protein vs pocket-only).
     const chain = pocketChain || "A";
     const pocketSel = pocketResidues && pocketResidues.length
       ? `(${pocketResidues.join(" or ")}) and :${chain}`
       : "polymer";
-    const mainSel = pocketOnly ? pocketSel : "polymer";
 
-    if (rep === "Cartoon") {
-      comp.addRepresentation("cartoon", { sele: mainSel, colorScheme: "chainid", quality: "medium" });
-    } else if (rep === "Surface") {
-      comp.addRepresentation("surface", { sele: mainSel, opacity: 0.5, colorScheme: "electrostatic" });
-    } else if (rep === "Sticks") {
-      comp.addRepresentation("licorice", { sele: mainSel });
+    // The full-protein view is ALWAYS cartoon — the previous design
+    // applied the rep dropdown to the whole polymer, so picking
+    // "Sticks" turned 800 protein atoms into licorice (unreadable).
+    // Cartoon is the only rep that scales to a full protein; the
+    // dropdown now controls the POCKET close-up rep instead.
+    if (!pocketOnly) {
+      // Full protein, always cartoon. Pocket residues highlighted in
+      // green so the user can SEE the binding site on the ribbon.
+      comp.addRepresentation("cartoon", {
+        sele: "polymer", colorScheme: "chainid", quality: "medium",
+      });
+      if (pocketResidues && pocketResidues.length) {
+        // Two-layer pocket highlight on top of the cartoon:
+        //   1. Green ball+stick of the active-site residues (atom detail)
+        //   2. Translucent green surface (the cavity shape — the "lock")
+        comp.addRepresentation("licorice", {
+          sele: pocketSel, color: "#10b981", opacity: 0.95,
+        });
+        comp.addRepresentation("surface", {
+          sele: pocketSel, color: "#10b981", opacity: 0.20, useWorker: false,
+        });
+      }
     } else {
-      comp.addRepresentation("spacefill", { sele: mainSel });
-    }
-
-    // Pocket HIGHLIGHT — always-on green overlay on the active-site
-    // residues so the user can SEE where the pocket is, even when the
-    // full protein cartoon is rendered. Two layers:
-    //   1. Green ball+stick of the pocket residues (atomic detail)
-    //   2. Translucent green surface around the same residues (cavity
-    //      shape — the "lock" the drug fits into)
-    // Both are skipped in pocket-only mode since the main rep is
-    // already showing only those residues.
-    if (pocketResidues && pocketResidues.length && !pocketOnly) {
-      comp.addRepresentation("licorice", {
-        sele: pocketSel,
-        color: "#10b981",
-        opacity: 0.95,
-      });
-      comp.addRepresentation("surface", {
-        sele: pocketSel,
-        color: "#10b981",
-        opacity: 0.18,
-        useWorker: false,
-      });
+      // Pocket-only view — render JUST the active-site residues with
+      // the rep the user picked from the dropdown. This is where
+      // Sticks / Surface / Spheres are actually useful (close-up of
+      // 6-ish residues, atomic detail readable).
+      const sel = pocketSel;
+      if (rep === "Cartoon") {
+        comp.addRepresentation("cartoon", { sele: sel, colorScheme: "chainid", quality: "medium" });
+        comp.addRepresentation("licorice", { sele: sel, color: "#10b981" });
+      } else if (rep === "Surface") {
+        comp.addRepresentation("surface", { sele: sel, opacity: 0.6, colorScheme: "electrostatic" });
+      } else if (rep === "Sticks") {
+        comp.addRepresentation("licorice", { sele: sel, colorScheme: "element" });
+      } else {
+        comp.addRepresentation("spacefill", { sele: sel, colorScheme: "element" });
+      }
     }
 
     if (wire) {
-      comp.addRepresentation("backbone", { sele: mainSel, colorScheme: "uniform", color: "#8b949e" });
+      comp.addRepresentation("backbone", { sele: "polymer", colorScheme: "uniform", color: "#8b949e" });
     }
   }
 
