@@ -255,13 +255,20 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
     const stage = stageObj.current;
     if (!protein || !stage) return;
     applyRepresentation(protein, representation, wireframe);
-    // Single, simple camera refit — stage.autoView fits ALL loaded
-    // components together. Two-shot scheduling so the second call
-    // lands after async rep-creation has settled.
+    // Camera refit:
+    //   Pocket OFF → stage.autoView (full protein + ligand together)
+    //   Pocket ON  → centre on the LIGAND, which is positioned in the
+    //                pocket by chem/place-in-pocket. The pocket
+    //                residues drawn nearby fall into the same tight
+    //                frame, so the user doesn't have to hunt around.
     const refit = () => {
       try {
         stage.handleResize?.();
-        stage.autoView?.(400);
+        if (pocketOnly && ligandComp.current) {
+          ligandComp.current.autoView?.(400);
+        } else {
+          stage.autoView?.(400);
+        }
       } catch {/*noop*/}
     };
     refit();
