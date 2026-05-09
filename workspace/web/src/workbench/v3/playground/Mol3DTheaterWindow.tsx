@@ -136,6 +136,34 @@ export function Mol3DTheaterWindow(p: Props) {
   // Hovered Key-Contacts row → flashes the matching residue in the
   // 3D viewer via hoverResidue prop on Mol3D. Cleared on mouseleave.
   const [hoverContact, setHoverContact] = useState<{ resi: number; chain: string } | null>(null);
+  // Resistance robustness — fetched from /chem/resistance/predict
+  // when SMILES + target are set. Same backend Service 2 uses; we
+  // surface the headline robustness score as a chip on the viewer
+  // so the user sees clinical-resistance risk at a glance without
+  // opening the resistance escape map.
+  const [robustness, setRobustness] = useState<{ score: number; nEscape: number; nTotal: number } | null>(null);
+  useEffect(() => {
+    if (!p.smiles || !selectedTargetId) { setRobustness(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`${p.apiBase}/workbench/chem/resistance/predict`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ smiles: p.smiles, pdb_id: selectedTargetId }),
+        });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (cancelled) return;
+        setRobustness({
+          score: d.robustness_score ?? 0,
+          nEscape: d.n_escape_vectors ?? 0,
+          nTotal: d.n_total_known_mutations ?? 0,
+        });
+      } catch {/*noop*/}
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [p.smiles, selectedTargetId, p.apiBase]);
   const [poseLoading, setPoseLoading] = useState(false);
   const [poseError, setPoseError] = useState<string>("");
   const lastSmilesRef = useRef<string>("");
@@ -480,6 +508,45 @@ export function Mol3DTheaterWindow(p: Props) {
           )}
         </div>
       )}
+
+      {/* ─── BELOW-POSE-CHIP: Resistance robustness chip ─────────────
+          Pulls /chem/resistance/predict for the current candidate +
+          target. Shows tier (ROBUST / WEAK / VULNERABLE) + score so
+          the user can see clinical-resistance risk at a glance —
+          without opening the full Resistance Escape Map. Click the
+          icon for the full breakdown (the resistance map sub-card). */}
+      {robustness && pose && (() => {
+        const r = robustness.score;
+        const tier = r >= 0.7 ? "robust" : r >= 0.4 ? "moderate" : "vulnerable";
+        const RC = {
+          robust:     { fg: "#10b981", bg: "rgba(16,185,129,0.10)", border: "rgba(16,185,129,0.40)" },
+          moderate:   { fg: "#ca8a04", bg: "rgba(202,138,4,0.10)",  border: "rgba(202,138,4,0.40)"  },
+          vulnerable: { fg: "#dc2626", bg: "rgba(220,38,38,0.10)",  border: "rgba(220,38,38,0.40)"  },
+        }[tier];
+        return (
+          <div
+            title={`Resistance robustness vs ${robustness.nTotal} curated CARD clinical mutations for this target. ${robustness.nEscape > 0 ? `${robustness.nEscape} atom${robustness.nEscape === 1 ? "" : "s"} above the 0.30 escape threshold.` : "No atoms above the escape threshold — this candidate's contact pattern doesn't overlap with known clinical mutations."}`}
+            style={{
+              position: "absolute", top: 80, right: 8, zIndex: 60,
+              padding: "4px 9px",
+              background: RC.bg, border: `1px solid ${RC.border}`,
+              borderRadius: 5, backdropFilter: "blur(8px)",
+              display: "inline-flex", alignItems: "center", gap: 7,
+              fontFamily: "var(--lys-font-mono)", fontSize: 10,
+              color: RC.fg, fontWeight: 700,
+            }}>
+            <span style={{ textTransform: "uppercase", letterSpacing: "0.04em" }}>{tier}</span>
+            <span style={{ opacity: 0.55, fontWeight: 500 }}>·</span>
+            <span style={{ fontVariantNumeric: "tabular-nums" }}>{r.toFixed(2)}</span>
+            {robustness.nEscape > 0 && (
+              <>
+                <span style={{ opacity: 0.55, fontWeight: 500 }}>·</span>
+                <span title="atoms above escape threshold">{robustness.nEscape} esc</span>
+              </>
+            )}
+          </div>
+        );
+      })()}
       {poseLoading && (
         <div style={{
           position: "absolute", top: 8, right: 8, zIndex: 60,

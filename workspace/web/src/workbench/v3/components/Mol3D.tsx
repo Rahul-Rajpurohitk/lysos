@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Eye, EyeOff, RefreshCw, Layers } from "lucide-react";
+import { ChevronDown, Eye, EyeOff, RefreshCw, Layers, Download } from "lucide-react";
 import clsx from "clsx";
 
 interface Mol3DProps {
@@ -498,6 +498,30 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
     stageObj.current?.autoView?.(600);
   }
 
+  // Export the current viewer as a high-res PNG. Useful for the
+  // pitch deck and clinical reports — captures whatever the user
+  // has framed (pocket-on close-up, full protein, etc.).
+  async function exportPng() {
+    const stage = stageObj.current;
+    if (!stage?.makeImage) return;
+    try {
+      const blob = await stage.makeImage({
+        factor: 2,           // 2x resolution
+        antialias: true,
+        trim: false,
+        transparent: false,
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lysos-3d-${pdb}-${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {/*noop*/}
+  }
+
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
       {/* Toolbar — focused viewer controls only.
@@ -533,6 +557,9 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
         <ToggleBtn icon={pocketOnly ? <Eye size={11} /> : <EyeOff size={11} />} label="Pocket" active={pocketOnly} onClick={() => setPocketOnly((p) => !p)} />
         <button onClick={recenter} className="lys-3d-btn" title="Recenter — re-fit the camera around the loaded protein + ligand">
           <RefreshCw size={11} /> Recenter
+        </button>
+        <button onClick={exportPng} className="lys-3d-btn" title="Save snapshot — download the current view as a high-res PNG">
+          <Download size={11} /> PNG
         </button>
       </div>
       <div ref={stageRef} style={{
