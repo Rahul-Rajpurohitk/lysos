@@ -2019,52 +2019,47 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </div>
           )}
 
-          {/* ATOMS / BONDS / BUILD chip rail — top-RIGHT row of capsules.
-              Replaces the old always-visible right side rail. Each
-              chip toggles the shared rail panel; once open the user
-              can use the rail's internal section collapses to focus.
-              All three chips look identical so the user can recognise
-              them as one control family. The chip becomes filled
-              when the rail is open. */}
-          {[
-            { key: "atoms", label: "ATOMS", accent: "#10b981", desc: "elements · valence" },
-            { key: "bonds", label: "BONDS", accent: "#a855f7", desc: "order · ring" },
-            { key: "build", label: "BUILD", accent: "#0891b2", desc: "fragments · rings · smiles" },
-          ].map((chip, i) => (
-            <button
-              key={chip.key}
-              type="button"
-              onClick={() => setRailOpen((o) => !o)}
-              title={`${chip.label} — ${chip.desc} (toggle rail)`}
-              style={{
-                position: "absolute",
-                top: 8,
-                right: 8 + i * 88,
-                zIndex: 55,
-                padding: "5px 10px",
-                background: railOpen
-                  ? `${chip.accent}20`
-                  : `${chip.accent}10`,
-                border: `1px solid ${railOpen ? chip.accent : `${chip.accent}55`}`,
-                borderRadius: 6,
-                backdropFilter: "blur(8px)",
-                boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
-                fontFamily: "var(--lys-font-body)",
-                cursor: "pointer",
-                display: "inline-flex", alignItems: "center", gap: 6,
-              }}>
-              <span style={{
-                fontFamily: "var(--lys-font-mono)", fontWeight: 800,
-                fontSize: 8.5, letterSpacing: "0.08em",
-                padding: "1px 4px", borderRadius: 2,
-                background: chip.accent, color: "white",
-              }}>{chip.label}</span>
-              <span style={{ fontWeight: 600, fontSize: 9.5,
-                color: chip.accent, opacity: 0.85 }}>
-                {chip.desc}
-              </span>
-            </button>
-          ))}
+          {/* INVENTORY chip — single capsule top-RIGHT containing
+              all three labels (atoms / bonds / build). Click toggles
+              the shared rail panel; the rail's existing internal
+              section collapses let the user focus once it's open.
+              One chip = one click target, no overlap, dynamic-width
+              capsule that adapts to its content. */}
+          <button
+            type="button"
+            onClick={() => setRailOpen((o) => !o)}
+            title="Inventory — atoms · bonds · build (toggle rail)"
+            style={{
+              position: "absolute",
+              top: 8, right: 8, zIndex: 55,
+              padding: "5px 10px",
+              background: railOpen ? "rgba(99,102,241,0.20)" : "rgba(99,102,241,0.10)",
+              border: `1px solid ${railOpen ? "#6366f1" : "rgba(99,102,241,0.35)"}`,
+              borderRadius: 6,
+              backdropFilter: "blur(8px)",
+              boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
+              fontFamily: "var(--lys-font-body)",
+              cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: 8,
+            }}>
+            <span style={{
+              fontFamily: "var(--lys-font-mono)", fontWeight: 800,
+              fontSize: 8.5, letterSpacing: "0.08em",
+              padding: "1px 4px", borderRadius: 2,
+              background: "#6366f1", color: "white",
+            }}>INV</span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6,
+              fontWeight: 600, fontSize: 9.5 }}>
+              <span style={{ color: "#10b981" }}>atoms</span>
+              <span style={{ opacity: 0.40 }}>·</span>
+              <span style={{ color: "#a855f7" }}>bonds</span>
+              <span style={{ opacity: 0.40 }}>·</span>
+              <span style={{ color: "#0891b2" }}>build</span>
+            </span>
+            <span style={{ fontSize: 8, opacity: 0.7, color: "#6366f1" }}>
+              {railOpen ? "▼" : "▶"}
+            </span>
+          </button>
 
           {/* PROPERTIES chip — bottom-LEFT capsule on the 2D canvas.
               Same pattern as the 3D viewer's NOVEL chip: collapsed
@@ -2148,18 +2143,20 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             </div>
           )}
 
-          {/* BUILD chip — bottom-RIGHT capsule. Same pattern. Inline
-              counter on the pill ('6a/6b') so totals are glanceable. */}
+          {/* BUILD chip — bottom-LEFT, stacked ABOVE the PROPS chip
+              (PROPS is at bottom: 8, BUILD sits at bottom: 44). Same
+              lavender-glass pattern. Inline counter on the pill
+              ('6a · 6b') so totals are glanceable. */}
           {!buildOverlayOpen && (
             <button
               type="button"
               onClick={() => { setPropsOverlayOpen(false); setBuildOverlayOpen(true); }}
               title="Build — state · composition · patterns · closest known"
               style={{
-                position: "absolute", bottom: 8, right: 8, zIndex: 55,
+                position: "absolute", bottom: 44, left: 8, zIndex: 55,
                 padding: "5px 10px",
                 background: "rgba(168,85,247,0.10)",
-                border: "1px solid rgba(168,85,247,0.30)",
+                border: "1px solid rgba(168,85,247,0.35)",
                 borderRadius: 6,
                 backdropFilter: "blur(8px)",
                 boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
@@ -2180,7 +2177,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
           )}
           {buildOverlayOpen && (
             <div style={{
-              position: "absolute", bottom: 8, right: 8, zIndex: 55,
+              position: "absolute", bottom: 8, left: 8, zIndex: 55,
               width: 360, maxHeight: "calc(100% - 16px)",
               // Same lavender-glass treatment as the 3D NOVEL card,
               // in purple. Translucent tint + backdrop blur.
