@@ -354,7 +354,21 @@ export function Mol3DTheaterWindow(p: Props) {
         pathogen={p.pathogen}
         onMoleculeEdit={p.onMoleculeEdit}
         pdbOverride={selectedTargetId}
-        pocketResidues={selectedTarget?.active_site_residues ?? []}
+        pocketResidues={(() => {
+          // Pocket = union of curated active-site residues + the residues
+          // actually contacted by the docked ligand. Without the union,
+          // hovering a Key Contact (e.g. TYR337) highlighted a residue
+          // that wasn't in the rendered pocket — visually disconnected
+          // from the green sticks. With the union, every Key Contact
+          // residue IS rendered, so the hover highlight always lands on
+          // a visible stick. Curated set is the fallback when no pose
+          // exists yet.
+          const curated = selectedTarget?.active_site_residues ?? [];
+          const fromPose = pose?.key_contacts
+            ?.map((c) => parseInt(c.residue.match(/(\d+)/)?.[1] ?? "0", 10))
+            .filter((n) => n > 0) ?? [];
+          return Array.from(new Set([...curated, ...fromPose]));
+        })()}
         pocketChain={selectedTarget?.active_site_chain ?? "A"}
         leftToolbarSlot={targetPickerSlot}
         hoverResidue={activeContact}
