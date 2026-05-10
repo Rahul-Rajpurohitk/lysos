@@ -106,7 +106,10 @@ class Step:
     id: str
     label: str
     tool: str
-    args_fn: Callable[[dict], dict]
+    # Inline / loop steps don't dispatch a real tool, so args_fn is
+    # optional. Defaulting to None keeps the dataclass happy when only
+    # `inline_fn` is provided.
+    args_fn: Optional[Callable[[dict], dict]] = None
     description: str = ""
     depends_on: list[str] = field(default_factory=list)
     skip_if: Optional[Callable[[dict], bool]] = None
@@ -444,26 +447,59 @@ def _synth_spectrum(state: dict) -> str:
     return "\n".join(lines)
 
 
-# ── Workflow 4: compare_top_n ────────────────────────────────────────
+# ── Workflow 4: compare_top_n (agentic — multi-step deep dive) ──────
+async def _critic_narrate_step(state: dict) -> dict:
+    """Inline step: hand the structured compare result to the Critic
+    Gemini call so the user gets a real narrative instead of a static
+    template. Best-effort — failure does not abort the workflow."""
+    from . import debate
+    comparison = state.get("comparison") or {}
+    pathogen = state.get("pathogen") or "MRSA"
+    session_id = state.get("_session_id") or ""
+    if not comparison.get("rows"):
+        return {"error": "no comparison rows to narrate"}
+    res = await debate.critic_narrate_compare(session_id, comparison, pathogen=pathogen)
+    if res.error:
+        return {"error": res.error, "elapsed_ms": res.elapsed_ms,
+                "tokens_in": res.tokens_in, "tokens_out": res.tokens_out}
+    out = dict(res.raw)
+    out["elapsed_ms"] = res.elapsed_ms
+    out["tokens_in"] = res.tokens_in
+    out["tokens_out"] = res.tokens_out
+    out["cost_usd"] = res.cost_usd
+    return out
+
+
 _register(Workflow(
     name="compare_top_n",
     label="Compare candidates",
-    description="Side-by-side resistance comparison of N candidates against the same target.",
+    description="Side-by-side resistance comparison of N candidates plus a Gemini-driven Critic narrative naming the winner, loser's specific weakness, and recommended next action.",
     inputs=[
         {"name": "smiles_list", "type": "array", "required": True},
         {"name": "pdb_id", "type": "string", "default": "1VQQ"},
+        {"name": "pathogen", "type": "string", "default": "MRSA"},
     ],
-    tags=["compare"],
+    tags=["compare", "critic"],
     steps=[
         Step(
             id="compare",
             label="Compare resistance profiles",
             tool="compare_resistance",
+            # Pass the SMILES strings as labels so the agent's narration
+            # references real structures — not "cand_1" / "cand_2".
             args_fn=lambda st: {
                 "smiles_list": st["smiles_list"],
+                "labels": st["smiles_list"],
                 "pdb_id": st.get("pdb_id", "1VQQ"),
             },
             on_result=lambda st, r: st.__setitem__("comparison", r),
+        ),
+        Step(
+            id="critic_narrate",
+            label="Critic narrates the comparison",
+            tool="__inline__",
+            inline_fn=_critic_narrate_step,
+            on_result=lambda st, r: st.__setitem__("critic_verdict", r),
         ),
     ],
     synthesize_fn=lambda st: _synth_compare(st),
@@ -472,20 +508,52 @@ _register(Workflow(
 
 def _synth_compare(state: dict) -> str:
     c = state.get("comparison") or {}
+    verdict = state.get("critic_verdict") or {}
     rows = c.get("rows") or []
     best_idx = c.get("best_idx")
-    out = [f"Compared {c.get('n', 0)} candidates against {c.get('pdb_id')}."]
+    out: list[str] = [f"### Compared {c.get('n', 0)} candidates against `{c.get('pdb_id')}`"]
+    out.append("")
+    out.append("| # | SMILES | robustness | escape | contacts |")
+    out.append("|---|---|---:|---:|---:|")
     for i, r in enumerate(rows):
-        marker = " ★" if i == best_idx else ""
+        marker = "★ " if i == best_idx else ""
+        smi = r.get("smiles") or r.get("label") or "?"
+        smi_short = smi if len(smi) <= 30 else smi[:29] + "…"
         out.append(
-            f"  {i+1}. {r.get('label')}{marker} — rob {r.get('robustness_score', 0):.2f}, "
-            f"esc {r.get('n_escape_vectors', 0)}"
+            f"| {marker}{i+1} | `{smi_short}` | "
+            f"{r.get('robustness_score', 0):.3f} | "
+            f"{r.get('n_escape_vectors', 0)} | "
+            f"{r.get('n_residues_with_contacts', 0)} |"
         )
     common = c.get("common_weak_residues") or []
     if common:
         out.append("")
-        out.append(f"Common weak residues across the set: "
-                   f"{', '.join(str(r['position']) for r in common[:5])}")
+        out.append(
+            f"**Common weak residues** (hit by ≥½ the set): "
+            + ", ".join(f"`{r['position']}`" for r in common[:5])
+        )
+    if verdict and not verdict.get("error"):
+        out.append("")
+        out.append("---")
+        out.append("")
+        out.append("**Critic's verdict** (Gemini Pro):")
+        if verdict.get("winner_smiles"):
+            out.append(f"  - 🏆 **Winner**: `{verdict['winner_smiles']}` — "
+                       f"{verdict.get('winner_reason', '')}")
+        if verdict.get("loser_smiles"):
+            out.append(f"  - ❌ **Loser**: `{verdict['loser_smiles']}` — "
+                       f"{verdict.get('loser_weakness', '')}")
+        if verdict.get("common_pitfall"):
+            out.append(f"  - ⚠ **Common pitfall**: {verdict['common_pitfall']}")
+        if verdict.get("next_action"):
+            out.append(f"  - ➡ **Next**: `{verdict['next_action']}` — "
+                       f"{verdict.get('next_reason', '')}")
+        if verdict.get("thinking"):
+            out.append("")
+            out.append(f"_{verdict['thinking']}_")
+    elif verdict and verdict.get("error"):
+        out.append("")
+        out.append(f"_(Critic narration unavailable: {verdict['error']})_")
     return "\n".join(out)
 
 
@@ -746,18 +814,23 @@ async def _execute_workflow(
                 "label": step.label, "tool": step.tool,
             })
 
-            try:
-                args = step.args_fn(state) or {}
-            except Exception as exc:
-                yield _sse({
-                    "event": "step.error", "run_id": run_id, "step_id": step.id,
-                    "error": f"args_fn raised: {exc}",
-                })
-                if not step.optional:
-                    yield _sse({"event": "workflow.error", "run_id": run_id,
-                                "error": f"step {step.id} args failed"})
-                    return
-                continue
+            # `args_fn` is optional for inline / loop steps that don't
+            # have an HTTP tool to dispatch.
+            if step.args_fn is None:
+                args = {}
+            else:
+                try:
+                    args = step.args_fn(state) or {}
+                except Exception as exc:
+                    yield _sse({
+                        "event": "step.error", "run_id": run_id, "step_id": step.id,
+                        "error": f"args_fn raised: {exc}",
+                    })
+                    if not step.optional:
+                        yield _sse({"event": "workflow.error", "run_id": run_id,
+                                    "error": f"step {step.id} args failed"})
+                        return
+                    continue
 
             # Dispatch — three modes: __inline__, __loop__, real tool.
             t0 = time.perf_counter()

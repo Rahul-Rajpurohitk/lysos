@@ -118,6 +118,27 @@ Rules:
 - Don't make edits that lose the original scaffold's pharmacophore.
 """
 
+CRITIC_COMPARE_PROMPT = """You are the Critic agent narrating a side-by-side comparison of N
+antibiotic candidates against the same target. You receive structured
+resistance / scoring data; you do NOT redo the analysis. Your job is
+to translate the numbers into a one-paragraph verdict that names the
+winner, calls out the loser's specific weakness (which atom, which
+escape vector, which residue), and recommends the next concrete action.
+
+Output STRICT JSON:
+{
+  "thinking": "<one paragraph — what stood out in the numbers; why the winner wins>",
+  "winner_smiles": "<SMILES of the candidate the team should advance>",
+  "winner_reason": "<one sentence — the SPECIFIC numerical reason: e.g. 'highest robustness 0.95, only 1 escape vector vs 3+ for the others'>",
+  "loser_smiles": "<SMILES of the worst candidate>",
+  "loser_weakness": "<one sentence — name the actual weakness: low robustness, high escape count, common-residue vulnerability, etc.>",
+  "common_pitfall": "<if common_weak_residues is non-empty, name the top residue and why it matters; else 'none — set is well-diversified'>",
+  "next_action": "harden" | "ship" | "edit_runner_up" | "expand_set",
+  "next_reason": "<one sentence — why this next action>"
+}
+"""
+
+
 STRATEGIST_PROMPT = """You are the Strategist agent in a multi-agent antibiotic-discovery debate.
 
 Your job: weigh the final refined candidates against the project goals
@@ -335,6 +356,63 @@ async def editor_refine(
         tokens_in=res.tokens_in, tokens_out=res.tokens_out,
         triggered_by="critic",
         tags=["gemini", "refine"],
+    )
+    return res
+
+
+async def critic_narrate_compare(
+    session_id: str, comparison: dict, pathogen: str = "MRSA",
+) -> RoleResult:
+    """Have the Critic look at a structured compare_resistance result
+    (rows + best_idx + common_weak_residues) and produce a one-paragraph
+    verdict naming winner / loser / next action with concrete numerical
+    citations. Used by the deep compare_top_n workflow."""
+    rows = comparison.get("rows") or []
+    if not rows:
+        return RoleResult(role="critic", raw={}, elapsed_ms=0,
+                          tokens_in=0, tokens_out=0, cost_usd=0.0,
+                          error="empty comparison rows")
+    rows_block = "\n".join(
+        f"  {i+1}. SMILES `{r.get('smiles')}` · "
+        f"robustness {r.get('robustness_score', 0):.3f} · "
+        f"escape_vectors {r.get('n_escape_vectors', 0)} · "
+        f"contacts {r.get('n_residues_with_contacts', 0)} · "
+        f"clinical_overlaps {r.get('n_clinical_overlaps', 0)}"
+        + (" ⚠ ERROR: " + r.get("error") if r.get("error") else "")
+        for i, r in enumerate(rows)
+    )
+    common = comparison.get("common_weak_residues") or []
+    common_block = ""
+    if common:
+        common_block = "\nCommon weak residues across the set: " + ", ".join(
+            f"{c.get('position')} (hits {c.get('n_candidates')}/{comparison.get('n_valid', '?')})"
+            for c in common[:5]
+        )
+    user = (
+        f"Pathogen: {pathogen} · Target PDB: {comparison.get('pdb_id')}\n"
+        f"{len(rows)} candidates compared:\n\n{rows_block}\n"
+        f"{common_block}\n\n"
+        f"Backend's pick (highest robustness): index {comparison.get('best_idx')}.\n"
+        f"Verify or contradict — pick the real winner and name the real loser's weakness."
+        + _pathogen_brief(pathogen)
+    )
+    # Bump max_tokens beyond the default — the structured JSON has 7
+    # fields and Gemini's thinking budget eats from the same pool.
+    res = await _gemini_call("critic", CRITIC_COMPARE_PROMPT, user, temperature=0.3, max_tokens=4096)
+    msg = (
+        f"narrated {len(rows)}-candidate compare · winner: "
+        f"`{res.raw.get('winner_smiles', '?')[:30]}…` · "
+        f"next: {res.raw.get('next_action', '?')}"
+    )
+    agent_activity.record(
+        session_id, "critic", "narrate_compare",
+        message=msg or (res.error or "(no narration)"),
+        confidence=0.85 if not res.error else 0.0,
+        elapsed_ms=res.elapsed_ms,
+        status="error" if res.error else "ok",
+        tokens_in=res.tokens_in, tokens_out=res.tokens_out,
+        triggered_by="strategist",
+        tags=["gemini", "compare"],
     )
     return res
 

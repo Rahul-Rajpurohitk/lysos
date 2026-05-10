@@ -194,10 +194,23 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
     return `**${label}** for atom **#${result.atom_idx}**${ms}: ${sugs.length} swap${sugs.length === 1 ? "" : "s"} proposed — ${top}.`;
   }
 
-  // Compare workflow
+  // Compare workflow — the backend returns `best_idx` (an int),
+  // not `best_smiles`. Resolve the actual SMILES from rows so the
+  // chat narration shows the winner's structure instead of "?".
   if (tool === "compare_resistance") {
-    const n = (result.rows ?? []).length;
-    return `**${label}**${ms}: compared ${n} candidates side-by-side. Best: \`${result.best_smiles ?? "?"}\``;
+    const rows = (result.rows ?? []) as any[];
+    const bestIdx = result.best_idx;
+    const winner = (typeof bestIdx === "number" && rows[bestIdx]) ? rows[bestIdx] : null;
+    if (!winner) {
+      return `**${label}**${ms}: no valid winner — all ${rows.length} candidates errored or were equal.`;
+    }
+    const others = rows.length - 1;
+    const common = (result.common_weak_residues ?? []).slice(0, 3)
+      .map((r: any) => r.position).join(", ");
+    return `**${label}**${ms}: ${rows.length} candidates compared on \`${result.pdb_id}\`. ` +
+      `Winner: \`${winner.smiles}\` (rob **${(winner.robustness_score ?? 0).toFixed(2)}**, ` +
+      `escape ${winner.n_escape_vectors ?? 0}) beats ${others} other${others === 1 ? "" : "s"}` +
+      (common ? `. Common weak residues: **${common}**.` : ".");
   }
 
   // Cross-target spectrum
@@ -776,18 +789,35 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       const r = await fetch(`${apiBase}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: activeChatId, text }),
+        body: JSON.stringify({
+          session_id: activeChatId, text,
+          // Critical: bridge the ambient UI context so bare slashes
+          // (`/explain`, `/score`, `/edit`, …) and side-card "send to
+          // agent" buttons resolve from current pathogen/smiles/pdb
+          // instead of erroring with "No active candidate".
+          pathogen: selectedPathogen,
+          smiles: currentSmilesRef.current ?? null,
+          pdb_id: selectedPdbId ?? null,
+        }),
       });
       if (!r.ok) return;
       const d = await r.json();
+      // Use d.card_kind + d.data (the real harness response shape).
+      // The earlier d.card check was dead code — that field never
+      // existed, which is why "send to agent →" looked like an old
+      // hardcoded UI when really it was the lack of a structured card.
+      const finalContent = (d?.text && d.text.length > 0)
+        ? d.text
+        : (d?.error || "(no response)");
       setEvents((p) => [...p, {
         type: "agent_message", ts: Date.now() / 1000,
-        agent: "assistant",
-        content: (d?.text ?? d?.message ?? ""),
-        ...(d?.card ? { card: d.card } : {}),
+        agent: d?.error ? "system" : "assistant",
+        content: finalContent,
+        card_kind: d?.card_kind ?? undefined,
+        data: d?.data ?? undefined,
       } as any]);
     } catch { /* */ }
-  }, [activeChatId, apiBase]);
+  }, [activeChatId, apiBase, selectedPathogen, selectedPdbId]);
 
   /** Refresh the recent edit log from /sessions/{sid}/edits — drives the
    *  Edit-log card so the user sees every persisted MoleculeEdit row. */
@@ -1712,6 +1742,59 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     // 2) /wf <name> {json}  → run a workflow as SSE stream.
                     //    Other slash commands → legacy /api/chat (registered handlers).
                     //    Free text → /api/agent/run SSE (Gemini Pro tool-calling).
+
+                    // 2a) /wf help OR bare /wf → render workflow catalog in
+                    //    chat. The composer's pop-up catalog (the "+ workflow"
+                    //    button) only works on click; users typing /wf help
+                    //    should still get the list inline. (`trimmed` is
+                    //    already declared a few lines up — reuse it.)
+                    if (/^\/wf(\s+help)?\s*$/i.test(trimmed)) {
+                      try {
+                        setEvents((p) => [...p, {
+                          type: "agent_message", ts: Date.now() / 1000,
+                          agent: "user", content: trimmed,
+                        } as any]);
+                        const r = await fetch(`${apiBase}/api/workflows/list`);
+                        if (!r.ok) {
+                          setEvents((p) => [...p, {
+                            type: "agent_message", ts: Date.now() / 1000,
+                            agent: "system",
+                            content: `error fetching workflows: ${r.status}`,
+                          } as any]);
+                          return;
+                        }
+                        const d = await r.json();
+                        const wfs = (d.workflows ?? d ?? []) as any[];
+                        const lines: string[] = [
+                          `### Available workflows · ${wfs.length}`,
+                          "",
+                          "| name | what it does | required inputs |",
+                          "|---|---|---|",
+                        ];
+                        for (const w of wfs) {
+                          const reqs = (w.inputs ?? [])
+                            .filter((i: any) => i.required)
+                            .map((i: any) => `\`${i.name}\``).join(" ");
+                          lines.push(
+                            `| **\`/wf ${w.name}\`** | ${(w.description || w.label || "").replace(/\|/g, "·")} | ${reqs || "_none_"} |`,
+                          );
+                        }
+                        lines.push("");
+                        lines.push("_Tip_: `/wf <name> {\"key\":\"value\"}` to pass JSON inputs. Bare slash auto-fills from context.");
+                        setEvents((p) => [...p, {
+                          type: "agent_message", ts: Date.now() / 1000,
+                          agent: "assistant", content: lines.join("\n"),
+                        } as any]);
+                      } catch (exc: any) {
+                        setEvents((p) => [...p, {
+                          type: "agent_message", ts: Date.now() / 1000,
+                          agent: "system",
+                          content: `wf list failed: ${exc?.message ?? exc}`,
+                        } as any]);
+                      }
+                      return;
+                    }
+
                     const wfMatch = t.trim().match(/^\/wf\s+(\S+)(?:\s+(\{.*\}))?\s*$/);
                     if (wfMatch) {
                       const wfName = wfMatch[1];

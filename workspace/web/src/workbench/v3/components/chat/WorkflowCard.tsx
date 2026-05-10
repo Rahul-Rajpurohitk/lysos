@@ -168,23 +168,29 @@ export function WorkflowCard({ state, apiBase }: Props) {
       display: "flex", flexDirection: "column", gap: 6,
       fontFamily: "var(--lys-font-body)",
     }}>
-      {/* Header — single inline row, no uppercase mono shouting */}
+      {/* Header — single inline row that does NOT wrap. The label can
+       *  ellipsize if the chat panel is narrow; the StatusPill always
+       *  stays on the right edge. */}
       <div style={{
         display: "flex", alignItems: "center", gap: 6,
         fontSize: 12, color: LAV.fg, fontWeight: 600,
         fontFamily: "var(--lys-font-body)",
+        flexWrap: "nowrap", minWidth: 0,
       }}>
-        <Sparkles size={12} />
-        <span>workflow</span>
+        <Sparkles size={12} style={{ flexShrink: 0 }} />
+        <span style={{ flexShrink: 0 }}>workflow</span>
         <span style={{
           fontFamily: "var(--lys-font-mono)", fontSize: 11,
           color: LAV.fgDeep, fontWeight: 700,
+          flexShrink: 0, whiteSpace: "nowrap",
         }}>{state.name}</span>
         <span style={{
           color: "var(--lys-text-faint)", fontWeight: 500,
+          minWidth: 0, overflow: "hidden", textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}>· {state.label}</span>
 
-        <span style={{ flex: 1 }} />
+        <span style={{ flex: 1, minWidth: 4 }} />
 
         <StatusPill status={state.status} elapsed_ms={state.elapsed_ms} />
 
@@ -196,6 +202,7 @@ export function WorkflowCard({ state, apiBase }: Props) {
               cursor: "pointer", padding: 2,
               color: RED.fg,
               display: "inline-flex", alignItems: "center",
+              flexShrink: 0,
             }}>
             <IconX size={11} />
           </button>
@@ -471,6 +478,7 @@ function StatusPill({ status, elapsed_ms }: { status: WorkflowState["status"]; e
       fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
       letterSpacing: "0.04em", textTransform: "uppercase", fontWeight: 700,
       display: "inline-flex", alignItems: "center", gap: 3,
+      whiteSpace: "nowrap", flexShrink: 0,
     }}>
       {status === "running" && <Loader2 size={9} className="lys-spin" />}
       {label}{elapsed ? ` · ${elapsed}` : ""}
