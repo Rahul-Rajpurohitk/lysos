@@ -308,33 +308,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     if (!activeChatId && chatTabs.length > 0) setActiveChatId(chatTabs[0].id);
   }, [activeChatId, chatTabs]);
   const [chatEventsBySid, setChatEventsBySid] = useState<Record<string, TraceEvent[]>>({});
-  // Live slash-command registry. Fetched from /api/commands/list at
-  // mount so the composer can recognize "this isn't a real command —
-  // route through the orchestrator instead of failing with an
-  // 'Unknown command' wall." Modern agentic apps (Claude, Cursor, …)
-  // never reject a user's message; the agent always sees it and
-  // decides what to do. This makes Lysos behave the same way.
-  const [knownSlashes, setKnownSlashes] = useState<Set<string>>(() => new Set());
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`${apiBase}/api/commands/list`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((d) => {
-        if (cancelled || !Array.isArray(d)) return;
-        const names: string[] = [];
-        for (const c of d as any[]) {
-          if (c?.name) names.push(c.name.toLowerCase());
-          for (const a of c?.aliases ?? []) names.push(String(a).toLowerCase());
-        }
-        // Frontend-only fast-path slashes that don't live in the
-        // backend registry but are still valid (handled inline in
-        // onSend before any /api/chat call).
-        ["wf", "load", "swap", "fg", "harden"].forEach((s) => names.push(s));
-        setKnownSlashes(new Set(names));
-      })
-      .catch(() => {/* keep empty set; orchestrator handles all */});
-    return () => { cancelled = true; };
-  }, [apiBase]);
+  // (Slash registry no longer pre-fetched — every slash now goes
+  // through the orchestrator agent the same way free text does. The
+  // orchestrator decides whether to dispatch it, run a workflow, hand
+  // off to the agent loop, or just answer.)
   const events: TraceEvent[] = chatEventsBySid[activeChatId] ?? [];
   function setEvents(updater: TraceEvent[] | ((prev: TraceEvent[]) => TraceEvent[])): void {
     setChatEventsBySid((bySid) => {
@@ -2043,148 +2020,19 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       runWorkflow(wfName, wfInputs);
                       return;
                     }
-                    if (t.trim().startsWith("/")) {
-                      // Modern-agent behavior: if the typed slash isn't
-                      // a known command, hand the WHOLE message to the
-                      // orchestrator (Gemini) instead of erroring with
-                      // "Unknown command". This matches how Claude /
-                      // Cursor handle slashes — the agent ALWAYS sees
-                      // the message and decides what to do.
-                      const slashHead = t.trim().slice(1).split(/\s+/)[0].toLowerCase();
-                      if (knownSlashes.size > 0 && !knownSlashes.has(slashHead)) {
-                        // Re-route as plain text through orchestrator
-                        // by dispatching the auto-slash channel with
-                        // the original line (slash and all). The
-                        // orchestrator path picks intent. Also fall
-                        // through to the orchestrator branch below by
-                        // mutating `t` … but we can't mutate it here,
-                        // so dispatch and return.
-                        setEvents((p) => [...p, {
-                          type: "agent_message", ts: Date.now() / 1000,
-                          agent: "orchestrator",
-                          content: `\`/${slashHead}\` isn't a registered command. Letting the orchestrator interpret your intent…`,
-                        } as any]);
-                        const stripped = t.trim().replace(/^\/\S+\s*/, "").trim() || t.trim();
-                        // Fire orchestrator endpoint directly — same
-                        // path that free text takes, no auto-slash
-                        // re-entry (which caused double sends).
-                        setPendingChat(true);
-                        const runId = `run-${crypto.randomUUID().slice(0, 8)}`;
-                        setEvents((p) => [...p, {
-                          type: "orchestrator_run",
-                          ts: Date.now() / 1000,
-                          agent: "orchestrator",
-                          run_id: runId,
-                          api_base: apiBase,
-                          orchestrator_state: { run_id: runId, user_text: stripped, status: "running" },
-                        } as any]);
-                        try {
-                          const r = await fetch(`${apiBase}/api/orchestrator/run`, {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              session_id: chatSid,
-                              text: stripped,
-                              smiles: currentSmiles ?? null,
-                              pathogen: selectedPathogen,
-                              pdb_id: selectedPdbId ?? null,
-                              n_candidates: 0,
-                            }),
-                          });
-                          if (!r.ok || !r.body) {
-                            setEvents((evs) => evs.map((e: any) =>
-                              e.run_id === runId ? { ...e, orchestrator_state: { ...e.orchestrator_state, status: "error", error: `HTTP ${r.status}` } } : e));
-                            return;
-                          }
-                          const reader = r.body.getReader();
-                          const decoder = new TextDecoder();
-                          let buf = "";
-                          let cur: any = { run_id: runId, user_text: stripped, status: "running" };
-                          for (;;) {
-                            const { value, done } = await reader.read();
-                            if (done) break;
-                            buf += decoder.decode(value, { stream: true });
-                            const blocks = buf.split("\n\n");
-                            buf = blocks.pop() ?? "";
-                            for (const block of blocks) {
-                              const line = block.trim();
-                              if (!line.startsWith("data:")) continue;
-                              try {
-                                const ev = JSON.parse(line.slice(5).trim());
-                                cur = reduceOrchestratorEvent(cur, ev);
-                                setEvents((evs) => evs.map((e: any) =>
-                                  e.run_id === runId ? { ...e, orchestrator_state: cur } : e));
-                              } catch {/* malformed line */}
-                            }
-                          }
-                        } catch (exc: any) {
-                          setEvents((evs) => evs.map((e: any) =>
-                            e.run_id === runId ? { ...e, orchestrator_state: { ...e.orchestrator_state, status: "error", error: String(exc?.message ?? exc) } } : e));
-                        } finally {
-                          setPendingChat(false);
-                        }
-                        return;
-                      }
-                      try {
-                        const r = await fetch(`${apiBase}/api/chat`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          // Pass the live UI context so bare slash
-                          // commands like `/explain` or `/score` can
-                          // resolve from the current pathogen + loaded
-                          // SMILES without demanding explicit args.
-                          body: JSON.stringify({
-                            session_id: chatSid,
-                            text: t,
-                            pathogen: selectedPathogen,
-                            smiles: currentSmiles ?? null,
-                            pdb_id: selectedPdbId ?? null,
-                          }),
-                        });
-                        if (!r.ok) {
-                          const errTxt = await r.text();
-                          setEvents((p) => [...p, {
-                            type: "agent_message",
-                            ts: Date.now() / 1000,
-                            agent: "orchestrator",
-                            content: `That command came back with HTTP ${r.status}: ${errTxt.slice(0, 180)}. Try again or rephrase — I can also pick a different workflow if you tell me what you want.`,
-                          } as any]);
-                          return;
-                        }
-                        const d = await r.json();
-                        // The harness sets text="" when there's an error,
-                        // so we MUST use || (not ??) so empty string falls
-                        // through to d.error. Otherwise the user sees an
-                        // invisible empty assistant bubble (the bug that
-                        // made /explain look broken).
-                        const finalContent = (d.text && d.text.length > 0)
-                          ? d.text
-                          : (d.error || "(no response)");
-                        setEvents((p) => [...p, {
-                          type: "agent_message",
-                          ts: Date.now() / 1000,
-                          // Even harness errors render under the orchestrator
-                          // persona — chat is a conversation with agents,
-                          // not a system-bubble dump.
-                          agent: d.error ? "orchestrator" : "assistant",
-                          content: finalContent,
-                          card_kind: d.card_kind ?? undefined,
-                          data: d.data ?? undefined,
-                        } as any]);
-                      } catch (exc: any) {
-                        setEvents((p) => [...p, {
-                          type: "agent_message",
-                          ts: Date.now() / 1000,
-                          agent: "orchestrator",
-                          content: `Network hiccup while routing that to the agent — ${exc?.message ?? exc}. Want to retry?`,
-                        } as any]);
-                      } finally {
-                        setPendingChat(false);
-                      }
-                      return;
-                    }
+                    // ── Agentic delegation ──
+                    // Slashes are intent shortcuts, not bypasses. The
+                    // orchestrator agent SEES every chat message — slash
+                    // OR free text — and decides whether to dispatch a
+                    // slash, run a workflow, hand off to the agent
+                    // loop, or just answer. This matches Claude /
+                    // Cursor: the agent is the front door, never
+                    // bypassed. Canvas fast-paths (/load, /swap, /fg,
+                    // /harden, /wf) are handled ABOVE this point
+                    // because they mutate visuals immediately and
+                    // don't need a Gemini round-trip.
 
-                    // 3) Free text → ORCHESTRATOR stream.
+                    // 3) Free text + unhandled slash → ORCHESTRATOR stream.
                     //    Plain English routes through /api/orchestrator/run,
                     //    which uses Gemini Pro to classify intent and pick
                     //    one of: workflow / slash / agent / answer. The
@@ -2393,28 +2241,68 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     // commands from plain English without the user typing
                     // them explicitly.
                     if (dispatchedSlash) {
-                      // setTimeout to let the current setEvents flush,
-                      // and avoid a synchronous recursive call.
                       const renderedFinal = dispatchedSlash;
-                      setTimeout(() => {
-                        const composer = (document.querySelector(
-                          "textarea[data-lys-composer]"
-                        ) as HTMLTextAreaElement | null);
-                        // Also push a tiny "auto-routed" status pill
+                      // Hit /api/chat directly to EXECUTE the slash the
+                      // orchestrator picked. We can't re-enter onSend
+                      // (it now routes everything through the
+                      // orchestrator → infinite loop). The user already
+                      // sees the dispatch choice in the OrchestratorCard
+                      // above, so just run it and surface the result.
+                      try {
+                        const r = await fetch(`${apiBase}/api/chat`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            session_id: chatSid,
+                            text: renderedFinal,
+                            pathogen: selectedPathogen,
+                            smiles: currentSmiles ?? null,
+                            pdb_id: selectedPdbId ?? null,
+                          }),
+                        });
+                        if (!r.ok) {
+                          const errTxt = await r.text();
+                          setEvents((p) => [...p, {
+                            type: "agent_message",
+                            ts: Date.now() / 1000,
+                            agent: "orchestrator",
+                            content: `Tried to run \`${renderedFinal}\` but got HTTP ${r.status}: ${errTxt.slice(0, 160)}`,
+                          } as any]);
+                          return;
+                        }
+                        const d = await r.json();
+                        const finalContent = (d.text && d.text.length > 0)
+                          ? d.text
+                          : (d.error || "(no response)");
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: d.error ? "orchestrator" : "assistant",
+                          content: finalContent,
+                          card_kind: d.card_kind ?? undefined,
+                          data: d.data ?? undefined,
+                        } as any]);
+                        // Auto-load returned SMILES into 2D + 3D when
+                        // /load / /edit / /swap return one (same logic
+                        // sendAgentMessage uses).
+                        const newSmi = (d?.data && typeof d.data === "object" && (d.data as any).smiles) as string | undefined;
+                        if (newSmi && !d?.error) {
+                          try {
+                            await loadSmilesIntoCanvas(newSmi, {
+                              createdBy: "agent",
+                              parentId: null,
+                              logLabel: `[orchestrator → ${renderedFinal.split(" ")[0]}]`,
+                            });
+                          } catch {/* canvas already in sync */}
+                        }
+                      } catch (exc: any) {
                         setEvents((p) => [...p, {
                           type: "agent_message",
                           ts: Date.now() / 1000,
                           agent: "orchestrator",
-                          content: `→ auto-routed: \`${renderedFinal}\``,
+                          content: `Couldn't execute \`${renderedFinal}\` — ${exc?.message ?? exc}`,
                         } as any]);
-                        // Trigger the actual slash by re-entering onSend.
-                        // We can't easily call the closure from here, so
-                        // we dispatch a window event the composer owns.
-                        window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
-                          detail: { text: renderedFinal },
-                        }));
-                        if (composer) composer.focus();
-                      }, 60);
+                      }
                     }
                   }}
                   onIntervene={intervene}

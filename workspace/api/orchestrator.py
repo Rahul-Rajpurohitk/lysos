@@ -103,6 +103,11 @@ _KNOWN_WORKFLOWS = [
 ]
 
 _KNOWN_SLASH = [
+    {"cmd": "/help",
+     "phrases": ["help", "what can you do", "commands", "options"],
+     "args_hint": "/help",
+     "what_it_does": "List every registered slash command + workflow with descriptions. Use when the user types `/help` or asks 'what can you do'.",
+    },
     {"cmd": "/score",
      "phrases": ["score", "evaluate", "rate this", "assess", "grade"],
      "args_hint": "/score <smiles>",
@@ -166,6 +171,12 @@ def _build_routing_system_prompt() -> str:
         '  "answer": "<only set if route=answer; the prose to display>"\n'
         "}\n\n"
         "Rules:\n"
+        "  - When the user's text STARTS WITH a literal slash (e.g. `/help`, "
+        "`/score c1ccccc1`, `/champion MRSA`), ALWAYS pick route='slash' and "
+        "set name to the slash they typed (lowercased, with the leading /). "
+        "Don't second-guess the user — they explicitly asked for that command. "
+        "If the slash isn't in the registry above, fall back to the most "
+        "relevant workflow or the agent route.\n"
         "  - PREFER 'slash' when the prompt clearly maps to one command.\n"
         "  - PREFER 'workflow' when the user wants a multi-step outcome (e.g. "
         "'find me a beta-lactam for MRSA and harden it').\n"
