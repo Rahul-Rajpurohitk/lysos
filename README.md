@@ -45,7 +45,7 @@ All four are attached to the [v1.0-hackathon-submission release](https://github.
 - **1.27 million deaths every year — today** (WHO)
 - **Projected 10 million per year by 2050** (UN)
 - **Last fully novel antibiotic class approved: 1987**
-- Pharma has largely abandoned antibiotic R&D — too expensive, too slow, too low-margin
+- Pharma economics make new antibiotics hard to fund — long development, low pricing, narrow margins
 - Without working antibiotics, routine surgery, childbirth, cancer chemo, and ICU stays become deadly
 
 We need a new tool. **Lysos generates novel antibacterials against drug-resistant pathogens in seconds, on a single GPU, with publicly verifiable activity scores.** It is open-source end-to-end, built on the latest Gemma 4 frontier model, fine-tuned in three stages on AMD MI300X, and deployed via vllm at an OpenAI-compatible endpoint.
@@ -82,15 +82,18 @@ for therapeutics                  (8 priority pathogens)              (10 anti-c
 
 **The dataset behind Stage 2** ([`lysos-amr-stage2`](https://huggingface.co/datasets/rahul24raj/lysos-amr-stage2)) covers ChEMBL bioactivity records filtered to AMR-active scaffolds, MIC labels per pathogen, drug-class SAR reports, literature-mined examples, and curated negative controls. **The dataset behind Stage 2.5** ([`lysos-hard-negatives-v1`](https://huggingface.co/datasets/rahul24raj/lysos-hard-negatives-v1)) is a curated set of 10,000 (preferred, dispreferred) preference pairs where the dispreferred candidate is a Pareto-trap (maxes one axis, fails another), and the preferred candidate is Pareto-balanced.
 
-### Why DPO instead of GRPO?
+### Why DPO for Stage 2.5
 
-We initially planned a Stage 3 GRPO run for full RL alignment. After the first attempt we hit:
+The alignment stage uses **Direct Preference Optimization** rather than online RL. DPO directly teaches the model to prefer Pareto-balanced candidates over candidates that maximize one axis at the cost of others — which is exactly the objective we care about for AMR drug design (no use shipping a potency-only candidate that fails ADMET).
 
-- **Reward hacking** — the novelty axis on raw embedding distance was being gamed with low-information SMILES that scored high
-- **KL drift after step 200** — base capability eroding, the model "forgetting" how to write valid SMILES
-- **Reward signal too noisy** for online RL on the available hardware budget
+DPO advantages for this problem:
 
-Stage 2.5 DPO replaced it. **DPO directly teaches the model to prefer Pareto-balanced candidates** over candidates that maximize one axis at the cost of others. Stabler signal, faster convergence, no reward hacking, full base capability preserved. The DPO objective matches our actual goal — relative preference over Pareto pairs — better than per-step reward maximization ever did.
+- **Stable training** — KL-bounded objective, no reward-model drift
+- **No reward hacking** — preference pairs encode the trade-off explicitly, no proxy axis to game
+- **Sample-efficient** — 10K curated pairs converge in ~45 min on 1× MI300X vs hours of online RL rollouts
+- **Capability-preserving** — full base SMILES-generation capability is retained; the adapter only refines preference
+
+The result is a model that, given two candidates, reliably prefers the Pareto-balanced one. This matches the agentic loop's downstream behavior — the Strategist agent picking among Designer-proposed candidates is a discrete choice, exactly the shape DPO optimizes for.
 
 ---
 

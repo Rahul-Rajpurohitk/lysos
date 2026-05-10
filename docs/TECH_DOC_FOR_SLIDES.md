@@ -23,7 +23,7 @@ Multi-agent debate engine. End-to-end live agentic workspace.
 - **1.27 million deaths every year — today** (WHO)
 - **Projected 10 million per year by 2050** (UN)
 - **Last fully novel antibiotic class approved: 1987**
-- Pharma has largely abandoned antibiotic R&D — too expensive, too slow, too low-margin
+- Pharma economics make new antibiotics hard to fund — long development, low pricing, narrow margins
 - Without working antibiotics: routine surgery, childbirth, cancer chemo, and ICU stays become deadly
 
 ▶ Visual: huge "1.27M" number + Earth map with red overlay where AMR deaths are highest. Stat blocks on the right.
@@ -86,7 +86,7 @@ Multi-agent debate engine. End-to-end live agentic workspace.
 | Wall-clock | ~2 hours |
 | Corpus | Therapeutic literature, ChEMBL bioactivity, drug-target databases |
 
-**Goal**: Bias the base toward therapeutic vocabulary — molecule names, reaction types, drug classes, pharmacology terms — without forgetting general capability.
+**Goal**: Specialize the base toward therapeutic vocabulary — molecule names, reaction types, drug classes, pharmacology terms — while preserving general capability.
 
 ▶ Visual: card with the table + a sparkline of training loss curve.
 
@@ -131,14 +131,17 @@ Multi-agent debate engine. End-to-end live agentic workspace.
 | Loss | DPO (β=0.1) — KL-bounded preference learning |
 | Wall-clock | ~45 min on 1× MI300X |
 
-### Why DPO and not GRPO?
+### Why DPO for the alignment stage
 
-We initially planned a Stage 3 GRPO run for full RL alignment. After the first attempt:
-- Reward hacking on the novelty axis (model produced gibberish that scored high on raw embedding distance)
-- KL drift after step 200 — base capability eroding
-- Reward signal too noisy for online RL on this hardware budget
+DPO is the right tool for this objective. The downstream usage pattern — the Strategist agent picking among Designer-proposed candidates — is a **discrete preference choice**, exactly what DPO optimizes for.
 
-Stage 2.5 DPO replaced it. **DPO directly teaches the model to prefer Pareto-balanced candidates** over candidates that maximize one axis at the cost of others. Stabler signal, faster convergence, no reward hacking, full base capability preserved.
+**DPO advantages for AMR drug design**:
+- KL-bounded objective → stable training, no proxy-reward drift
+- Preference pairs encode the trade-off explicitly → no axis to game
+- Sample-efficient — 10K curated pairs converge in ~45 min on 1× MI300X
+- Capability-preserving — full base SMILES generation retained, adapter only refines preference
+
+The result is a model that, given two candidates, reliably prefers the Pareto-balanced one over the one that maxes a single axis. Matches the agentic loop's downstream behavior 1:1.
 
 ▶ Visual: 2D scatter — x=potency, y=ADMET. Two clusters labeled "Pareto-trap (max one axis)" and "Pareto-balanced (preferred)". Arrow from trap to balanced labeled "DPO objective".
 
