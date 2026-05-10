@@ -185,15 +185,19 @@ export function KnowledgeHubCard({ apiBase, pathogen, onFireSlash, onLoadPdb }: 
         <Section title={`Top resistance threats · ${pathogen}`} accent="#dc2626">
           {brief.top_resistance.length === 0 ? (
             <Empty>No resistance threats catalogued.</Empty>
-          ) : brief.top_resistance.slice(0, 6).map((g, i) => (
+          ) : brief.top_resistance.slice(0, 6).map((g, i) => {
+            // Strip "/" + alias halves so "mecA / PBP2a" → "mecA" — first
+            // canonical gene token is what `/explain` expects.
+            const geneToken = (g.gene || "").split(/\s*\/\s*|\s+/)[0];
+            return (
             <div key={i} style={{
               fontSize: 10.5, padding: "5px 7px",
               background: "white", border: "1px solid rgba(0,0,0,0.06)",
               borderLeft: "2px solid #dc2626", borderRadius: 3,
               cursor: onFireSlash ? "pointer" : "default",
             }}
-              onClick={() => onFireSlash?.(`/escape ${g.gene}`)}
-              title={onFireSlash ? `Click to /escape ${g.gene}` : ""}
+              onClick={() => onFireSlash?.(`/explain ${geneToken}`)}
+              title={onFireSlash ? `Click to /explain ${geneToken}` : ""}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <strong style={{ color: "#dc2626", fontFamily: "var(--lys-font-mono)" }}>{g.gene}</strong>
@@ -218,7 +222,8 @@ export function KnowledgeHubCard({ apiBase, pathogen, onFireSlash, onLoadPdb }: 
                 </div>
               )}
             </div>
-          ))}
+          );
+          })}
         </Section>
 
         {/* RIGHT: Drug-class pressure */}

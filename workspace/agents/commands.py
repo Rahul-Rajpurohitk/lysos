@@ -1209,24 +1209,77 @@ class EscapeCommand(Command):
         smiles = ctx.active_smiles
         if not smiles:
             return CommandResult(error="Set an active candidate first (load from library or run /design).")
-        parts = args.strip().split() if args.strip() else []
-        pdb_id: Optional[str] = parts[0].upper() if parts else None
+        from workspace.api.chem_3d import PATHOGEN_TARGETS
+        pathogen_targets = PATHOGEN_TARGETS.get(ctx.active_target or "MRSA", [])
+
+        def _default_pdb() -> Optional[str]:
+            return next(
+                (t["pdb_id"] for t in pathogen_targets if t.get("preferred_default")),
+                pathogen_targets[0]["pdb_id"] if pathogen_targets else None,
+            )
+
+        # Resolve the user's first arg into a PDB. Three modes:
+        #   (a) bare 4-char alphanumeric ID — use as-is (PDB regex)
+        #   (b) gene/target alias — search PATHOGEN_TARGETS for a match
+        #       on name / aliases / pathogen so "mecA" → 1VQQ (PBP2a).
+        #   (c) anything else — fall back to active pathogen's preferred PDB.
+        pdb_id: Optional[str] = None
+        resolution_note = ""
+        raw_arg = args.strip()
+        if raw_arg:
+            # Take the first token after stripping common separators —
+            # users sometimes paste "mecA / PBP2a" or "PBP2a (1VQQ)".
+            first_tok = raw_arg.split(maxsplit=1)[0].strip("()[],/")
+            # PDB IDs are always 4 chars AND start with a digit
+            # (e.g. 1VQQ, 2X22, 4FDO). "mecA" / "VanA" are alphanumeric
+            # but DO NOT match this — so they correctly fall through to
+            # the alias resolver instead of 404'ing as a fake PDB.
+            import re as _re
+            is_pdb = bool(_re.fullmatch(r"\d[A-Za-z0-9]{3}", first_tok))
+            # (a) literal PDB ID
+            if is_pdb:
+                pdb_id = first_tok.upper()
+            else:
+                # (b) gene/target alias resolver — try the first token,
+                # then the whole arg if needed.
+                for needle in (first_tok.lower(), raw_arg.lower()):
+                    if pdb_id:
+                        break
+                    for t in pathogen_targets:
+                        name = (t.get("name") or "").lower()
+                        aliases = [a.lower() for a in (t.get("aliases") or [])]
+                        # Token match against name OR any alias
+                        if (needle and (needle in name or name in needle
+                            or any(needle == a or needle in a or a in needle
+                                   for a in aliases))):
+                            pdb_id = t["pdb_id"]
+                            resolution_note = (
+                                f"_(resolved `{first_tok}` → {t.get('name')} "
+                                f"PDB **{pdb_id}** for "
+                                f"{ctx.active_target or 'MRSA'})_\n\n"
+                            )
+                            break
+            # (c) last-ditch: default for the active pathogen
+            if not pdb_id:
+                fallback = _default_pdb()
+                if fallback:
+                    pdb_id = fallback
+                    resolution_note = (
+                        f"_(`{raw_arg}` is not a PDB or known target alias — "
+                        f"falling back to **{pdb_id}**, the default for "
+                        f"{ctx.active_target or 'MRSA'}. Use `/theater` to see all targets.)_\n\n"
+                    )
+        else:
+            pdb_id = _default_pdb()
         if not pdb_id:
-            try:
-                from workspace.api.chem_3d import PATHOGEN_TARGETS
-                ts = PATHOGEN_TARGETS.get(ctx.active_target or "MRSA", [])
-                pdb_id = next((t["pdb_id"] for t in ts if t.get("preferred_default")), ts[0]["pdb_id"] if ts else None)
-            except Exception:
-                pdb_id = None
-        if not pdb_id:
-            return CommandResult(error="No PDB ID — set a pathogen via /set-target or specify a PDB explicitly.")
+            return CommandResult(error="No PDB ID and no targets registered for the active pathogen. Use `/set-target <pathogen>`.")
         try:
             from workspace.api.chem_resistance import predict_resistance as _ep, PredictResistanceRequest
             result = await _ep(PredictResistanceRequest(smiles=smiles, pdb_id=pdb_id))
             md = [
                 f"### 🛡️ Resistance escape map · {result['target_name']}",
                 "",
-                f"**Pathogen**: {result['pathogen']}  ·  **PDB**: {pdb_id}",
+                resolution_note + f"**Pathogen**: {result['pathogen']}  ·  **PDB**: {pdb_id}",
                 f"**Robustness**: {result['robustness_score']:.3f}  ·  **Escape vectors**: {result['n_escape_vectors']}",
                 f"**Known clinical mutations checked**: {result['n_total_known_mutations']}",
                 "",
