@@ -42,6 +42,11 @@ interface Props {
    *  Rendered as orange halos with a "harden me" sticker. Editor agent
    *  uses this to pick which atom to swap for hardening. */
   vulnerableAtoms?: number[];
+  /** Cross-link: a single atom flashed by a sibling card (Resistance
+   *  Escape Map cell click, Pareto compare). Painted as a brighter
+   *  pulsing halo on top of any existing vulnerable/binding/clashing
+   *  layer so the user instantly sees where their click landed. */
+  focusedAtom?: number | null;
   /** Open the user's saved-molecules library popover. Implemented by parent
    *  via portal so we can share the same library state across cards. */
   onLoadFromLibrary?: (smi: string, name: string) => void;
@@ -151,8 +156,9 @@ function injectSvgSafely(host: HTMLElement, svgText: string): SVGSVGElement | nu
   });
   // Force responsive scaling — drop any fixed pixel dimensions, ensure
   // a viewBox exists, set 100%/100% so the SVG fits the host element.
+  // Pad the viewBox by ~10% on each side so the rendered molecule has
+  // breathing room and never touches the host edges (looked oversized).
   const svgEl = svg as unknown as SVGSVGElement;
-  // If viewBox is missing, synthesize from width/height attributes
   if (!svgEl.hasAttribute("viewBox")) {
     const w = svgEl.getAttribute("width") || "480";
     const h = svgEl.getAttribute("height") || "340";
@@ -160,6 +166,20 @@ function injectSvgSafely(host: HTMLElement, svgText: string): SVGSVGElement | nu
     const hn = parseFloat(h);
     if (!isNaN(wn) && !isNaN(hn)) {
       svgEl.setAttribute("viewBox", `0 0 ${wn} ${hn}`);
+    }
+  }
+  // Expand viewBox by 20% on each side. RDKit emits at native size and
+  // when the host is taller than the molecule's aspect ratio, "meet"
+  // would scale up to fill width and clip vertically. The padded viewBox
+  // forces the SVG to letterbox (centered, smaller) instead — the
+  // molecule never touches the host edges.
+  const vb = svgEl.getAttribute("viewBox");
+  if (vb) {
+    const [x, y, w, h] = vb.split(/\s+/).map((n) => parseFloat(n));
+    if ([x, y, w, h].every((n) => !isNaN(n))) {
+      const padX = w * 0.20;
+      const padY = h * 0.20;
+      svgEl.setAttribute("viewBox", `${x - padX} ${y - padY} ${w + 2 * padX} ${h + 2 * padY}`);
     }
   }
   svgEl.setAttribute("width", "100%");
@@ -246,8 +266,12 @@ const ACTOR_COLOR: Record<string, string> = {
   user: "#f59e0b",
 };
 
-export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, bindingAtoms, clashingAtoms, vulnerableAtoms, onLoadFromLibrary, propertiesPanel }: Props) {
+export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, cursors, onCursorHover, highlightAtoms: externalHighlight, bindingAtoms, clashingAtoms, vulnerableAtoms, focusedAtom, onLoadFromLibrary, propertiesPanel }: Props) {
   const [svg, setSvg] = useState<string>("");
+  // Authoritative atom (x, y) coords from RDKit's GetDrawCoords —
+  // populated by the /molecule/2d response. Bypasses SVG parsing for
+  // the case where bond endpoints are ambiguous (aromatic stripes).
+  const authoritativeCoords = useRef<Map<number, { x: number; y: number }>>(new Map());
   const [violation, setViolation] = useState<Violation | null>(null);
   // Whole-molecule diagnostics (incomplete atoms after a bond-break, etc).
   // Polled whenever SMILES changes; the rail + SVG highlight from this.
@@ -283,7 +307,11 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
   // opens drug-likeness / rule / structure / identifiers; "Build"
   // opens build-state / composition / patterns / closest-known.
   const [propsOverlayOpen, setPropsOverlayOpen] = useState(false);
-  const [buildOverlayOpen, setBuildOverlayOpen] = useState(false);
+  // Reserved name for legacy compat — the merged INSIGHTS overlay now
+  // owns both former PROPS + BUILD content under propsOverlayOpen.
+  // Kept as a no-op closer for the toolbar buttons that defensively
+  // dismiss any expanded overlay before opening their own.
+  const [, setBuildOverlayOpen] = useState(false);
   // Atoms / Bonds / Build rail — was always-visible right side rail.
   // Now hidden by default; opened via 3 capsule chips on the 2D
   // canvas. All three chips toggle the same rail (the rail's
@@ -453,7 +481,17 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     let cancelled = false;
     fetch(`${apiBase}/workbench/molecule/2d/${b64}?w=480&h=340`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d) => { if (!cancelled) { setSvg(d.svg ?? ""); setViolation(null); } })
+      .then((d) => {
+        if (cancelled) return;
+        // Capture authoritative coords for halo/hit-circle placement.
+        const coords = new Map<number, { x: number; y: number }>();
+        for (const c of (d.atom_coords ?? []) as Array<{ idx: number; x: number; y: number }>) {
+          coords.set(c.idx, { x: c.x, y: c.y });
+        }
+        authoritativeCoords.current = coords;
+        setSvg(d.svg ?? "");
+        setViolation(null);
+      })
       .catch((err) => {
         if (cancelled) return;
         setSvg("");
@@ -494,6 +532,16 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     const svgEl = host.querySelector("svg");
     if (!svgEl) { atomPositions.current.clear(); atomIdxText.current.clear(); return; }
     const map = new Map<number, { x: number; y: number }>();
+    // ZEROTH priority: authoritative coords from RDKit GetDrawCoords.
+    // The backend computes these from the same draw pass that emitted the
+    // SVG, so they're guaranteed consistent. Bypasses ALL SVG-parsing
+    // ambiguity (aromatic inner stripes, bond-trim cosmetics, reversed
+    // path direction).
+    if (authoritativeCoords.current.size > 0) {
+      for (const [idx, pos] of authoritativeCoords.current.entries()) {
+        map.set(idx, pos);
+      }
+    }
     // 1) For heteroatoms, RDKit emits <path class="atom-N"> with NO
     //    bond- prefix. Use bbox of those directly (most accurate).
     svgEl.querySelectorAll<SVGGraphicsElement>("[class^='atom-']").forEach((el) => {
@@ -508,25 +556,24 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       } catch {/*noop*/}
     });
     // 2) For atoms missing from step 1 (pure carbons), use bond paths.
-    //    Each atom is connected to 1-3 other atoms; collect every
-    //    endpoint that path ascribes to a given atom across all
-    //    bond paths, then AVERAGE. Averaging cancels out the
-    //    parallel-offset error of aromatic-bond inner stripes:
-    //    inner stripes have endpoints offset perpendicular to the
-    //    bond direction, but the offsets point opposite ways for
-    //    the two atoms of the bond — so when an atom has 2-3
-    //    incoming bonds, the inner-stripe contributions partially
-    //    cancel and the average lands at the true atom centre.
-    //    Far more robust than 'pick the longest path' which depended
-    //    on RDKit's emit order.
+    //    Each bond path has TWO endpoints, but we DON'T know a priori
+    //    which endpoint belongs to atom A vs atom B — the M-then-L
+    //    convention is unreliable (RDKit can emit reversed paths and
+    //    aromatic-bond inner stripes have perpendicular-offset endpoints
+    //    that drift the average toward the bond midpoint, putting
+    //    selection halos on the bond instead of on the atoms).
+    //
+    //    Robust fix: cluster-based endpoint assignment. For each atom,
+    //    collect all bond endpoints from every bond it participates in
+    //    as UNORDERED candidate points. The true atom position is the
+    //    cluster of points that converge on a single coordinate (the
+    //    other cluster is the OTHER atom of each bond, which differs
+    //    bond-to-bond and so doesn't cluster).
     const dRe = /M\s*([\d.\-]+),?\s*([\d.\-]+).*?[L\s]\s*([\d.\-]+),?\s*([\d.\-]+)/i;
-    const samples = new Map<number, { sx: number; sy: number; n: number }>();
-    const addSample = (idx: number, x: number, y: number) => {
-      if (map.has(idx)) return;  // step-1 wins (heteroatom path is authoritative)
-      const cur = samples.get(idx) ?? { sx: 0, sy: 0, n: 0 };
-      cur.sx += x; cur.sy += y; cur.n += 1;
-      samples.set(idx, cur);
-    };
+
+    // Per-bond: parse both endpoints (no atom-assignment yet)
+    type BondPath = { aIdx: number; bIdx: number; p1: { x: number; y: number }; p2: { x: number; y: number } };
+    const bondPaths: BondPath[] = [];
     svgEl.querySelectorAll<SVGGraphicsElement>("[class^='bond-']").forEach((el) => {
       const cls = el.getAttribute("class") || "";
       const am = cls.match(/atom-(\d+)\s+atom-(\d+)/);
@@ -539,11 +586,80 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
       const x1 = parseFloat(dm[1]), y1 = parseFloat(dm[2]);
       const x2 = parseFloat(dm[3]), y2 = parseFloat(dm[4]);
       if (!isFinite(x1) || !isFinite(y1) || !isFinite(x2) || !isFinite(y2)) return;
-      addSample(aIdx, x1, y1);
-      addSample(bIdx, x2, y2);
+      bondPaths.push({ aIdx, bIdx, p1: { x: x1, y: y1 }, p2: { x: x2, y: y2 } });
     });
-    for (const [idx, s] of samples.entries()) {
-      if (s.n > 0) map.set(idx, { x: s.sx / s.n, y: s.sy / s.n });
+
+    // For each atom not yet placed, gather candidate points from every
+    // bond it touches. Pick the point that minimizes the sum of nearest-
+    // neighbour distances to endpoints of OTHER bonds containing the
+    // same atom — that's the convergence point (atom centre). Average
+    // across all "winning" endpoints to absorb sub-pixel jitter.
+    const atomBonds = new Map<number, BondPath[]>();
+    for (const bp of bondPaths) {
+      if (!atomBonds.has(bp.aIdx)) atomBonds.set(bp.aIdx, []);
+      if (!atomBonds.has(bp.bIdx)) atomBonds.set(bp.bIdx, []);
+      atomBonds.get(bp.aIdx)!.push(bp);
+      atomBonds.get(bp.bIdx)!.push(bp);
+    }
+    const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+      Math.hypot(a.x - b.x, a.y - b.y);
+    // Clustering tolerance — endpoints within TOL pixels are treated as
+    // the same atom point. RDKit aromatic-bond inner stripe endpoints
+    // sit ~3-4px off the true atom position (perpendicular to bond),
+    // and bond-trim cosmetics shift outer endpoints by a pixel or two.
+    // 10px catches both without bleeding into the next atom (which is
+    // the bond-length away — typically 25-40px).
+    const TOL = 10;
+    for (const [idx, bonds] of atomBonds.entries()) {
+      if (map.has(idx)) continue;  // step-1 (heteroatom) wins
+      if (bonds.length === 0) continue;
+
+      // Collect every endpoint from every bond path the atom touches.
+      // Aromatic bonds emit 2 paths (outer + inner stripe), so a hexagon
+      // carbon shows up here with 4 paths × 2 endpoints = 8 points: 4
+      // near the atom centre (slightly offset for the inner stripes)
+      // and 4 near each of its two neighbours. We cluster by proximity
+      // and pick the cluster with the MOST endpoints — that's the
+      // convergence point where multiple bonds meet, i.e., the atom.
+      const allPts = bonds.flatMap((bp) => [bp.p1, bp.p2]);
+      type Cluster = { sumX: number; sumY: number; n: number; cx: number; cy: number };
+      const clusters: Cluster[] = [];
+      for (const p of allPts) {
+        let placed = false;
+        for (const c of clusters) {
+          if (Math.hypot(c.cx - p.x, c.cy - p.y) < TOL) {
+            c.sumX += p.x; c.sumY += p.y; c.n += 1;
+            c.cx = c.sumX / c.n; c.cy = c.sumY / c.n;
+            placed = true;
+            break;
+          }
+        }
+        if (!placed) {
+          clusters.push({ sumX: p.x, sumY: p.y, n: 1, cx: p.x, cy: p.y });
+        }
+      }
+      // For terminal atoms (one bond, no stripe — 1 path × 2 points)
+      // we get 2 singleton clusters. Disambiguate by picking the one
+      // farther from the OTHER atom's bond-endpoints (that one is "us").
+      if (clusters.length === 2 && clusters[0].n === clusters[1].n) {
+        const bp = bonds[0];
+        const otherIdx = bp.aIdx === idx ? bp.bIdx : bp.aIdx;
+        const otherBonds = (atomBonds.get(otherIdx) || []).filter((b) => b !== bp);
+        if (otherBonds.length > 0) {
+          const otherPts = otherBonds.flatMap((b) => [b.p1, b.p2]);
+          const d0 = otherPts.reduce((s, q) => s + dist({ x: clusters[0].cx, y: clusters[0].cy }, q), 0);
+          const d1 = otherPts.reduce((s, q) => s + dist({ x: clusters[1].cx, y: clusters[1].cy }, q), 0);
+          const winner = d0 > d1 ? clusters[0] : clusters[1];
+          map.set(idx, { x: winner.cx, y: winner.cy });
+          continue;
+        }
+      }
+      // Otherwise the atom is the LARGEST cluster — most bonds converging.
+      // Tie-break by smallest cluster centroid distance to the average of
+      // all points (atom centres tend to be inside the molecule outline).
+      clusters.sort((a, b) => b.n - a.n);
+      const winner = clusters[0];
+      map.set(idx, { x: winner.cx, y: winner.cy });
     }
     atomPositions.current = map;
     // 3) Map RDKit's atom-index <text> elements to their atom indices,
@@ -1500,6 +1616,43 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
     }
   }, [vulnerableAtoms, svg]);
 
+  // FOCUSED-ATOM halo — bright lavender pulse painted by sibling cards
+  // (Resistance Escape Map cell click, Pareto compare). Sits on TOP of
+  // any other halo so the user instantly sees "here's the atom you just
+  // referenced." Single atom only.
+  useEffect(() => {
+    const host = svgHostRef.current;
+    if (!host) return;
+    const svgEl = host.querySelector("svg");
+    if (!svgEl) return;
+    svgEl.querySelectorAll('[data-focused-atom="1"]').forEach((n) => n.remove());
+    if (focusedAtom == null) return;
+    const pos = getAtomXY(focusedAtom);
+    if (!pos) return;
+    const ring = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+    ring.setAttribute("data-focused-atom", "1");
+    ring.setAttribute("cx", String(pos.x));
+    ring.setAttribute("cy", String(pos.y));
+    ring.setAttribute("r", "16");
+    ring.setAttribute("fill", "rgba(124,99,216,0.16)");
+    ring.setAttribute("stroke", "#6041d0");
+    ring.setAttribute("stroke-width", "2.4");
+    ring.style.pointerEvents = "none";
+    const anim = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+    anim.setAttribute("attributeName", "r");
+    anim.setAttribute("values", "14;19;14");
+    anim.setAttribute("dur", "1.0s");
+    anim.setAttribute("repeatCount", "indefinite");
+    ring.appendChild(anim);
+    const animOp = document.createElementNS("http://www.w3.org/2000/svg", "animate");
+    animOp.setAttribute("attributeName", "opacity");
+    animOp.setAttribute("values", "0.55;1;0.55");
+    animOp.setAttribute("dur", "1.0s");
+    animOp.setAttribute("repeatCount", "indefinite");
+    ring.appendChild(animOp);
+    svgEl.appendChild(ring);
+  }, [focusedAtom, svg]);
+
   // RAIL-HOVER halo — temporary cyan ring on the atom currently hovered
   // in the right-rail atoms list. Lighter than selection so the two
   // signals are distinguishable. Cleared as soon as the user leaves the
@@ -1924,7 +2077,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             instead (its body has internal overflow:auto). */}
         <div style={{ flex: "1 0 280px", minHeight: 280, position: "relative", overflow: "hidden", display: "grid", placeItems: "center", padding: 8 }}>
           {svg
-            ? <div ref={svgHostRef} style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }} />
+            ? <div ref={svgHostRef} style={{ width: "100%", height: "100%", minHeight: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", position: "relative" }} />
             : (
               <div style={{
                 color: "var(--lys-text-faint)", fontSize: 11,
@@ -2068,23 +2221,21 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
               when railOpen is true it floats here as an overlay
               card instead of as a side rail. */}
 
-          {/* PROPERTIES chip — bottom-LEFT capsule on the 2D canvas.
-              Same pattern as the 3D viewer's NOVEL chip: collapsed
-              shows a compact pill with a counter; click expands into
-              a glassy floating card with the full PropertiesCard
-              content. Click again or × to close. */}
-          {propertiesPanel && !propsOverlayOpen && !buildOverlayOpen && (
+          {/* INSIGHTS chip — bottom-RIGHT capsule. Merges what used to be
+              two separate chips (PROPS + BUILD) into a single overlay so
+              the user sees drug-likeness, rules, build state, composition,
+              patterns, and closest-known matches all in one place. The
+              `propsOverlayOpen` state is reused as the toggle for the
+              merged card. Wasted-space ≈ 0: PropertiesStrip renders ONLY
+              the columns it has data for and uses narrow stacked layout. */}
+          {propertiesPanel && !propsOverlayOpen && (
             <button
               type="button"
               onClick={() => { setBuildOverlayOpen(false); setPropsOverlayOpen(true); }}
-              title="Properties — drug-likeness · rule compliance · structure · identifiers"
+              title="Insights — drug-likeness · rules · build state · composition · patterns · closest known"
               style={{
                 position: "absolute", bottom: 8, right: 8, zIndex: 55,
                 padding: "5px 10px",
-                // Same lavender-glass treatment as the 3D NOVEL chip,
-                // just teal instead of purple so the two cards (props
-                // bottom-left vs build bottom-right) carry distinct
-                // accents but the same visual language.
                 background: "rgba(8,145,178,0.10)",
                 border: "1px solid rgba(8,145,178,0.35)",
                 borderRadius: 6,
@@ -2101,23 +2252,20 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 background: "#0891b2", color: "white",
               }}>PROPS</span>
               <span style={{ fontWeight: 600, fontSize: 10.5, color: "#0e7490" }}>
-                drug-likeness · rules
+                {diagnostics ? `${(diagnostics as any).n_atoms ?? 0}a · ${bondList.length}b` : "drug-likeness"}
               </span>
             </button>
           )}
           {propertiesPanel && propsOverlayOpen && (
             <div style={{
               position: "absolute", bottom: 8, right: 8, zIndex: 55,
-              width: 360, maxHeight: "calc(100% - 16px)",
-              // Lavender-glass treatment matching the 3D NOVEL card,
-              // but in teal — translucent tint + backdrop blur so the
-              // protein/molecule behind shows through.
-              background: "rgba(8,145,178,0.10)",
-              border: "1px solid rgba(8,145,178,0.35)",
+              width: 440, maxHeight: "calc(100% - 16px)",
+              background: "rgba(8,145,178,0.12)",
+              border: "1px solid rgba(8,145,178,0.42)",
               borderRadius: 6,
               boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
+              backdropFilter: "blur(14px)",
+              WebkitBackdropFilter: "blur(14px)",
               overflow: "hidden",
               display: "flex", flexDirection: "column",
             }}>
@@ -2125,7 +2273,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                 onClick={() => setPropsOverlayOpen(false)}
                 title="Click to collapse"
                 style={{
-                  padding: "6px 10px",
+                  padding: "7px 12px",
                   fontFamily: "var(--lys-font-mono)", fontSize: 9,
                   letterSpacing: "0.06em", textTransform: "uppercase",
                   color: "#0e7490", fontWeight: 700,
@@ -2140,104 +2288,33 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
                   padding: "1px 4px", borderRadius: 2,
                   background: "#0891b2", color: "white",
                 }}>PROPS</span>
-                <span>drug-likeness · rules · structure</span>
+                <span>drug-likeness · rules · build · patterns · closest known</span>
                 <span style={{ flex: 1 }} />
                 <span style={{ fontSize: 8, opacity: 0.7 }}>▼</span>
               </div>
-              <div style={{ flex: 1, overflow: "auto", background: "rgba(255,255,255,0.85)" }}>
-                {propertiesPanel}
-              </div>
-            </div>
-          )}
-
-          {/* BUILD chip — bottom-RIGHT, stacked ABOVE the PROPS chip
-              (PROPS at bottom: 8, BUILD at bottom: 44). Hidden when
-              either expanded card is showing so the chip can't sit
-              on top of an open card. */}
-          {!buildOverlayOpen && !propsOverlayOpen && (
-            <button
-              type="button"
-              onClick={() => { setPropsOverlayOpen(false); setBuildOverlayOpen(true); }}
-              title="Build — state · composition · patterns · closest known"
-              style={{
-                position: "absolute", bottom: 44, right: 8, zIndex: 55,
-                padding: "5px 10px",
-                background: "rgba(168,85,247,0.10)",
-                border: "1px solid rgba(168,85,247,0.35)",
-                borderRadius: 6,
-                backdropFilter: "blur(8px)",
-                boxShadow: "0 4px 12px rgba(15,23,42,0.10)",
-                fontFamily: "var(--lys-font-body)",
-                cursor: "pointer",
-                display: "inline-flex", alignItems: "center", gap: 6,
-              }}>
-              <span style={{
-                fontFamily: "var(--lys-font-mono)", fontWeight: 800,
-                fontSize: 8.5, letterSpacing: "0.08em",
-                padding: "1px 4px", borderRadius: 2,
-                background: "#a855f7", color: "white",
-              }}>BUILD</span>
-              <span style={{ fontWeight: 600, fontSize: 10.5, color: "#7c3aed" }}>
-                {diagnostics ? `${(diagnostics as any).n_atoms ?? 0}a · ${bondList.length}b` : "—"}
-              </span>
-            </button>
-          )}
-          {buildOverlayOpen && (
-            <div style={{
-              // Bottom-RIGHT, same slot PROPS uses when it's open —
-              // mutually exclusive so they never overlap.
-              position: "absolute", bottom: 8, right: 8, zIndex: 55,
-              width: 360, maxHeight: "calc(100% - 16px)",
-              background: "rgba(168,85,247,0.10)",
-              border: "1px solid rgba(168,85,247,0.35)",
-              borderRadius: 6,
-              boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-              overflow: "hidden",
-              display: "flex", flexDirection: "column",
-            }}>
-              <div
-                onClick={() => setBuildOverlayOpen(false)}
-                title="Click to collapse"
-                style={{
-                  padding: "6px 10px",
-                  fontFamily: "var(--lys-font-mono)", fontSize: 9,
-                  letterSpacing: "0.06em", textTransform: "uppercase",
-                  color: "#7c3aed", fontWeight: 700,
-                  borderBottom: "1px solid rgba(168,85,247,0.20)",
-                  display: "flex", alignItems: "center", gap: 6,
-                  cursor: "pointer", userSelect: "none",
-                  flexShrink: 0,
-                }}>
-                <span style={{
-                  fontFamily: "var(--lys-font-mono)", fontWeight: 800,
-                  fontSize: 8.5, letterSpacing: "0.08em",
-                  padding: "1px 4px", borderRadius: 2,
-                  background: "#a855f7", color: "white",
-                }}>BUILD</span>
-                <span>{diagnostics ? `${(diagnostics as any).n_atoms ?? 0}a · ${bondList.length}b` : "state · patterns"}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 8, opacity: 0.7, color: "#7c3aed" }}>▼</span>
-              </div>
-              <div style={{ flex: 1, overflow: "auto", background: "rgba(255,255,255,0.85)" }}>
-              <PropertiesStrip
-                apiBase={apiBase}
-                smiles={smiles}
-                smartsHits={smartsHits}
-                smarts={smarts}
-                diagnostics={diagnostics}
-                bondsCount={bondList.length}
-                onSelectPattern={(pattern, categoryColor) => {
-                  setSmarts(pattern);
-                  runSmartsMatch(pattern, categoryColor);
-                }}
-                hideProperties
-                hideHeader
-                forceLayout="narrow"
-              >
-                {null}
-              </PropertiesStrip>
+              {/* Body: ONE PropertiesStrip rendering all 4 columns
+                  (PropertiesCard children + build state + composition +
+                  patterns + closest known) in narrow stacked layout.
+                  flexShrink: 1 so the body collapses to fit content
+                  without forcing the card to a fixed height. */}
+              <div className="lys-glass-inner-teal"
+                   style={{ flexShrink: 1, overflow: "auto", background: "transparent" }}>
+                <PropertiesStrip
+                  apiBase={apiBase}
+                  smiles={smiles}
+                  smartsHits={smartsHits}
+                  smarts={smarts}
+                  diagnostics={diagnostics}
+                  bondsCount={bondList.length}
+                  onSelectPattern={(pattern, categoryColor) => {
+                    setSmarts(pattern);
+                    runSmartsMatch(pattern, categoryColor);
+                  }}
+                  hideHeader
+                  forceLayout="narrow"
+                >
+                  {propertiesPanel}
+                </PropertiesStrip>
               </div>
             </div>
           )}
@@ -2253,13 +2330,13 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
         {railOpen && (
         <div style={{
           position: "absolute", bottom: 8, left: 8, zIndex: 55,
-          width: 360, maxHeight: "calc(100% - 16px)",
-          background: "rgba(99,102,241,0.10)",
-          border: "1px solid rgba(99,102,241,0.35)",
+          width: 440, height: "calc(100% - 16px)", maxHeight: 620,
+          background: "rgba(99,102,241,0.12)",
+          border: "1px solid rgba(99,102,241,0.42)",
           borderRadius: 6,
           boxShadow: "0 8px 24px rgba(15,23,42,0.12)",
-          backdropFilter: "blur(10px)",
-          WebkitBackdropFilter: "blur(10px)",
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
           overflow: "hidden",
           display: "flex", flexDirection: "column",
           pointerEvents: "auto",
@@ -2268,7 +2345,7 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             onClick={() => setRailOpen(false)}
             title="Click to collapse"
             style={{
-              padding: "6px 10px",
+              padding: "7px 12px",
               fontFamily: "var(--lys-font-mono)", fontSize: 9,
               letterSpacing: "0.06em", textTransform: "uppercase",
               color: "#6366f1", fontWeight: 700,
@@ -2293,8 +2370,8 @@ export function Mol2DBuilderWindow({ apiBase, smiles, pathogen, onMoleculeEdit, 
             <span style={{ flex: 1 }} />
             <span style={{ fontSize: 8, opacity: 0.7 }}>▼</span>
           </div>
-          <div style={{ flex: 1, overflow: "auto",
-            background: "rgba(255,255,255,0.92)" }}>
+          <div className="lys-glass-inner-indigo"
+               style={{ flex: 1, overflow: "auto", background: "transparent" }}>
         <AtomsRail
           apiBase={apiBase}
           smiles={smiles}
@@ -3197,62 +3274,38 @@ function AtomsRail(p: AtomsRailProps) {
     Na: "#a855f7", Mg: "#c084fc", Ca: "#c084fc", K: "#a855f7",
   };
 
-  // Whole-rail collapse — when true, render only a 28px vertical strip
-  // with an icon. The center column (SVG + Properties) flexes to fill
-  // the freed horizontal space.
-  const [railCollapsed, setRailCollapsed] = useState(false);
   // Per-section collapse — the user can hide individual sub-sections
   // (atoms, build) without collapsing the entire rail. BondsRail
-  // already has its own internal collapse state.
+  // already has its own internal collapse state. The legacy
+  // whole-rail-to-vertical-strip mode was removed when the rail
+  // moved into the INV overlay capsule (no left strip exists).
   const [atomsSectionCollapsed, setAtomsSectionCollapsed] = useState(false);
   const [buildSectionCollapsed, setBuildSectionCollapsed] = useState(false);
 
-  if (railCollapsed) {
-    return (
-      <div style={{
-        width: 28, flexShrink: 0,
-        // Rail now lives on the LEFT, so the boundary edge is on the
-        // RIGHT side of this collapsed strip. Border flipped accordingly.
-        borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
-        background: "var(--lys-bg, #fafafa)",
-        display: "flex", flexDirection: "column", alignItems: "center",
-        cursor: "pointer", userSelect: "none",
-      }}
-      onClick={() => setRailCollapsed(false)}
-      title="Expand atoms / bonds / build rail"
-      >
-        <div style={{
-          writingMode: "vertical-rl",
-          transform: "rotate(180deg)",
-          padding: "10px 0",
-          fontSize: 10, fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-faint)",
-          letterSpacing: "0.06em", textTransform: "uppercase",
-          fontWeight: 700,
-        }}>▶ atoms · bonds · build</div>
-      </div>
-    );
-  }
-
   return (
     <div style={{
-      width: 320, flexShrink: 0,
-      // Rail now lives on the LEFT, so its boundary edge is on the
-      // RIGHT side of the rail (between rail and SVG).
-      borderRight: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
-      background: "var(--lys-bg, #fafafa)",
+      // Now embedded inside the lavender INV overlay capsule — let the
+      // outer card own background + border. Stay transparent so the
+      // lavender glass shows through every sub-section. We grow to
+      // fill the parent body (`flex: 1`) so the three sub-sections
+      // (atoms / bonds / build) — each `flex: 1 1 0` — actually have
+      // a parent height to share; otherwise the wrapper sizes to
+      // content and leftover body space shows up as an empty void at
+      // the bottom of the BUILD section.
+      width: "100%", height: "100%",
+      background: "transparent",
       display: "flex", flexDirection: "column",
-      overflow: "hidden",
+      minHeight: 0, overflow: "hidden",
     }}>
       {/* Header — title + count + add + COLLAPSE-ALL toggle */}
       <div
         title="Atom inventory · click any row to select & highlight in 2D · hover row to see actions"
         style={{
-          padding: "5px 8px 4px",
+          padding: "7px 10px 5px",
           fontSize: 9, fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-faint)",
+          color: "#6366f1",
           letterSpacing: "0.06em", textTransform: "uppercase",
-          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+          borderBottom: "1px solid rgba(99,102,241,0.16)",
           display: "flex", alignItems: "center", gap: 5,
         }}>
         <span
@@ -3264,16 +3317,6 @@ function AtomsRail(p: AtomsRailProps) {
         <span style={{ fontWeight: 700 }}>atoms</span>
         <span style={{ color: "#10b981", fontWeight: 700 }}>{atoms.length}</span>
         <span style={{ flex: 1 }} />
-        {/* Collapse-entire-rail button — pushes everything to a 28px strip */}
-        <button type="button"
-          onClick={() => setRailCollapsed(true)}
-          title="Collapse atoms + bonds + build rail entirely"
-          style={{
-            border: 0, background: "transparent",
-            cursor: "pointer", padding: "0 4px",
-            color: "var(--lys-text-faint)",
-            fontSize: 11, lineHeight: 1, fontWeight: 700,
-          }}>◀◀</button>
         {p.smiles && p.onAddAtom && (
           <button type="button"
             ref={addBtnRef}
@@ -3295,11 +3338,11 @@ function AtomsRail(p: AtomsRailProps) {
       {/* Stats band — quick chemistry summary */}
       {!atomsSectionCollapsed && atoms.length > 0 && (
         <div style={{
-          padding: "4px 8px",
+          padding: "5px 10px",
           display: "flex", flexWrap: "wrap", gap: 4,
-          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+          borderBottom: "1px solid rgba(99,102,241,0.10)",
           fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-          background: "rgba(0,0,0,0.015)",
+          background: "transparent",
         }}>
           <RailStat label="atoms" value={String(atoms.length)} color="#374151" tip="Heavy atoms (excludes implicit H)" />
           <RailStat label="aromatic" value={String(stats.aromaticAtoms)} color="#a855f7" tip="Atoms in aromatic systems" />
@@ -3312,10 +3355,10 @@ function AtomsRail(p: AtomsRailProps) {
       {/* Element filter chips */}
       {!atomsSectionCollapsed && uniqueElements.length > 1 && (
         <div style={{
-          padding: "4px 8px",
+          padding: "5px 10px",
           display: "flex", flexWrap: "wrap", gap: 3,
-          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
-          background: "var(--lys-bg-2, #ffffff)",
+          borderBottom: "1px solid rgba(99,102,241,0.10)",
+          background: "transparent",
         }}>
           <FilterChip label={`all · ${atoms.length}`} active={!elementFilter} onClick={() => setElementFilter("")} color="#6b7280" />
           {uniqueElements.map((el) => {
@@ -3332,10 +3375,10 @@ function AtomsRail(p: AtomsRailProps) {
           })}
         </div>
       )}
-      {/* Atoms list — flex:1 lets it grow but BuildTools below claims its share.
-          Hidden when atomsSectionCollapsed (header arrow toggles it). */}
+      {/* Atoms list — flex:1 1 0 so atoms / bonds / build split evenly when
+          all expanded. Hidden when atomsSectionCollapsed (header arrow toggles). */}
       {!atomsSectionCollapsed && (
-      <div className="lys-card-body" style={{ flex: "1 1 0", minHeight: 80, overflow: "auto" }}>
+      <div className="lys-card-body" style={{ flex: "1 1 0", minHeight: 60, overflow: "auto" }}>
         {!p.smiles && (
           <div style={{
             padding: "20px 12px", textAlign: "center",
@@ -3888,13 +3931,13 @@ function BondsRail(p: BondsRailProps) {
   return (
     <div style={{
       // When expanded, BondsRail flexes equally with atoms + build.
-      // When collapsed, shrinks to header height. The user wanted
-      // equal space distribution across the open sub-sections.
+      // When collapsed, shrinks to header height. Background stays
+      // transparent — the surrounding lavender INV card owns the bg.
       flex: collapsed ? "0 0 auto" : "1 1 0",
-      minHeight: collapsed ? 0 : 80,
+      minHeight: collapsed ? 0 : 60,
       display: "flex", flexDirection: "column",
-      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-      background: "var(--lys-bg, #fafafa)",
+      borderTop: "1px solid rgba(99,102,241,0.16)",
+      background: "transparent",
       overflow: "hidden",
     }}>
       {/* Header — collapsible, shows bond count + ring/aromatic counts */}
@@ -3902,11 +3945,11 @@ function BondsRail(p: BondsRailProps) {
         title="Bonds in the current candidate · click any row to highlight in 2D · × to break · click bond in SVG to break too"
         onClick={() => setCollapsed((c) => !c)}
         style={{
-          padding: "5px 8px",
+          padding: "6px 10px",
           fontSize: 9, fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-faint)",
+          color: "#6366f1",
           letterSpacing: "0.06em", textTransform: "uppercase",
-          borderBottom: collapsed ? "none" : "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+          borderBottom: collapsed ? "none" : "1px solid rgba(99,102,241,0.10)",
           display: "flex", alignItems: "center", gap: 5,
           cursor: "pointer",
           userSelect: "none",
@@ -4289,12 +4332,11 @@ function BuildTools(p: BuildToolsProps) {
 
   return (
     <div style={{
-      flexShrink: 0,
-      flexGrow: p.collapsed ? 0 : 1,
-      minHeight: p.collapsed ? "auto" : 100,
+      flex: p.collapsed ? "0 0 auto" : "1 1 0",
+      minHeight: p.collapsed ? "auto" : 80,
       display: "flex", flexDirection: "column",
-      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-      background: "var(--lys-bg-2, #ffffff)",
+      borderTop: "1px solid rgba(99,102,241,0.16)",
+      background: "transparent",
       overflow: "hidden",
     }}>
       {/* Single header — collapse arrow · build · selection-aware anchor status.
@@ -4307,11 +4349,11 @@ function BuildTools(p: BuildToolsProps) {
           ? "Show build tools (fragments / rings / SMILES)"
           : "Build tools — compose with chemistry blocks. Click to collapse. Fragments + rings attach to the selected atom (chemistry-valid options only). SMILES replaces the entire structure."}
         style={{
-          padding: "5px 8px",
+          padding: "6px 10px",
           fontSize: 9, fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-faint)",
+          color: "#6366f1",
           letterSpacing: "0.06em", textTransform: "uppercase",
-          borderBottom: p.collapsed ? "none" : "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+          borderBottom: p.collapsed ? "none" : "1px solid rgba(99,102,241,0.10)",
           display: "flex", alignItems: "center", gap: 5,
           cursor: "pointer", userSelect: "none",
         }}>
@@ -4361,8 +4403,8 @@ function BuildTools(p: BuildToolsProps) {
           <div>
             {!canAttach && (
               <div style={{
-                padding: "8px 6px", textAlign: "center",
-                fontSize: 9.5, color: "var(--lys-text-faint)",
+                padding: "6px 8px",
+                fontSize: 9, color: "var(--lys-text-faint)",
                 fontFamily: "var(--lys-font-body)", lineHeight: 1.4,
               }}>
                 {anchorIdx == null
@@ -4411,8 +4453,8 @@ function BuildTools(p: BuildToolsProps) {
           <div>
             {!canAttach && (
               <div style={{
-                padding: "8px 6px", textAlign: "center",
-                fontSize: 9.5, color: "var(--lys-text-faint)",
+                padding: "6px 8px",
+                fontSize: 9, color: "var(--lys-text-faint)",
                 fontFamily: "var(--lys-font-body)", lineHeight: 1.4,
               }}>
                 {anchorIdx == null
@@ -5166,11 +5208,12 @@ function PropertiesStrip(p: PropertiesStripProps) {
       // center column is short — its body has overflow:auto for
       // internal scroll, so content stays accessible. The SVG above
       // (flex: 1 0 280) holds its minimum 280px, keeping the diagram
-      // always visible.
+      // always visible. Background stays transparent so when nested
+      // inside the lavender BUILD overlay the glass tint shows through.
       flexShrink: 1,
       flexBasis: collapsed ? 28 : "auto",
-      borderTop: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-      background: "var(--lys-bg, #fafafa)",
+      borderTop: p.hideHeader ? "none" : "1px solid rgba(168,85,247,0.16)",
+      background: "transparent",
       display: "flex", flexDirection: "column",
       maxHeight: collapsed ? 28 : expandedH,
       minHeight: collapsed ? 28 : 0,

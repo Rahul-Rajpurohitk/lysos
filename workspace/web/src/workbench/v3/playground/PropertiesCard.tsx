@@ -310,7 +310,9 @@ function PropSection({ label, subtitle, children }: {
 
 const containerStyle: React.CSSProperties = {
   width: "100%", height: "100%", display: "flex", flexDirection: "column",
-  background: "var(--lys-bg-2, #ffffff)", overflow: "hidden",
+  // Transparent so when this card is nested inside the lavender PROPS
+  // overlay capsule the glass tint shows through every section.
+  background: "transparent", overflow: "hidden",
 };
 
 const emptyStateStyle: React.CSSProperties = {
@@ -323,11 +325,11 @@ const emptyStateStyle: React.CSSProperties = {
 function Header({ title, iconColor, onRefresh, loading }: { title: string; iconColor: string; onRefresh: () => void; loading: boolean }) {
   return (
     <div style={{
-      padding: "5px 10px",
+      padding: "6px 10px",
       fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
-      color: "var(--lys-text-faint)", letterSpacing: "0.06em",
+      color: "#0e7490", letterSpacing: "0.06em",
       textTransform: "uppercase",
-      borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.04))",
+      borderBottom: "1px solid rgba(8,145,178,0.16)",
       display: "flex", alignItems: "center", gap: 6,
     }}>
       <FlaskConical size={11} style={{ color: iconColor }} />
@@ -349,8 +351,8 @@ function InlineStat({ label, value, tip }: { label: string; value: string; tip?:
   return (
     <span title={tip} style={{
       padding: "1px 6px", borderRadius: 4,
-      background: "var(--lys-bg-3, rgba(0,0,0,0.02))",
-      border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.05))",
+      background: "rgba(8,145,178,0.08)",
+      border: "1px solid rgba(8,145,178,0.20)",
       fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
       display: "inline-flex", gap: 3, alignItems: "baseline",
     }}>
@@ -375,7 +377,7 @@ function MiniTile({ label, value, unit, color, tip }: {
       padding: "2px 8px 2px 7px",
       borderRadius: 3,
       borderLeft: `2px solid ${color}`,
-      background: "var(--lys-bg, #fafafa)",
+      background: "rgba(255,255,255,0.35)",
       display: "inline-flex", alignItems: "baseline", gap: 5,
       fontFamily: "var(--lys-font-mono)",
       cursor: tip ? "help" : "default",

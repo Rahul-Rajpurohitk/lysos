@@ -1186,8 +1186,29 @@ async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340) -> dict:
     drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()
-    # RDKit emits raw SVG with atom classes already; stash a small
-    # n_atoms hint for the frontend.
+
+    # Authoritative atom (x, y) coords in SVG pixel space. The frontend
+    # uses these directly for halo / hit-circle placement instead of
+    # parsing bond endpoints (which is unreliable for aromatic stripes
+    # and yields halos drifting onto bond midpoints).
+    atom_coords: list[dict] = []
+    try:
+        n = mol.GetNumAtoms()
+        for i in range(n):
+            try:
+                pt = drawer.GetDrawCoords(i)
+                atom_coords.append({"idx": i, "x": float(pt.x), "y": float(pt.y)})
+            except Exception:
+                # Some RDKit versions return a Point2D with .x .y; some return a
+                # tuple. Fall back to the second form.
+                try:
+                    pt = drawer.GetDrawCoords(i)  # type: ignore[assignment]
+                    atom_coords.append({"idx": i, "x": float(pt[0]), "y": float(pt[1])})
+                except Exception:
+                    pass
+    except Exception:
+        atom_coords = []
+
     return {
         "smiles": smiles,
         "svg": svg,
@@ -1195,6 +1216,7 @@ async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340) -> dict:
         "n_bonds": mol.GetNumBonds(),
         "w": w,
         "h": h,
+        "atom_coords": atom_coords,
     }
 
 
@@ -1972,6 +1994,7 @@ async def workbench_explain(req: ExplainRequest) -> ExplainResponse:
 class ScoreMoleculeRequest(BaseModel):
     smiles: str
     target_pathogen: str = "MRSA"
+    session_id: Optional[str] = None  # for session memory recording
 
 
 @router.post("/score")
@@ -1995,7 +2018,233 @@ async def workbench_score(req: ScoreMoleculeRequest) -> dict:
         # reward dep. Surface the error verbatim — the chat card renders it.
         raise HTTPException(422, f"score failed: {exc}")
 
-    return breakdown.model_dump()
+    result = breakdown.model_dump()
+    # Record into session memory so future Gemini calls in this session
+    # have a sense of what was last scored. Best-effort; never blocks.
+    if req.session_id:
+        try:
+            from . import session_memory
+            session_memory.record(req.session_id, "score", {
+                "smiles": req.smiles,
+                "composite": result.get("composite"),
+                "weakest": result.get("weakest"),
+            })
+        except Exception:
+            pass
+    return result
+
+
+@router.post("/score-explain")
+async def workbench_score_explain(req: ScoreMoleculeRequest) -> dict:
+    """Deep score breakdown — every axis gets:
+      - the raw value + weight + contribution (same as /score)
+      - the actual RDKit-derived properties driving it (MW, LogP, HBA,
+        HBD, TPSA, rotatable bonds, ring count, aromatic rings, fsp3,
+        Lipinski/Veber/Egan compliance flags)
+      - per-axis Gemini-generated reasoning explaining WHY this value
+        and a concrete suggestion to improve it
+
+    Used by the Scoring container's "deep dive" panel — each axis
+    expands to show the underlying chemistry + improvement direction.
+    """
+    try:
+        from tools.scoring.score_molecule import score_molecule
+    except ImportError as exc:
+        raise HTTPException(503, f"scoring module not available: {exc}")
+
+    try:
+        breakdown = score_molecule(smiles=req.smiles, target_pathogen=req.target_pathogen)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(422, f"score failed: {exc}")
+
+    base = breakdown.model_dump()
+
+    # ── Real RDKit-derived molecular properties ──
+    props = _deep_properties(req.smiles)
+    base["rdkit_properties"] = props
+
+    # ── Rule compliance flags (Lipinski / Veber / Egan / PAINS-aware) ──
+    rules = _compute_rule_compliance(props)
+    base["rules"] = rules
+
+    # ── Per-axis Gemini reasoning + improvement suggestions ──
+    axis_reasoning = await _llm_score_axis_reasoning(
+        req.smiles, req.target_pathogen, base.get("components") or [], props,
+    )
+    base["axis_reasoning"] = axis_reasoning
+
+    return base
+
+
+def _deep_properties(smiles: str) -> dict:
+    """Full RDKit property panel — everything the Scoring container
+    needs to surface real chemistry behind each axis."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import (
+            Crippen, Descriptors, Lipinski, rdMolDescriptors,
+        )
+    except ImportError:
+        return {"valid": False, "error": "rdkit unavailable"}
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return {"valid": False, "error": "unparseable"}
+    return {
+        "valid": True,
+        "smiles_canonical": Chem.MolToSmiles(mol),
+        "formula": rdMolDescriptors.CalcMolFormula(mol),
+        "mw": round(Descriptors.MolWt(mol), 2),
+        "exact_mass": round(Descriptors.ExactMolWt(mol), 4),
+        "logp": round(Crippen.MolLogP(mol), 2),
+        "logd_proxy": round(Crippen.MolLogP(mol), 2),  # at neutral pH ~ logP
+        "hba": int(Lipinski.NumHAcceptors(mol)),
+        "hbd": int(Lipinski.NumHDonors(mol)),
+        "tpsa": round(Descriptors.TPSA(mol), 2),
+        "rotatable_bonds": int(Lipinski.NumRotatableBonds(mol)),
+        "rings": int(Descriptors.RingCount(mol)),
+        "aromatic_rings": int(rdMolDescriptors.CalcNumAromaticRings(mol)),
+        "fsp3": round(rdMolDescriptors.CalcFractionCSP3(mol), 3),
+        "n_heavy_atoms": int(mol.GetNumHeavyAtoms()),
+        "n_stereo_centers": int(rdMolDescriptors.CalcNumAtomStereoCenters(mol)),
+        "qed": round(Descriptors.qed(mol), 4),
+        "bertz_complexity": round(Descriptors.BertzCT(mol), 1),
+    }
+
+
+def _compute_rule_compliance(props: dict) -> dict:
+    """Industry rule sets for drug-likeness compliance.
+      Lipinski (CRO oral absorption):  MW≤500, LogP≤5, HBA≤10, HBD≤5
+      Veber (oral bioavailability):    rot≤10, TPSA≤140
+      Egan (oral absorption):          LogP −1..6, TPSA≤132
+      Ghose (CNS-active):              MW 160-480, LogP −0.4..5.6, HA 20-70
+    Each rule returns {pass, n_violations, violations[]}."""
+    if not props.get("valid"):
+        return {}
+    mw = props["mw"]; logp = props["logp"]
+    hba = props["hba"]; hbd = props["hbd"]
+    rot = props["rotatable_bonds"]; tpsa = props["tpsa"]; ha = props["n_heavy_atoms"]
+    out: dict[str, dict] = {}
+
+    lip_v = []
+    if mw > 500: lip_v.append(f"MW {mw}>500")
+    if logp > 5: lip_v.append(f"LogP {logp}>5")
+    if hba > 10: lip_v.append(f"HBA {hba}>10")
+    if hbd > 5:  lip_v.append(f"HBD {hbd}>5")
+    out["lipinski"] = {"pass": len(lip_v) <= 1, "n_violations": len(lip_v), "violations": lip_v}
+
+    veb_v = []
+    if rot > 10: veb_v.append(f"rot {rot}>10")
+    if tpsa > 140: veb_v.append(f"TPSA {tpsa}>140")
+    out["veber"] = {"pass": len(veb_v) == 0, "n_violations": len(veb_v), "violations": veb_v}
+
+    egan_v = []
+    if logp < -1 or logp > 6: egan_v.append(f"LogP {logp} outside [-1, 6]")
+    if tpsa > 132: egan_v.append(f"TPSA {tpsa}>132")
+    out["egan"] = {"pass": len(egan_v) == 0, "n_violations": len(egan_v), "violations": egan_v}
+
+    ghose_v = []
+    if mw < 160 or mw > 480: ghose_v.append(f"MW {mw} outside [160, 480]")
+    if logp < -0.4 or logp > 5.6: ghose_v.append(f"LogP {logp} outside [-0.4, 5.6]")
+    if ha < 20 or ha > 70: ghose_v.append(f"HA {ha} outside [20, 70]")
+    out["ghose"] = {"pass": len(ghose_v) == 0, "n_violations": len(ghose_v), "violations": ghose_v}
+
+    out["overall_pass_count"] = sum(1 for r in out.values() if isinstance(r, dict) and r.get("pass"))
+    return out
+
+
+async def _llm_score_axis_reasoning(
+    smiles: str, pathogen: str, components: list, props: dict,
+) -> dict:
+    """Gemini-generated per-axis reasoning. For each scored axis returns:
+      {axis: {explanation, improvement, predicted_delta_if_applied}}.
+    Best-effort — empty dict on any failure path."""
+    import os as _os
+    key = _os.getenv("GEMINI_API_KEY")
+    if not key or not components or not props.get("valid"):
+        return {}
+    model_id = _os.getenv("LYSOS_SCORE_GEMINI_MODEL", "gemini-2.5-flash")
+    axis_lines = "\n".join(
+        f"  - {c.get('name')}: value={c.get('value'):.3f} weight={c.get('weight')} contribution={c.get('contribution', 0):.3f}"
+        for c in components if isinstance(c, dict) and "name" in c
+    )
+    prompt = (
+        "You are a senior medicinal chemist reviewing a candidate's score. "
+        "For EACH axis below, return JSON explaining (a) WHY the value is "
+        "what it is given the molecule's properties, and (b) a concrete "
+        "improvement direction with predicted delta if applied.\n\n"
+        f"SMILES: {smiles}\n"
+        f"Target pathogen: {pathogen}\n"
+        f"Properties: MW={props['mw']}, LogP={props['logp']}, HBA={props['hba']}, "
+        f"HBD={props['hbd']}, TPSA={props['tpsa']}, rotatables={props['rotatable_bonds']}, "
+        f"rings={props['rings']}, aromatic_rings={props['aromatic_rings']}, "
+        f"fsp3={props['fsp3']}, QED={props['qed']}, formula={props.get('formula')}\n"
+        f"Per-axis breakdown:\n{axis_lines}\n\n"
+        "Return STRICT JSON: "
+        '{"axes": [{"name":"<axis>","explanation":"<≤220 chars>",'
+        '"improvement":"<≤180 chars>","predicted_delta":<0..0.4>}]}\n'
+        "No markdown."
+    )
+    try:
+        import httpx
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "maxOutputTokens": 3072,
+                "temperature": 0.4,
+                "responseMimeType": "application/json",
+                "thinkingConfig": {"thinkingBudget": 512, "includeThoughts": False},
+            },
+        }
+        async with httpx.AsyncClient(timeout=20.0) as cx:
+            r = await cx.post(url,
+                              headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+                              json=payload)
+        if r.status_code != 200:
+            return {}
+        d = r.json()
+        cands = d.get("candidates") or []
+        if not cands:
+            return {}
+        parts = (cands[0].get("content") or {}).get("parts") or []
+        if not parts:
+            return {}
+        raw = (parts[0].get("text") or "").strip()
+        try:
+            obj = json.loads(raw)
+        except Exception:
+            # Brace-balanced fallback
+            start = raw.find("{")
+            if start < 0: return {}
+            depth = 0; end = len(raw)
+            for i in range(start, len(raw)):
+                if raw[i] == "{": depth += 1
+                elif raw[i] == "}":
+                    depth -= 1
+                    if depth == 0: end = i + 1; break
+            try: obj = json.loads(raw[start:end])
+            except Exception: return {}
+        items = obj.get("axes") if isinstance(obj, dict) else None
+        if not isinstance(items, list):
+            return {}
+        out: dict[str, dict] = {}
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            name = str(it.get("name") or "").strip()
+            if not name:
+                continue
+            try: pdelta = float(it.get("predicted_delta", 0.0))
+            except Exception: pdelta = 0.0
+            out[name] = {
+                "explanation": str(it.get("explanation") or "")[:300],
+                "improvement": str(it.get("improvement") or "")[:240],
+                "predicted_delta": round(max(0.0, min(0.4, pdelta)), 3),
+            }
+        return out
+    except Exception as exc:  # noqa: BLE001
+        log.debug("score-explain gemini failed: %s", exc)
+        return {}
 
 
 @router.post("/molecule/3d")
@@ -4159,4 +4408,130 @@ async def session_agent_roster(sid: str) -> dict:
             "state": "active" if last else "idle",
         })
     return {"session": sid, "roster": roster, "total_actions": len(actions)}
+
+
+# ---------------------------------------------------------------------------
+# Live agent activity (in-memory, fast) — drives the redesigned Agents
+# container's per-agent KPIs + timeline sparklines + flow graph.
+# Powered by workspace.api.agent_activity which is the single tap point
+# for "an agent did something in this session" across the orchestrator,
+# workflows, harden, and design paths.
+# ---------------------------------------------------------------------------
+
+@router.get("/sessions/{sid}/agent-live/recent")
+async def session_agent_live_recent(sid: str, limit: int = 200) -> dict:
+    """Fast recent actions feed — no DB roundtrip, in-memory ring."""
+    from . import agent_activity
+    return {"session": sid, "actions": agent_activity.recent(sid, limit=limit)}
+
+
+@router.get("/sessions/{sid}/agent-live/metrics")
+async def session_agent_live_metrics(sid: str) -> dict:
+    """Aggregate per-agent KPIs — n_actions, avg latency, ok_rate,
+    avg_confidence, action_type breakdown, last action."""
+    from . import agent_activity
+    return agent_activity.metrics(sid)
+
+
+@router.get("/sessions/{sid}/agent-live/timeline")
+async def session_agent_live_timeline(sid: str, bucket_s: float = 5.0) -> dict:
+    """Per-agent time-bucketed action counts — drives the sparklines."""
+    from . import agent_activity
+    return agent_activity.timeline(sid, bucket_s=bucket_s)
+
+
+# ── Champions ───────────────────────────────────────────────────────
+
+@router.get("/champion/{pathogen}")
+async def champion_get(pathogen: str) -> dict:
+    from . import champions
+    rec = champions.get(pathogen)
+    return {"pathogen": pathogen.upper(), "champion": rec}
+
+
+@router.get("/champions")
+async def champions_all() -> dict:
+    from . import champions
+    return {"champions": champions.all_champions()}
+
+
+class ChampionProposeRequest(BaseModel):
+    pathogen: str
+    smiles: str
+    composite: Optional[float] = None
+    robustness: Optional[float] = None
+    fitness: Optional[float] = None
+    scores: Optional[dict[str, float]] = None
+    session_id: str = ""
+    rationale: str = ""
+    score_axis: str = "fitness"
+
+
+@router.post("/champion/propose")
+async def champion_propose(req: ChampionProposeRequest) -> dict:
+    from . import champions
+    return champions.propose(
+        req.pathogen, req.smiles,
+        composite=req.composite, robustness=req.robustness,
+        fitness=req.fitness, scores=req.scores,
+        session_id=req.session_id, rationale=req.rationale,
+        score_axis=req.score_axis,
+    )
+
+
+class ChampionCompareRequest(BaseModel):
+    pathogen: str
+    smiles: str
+    composite: Optional[float] = None
+    robustness: Optional[float] = None
+    scores: Optional[dict[str, float]] = None
+
+
+@router.post("/champion/compare")
+async def champion_compare(req: ChampionCompareRequest) -> dict:
+    from . import champions
+    return champions.compare(
+        req.pathogen, req.smiles,
+        composite=req.composite, robustness=req.robustness, scores=req.scores,
+    )
+
+
+@router.get("/sessions/{sid}/agent-live/handoffs")
+async def session_agent_live_handoffs(sid: str) -> dict:
+    """Directed edges between agents — drives the handoff graph viz."""
+    from . import agent_activity
+    return agent_activity.handoffs(sid)
+
+
+@router.get("/sessions/{sid}/agent-live/errors")
+async def session_agent_live_errors(sid: str, limit: int = 30) -> dict:
+    """Error-status actions only — drives the alerts panel."""
+    from . import agent_activity
+    return agent_activity.errors(sid, limit=limit)
+
+
+@router.get("/sessions/{sid}/agent-live/stream")
+async def session_agent_live_stream(sid: str, request: Request):
+    """SSE push stream — every record() lands on subscribers immediately.
+    Replaces 1.5s polling with sub-100ms push, lower DB load."""
+    import asyncio as _asyncio
+    import json as _json
+    from . import agent_activity
+    from sse_starlette.sse import EventSourceResponse
+
+    async def event_gen():
+        q = agent_activity.subscribe(sid)
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    payload = await _asyncio.wait_for(q.get(), timeout=25.0)
+                    yield {"event": "action", "data": _json.dumps(payload)}
+                except _asyncio.TimeoutError:
+                    yield {"event": "ping", "data": "{}"}
+        finally:
+            agent_activity.unsubscribe(sid, q)
+
+    return EventSourceResponse(event_gen())
 

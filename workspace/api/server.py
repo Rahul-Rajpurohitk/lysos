@@ -258,6 +258,36 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Playground router not loaded: %s", exc)
 
+# Agent — Gemini Pro tool-calling agent with SSE streaming
+try:
+    from .agent import router as agent_router
+    app.include_router(agent_router)
+    log.info("Agent routes loaded (POST /api/agent/run [SSE], GET /api/agent/tools)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Agent router not loaded: %s", exc)
+
+# Workflows — declarative multi-step pipelines + guidance engine
+try:
+    from .workflows import router as workflows_router
+    app.include_router(workflows_router)
+    log.info("Workflow routes loaded (GET /api/workflows/list, POST /api/workflows/run [SSE], GET /api/agent/suggest-next)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Workflows router not loaded: %s", exc)
+
+# Orchestrator — plain-English prompt → routed execution (workflow / slash / agent / answer)
+try:
+    from .orchestrator import router as orchestrator_router
+    app.include_router(orchestrator_router)
+    log.info("Orchestrator routes loaded (POST /api/orchestrator/run [SSE], POST /api/orchestrator/route, GET /api/orchestrator/health)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Orchestrator router not loaded: %s", exc)
+
+try:
+    from .knowledge import router as knowledge_router  # noqa: E402
+    app.include_router(knowledge_router)
+    log.info("Knowledge routes loaded (GET /workbench/knowledge/{pathogen})")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Knowledge router not loaded: %s", exc)
 
 # ----------------------------------------------------------------------------
 # Schemas

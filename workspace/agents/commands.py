@@ -131,6 +131,96 @@ class CommandRegistry:
 # Built-in commands
 # ---------------------------------------------------------------------------
 
+async def _gemini_edit_translator(
+    parent_smiles: str,
+    atom_idx: int,
+    edit_description: str,
+) -> dict:
+    """Use Gemini Pro to translate a natural-language molecule edit
+    into a concrete RDKit-valid SMILES.
+
+    Input: parent SMILES + atom index + free-text description ("Replace
+    cyclopropyl with tert-butyl", "C5-H → C5-CF3").
+    Output: {"smiles": <new SMILES>, "rationale": <one sentence>}.
+
+    Validates the returned SMILES with RDKit before returning. Used by
+    /edit when the simple keyword/element parser doesn't match.
+    """
+    import os, re, httpx, json as _json
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        return {"error": "GEMINI_API_KEY missing"}
+    model_id = os.getenv("LYSOS_EDIT_MODEL", "gemini-2.5-pro")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent"
+    system = (
+        "You are a medicinal-chemistry SMILES editor. Given a parent "
+        "SMILES, an atom index (0-indexed), and a natural-language edit "
+        "description, return the resulting SMILES that an RDKit parser "
+        "would accept.\n\n"
+        "Output STRICT JSON: {\"smiles\": \"<RDKit-valid SMILES>\", "
+        "\"rationale\": \"<one sentence: what changed and why it makes "
+        "chemical sense>\"}\n\n"
+        "Rules:\n"
+        "- Preserve the rest of the scaffold; only modify what the "
+        "  description says.\n"
+        "- Make sure valences and aromaticity are valid.\n"
+        "- If the edit is impossible without breaking valence, suggest "
+        "  the closest valid alternative AND explain in rationale.\n"
+        "- Do NOT wrap output in markdown code fences."
+    )
+    user = (
+        f"Parent SMILES: {parent_smiles}\n"
+        f"Edit at atom index: {atom_idx}\n"
+        f"Description: {edit_description}\n\n"
+        f"Return JSON only."
+    )
+    payload = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 512,
+            "temperature": 0.2,
+            "thinkingConfig": {"thinkingBudget": 512, "includeThoughts": False},
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cx:
+            r = await cx.post(url,
+                              headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+                              json=payload)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"http error: {exc}"}
+    if r.status_code != 200:
+        return {"error": f"gemini http {r.status_code}: {r.text[:200]}"}
+    body = r.json()
+    cands = body.get("candidates") or []
+    if not cands:
+        return {"error": "no gemini candidates"}
+    parts = (cands[0].get("content") or {}).get("parts") or []
+    txt = "".join(p.get("text") or "" for p in parts).strip()
+    if txt.startswith("```"):
+        txt = re.sub(r"^```(?:json)?\s*|\s*```$", "", txt, flags=re.M).strip()
+    try:
+        parsed = _json.loads(txt)
+    except _json.JSONDecodeError as exc:
+        return {"error": f"json parse: {exc}", "raw": txt[:200]}
+    smi = parsed.get("smiles", "").strip()
+    if not smi:
+        return {"error": "no smiles in gemini response", "raw": parsed}
+    # Validate with RDKit
+    try:
+        from rdkit import Chem
+        mol = Chem.MolFromSmiles(smi)
+        if mol is None:
+            return {"error": f"gemini returned unparseable SMILES: `{smi}`"}
+        canonical = Chem.MolToSmiles(mol)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"rdkit failure: {exc}", "raw_smiles": smi}
+    return {"smiles": canonical, "rationale": parsed.get("rationale", ""),
+            "raw_smiles": smi}
+
+
 class HelpCommand(Command):
     def __init__(self):
         super().__init__(
@@ -139,12 +229,54 @@ class HelpCommand(Command):
         )
 
     async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
-        skills_md = REPO_ROOT / "SKILLS.md"
-        if skills_md.exists():
-            content = skills_md.read_text()
-        else:
-            content = "_SKILLS.md missing._"
-        return CommandResult(output=content, data={"skills_md_path": str(skills_md)})
+        # Tight, demo-ready overview. The full SKILLS.md is still on disk
+        # for agent context but we no longer dump 6KB of markdown into
+        # the chat — that was unreadable noise. Group by category, one
+        # line each.
+        content = (
+            "## Lysos commands · 25 total\n"
+            "\n"
+            "**Design & build**\n"
+            "- `/design <pathogen> [objective]` — multi-agent design session\n"
+            "- `/edit <op>` — deterministic structural edit\n"
+            "- `/scaffold-hop` — bioisosteric scaffold replacement\n"
+            "- `/branch <hint>` — fork the active candidate\n"
+            "\n"
+            "**Score & assess**\n"
+            "- `/score [smiles]` — 12-axis reward stack (composite)\n"
+            "- `/admet [smiles]` — ADMET predictions\n"
+            "- `/synth [smiles]` — retrosynthesis route + cost\n"
+            "- `/similar [k=5]` — top-K nearest known antibiotics\n"
+            "- `/sar [k=5]` — k mutants + score deltas\n"
+            "- `/pareto [x] [y]` — multi-candidate Pareto frontier\n"
+            "- `/compare <s1> <s2> ...` — side-by-side N candidates\n"
+            "\n"
+            "**Resistance & robustness**\n"
+            "- `/resistance <pathogen>` — resistome + escape probability\n"
+            "- `/escape [pdb_id]` — per-atom vulnerability map\n"
+            "- `/stress [smiles]` — adversarial Critic failure modes\n"
+            "\n"
+            "**Structure & docking**\n"
+            "- `/dock [pdb_id]` — Vina docking vs target\n"
+            "- `/complex [pathogen]` — Boltz-2 complex pose\n"
+            "- `/theater [smiles] [pdb_id]` — 3D target-ligand viewer\n"
+            "\n"
+            "**Knowledge**\n"
+            "- `/explain <target|drug>` — mechanism + spectrum + resistance brief\n"
+            "- `/datasets` — list grounding datasets\n"
+            "- `/library` — past sessions for replay\n"
+            "\n"
+            "**System**\n"
+            "- `/set-target <pathogen>` — change active pathogen\n"
+            "- `/clear` — reset session state\n"
+            "- `/run <code>` — Python sandbox cell\n"
+            "- `/trace [n]` — last N harness events\n"
+            "- `/wf <workflow_name>` — run a multi-step workflow (5 registered)\n"
+            "\n"
+            "💡 **Or just type natural language** — the orchestrator routes "
+            "free text to the right command/workflow automatically."
+        )
+        return CommandResult(output=content, data={})
 
 
 class ClearCommand(Command):
@@ -264,22 +396,116 @@ class EditCommand(Command):
     async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
         op = args.strip()
         if not op:
-            return CommandResult(error="Usage: /edit <op>. See /help for ops.")
-        # Lazy import — sandbox dispatches the actual tool
+            return CommandResult(error="Usage: /edit atom=N <change>. Examples: `/edit atom=2 -OH`, `/edit atom=5 swap=F`, `/edit atom=0 add hydroxyl`, `/edit atom=3 Replace cyclopropyl with tert-butyl`.")
+
+        # ── Smart parser: accept natural-language edit prompts ──
+        # Tier 1: regex parse for obvious shapes (FG keywords, swap=X)
+        # Tier 2: Gemini Pro structured-output call for arbitrary
+        #         medicinal-chemistry English ("Replace cyclopropyl
+        #         with tert-butyl", "C5-H → C5-CF3", etc.)
+        import re as _re
+        atom_m = _re.search(r"atom\s*=\s*(\d+)", op, _re.I)
+        atom_idx = int(atom_m.group(1)) if atom_m else None
+        body = op
+        if atom_m:
+            body = op[atom_m.end():].strip()
+
+        active_smi = ctx.active_smiles
+        if not active_smi:
+            return CommandResult(error="No active SMILES to edit. Load a candidate first.")
+        if atom_idx is None:
+            return CommandResult(error="Couldn't parse atom index. Use `/edit atom=N <change>`.")
+
+        # Functional-group keyword map → /workbench/molecule/edit op=add_functional_group_at
+        FG_KEYWORDS = {
+            "hydroxyl": "hydroxyl", "-oh": "hydroxyl", "oh": "hydroxyl", "phenol": "hydroxyl",
+            "methyl": "methyl", "-ch3": "methyl", "ch3": "methyl",
+            "amine": "amine", "-nh2": "amine", "nh2": "amine",
+            "fluorine": "fluorine", "-f": "fluorine", "fluoro": "fluorine",
+            "chlorine": "chlorine", "-cl": "chlorine",
+            "bromine": "bromine", "-br": "bromine",
+            "iodine": "iodine", "-i": "iodine",
+            "thiol": "thiol", "-sh": "thiol", "sh": "thiol",
+            "carbonyl": "carbonyl", "aldehyde": "aldehyde",
+            "carboxyl": "carboxyl", "-cooh": "carboxyl", "cooh": "carboxyl",
+            "amide": "amide", "ester": "ester",
+            "nitro": "nitro", "-no2": "nitro", "no2": "nitro",
+            "sulfonyl": "sulfonyl", "sulfonamide": "sulfonamide",
+            "sulfide": "sulfide", "thioether": "sulfide",
+            "cyano": "cyano", "-cn": "cyano", "nitrile": "cyano",
+            "trifluoromethyl": "trifluoromethyl", "-cf3": "trifluoromethyl", "cf3": "trifluoromethyl",
+            "ethyl": "ethyl", "vinyl": "vinyl",
+            "phosphate": "phosphate", "phosphonate": "phosphonate",
+        }
+        body_low = body.lower()
+        fg = next((v for k, v in FG_KEYWORDS.items() if k in body_low), None)
+
+        # Element swap detection (single capital letter or common 2-letter)
+        elem_m = _re.search(r"\b(swap|replace|to|->)\s*[=:]?\s*([A-Z][a-z]?)\b", body)
+        new_element = elem_m.group(2) if elem_m else None
+
         try:
-            from workspace.tools.generative.transform_structure import transform_structure
-            r = transform_structure(smiles=ctx.active_smiles, op=op)
-            if not r.success:
-                return CommandResult(error=r.note or "transform failed", data=r.model_dump())
-            products_md = "\n".join(f"- `{p}`" for p in r.products)
+            from api.workbench import molecule_edit, AtomEditRequest
+        except ImportError as exc:
+            return CommandResult(error=f"molecule_edit route unavailable: {exc}")
+
+        try:
+            if fg:
+                req = AtomEditRequest(
+                    smiles=active_smi, op="add_functional_group_at",
+                    atom_index=atom_idx, functional_group=fg,
+                    actor="user",
+                )
+            elif new_element:
+                req = AtomEditRequest(
+                    smiles=active_smi, op="swap_element",
+                    atom_index=atom_idx, new_element=new_element,
+                    actor="user",
+                )
+            else:
+                # ── Tier 2: Gemini Pro translates natural language to a
+                # concrete SMILES edit. Real LLM call, structured output. ──
+                gemini_smi = await _gemini_edit_translator(
+                    parent_smiles=active_smi,
+                    atom_idx=atom_idx,
+                    edit_description=body,
+                )
+                if gemini_smi.get("error"):
+                    return CommandResult(
+                        error=f"Couldn't interpret `{body}`: {gemini_smi['error']}",
+                        data=gemini_smi,
+                    )
+                new_smi = gemini_smi.get("smiles")
+                rationale = gemini_smi.get("rationale", "")
+                if not new_smi:
+                    return CommandResult(error="Gemini returned no SMILES.", data=gemini_smi)
+                return CommandResult(
+                    output=(
+                        f"Edited `{active_smi}` at atom **#{atom_idx}**.\n\n"
+                        f"_{rationale}_\n\n"
+                        f"Result: `{new_smi}`\n\n"
+                        f"_Click below to load it into the canvas._"
+                    ),
+                    data={"smiles": new_smi, "edit": body, "atom_idx": atom_idx,
+                          "parent_smiles": active_smi, "rationale": rationale,
+                          "via": "gemini"},
+                    follow_ups=[f"/load {new_smi}", f"/score {new_smi}"],
+                )
+
+            d = await molecule_edit(req)
+            new_smi = d.get("smiles") if isinstance(d, dict) else None
+            if not new_smi:
+                return CommandResult(error=f"edit returned no SMILES: {d}")
+            descr = fg or f"swap → {new_element}"
             return CommandResult(
                 output=(
-                    f"**{op}** on `{ctx.active_smiles}`\n\n"
-                    f"_{r.op_rationale}_\n\n"
-                    f"Products:\n{products_md}"
+                    f"Edited `{active_smi}` at atom **#{atom_idx}** ({descr}).\n\n"
+                    f"Result: `{new_smi}`\n\n"
+                    f"_Click below to load it into the canvas._"
                 ),
-                data=r.model_dump(),
-                follow_ups=[f"/score {p}" for p in r.products[:2]],
+                data={"smiles": new_smi, "edit": descr, "atom_idx": atom_idx,
+                      "parent_smiles": active_smi},
+                follow_ups=[f"/load {new_smi}", f"/score {new_smi}"],
             )
         except Exception as exc:  # noqa: BLE001
             return CommandResult(error=f"edit failed: {exc}")
@@ -328,9 +554,16 @@ class ExplainCommand(Command):
         )
 
     async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
-        target = args.strip() or (ctx.active_target or "")
+        # Resolution order: explicit args → session active_target → session
+        # active pathogen (so a user with MRSA selected can just type
+        # `/explain` and get a brief on the pathogen). Final fallback is
+        # an explanatory error so the agent never silently no-ops.
+        target = args.strip() or (ctx.active_target or "") or getattr(ctx, "active_pathogen", "") or ""
         if not target:
-            return CommandResult(error="Provide a target/drug or set an active target. Try `/explain mecA` or `/explain cefiderocol`.")
+            return CommandResult(error=(
+                "No target supplied and no active pathogen/target in this session. "
+                "Try `/explain mecA`, `/explain cefiderocol`, or pick a pathogen in the top header."
+            ))
 
         try:
             from api.workbench import workbench_explain, ExplainRequest
@@ -1063,6 +1296,107 @@ class ParetoCommand(Command):
             return CommandResult(error=f"pareto failed: {exc}")
 
 
+class ChampionCommand(Command):
+    """`/champion` — show reigning champion for the current pathogen.
+    `/champion <smiles>` — A/B compare a SMILES against the reigning champion.
+    `/champion promote` — promote the active candidate to champion.
+    """
+
+    def __init__(self):
+        super().__init__(
+            name="champion",
+            description="Reigning best per pathogen + A/B vs prior best",
+            type=CommandType.LOCAL,
+            argument_hint="[promote|<smiles>]",
+        )
+
+    async def execute(self, args: str, ctx: CommandContext) -> CommandResult:
+        from workspace.api import champions
+        pathogen = (ctx.active_target or "MRSA").upper()
+        sub = args.strip()
+
+        # `/champion` (bare) — show reigning champion
+        if not sub:
+            champ = champions.get(pathogen)
+            if not champ:
+                return CommandResult(
+                    output=(
+                        f"### 🏆 Champion · {pathogen}\n\n"
+                        f"_No champion crowned yet for {pathogen}._\n\n"
+                        f"Run `/wf discover_and_assess pathogen={pathogen}` "
+                        f"or `/wf design_with_debate` and the winner is auto-promoted."
+                    ),
+                    data={"champion": None, "pathogen": pathogen},
+                )
+            md = [
+                f"### 🏆 Champion · {pathogen}",
+                "",
+                f"**SMILES**: `{champ['smiles']}`",
+                f"**Composite**: {(champ.get('composite') or 0):.3f}  ·  "
+                f"**Robustness**: {(champ.get('robustness') or 0):.3f}  ·  "
+                f"**Fitness**: {(champ.get('fitness') or 0):.3f}",
+            ]
+            if champ.get("rationale"):
+                md.append(f"\n_{champ['rationale']}_")
+            return CommandResult(
+                output="\n".join(md),
+                data={"champion": champ, "pathogen": pathogen,
+                      "ui_actions": [{"type": "load_smiles", "smiles": champ["smiles"]}]},
+            )
+
+        # `/champion promote` — auto-promote active candidate
+        if sub.lower() == "promote":
+            if not ctx.active_smiles:
+                return CommandResult(error="No active candidate. Apply one first then `/champion promote`.")
+            res = champions.propose(
+                pathogen, ctx.active_smiles,
+                composite=None, robustness=None,
+                session_id=ctx.session_id, rationale="manual /champion promote",
+            )
+            if res.get("promoted"):
+                return CommandResult(
+                    output=f"✅ Promoted to {pathogen} champion.",
+                    data={"champion_promotion": res, "pathogen": pathogen},
+                )
+            return CommandResult(
+                output=f"Did not promote — {res.get('reason', 'unknown')}.",
+                data={"champion_promotion": res, "pathogen": pathogen},
+            )
+
+        # `/champion <smiles>` — A/B compare
+        smi = sub
+        try:
+            ab = champions.compare(pathogen, smi)
+            md = [
+                f"### ⚔️ A/B vs reigning {pathogen} champion",
+                "",
+                f"**Candidate**: `{smi}`",
+            ]
+            if ab.get("champion"):
+                ch = ab["champion"]
+                d = ab["deltas"]
+                md.extend([
+                    f"**Champion**: `{ch['smiles']}`",
+                    "",
+                    f"| axis | champion | candidate | Δ |",
+                    f"|---|---:|---:|---:|",
+                    f"| composite  | {(ch.get('composite') or 0):.3f} | {ab['candidate']['composite']:.3f} | {d['composite']:+.3f} |",
+                    f"| robustness | {(ch.get('robustness') or 0):.3f} | {ab['candidate']['robustness']:.3f} | {d['robustness']:+.3f} |",
+                    f"| fitness    | {(ch.get('fitness') or 0):.3f} | {ab['candidate']['fitness']:.3f} | {d['fitness']:+.3f} |",
+                    "",
+                    f"**Verdict**: {ab['verdict']}",
+                ])
+            else:
+                md.append("\n_No reigning champion yet — promote with `/champion promote`._")
+            return CommandResult(
+                output="\n".join(md),
+                data={"ab_compare": ab, "pathogen": pathogen,
+                      "ui_actions": [{"type": "champion_ab", "ab": ab}]},
+            )
+        except Exception as exc:  # noqa: BLE001
+            return CommandResult(error=f"champion compare failed: {exc}")
+
+
 def create_default_registry() -> CommandRegistry:
     """Build the production registry. Add new commands here."""
     r = CommandRegistry()
@@ -1093,6 +1427,8 @@ def create_default_registry() -> CommandRegistry:
         TheaterCommand(),
         EscapeCommand(),
         ParetoCommand(),
+        # Wave C — champion table
+        ChampionCommand(),
     ]:
         r.register(cmd)
     return r

@@ -54,14 +54,34 @@ export function DesignSessionCard({ msg, onIngestEvent }: DesignSessionCardProps
         const ev = JSON.parse(e.data ?? "{}");
         // Workbench events arrive as { type, data, agent?, iteration?, ... }
         // Translate into the ChatMsg shape MessageRow consumes.
+        const content = ev.data?.content ?? ev.content;
+        const agent = ev.agent ?? ev.data?.role;
+        const smiles = ev.data?.smiles ?? ev.smiles;
+        const evType = ev.type ?? "agent_message";
+        // Drop junk events: a stream of "agent_message" pings with no
+        // body and no agent name was rendering as a literal
+        // "agent_message" header row in the chat. Only ingest events
+        // that actually carry content, a role, or candidate signal.
+        const interesting = ["candidate_added", "iteration_start",
+          "iteration_end", "score", "tool_call_result", "tool_call_error",
+          "session_complete", "intervention_queued"].includes(evType);
+        if (!content && !agent && !smiles && !interesting) {
+          setEventCount((c) => c + 1);
+          if (evType === "session_complete" || evType === "error") {
+            setStreaming(false);
+            es.close();
+            SUBSCRIBED.delete(sessionId);
+          }
+          return;
+        }
         const chatMsg: ChatMsg = {
           id: ev.id ?? undefined,
-          type: ev.type ?? "agent_message",
+          type: evType,
           ts: Date.now() / 1000,
-          agent: ev.agent ?? ev.data?.role ?? undefined,
-          content: ev.data?.content ?? ev.content ?? undefined,
+          agent,
+          content,
           iteration: ev.iteration ?? ev.data?.iteration ?? undefined,
-          smiles: ev.data?.smiles ?? ev.smiles ?? undefined,
+          smiles,
           composite: ev.data?.composite ?? ev.composite ?? undefined,
           scores: ev.data?.scores ?? undefined,
         };

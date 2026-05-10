@@ -1,3 +1,40 @@
+import { useEffect, useState } from "react";
+
+interface DeepExplain {
+  rdkit_properties?: {
+    valid: boolean; formula?: string; mw?: number; logp?: number;
+    hba?: number; hbd?: number; tpsa?: number; rotatable_bonds?: number;
+    rings?: number; aromatic_rings?: number; fsp3?: number;
+    n_heavy_atoms?: number; n_stereo_centers?: number; qed?: number;
+    bertz_complexity?: number;
+  };
+  rules?: Record<string, { pass: boolean; n_violations: number; violations: string[] }>;
+  axis_reasoning?: Record<string, { explanation: string; improvement: string; predicted_delta: number }>;
+}
+
+function useDeepExplain(apiBase?: string, smiles?: string | null, pathogen?: string):
+  [DeepExplain | null, (v: DeepExplain | null) => void] {
+  const [deep, setDeep] = useState<DeepExplain | null>(null);
+  useEffect(() => {
+    if (!apiBase || !smiles) { setDeep(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await fetch(`${apiBase}/workbench/score-explain`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ smiles, target_pathogen: pathogen ?? "MRSA" }),
+        });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!cancelled) setDeep(d);
+      } catch {/*noop*/}
+    }, 600);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [apiBase, smiles, pathogen]);
+  return [deep, setDeep];
+}
+
 /**
  * ScoreBreakdownCard — full 12-axis reward decomposition.
  *
@@ -21,6 +58,12 @@ interface Props {
   weights: Record<string, number>;
   best?: Record<string, number>;
   composite?: number;
+  /** Optional context for the deep-explain panel — when set, the card
+   *  fetches /workbench/score-explain and renders RDKit properties +
+   *  per-axis Gemini reasoning + rule compliance. */
+  apiBase?: string;
+  smiles?: string | null;
+  pathogen?: string;
 }
 
 const AXIS_LABEL: Record<string, string> = {
@@ -85,7 +128,10 @@ function colorFor(v: number): string {
   return "#dc2626";
 }
 
-export function ScoreBreakdownCard({ scores, weights, best, composite }: Props) {
+export function ScoreBreakdownCard({ scores, weights, best, composite, apiBase, smiles, pathogen }: Props) {
+  // Deep explain state — fetched lazily when the user opens the panel.
+  const [deep, setDeep] = useDeepExplain(apiBase, smiles, pathogen);
+  void setDeep;
   const axes = Object.keys(weights);
   const enriched = axes.map((axis) => {
     const v = scores[axis] ?? 0;
@@ -211,9 +257,117 @@ export function ScoreBreakdownCard({ scores, weights, best, composite }: Props) 
                   +{e.contribution.toFixed(3)}
                 </div>
               </div>
+              {/* Per-axis Gemini reasoning + improvement suggestion */}
+              {(() => {
+                const reason = deep?.axis_reasoning?.[e.axis];
+                if (!reason) return null;
+                return (
+                  <div style={{
+                    marginTop: 4, padding: "5px 8px",
+                    background: "rgba(124,99,216,0.05)",
+                    border: "1px solid rgba(124,99,216,0.18)",
+                    borderLeft: "2px solid #6041d0",
+                    borderRadius: 3, fontSize: 9.5, lineHeight: 1.45,
+                    fontFamily: "var(--lys-font-body)",
+                  }}>
+                    <div style={{ color: "var(--lys-text-dim)", marginBottom: 3 }}>
+                      <strong style={{ color: "#6041d0", fontFamily: "var(--lys-font-mono)",
+                        fontSize: 8.5, letterSpacing: "0.04em", textTransform: "uppercase",
+                        marginRight: 5 }}>why</strong>
+                      {reason.explanation}
+                    </div>
+                    {reason.improvement && (
+                      <div style={{ color: "var(--lys-text-dim)" }}>
+                        <strong style={{ color: "#10b981", fontFamily: "var(--lys-font-mono)",
+                          fontSize: 8.5, letterSpacing: "0.04em", textTransform: "uppercase",
+                          marginRight: 5 }}>improve</strong>
+                        {reason.improvement}
+                        {reason.predicted_delta > 0 && (
+                          <span style={{
+                            marginLeft: 6, padding: "0 5px", borderRadius: 3,
+                            background: "rgba(16,185,129,0.12)",
+                            color: "#10b981", fontFamily: "var(--lys-font-mono)",
+                            fontSize: 8.5, fontWeight: 700,
+                          }}>+{reason.predicted_delta.toFixed(2)}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
+
+        {/* RDKit-derived properties strip — concrete molecular numbers */}
+        {hasScores && deep?.rdkit_properties?.valid && (
+          <div style={{
+            marginTop: 10, padding: "6px 9px",
+            background: "rgba(0,0,0,0.025)",
+            border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+            borderRadius: 4,
+          }}>
+            <div style={{
+              fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+              color: "var(--lys-text-faint)", letterSpacing: "0.06em",
+              textTransform: "uppercase", fontWeight: 700, marginBottom: 4,
+            }}>RDKit · molecular properties</div>
+            <div style={{
+              display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+              gap: 4, fontSize: 9, fontFamily: "var(--lys-font-mono)",
+            }}>
+              {[
+                ["formula", deep.rdkit_properties.formula],
+                ["MW", deep.rdkit_properties.mw],
+                ["LogP", deep.rdkit_properties.logp],
+                ["TPSA", deep.rdkit_properties.tpsa],
+                ["HBA", deep.rdkit_properties.hba],
+                ["HBD", deep.rdkit_properties.hbd],
+                ["rot", deep.rdkit_properties.rotatable_bonds],
+                ["rings", deep.rdkit_properties.rings],
+                ["arom", deep.rdkit_properties.aromatic_rings],
+                ["fsp3", deep.rdkit_properties.fsp3],
+                ["heavy", deep.rdkit_properties.n_heavy_atoms],
+                ["QED", deep.rdkit_properties.qed],
+              ].map(([k, v]) => (
+                <div key={String(k)} style={{
+                  display: "flex", justifyContent: "space-between",
+                  padding: "1px 4px",
+                }}>
+                  <span style={{ color: "var(--lys-text-faint)" }}>{k}</span>
+                  <span style={{ color: "var(--lys-text)", fontWeight: 700 }}>{String(v ?? "—")}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Rule compliance badges — Lipinski/Veber/Egan/Ghose */}
+        {hasScores && deep?.rules && (
+          <div style={{
+            marginTop: 6,
+            display: "flex", flexWrap: "wrap", gap: 4,
+          }}>
+            {(["lipinski", "veber", "egan", "ghose"] as const).map((rule) => {
+              const r = deep.rules?.[rule];
+              if (!r) return null;
+              const ok = r.pass;
+              return (
+                <span key={rule}
+                  title={r.violations?.length ? r.violations.join(" · ") : "all checks pass"}
+                  style={{
+                    padding: "1px 7px", borderRadius: 3, fontSize: 9,
+                    fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+                    background: ok ? "rgba(16,185,129,0.10)" : "rgba(220,38,38,0.10)",
+                    color: ok ? "#059669" : "#dc2626",
+                    border: `1px solid ${ok ? "rgba(16,185,129,0.30)" : "rgba(220,38,38,0.30)"}`,
+                  }}>
+                  {ok ? "✓" : "✗"} {rule}{r.n_violations > 0 ? ` (${r.n_violations})` : ""}
+                </span>
+              );
+            })}
+          </div>
+        )}
 
         {hasScores && (
           <div style={{

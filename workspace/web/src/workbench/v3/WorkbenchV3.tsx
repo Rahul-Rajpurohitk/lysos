@@ -5,6 +5,12 @@ import "allotment/dist/style.css";
 
 import { TopHeader } from "./components/TopHeader";
 import { TightComposer } from "./components/chat/TightComposer";
+import { reduceAgentEventStandalone as _reduceAgentEvent } from "./hooks/useAgentStream.helpers";
+void _reduceAgentEvent;
+import { reduceWorkflowEvent } from "./components/chat/WorkflowCard";
+import { reduceOrchestratorEvent, type OrchestratorState } from "./components/chat/OrchestratorCard";
+import { ToolAccessOverlay } from "./components/chat/ToolAccessOverlay";
+import { AgentSuggestionStrip } from "./components/chat/AgentSuggestionStrip";
 // IterationStrip removed from primary layout per redesign — was a 2nd-row
 // chrome that violated the single-navbar mandate. The play/seek/speed
 // controls migrate inline elsewhere if needed.
@@ -30,7 +36,7 @@ import { GraphPanel as _GraphPanel } from "./panels/GraphPanel";
 void _RadarPanel; void _ParetoPanel; void _SynthPanel; void _LineagePanel; void _GraphPanel;
 import { ArtifactPanel, type ArtifactDoc } from "./panels/ArtifactPanel";
 import { PlaygroundCanvas, type WindowLayout, type Viewport } from "./playground/PlaygroundCanvas";
-import { TabbedView } from "./playground/TabbedView";
+import { TabbedView, TabbedViewTabs } from "./playground/TabbedView";
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
@@ -59,6 +65,8 @@ import { ToxicityProfileCard } from "./playground/ToxicityProfileCard";
 import { SimilarityCard } from "./playground/SimilarityCard";
 import { ScoreBreakdownCard } from "./playground/ScoreBreakdownCard";
 import { AgentRosterCard } from "./playground/AgentRosterCard";
+import { AgentsHubCard } from "./playground/AgentsHubCard";
+void AgentRosterCard;
 import { SessionTraceCard } from "./playground/SessionTraceCard";
 import { AgentActionLogCard } from "./playground/AgentActionLogCard";
 import { AgentMetricsCard } from "./playground/AgentMetricsCard";
@@ -66,6 +74,8 @@ import { ChemistryNavbar } from "./playground/ChemistryNavbar";
 import { ChemistryTopNav } from "./playground/ChemistryTopNav";
 void ChemistryNavbar;  // keeping import in case we want to switch back
 import { KnowledgeNavbar } from "./playground/KnowledgeNavbar";
+import { KnowledgeChampionPane } from "./playground/KnowledgeChampionPane";
+import { KnowledgeHubCard } from "./playground/KnowledgeHubCard";
 import { ScoringNavbar } from "./playground/ScoringNavbar";
 import { AgentsNavbar } from "./playground/AgentsNavbar";
 import { LiveNavbar } from "./playground/LiveNavbar";
@@ -126,6 +136,96 @@ interface Constraint {
 const RIGHT_TABS = ["Radar", "Pareto", "Synth", "Graph", "Lineage", "Artifact"] as const;
 type RightTab = (typeof RIGHT_TABS)[number];
 
+/** Map a workflow step's tool/id to the agent role that "owns" the
+ *  semantic narration. Mirrors the backend _STEP_AGENT mapping so the
+ *  user sees the same colored bars in the chat as in the Agents tab. */
+function roleForStep(tool: string | undefined, stepId: string | undefined): string {
+  const t = (tool ?? "").toLowerCase();
+  const id = (stepId ?? "").toLowerCase();
+  if (["predict_resistance", "compare_resistance", "cross_target_risk", "explain_resistance"].includes(t)) return "critic";
+  if (["score_each", "score_explain", "score_molecule", "place_in_pocket", "molecule_properties"].includes(t)) return "designer";
+  if (["harden_atom"].includes(t)) return "editor";
+  if (id.includes("harden")) return "editor";
+  if (id.includes("seed") || id.includes("rank") || id.includes("pick")) return "strategist";
+  return "designer";
+}
+
+/** Turn a workflow step result into a one-paragraph chat narration so
+ *  the user sees the agent "speaking" with real findings, not just
+ *  watching a workflow card collapse. */
+function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): string | null {
+  if (!stepDef || !result) return null;
+  const label = stepDef.label || stepDef.id || "step";
+  const tool = (stepDef.tool || "").toLowerCase();
+  const ms = elapsedMs ? ` _(${elapsedMs}ms)_` : "";
+
+  // Resistance prediction — the critic's specialty
+  if (tool === "predict_resistance") {
+    const va = (result.vulnerable_atoms ?? []) as any[];
+    const rb = result.robustness_score;
+    if (va.length === 0 && typeof rb === "number") {
+      return `**${label}** complete${ms}. Robustness against \`${result.target_name ?? result.pdb_id}\`: **${rb.toFixed(2)}**. No vulnerable atoms above threshold — candidate is robust.`;
+    }
+    const top = va.slice(0, 3).map((v) => {
+      const m = v.top_mutation ?? {};
+      return `atom **#${v.atom_idx}** (escape ${(v.escape_score ?? 0).toFixed(2)}, ${m.wt}${m.position}${m.mutant} · ${m.drug_class ?? "?"})`;
+    }).join(", ");
+    return `**${label}**${ms}: robustness **${(rb ?? 0).toFixed(2)}** against \`${result.target_name ?? result.pdb_id}\`. ${va.length} vulnerable atoms detected — top: ${top}.`;
+  }
+
+  // Scoring — designer's domain
+  if (tool === "score_explain" || tool === "score_molecule" || tool === "score_each") {
+    if (Array.isArray(result)) {
+      const tops = result.slice(0, 3).map((r: any) =>
+        `\`${r.smiles}\` → composite **${(r.composite ?? 0).toFixed(3)}**`).join(", ");
+      return `**${label}** complete${ms}. Scored ${result.length} candidate${result.length === 1 ? "" : "s"} — ${tops}.`;
+    }
+    if (typeof result.composite === "number") {
+      return `**${label}**${ms}: \`${result.smiles}\` → composite **${result.composite.toFixed(3)}**${result.weakest ? `, weakest axis: \`${result.weakest}\`` : ""}.`;
+    }
+  }
+
+  // Hardening — editor's domain
+  if (tool === "harden_atom") {
+    const sugs = result.gemini_suggestions ?? result.suggestions ?? [];
+    if (sugs.length === 0) return `**${label}** complete${ms}: no viable hardenings found for atom **#${result.atom_idx}**.`;
+    const top = sugs.slice(0, 2).map((s: any) =>
+      `**${s.swap}** (conf ${(s.confidence ?? 0).toFixed(2)})`).join(" · ");
+    return `**${label}** for atom **#${result.atom_idx}**${ms}: ${sugs.length} swap${sugs.length === 1 ? "" : "s"} proposed — ${top}.`;
+  }
+
+  // Compare workflow
+  if (tool === "compare_resistance") {
+    const n = (result.rows ?? []).length;
+    return `**${label}**${ms}: compared ${n} candidates side-by-side. Best: \`${result.best_smiles ?? "?"}\``;
+  }
+
+  // Cross-target spectrum
+  if (tool === "cross_target_risk") {
+    return `**${label}**${ms}: tested against ${result.n_targets ?? 0} targets, avg robustness **${(result.avg_robustness ?? 0).toFixed(2)}** — classified as **${result.spectrum ?? "?"}**.`;
+  }
+
+  // Multi-agent debate — special: emit a rich debate summary
+  if (result?.rounds && Array.isArray(result.rounds)) {
+    const rounds = result.rounds;
+    const winner = result.winner;
+    const runner = result.runner_up;
+    const cost = result.cost_usd;
+    const tokens = (result.tokens_in ?? 0) + (result.tokens_out ?? 0);
+    const out: string[] = [`**Multi-agent debate** complete${ms} — ${rounds.length} rounds, $${(cost ?? 0).toFixed(4)}, ${tokens.toLocaleString()} tokens.`];
+    for (const r of rounds) {
+      if (r.designer_thinking) out.push(`\n*Designer (round ${r.round}):* ${(r.designer_thinking ?? "").slice(0, 200)}`);
+      if (r.critic_thinking) out.push(`\n*Critic (round ${r.round}):* ${(r.critic_thinking ?? "").slice(0, 200)}`);
+      if (r.editor_thinking) out.push(`\n*Editor (round ${r.round}):* ${(r.editor_thinking ?? "").slice(0, 200)}`);
+    }
+    if (winner) out.push(`\n\n**Strategist's verdict**: winner \`${winner}\`, runner-up \`${runner}\`. Next: \`${result.next_action ?? "score"}\`. ${result.justification ?? ""}`);
+    return out.join("");
+  }
+
+  // Inline / loop / unknown — generic acknowledgement
+  return `**${label}** complete${ms}.`;
+}
+
 export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Header state
   const [pathogens, setPathogens] = useState<Pathogen[]>([]);
@@ -149,6 +249,13 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Rendered on the 2D builder as orange halos so the agent sees which
   // atoms are clinically vulnerable AND which are binding/clashing.
   const [vulnerableAtoms, setVulnerableAtoms] = useState<number[]>([]);
+  // Cross-link focus from sibling cards. The Resistance Escape Map sets
+  // these when the user clicks a heatmap cell or vulnerable-atom row,
+  // and Pareto Compare sets them too. The 2D builder paints a lavender
+  // pulse on focusedAtomIdx, the 3D theater flashes focusedResidueId.
+  // Single source of truth — always reset together when the molecule changes.
+  const [focusedAtomIdx, setFocusedAtomIdx] = useState<number | null>(null);
+  const [focusedResidueId, setFocusedResidueId] = useState<number | null>(null);
   // Filter state for navbar buttons across containers
   const [drugClassFilter, setDrugClassFilter] = useState<string>("");
   const [scoringPreset, setScoringPreset] = useState<"default" | "mic" | "admet" | "novel">("default");
@@ -281,6 +388,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       return v === "tabs" ? "tabs" : "whiteboard";
     } catch { return "whiteboard"; }
   });
+  // Active tab ID — lifted out of TabbedView so the merged TopHeader can
+  // render the tab strip inline with the rest of the nav (eliminating the
+  // wasted second-row sub-nav). TabbedView reads this via controlledActiveId.
+  const [playgroundActiveTabId, setPlaygroundActiveTabId] = useState<string>("chemistry");
+  // Chat-pane (left Allotment pane) live width — used by TopHeader to
+  // align its internal left/right split with the body's vertical
+  // divider. Updated by Allotment's onChange.
+  const [chatPaneWidth, setChatPaneWidth] = useState<number>(480);
   function setViewMode(v: "whiteboard" | "tabs") {
     _setViewMode(v);
     try { localStorage.setItem("lys-viewmode", v); } catch { /* noop */ }
@@ -302,11 +417,32 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [currentMoleculeId, setCurrentMoleculeId] = useState<string | null>(null);
   const [editLog, setEditLog] = useState<any[]>([]);
 
+  // Forward-declared ref so runWorkflow (defined before loadSmilesIntoCanvas)
+  // can dispatch to emitWorkflowCandidates without a circular hook order.
+  const emitWorkflowCandidatesRef = useRef<((wfState: any) => Promise<void>) | null>(null);
+
   /** Load a SMILES into the playground store + canvas state. Used by
-   *  scaffold picker, agent SMILES emissions, and post-edit refresh. */
+   *  scaffold picker, agent SMILES emissions, and post-edit refresh.
+   *
+   *  Chat-emission policy:
+   *    - silent:true    → no chat rows at all (default seed, internal refresh)
+   *    - quiet:true     → tiny one-line "loaded" status pill (library / 3D
+   *                       picker), suppresses the full candidate_added card
+   *    - default        → small status pill; the candidate_added row is
+   *                       deferred to the auto-score effect, which fires it
+   *                       only after composite is real (no more 0.000 spam).
+   */
   const loadSmilesIntoCanvas = useCallback(async (
     smi: string,
-    opts: { createdBy?: string; parentId?: string | null; logLabel?: string } = {}
+    opts: {
+      createdBy?: string;
+      parentId?: string | null;
+      logLabel?: string;
+      /** No chat rows (default seed, programmatic refresh). */
+      silent?: boolean;
+      /** One-line "loaded" status pill, no candidate card. */
+      quiet?: boolean;
+    } = {}
   ) => {
     if (!smi || !activeChatId) return null;
     try {
@@ -323,14 +459,21 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       const d = await r.json();
       if (d.molecule_id) {
         setCurrentMoleculeId(d.molecule_id);
-        // Echo into the chat events stream so the radar + agent trace + chat panel update
+        // New molecule means stale cross-link focus — drop it so no
+        // halo lingers on an atom/residue from the previous candidate.
+        setFocusedAtomIdx(null);
+        setFocusedResidueId(null);
+        // ALWAYS emit a load_status event so currentSmiles (derived
+        // from the events stream) can update — even for silent loads.
+        // The `silent` flag on the event tells MessageRow to skip
+        // rendering the row, but the SMILES still propagates to all
+        // subscribers (2D viewer, 3D theater, scoring pipeline).
         const label = opts.logLabel ?? "[load]";
         setEvents((p) => [
           ...p,
-          { type: "agent_message", ts: Date.now()/1000, agent: opts.createdBy ?? "user",
-            content: `${label} ${smi}` } as any,
-          { type: "candidate_added", ts: Date.now()/1000, smiles: smi,
-            composite: 0, agent: opts.createdBy ?? "user" } as any,
+          { type: "load_status", ts: Date.now()/1000, agent: opts.createdBy ?? "user",
+            content: `${label} ${smi}`, smiles: smi,
+            silent: opts.silent === true } as any,
         ]);
       }
       return d.molecule_id;
@@ -338,6 +481,313 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       return null;
     }
   }, [activeChatId, apiBase, currentMoleculeId]);
+
+  /** Agent tool-result → UI dispatcher.
+   *
+   *  This is the "agentic SaaS" cross-link: when the LLM agent calls a
+   *  chemistry tool (score_explain, predict_resistance, place_in_pocket,
+   *  harden_atom), we mirror the result into the actual UI containers
+   *  (Scoring radar, Resistance map atom halos, 2D pose halos) so the
+   *  user SEES the agent's work happening in the visual surfaces — not
+   *  just buried inside an agent message card.
+   *
+   *  Single source of truth: agent_state.steps still holds the raw
+   *  call+result for the chat card; this dispatcher publishes the
+   *  side effects on top.
+   */
+  // currentSmiles read via ref so this hook ordering is safe — the
+  // useMemo for currentSmiles is declared further down. The ref is
+  // updated in an effect once currentSmiles becomes available.
+  const currentSmilesRef = useRef<string | null>(null);
+
+  const dispatchAgentToolResult = useCallback((tool: string, args: any, result: any) => {
+    if (!result || typeof result !== "object") return;
+    const liveCurrentSmiles = currentSmilesRef.current;
+
+    // SCORING: score_molecule / score_explain → emit a `score` event
+    // (drives Reward Radar, Score Breakdown, Toxicity, Similarity cards).
+    if (tool === "score_molecule" || tool === "score_explain") {
+      const smi = args?.smiles;
+      if (!smi) return;
+      const composite: number = typeof result.composite === "number" ? result.composite : 0;
+      const scores: Record<string, number> = {};
+      if (Array.isArray(result.components)) {
+        for (const c of result.components) {
+          if (c?.name && typeof c.value === "number") scores[c.name] = c.value;
+        }
+      }
+      setEvents((p) => [...p, {
+        type: "score", ts: Date.now() / 1000,
+        smiles: smi, scores, composite, agent: "agent",
+      } as any]);
+      // If the agent scored a SMILES that ISN'T currently loaded, also
+      // emit a load_status so the user can click to inspect it.
+      if (smi !== liveCurrentSmiles) {
+        setEvents((p) => [...p, {
+          type: "load_status", ts: Date.now() / 1000,
+          agent: "agent",
+          content: `[agent · scored] ${smi}`, smiles: smi,
+        } as any]);
+      }
+    }
+
+    // RESISTANCE: predict_resistance → paint vulnerable atom halos on
+    // the 2D builder so user sees WHICH atoms are weak.
+    if (tool === "predict_resistance") {
+      const va = result.vulnerable_atoms;
+      if (Array.isArray(va)) {
+        const idxs: number[] = va
+          .map((v: any) => v?.atom_idx)
+          .filter((x: any): x is number => typeof x === "number");
+        setVulnerableAtoms(idxs);
+      }
+    }
+
+    // POSE: place_in_pocket → propagate binding/clashing atoms to 2D.
+    if (tool === "place_in_pocket") {
+      if (Array.isArray(result.binding_atoms)) setPoseBindingAtoms(result.binding_atoms);
+      if (Array.isArray(result.clashing_atoms)) setPoseClashingAtoms(result.clashing_atoms);
+      if (result.pdb_id) setSelectedPdbId((prev) => prev ?? result.pdb_id);
+    }
+
+    // HARDEN: harden_atom → if the AI suggested a valid hardened SMILES,
+    // surface a load chip so the user can promote it with one click.
+    if (tool === "harden_atom") {
+      const sugs = result.gemini_suggestions ?? result.suggestions ?? [];
+      const winner = sugs.find((s: any) => s?.proposed_smiles_valid && s?.proposed_smiles);
+      if (winner?.proposed_smiles) {
+        setEvents((p) => [...p, {
+          type: "load_status", ts: Date.now() / 1000,
+          agent: "agent",
+          content: `[agent · harden suggests] ${winner.proposed_smiles}`,
+          smiles: winner.proposed_smiles,
+        } as any]);
+      }
+    }
+  }, []);
+
+  // Forward-declared ref (same trick as emitWorkflowCandidatesRef) so
+  // the SSE consumer can dispatch without circular hook ordering.
+  const dispatchAgentToolResultRef = useRef(dispatchAgentToolResult);
+  useEffect(() => { dispatchAgentToolResultRef.current = dispatchAgentToolResult; }, [dispatchAgentToolResult]);
+
+  /** Mine a completed workflow's state for candidate SMILES and emit
+   *  candidate_added rows + auto-load the winner. Used by both the
+   *  direct /wf path AND the orchestrator-delegated workflow path. */
+  const emitWorkflowCandidates = useCallback(async (wfState: any) => {
+    if (!wfState || wfState.status !== "done") return;
+    const dump = wfState.state_dump ?? {};
+    const ranking: Array<{
+      smiles: string; composite?: number; robustness?: number; fitness?: number;
+    }> = Array.isArray(dump.ranking) ? dump.ranking : [];
+    if (ranking.length === 0) return;
+    setEvents((p) => {
+      const next = [...p];
+      for (const r of ranking) {
+        if (!r.smiles) continue;
+        next.push({
+          type: "candidate_added",
+          ts: Date.now() / 1000,
+          smiles: r.smiles,
+          composite: typeof r.composite === "number" ? r.composite : 0,
+          scores: typeof r.composite === "number" ? { composite: r.composite } : undefined,
+          agent: "workflow",
+          content: `[workflow · ${wfState.name}] fitness=${r.fitness ?? "?"} · rob=${r.robustness ?? "?"}`,
+        } as any);
+      }
+      return next;
+    });
+    const winner = ranking[0];
+    if (winner?.smiles) {
+      await loadSmilesIntoCanvas(winner.smiles, {
+        createdBy: "workflow",
+        parentId: null,
+        logLabel: `[workflow · ${wfState.name} · winner]`,
+      });
+    }
+    // Emit a champion-promotion notification card if the workflow.done
+    // payload included a champion_promotion side-effect (auto-promote
+    // path on the backend).
+    const promo = dump.champion_promotion;
+    if (promo) {
+      setEvents((p) => [...p, {
+        type: "agent_message",
+        ts: Date.now() / 1000,
+        agent: "strategist",
+        card_kind: "champion",
+        data: {
+          mode: "promote",
+          promotion: promo,
+          pathogen: dump.pathogen,
+        },
+        content: "",
+      } as any]);
+      // Wake the Knowledge-tab champion pane up so it refetches.
+      try { window.dispatchEvent(new Event("lysos:champion-changed")); } catch {}
+    }
+  }, [loadSmilesIntoCanvas]);
+
+  // Keep the ref synced so runWorkflow (defined above) can dispatch.
+  useEffect(() => {
+    emitWorkflowCandidatesRef.current = emitWorkflowCandidates;
+  }, [emitWorkflowCandidates]);
+
+  /** Stream a workflow run via SSE and inject one workflow_run row into
+   *  the chat timeline whose state mutates as events arrive. Reusable
+   *  from both the /wf slash command path AND the AgentSuggestionStrip
+   *  chip-click path so chip-launch and slash-launch share one code
+   *  path (single source of truth for the SSE consumer). */
+  const runWorkflow = useCallback(async (name: string, inputs: Record<string, any>) => {
+    if (!activeChatId) return;
+    const runId = `wfrow-${crypto.randomUUID().slice(0, 8)}`;
+    // Echo as a user-side intent message so the chat shows WHAT the
+    // user clicked. Without this, suggestion-chip / palette taps were
+    // invisible — the workflow card popped in with no context, looking
+    // like it appeared from nowhere.
+    const argsText = Object.entries(inputs)
+      .map(([k, v]) => `${k}=${typeof v === "string" && v.length > 30 ? v.slice(0, 30) + "…" : v}`)
+      .join(" ");
+    setEvents((p) => [...p, {
+      type: "agent_message",
+      ts: Date.now() / 1000,
+      agent: "user",
+      content: `/wf ${name}${argsText ? "  " + argsText : ""}`,
+    } as any, {
+      type: "workflow_run",
+      ts: Date.now() / 1000,
+      agent: "assistant",
+      run_id: runId,
+      api_base: apiBase,
+      workflow_state: null,
+    } as any]);
+    const updateWf = (next: any) => {
+      setEvents((evs) => evs.map((e: any) =>
+        e.run_id === runId ? { ...e, workflow_state: next } : e));
+    };
+    let curWf: any = null;
+    try {
+      const r = await fetch(`${apiBase}/api/workflows/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, inputs, session_id: activeChatId }),
+      });
+      if (!r.ok || !r.body) {
+        const errBody = await r.text().catch(() => "");
+        curWf = { run_id: runId, name, label: name, status: "error",
+          inputs, steps: [], cancellable: false,
+          error: `HTTP ${r.status}: ${errBody.slice(0, 200)}` };
+        updateWf(curWf);
+        return;
+      }
+      const reader = r.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const blocks = buf.split("\n\n");
+        buf = blocks.pop() ?? "";
+        for (const block of blocks) {
+          const line = block.trim();
+          if (!line.startsWith("data:")) continue;
+          const json = line.slice(5).trim();
+          if (!json) continue;
+          try {
+            const ev = JSON.parse(json);
+            curWf = reduceWorkflowEvent(curWf, ev);
+            updateWf(curWf);
+            // Per-step UI dispatch + chat narration — same pattern as
+            // the orchestrator delegate path so direct /wf invocations
+            // also drive the chemistry visuals AND emit per-agent chat
+            // rows as steps complete.
+            if (ev?.event === "step.done" && ev.result) {
+              const stepDef = curWf?.steps?.find((s: any) => s.id === ev.step_id);
+              if (stepDef?.tool && stepDef.tool !== "__inline__"
+                  && stepDef.tool !== "__loop__") {
+                dispatchAgentToolResultRef.current?.(
+                  stepDef.tool, curWf.inputs ?? {}, ev.result,
+                );
+              }
+              const role = roleForStep(stepDef?.tool, ev.step_id);
+              const narration = narrateStepResult(stepDef, ev.result, ev.elapsed_ms);
+              if (narration) {
+                setEvents((p) => [...p, {
+                  type: "agent_message",
+                  ts: Date.now() / 1000,
+                  agent: role,
+                  content: narration,
+                } as any]);
+              }
+              // Debate inline step → emit a ProposalCard so the user
+              // gets the multi-option Apply / Compare / Decide UX.
+              if (ev.step_id === "debate" && ev.result?.winner && ev.result?.runner_up) {
+                setEvents((p) => [...p, {
+                  type: "agent_message",
+                  ts: Date.now() / 1000,
+                  agent: "strategist",
+                  content: "",
+                  card_kind: "proposal",
+                  data: {
+                    api_base: apiBase,
+                    session_id: activeChatId,
+                    pathogen: selectedPathogen,
+                    title: "Strategist's verdict — pick your winner",
+                    verdict: ev.result.justification ?? "",
+                    options: [
+                      { smiles: ev.result.winner, label: "winner",
+                        rationale: ev.result.justification ?? "" },
+                      { smiles: ev.result.runner_up, label: "runner-up",
+                        rationale: "Strategist's second-choice — useful for A/B vs winner." },
+                    ],
+                  },
+                } as any]);
+              }
+            }
+            // When the workflow finishes, mine state.ranking for candidate
+            // SMILES and surface them as `candidate_added` rows so the
+            // user sees real load-able candidates in the chat (instead
+            // of a buried state_dump). Auto-loads the winner into 2D/3D
+            // so the molecule actually changes on screen end-to-end.
+            if (ev?.event === "workflow.done") {
+              await emitWorkflowCandidatesRef.current?.(curWf);
+            }
+          } catch { /* malformed */ }
+        }
+      }
+    } catch (exc: any) {
+      curWf = { run_id: runId, name, label: name, status: "error",
+        inputs, steps: [], cancellable: false,
+        error: String(exc?.message ?? exc) };
+      updateWf(curWf);
+    }
+  }, [activeChatId, apiBase]);
+
+  /** Send a message into the chat harness from a sibling card (Resistance
+   *  "ask agent", Pareto "explain" with agent fall-through, etc.). Mirrors
+   *  the TightComposer onSend flow but skips the input box. */
+  const sendAgentMessage = useCallback(async (text: string) => {
+    if (!text || !activeChatId) return;
+    setEvents((p) => [...p, {
+      type: "agent_message", ts: Date.now() / 1000,
+      agent: "user", content: text,
+    } as any]);
+    try {
+      const r = await fetch(`${apiBase}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ session_id: activeChatId, text }),
+      });
+      if (!r.ok) return;
+      const d = await r.json();
+      setEvents((p) => [...p, {
+        type: "agent_message", ts: Date.now() / 1000,
+        agent: "assistant",
+        content: (d?.text ?? d?.message ?? ""),
+        ...(d?.card ? { card: d.card } : {}),
+      } as any]);
+    } catch { /* */ }
+  }, [activeChatId, apiBase]);
 
   /** Refresh the recent edit log from /sessions/{sid}/edits — drives the
    *  Edit-log card so the user sees every persisted MoleculeEdit row. */
@@ -644,10 +1094,21 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   }
 
   const messages = useMemo(() => {
-    return events.filter((e) =>
-      ["agent_message", "tool_call_result", "tool_call_error", "candidate_added", "state_change",
-        "intervention", "mol_edit"].includes(e.type)
-    );
+    // ALL user-visible activity counts — must include the SSE-streamed
+    // *_run rows (agent_run, workflow_run, orchestrator_run) and the
+    // tiny load_status pill, otherwise OnboardingHero + starter
+    // prompts persist on top of an active workflow → big visual
+    // overlap on every interaction. silent load_status entries are
+    // excluded since they shouldn't count as a "real" user message.
+    return events.filter((e: any) => {
+      const t = e.type;
+      if (["agent_message", "tool_call_result", "tool_call_error",
+           "candidate_added", "state_change", "intervention", "mol_edit",
+           "agent_run", "workflow_run", "orchestrator_run",
+          ].includes(t)) return true;
+      if (t === "load_status" && !e.silent) return true;
+      return false;
+    });
   }, [events]);
 
   // iterCompositeMap fed the (now-removed) IterationStrip's per-iter
@@ -664,16 +1125,26 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   void iterCompositeMap;
 
   const currentSmiles = useMemo(() => {
+    // Pick the LAST event that carries a SMILES the viewer should show.
+    // Order matters: load_status, candidate_added, and mol_edit all
+    // count — load_status is what loadSmilesIntoCanvas emits when a
+    // user picks a library/scaffold/winner SMILES (no full candidate
+    // card until after auto-scoring lands). Without including it here,
+    // the 2D viewer would NEVER refresh on library/winner loads, since
+    // candidate_added is now gated on composite>0.
     for (let i = events.length - 1; i >= 0; i--) {
-      if (events[i].type === "candidate_added" && events[i].smiles) {
-        return events[i].smiles!;
-      }
-      if (events[i].type === "mol_edit" && events[i].candidate) {
-        return events[i].candidate!;
-      }
+      const e: any = events[i];
+      if (e.type === "candidate_added" && e.smiles) return e.smiles as string;
+      if (e.type === "mol_edit" && e.candidate) return e.candidate as string;
+      if (e.type === "load_status" && e.smiles) return e.smiles as string;
     }
     return null;
   }, [events]);
+
+  // Keep currentSmilesRef in lockstep so the agent tool dispatcher
+  // (declared above the currentSmiles useMemo to keep hook order safe)
+  // can read the live value without taking it as a dependency.
+  useEffect(() => { currentSmilesRef.current = currentSmiles; }, [currentSmiles]);
 
   const lastScores = useMemo<Record<string, number> | null>(() => {
     for (let i = events.length - 1; i >= 0; i--) {
@@ -715,6 +1186,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         createdBy: "system",
         parentId: null,
         logLabel: "[default · benzene]",
+        silent: true,  // default seed — no chat noise on first open
       });
     }, 1200);
     return () => clearTimeout(t);
@@ -740,19 +1212,71 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         });
         if (!r.ok) return;
         const d = await r.json();
+        // /workbench/score returns components as an ARRAY of
+        //   {name, value, weight, contribution}
+        // (NOT keyed by axis name). The earlier Object.entries path
+        // turned [0, 1, 2, ...] into the keys and zeroed everything.
         const scores: Record<string, number> = {};
-        if (d.components) {
+        if (Array.isArray(d.components)) {
+          for (const c of d.components) {
+            if (c && typeof c.name === "string") {
+              scores[c.name] = typeof c.value === "number" ? c.value : 0;
+            }
+          }
+        } else if (d.components && typeof d.components === "object") {
           for (const [k, v] of Object.entries(d.components)) {
-            // components is {axis: {value, weight, contribution}}
             const obj = v as any;
             scores[k] = typeof obj === "number" ? obj : (obj?.value ?? 0);
           }
         }
         const composite = typeof d.composite === "number" ? d.composite : 0;
-        setEvents((prev) => [
-          ...prev,
-          { type: "score", ts: Date.now()/1000, smiles: currentSmiles, scores, composite } as any,
-        ]);
+        // Emit BOTH a `score` row (for radar/explainer) AND a
+        // `candidate_added` row (for paretoRows + chat). The candidate
+        // row is gated on composite>0 so the chat never shows an
+        // unscored "0.000" placeholder. Default seed (silent load) is
+        // skipped via the same gate (currentSmiles wouldn't be set
+        // until POST returns, and the silent loader sets it without
+        // any chat-side flag — so we additionally check the most
+        // recent load_status row for `silent` is impossible because
+        // silent loads emit none. Practical net: silent loads still
+        // get a candidate_added once score lands, BUT the user never
+        // sees a 0.000 placeholder).
+        setEvents((prev) => {
+          // Check whether currentSmiles came from a silent load (the
+          // default benzene seed, programmatic refreshes). If so, emit
+          // ONLY the score event (which feeds the radar/breakdown
+          // cards) but NOT a candidate_added row — those count as
+          // "user-initiated candidates" and should never include the
+          // system seed.
+          let cameFromSilent = false;
+          for (let i = prev.length - 1; i >= 0; i--) {
+            const e: any = prev[i];
+            if (e.type === "load_status" && e.smiles === currentSmiles) {
+              cameFromSilent = e.silent === true;
+              break;
+            }
+            if ((e.type === "candidate_added" || e.type === "mol_edit")
+                && (e.smiles === currentSmiles || e.candidate === currentSmiles)) {
+              break;  // SMILES had a non-silent origin already
+            }
+          }
+          const next: any[] = [
+            ...prev,
+            { type: "score", ts: Date.now()/1000, smiles: currentSmiles,
+              scores, composite } as any,
+          ];
+          if (composite > 0 && !cameFromSilent) {
+            next.push({
+              type: "candidate_added",
+              ts: Date.now()/1000,
+              smiles: currentSmiles,
+              composite,
+              scores,
+              agent: "scorer",
+            } as any);
+          }
+          return next;
+        });
       } catch {/*noop*/}
     }, 700);  // 700ms debounce — protects against rapid SMILES edits
     return () => clearTimeout(t);
@@ -801,8 +1325,126 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     [events]
   );
 
+  // Derive running processes (agent / workflow / orchestrator runs that
+  // are currently executing) so the RunningProcessesTray at the top of
+  // the chat reflects live system state. Each row is a `RunningProcess`
+  // with kind, name, status sub-label, and startedAt timestamp.
+  const runningProcesses = useMemo(() => {
+    const procs: Array<{
+      id: string; kind: "agent" | "workflow" | "score"; name: string;
+      status: string; startedAt: number;
+      cancellable?: boolean; onClick?: () => void;
+    }> = [];
+    for (const e of events as any[]) {
+      // Workflow runs in flight
+      if (e.type === "workflow_run" && e.workflow_state) {
+        const ws = e.workflow_state;
+        if (ws.status === "running" || ws.status === "pending") {
+          const stepsDone = (ws.steps ?? []).filter((s: any) => s.status === "done").length;
+          const total = (ws.steps ?? []).length;
+          const cur = (ws.steps ?? []).find((s: any) => s.status === "running");
+          const sub = cur
+            ? `${cur.id ?? cur.name ?? "step"} · ${stepsDone}/${total}`
+            : `${stepsDone}/${total} steps`;
+          procs.push({
+            id: e.run_id ?? `wf-${e.ts}`,
+            kind: "workflow",
+            name: ws.name ?? ws.label ?? "workflow",
+            status: sub,
+            startedAt: (e.ts ?? Date.now() / 1000) * 1000,
+          });
+        }
+      }
+      // Agent runs in flight
+      if (e.type === "agent_run" && e.agent_state) {
+        const ast = e.agent_state;
+        if (ast.status === "running") {
+          procs.push({
+            id: e.run_id ?? `ag-${e.ts}`,
+            kind: "agent",
+            name: "gemini-pro",
+            status: ast.n_tool_calls
+              ? `${ast.n_tool_calls} tool call${ast.n_tool_calls === 1 ? "" : "s"}`
+              : "thinking…",
+            startedAt: (e.ts ?? Date.now() / 1000) * 1000,
+          });
+        }
+      }
+      // Orchestrator runs in flight
+      if (e.type === "orchestrator_run" && e.orchestrator_state) {
+        const os = e.orchestrator_state;
+        if (os.status === "running") {
+          const route = os.plan?.route;
+          procs.push({
+            id: e.run_id ?? `or-${e.ts}`,
+            kind: "agent",
+            name: "orchestrator",
+            status: route ? `routing → ${route}` : "classifying intent…",
+            startedAt: (e.ts ?? Date.now() / 1000) * 1000,
+          });
+        }
+      }
+    }
+    return procs;
+  }, [events]);
+
+  // Top-level tab list for the merged TopHeader. Categories are stable
+  // (must match playgroundGroups[].id below). Used only when viewMode=tabs.
+  const headerTabsGroups: { id: string; category: any; cards: any[] }[] = [
+    { id: "chemistry", category: "Chemistry", cards: [{ id: "_" }] },
+    { id: "scoring",   category: "Scoring",   cards: [{ id: "_" }] },
+    { id: "agents",    category: "Agents",    cards: [{ id: "_" }] },
+    { id: "report",    category: "Report",    cards: [{ id: "_" }] },
+    { id: "knowledge", category: "Knowledge", cards: [{ id: "_" }] },
+  ];
+
+  // View-mode toggle (whiteboard ↔ tabs). Lifted out of the right-pane
+  // IIFE so we can render it alongside the merged tabs strip in
+  // TopHeader. The whiteboard-mode floating duplicate is built inline
+  // by the right pane.
+  const headerViewToggle = (
+    <div style={{
+      display: "inline-flex",
+      background: "transparent",
+      border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
+      borderRadius: 4,
+      height: 22,
+      overflow: "hidden",
+      flexShrink: 0,
+    }}>
+      <button type="button"
+        onClick={() => setViewMode("whiteboard")}
+        title="Whiteboard"
+        style={{
+          width: 26, height: 22, padding: 0, border: 0, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: viewMode === "whiteboard" ? "var(--lys-text, #0f172a)" : "transparent",
+          color: viewMode === "whiteboard" ? "white" : "var(--lys-text-faint, #94a3b8)",
+        }}>
+        <Maximize2 size={11} />
+      </button>
+      <button type="button"
+        onClick={() => setViewMode("tabs")}
+        title="Tabs"
+        style={{
+          width: 26, height: 22, padding: 0, border: 0, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: viewMode === "tabs" ? "var(--lys-text, #0f172a)" : "transparent",
+          color: viewMode === "tabs" ? "white" : "var(--lys-text-faint, #94a3b8)",
+        }}>
+        <LayoutGrid size={11} />
+      </button>
+    </div>
+  );
+
   return (
     <div className="lys-shell">
+      {/* Floating tool-access popups — bottom-right overlay that surfaces
+       *  every tool invocation (running / done / error) with elapsed
+       *  timer + args preview. Pulls tool steps from agent_run /
+       *  workflow_run rows + tool_call_result events in the chat events
+       *  stream (single source of truth). Non-blocking. */}
+      <ToolAccessOverlay events={events as any[]} />
       <TopHeader
         pathogens={pathogens}
         selectedPathogen={selectedPathogen}
@@ -823,6 +1465,27 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         firstLineCount={firstLineCount}
         activeAgents={activeAgents}
         sessionId={sessionId}
+        leftClusterWidth={chatPaneWidth}
+        tabsSlot={
+          viewMode === "tabs" ? (
+            <TabbedViewTabs
+              groups={headerTabsGroups}
+              activeId={playgroundActiveTabId}
+              onActiveIdChange={setPlaygroundActiveTabId}
+              leftSlot={headerViewToggle}
+            />
+          ) : (
+            // Whiteboard mode: just the view toggle (let the user flip
+            // back to tabs). Right side stays empty otherwise — the
+            // canvas itself owns its real estate.
+            <div style={{
+              display: "flex", alignItems: "center",
+              padding: "0 8px",
+            }}>
+              {headerViewToggle}
+            </div>
+          )
+        }
       />
 
       {/* IterationStrip moved into a thin hairline below the body bar.
@@ -832,13 +1495,24 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         {/* Strict 2-pane layout: chat left (35%), playground right (65%).
             Middle pane (legacy 3D + 2D + drag-chips + mechanism) was
             collapsed into the playground as windows per user direction. */}
-        <Allotment defaultSizes={[35, 65]}>
+        <Allotment
+          defaultSizes={[35, 65]}
+          onChange={(sizes) => {
+            // First entry = chat-pane width in px. Drives TopHeader's
+            // left/right split so the nav-bar divider tracks the
+            // body's vertical splitter dynamically.
+            if (sizes && sizes.length > 0 && Number.isFinite(sizes[0])) {
+              setChatPaneWidth(Math.round(sizes[0]));
+            }
+          }}
+        >
           {/* CHAT */}
           <Allotment.Pane minSize={340} preferredSize={480}>
             <ChatPanel
               events={events as any}
               isRunning={isRunning}
               totalMsgs={messages.length}
+              runningProcesses={runningProcesses}
               showOnboarding={
                 <OnboardingHero
                   apiBase={apiBase}
@@ -867,6 +1541,38 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 <TightComposer
                   isRunning={isRunning}
                   chatEmpty={messages.length === 0}
+                  headerSlot={
+                    <AgentSuggestionStrip
+                      apiBase={apiBase}
+                      smiles={currentSmiles}
+                      pdbId={selectedPdbId}
+                      pathogen={selectedPathogen}
+                      hasScore={!!lastScores && Object.keys(lastScores).length > 0}
+                      hasResistance={events.some((e: any) =>
+                        e.type === "workflow_run" &&
+                        e.workflow_state?.name === "harden_candidate" &&
+                        e.workflow_state?.status === "done")}
+                      hasHarden={events.some((e: any) =>
+                        e.type === "workflow_run" &&
+                        e.workflow_state?.name === "harden_candidate" &&
+                        e.workflow_state?.steps?.some((s: any) => s.id === "harden_each" && s.status === "done"))}
+                      nCandidates={Array.from(new Set(events
+                        .filter((e: any) => e.type === "candidate_added" && e.smiles)
+                        .map((e: any) => e.smiles))).length}
+                      sessionCandidates={Array.from(new Set(events
+                        .filter((e: any) => e.type === "candidate_added" && e.smiles)
+                        .map((e: any) => e.smiles as string))).slice(-5)}
+                      onRunWorkflow={(name, inputs) => runWorkflow(name, inputs)}
+                      // ALWAYS show the +workflow button — it's the
+                      // primary discovery point for advanced workflows.
+                      // EMPTY chat → compact (just the +workflow pill).
+                      // ACTIVE chat → also compact (suggestion cards
+                      //   would duplicate the workflow card in the
+                      //   timeline). The slash starter prompts in the
+                      //   composer cover the empty-state guidance.
+                      compact={true}
+                    />
+                  }
                   onSend={async (t: string) => {
                     // 1) Echo the user message into the timeline immediately
                     setEvents((p) => [...p, {
@@ -875,48 +1581,452 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       agent: "user",
                       content: t,
                     } as any]);
-                    // 2) Use the active chat tab's id as the harness session
-                    //    id. Each tab is an independent chat session.
                     const chatSid = activeChatId;
-                    // Title is set by useAutoTitle (LLM-summarized) after a
-                    // few events. We keep "New chat" as the default until
-                    // the first auto-summarization completes — no crude
-                    // first-message-snippet hack here anymore.
-                    // 3) POST through the harness — slash commands route to
-                    //    the registry, free prompts route to the LLM.
-                    try {
-                      const r = await fetch(`${apiBase}/api/chat`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ session_id: chatSid, text: t }),
+
+                    // 1.5) Frontend-side fast-path slash commands that mutate
+                    //      the canvas directly — no chat round-trip. The user
+                    //      asked: "auto-send features … should not just go as
+                    //      plain text but do prompt filling and such working".
+                    //      So `/load <SMILES>` and `/swap <atom> <element>`
+                    //      fire the actual canvas mutation immediately.
+                    const trimmed = t.trim();
+
+                    // /load <SMILES>  → load directly into 2D + 3D + auto-score
+                    const loadMatch = trimmed.match(/^\/load\s+(\S.*)$/i);
+                    if (loadMatch) {
+                      const smi = loadMatch[1].trim();
+                      const id = await loadSmilesIntoCanvas(smi, {
+                        createdBy: "user",
+                        parentId: null,
+                        logLabel: "[/load]",
                       });
-                      if (!r.ok) {
-                        const errTxt = await r.text();
-                        setEvents((p) => [...p, {
-                          type: "agent_message",
-                          ts: Date.now() / 1000,
-                          agent: "system",
-                          content: `error ${r.status}: ${errTxt.slice(0, 200)}`,
-                        } as any]);
-                        return;
-                      }
-                      const d = await r.json();
-                      // 4) Push the response — text + structured card payload.
                       setEvents((p) => [...p, {
                         type: "agent_message",
                         ts: Date.now() / 1000,
                         agent: "assistant",
-                        content: d.text ?? d.error ?? "",
-                        card_kind: d.card_kind ?? undefined,
-                        data: d.data ?? undefined,
+                        content: id ? `Loaded \`${smi}\` into 2D + 3D. Re-scoring…` : `Could not load \`${smi}\` (invalid SMILES?)`,
                       } as any]);
+                      return;
+                    }
+
+                    // /swap <atomIdx> <element>  → atom-element swap
+                    const swapMatch = trimmed.match(/^\/swap\s+(\d+)\s+([A-Z][a-z]?)\s*$/);
+                    if (swapMatch && currentSmiles) {
+                      const atomIdx = parseInt(swapMatch[1], 10);
+                      const newEl = swapMatch[2];
+                      try {
+                        const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            smiles: currentSmiles,
+                            op: "swap_element",
+                            atom_index: atomIdx,
+                            new_element: newEl,
+                            actor: "user",
+                            session_id: activeChatId,
+                          }),
+                        });
+                        const d = await r.json();
+                        if (d.smiles) {
+                          await loadSmilesIntoCanvas(d.smiles, {
+                            createdBy: "user",
+                            parentId: currentMoleculeId,
+                            logLabel: `[/swap atom=${atomIdx} → ${newEl}]`,
+                          });
+                          setEvents((p) => [...p, {
+                            type: "agent_message",
+                            ts: Date.now() / 1000,
+                            agent: "assistant",
+                            content: `Swapped atom ${atomIdx} → ${newEl}. New SMILES: \`${d.smiles}\``,
+                          } as any]);
+                        } else {
+                          setEvents((p) => [...p, {
+                            type: "agent_message",
+                            ts: Date.now() / 1000,
+                            agent: "system",
+                            content: `swap failed: ${d.error ?? "unknown"}`,
+                          } as any]);
+                        }
+                      } catch (exc: any) {
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: "system",
+                          content: `swap network error: ${exc?.message ?? exc}`,
+                        } as any]);
+                      }
+                      return;
+                    }
+
+                    // /fg <atomIdx> <fg_name>  → add functional group
+                    const fgMatch = trimmed.match(/^\/fg\s+(\d+)\s+(\S+)\s*$/i);
+                    if (fgMatch && currentSmiles) {
+                      const atomIdx = parseInt(fgMatch[1], 10);
+                      const fg = fgMatch[2].toLowerCase();
+                      try {
+                        const r = await fetch(`${apiBase}/workbench/molecule/edit`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            smiles: currentSmiles,
+                            op: "add_functional_group_at",
+                            atom_index: atomIdx,
+                            functional_group: fg,
+                            actor: "user",
+                            session_id: activeChatId,
+                          }),
+                        });
+                        const d = await r.json();
+                        if (d.smiles) {
+                          await loadSmilesIntoCanvas(d.smiles, {
+                            createdBy: "user",
+                            parentId: currentMoleculeId,
+                            logLabel: `[/fg atom=${atomIdx} +${fg}]`,
+                          });
+                          setEvents((p) => [...p, {
+                            type: "agent_message",
+                            ts: Date.now() / 1000,
+                            agent: "assistant",
+                            content: `Added ${fg} at atom ${atomIdx}. New SMILES: \`${d.smiles}\``,
+                          } as any]);
+                        } else {
+                          setEvents((p) => [...p, {
+                            type: "agent_message",
+                            ts: Date.now() / 1000,
+                            agent: "system",
+                            content: `fg add failed: ${d.error ?? "unknown"}`,
+                          } as any]);
+                        }
+                      } catch (exc: any) {
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: "system",
+                          content: `fg network error: ${exc?.message ?? exc}`,
+                        } as any]);
+                      }
+                      return;
+                    }
+
+                    // 2) /wf <name> {json}  → run a workflow as SSE stream.
+                    //    Other slash commands → legacy /api/chat (registered handlers).
+                    //    Free text → /api/agent/run SSE (Gemini Pro tool-calling).
+                    const wfMatch = t.trim().match(/^\/wf\s+(\S+)(?:\s+(\{.*\}))?\s*$/);
+                    if (wfMatch) {
+                      const wfName = wfMatch[1];
+                      let wfInputs: Record<string, any> = {};
+                      try { if (wfMatch[2]) wfInputs = JSON.parse(wfMatch[2]); }
+                      catch {/* ignore parse error, send empty */}
+                      // Auto-fill obvious context defaults
+                      if (wfName === "harden_candidate" || wfName === "broad_spectrum_screen" ||
+                          wfName === "optimize_for_property") {
+                        // Fall back to a benzene seed so workflows that
+                        // REQUIRE smiles never crash on "step predict
+                        // args failed" when no candidate is loaded yet.
+                        wfInputs.smiles ??= currentSmiles || "c1ccccc1";
+                      }
+                      if (wfName === "harden_candidate" || wfName === "discover_and_assess" ||
+                          wfName === "compare_top_n") {
+                        wfInputs.pdb_id ??= selectedPdbId ?? "1VQQ";
+                      }
+                      if (wfName === "compare_top_n") {
+                        // Auto-fill smiles_list from recent session
+                        // candidates so /wf compare_top_n doesn't crash
+                        // on a missing required arg.
+                        if (!wfInputs.smiles_list || (Array.isArray(wfInputs.smiles_list) && wfInputs.smiles_list.length === 0)) {
+                          const cands = Array.from(new Set(events
+                            .filter((e: any) => e.type === "candidate_added" && e.smiles)
+                            .map((e: any) => e.smiles as string)));
+                          wfInputs.smiles_list = cands.length > 0
+                            ? cands.slice(-3)
+                            : (currentSmiles ? [currentSmiles] : ["c1ccccc1"]);
+                        }
+                      }
+                      if (wfName === "discover_and_assess" || wfName === "optimize_for_property") {
+                        wfInputs.pathogen ??= selectedPathogen;
+                      }
+                      runWorkflow(wfName, wfInputs);
+                      return;
+                    }
+                    if (t.trim().startsWith("/")) {
+                      try {
+                        const r = await fetch(`${apiBase}/api/chat`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          // Pass the live UI context so bare slash
+                          // commands like `/explain` or `/score` can
+                          // resolve from the current pathogen + loaded
+                          // SMILES without demanding explicit args.
+                          body: JSON.stringify({
+                            session_id: chatSid,
+                            text: t,
+                            pathogen: selectedPathogen,
+                            smiles: currentSmiles ?? null,
+                            pdb_id: selectedPdbId ?? null,
+                          }),
+                        });
+                        if (!r.ok) {
+                          const errTxt = await r.text();
+                          setEvents((p) => [...p, {
+                            type: "agent_message",
+                            ts: Date.now() / 1000,
+                            agent: "system",
+                            content: `error ${r.status}: ${errTxt.slice(0, 200)}`,
+                          } as any]);
+                          return;
+                        }
+                        const d = await r.json();
+                        // The harness sets text="" when there's an error,
+                        // so we MUST use || (not ??) so empty string falls
+                        // through to d.error. Otherwise the user sees an
+                        // invisible empty assistant bubble (the bug that
+                        // made /explain look broken).
+                        const finalContent = (d.text && d.text.length > 0)
+                          ? d.text
+                          : (d.error || "(no response)");
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: d.error ? "system" : "assistant",
+                          content: finalContent,
+                          card_kind: d.card_kind ?? undefined,
+                          data: d.data ?? undefined,
+                        } as any]);
+                      } catch (exc: any) {
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: "system",
+                          content: `network error: ${exc?.message ?? exc}`,
+                        } as any]);
+                      }
+                      return;
+                    }
+
+                    // 3) Free text → ORCHESTRATOR stream.
+                    //    Plain English routes through /api/orchestrator/run,
+                    //    which uses Gemini Pro to classify intent and pick
+                    //    one of: workflow / slash / agent / answer. The
+                    //    chosen route's downstream events are wrapped in
+                    //    orchestrator.delegate sub-events so the chat shows
+                    //    the routing decision + the live execution.
+                    //    For dispatch_slash, we capture it locally and
+                    //    re-trigger onSend() with the rendered slash so the
+                    //    existing slash-command handlers fire (no duplicate
+                    //    code path).
+                    const runId = `run-${crypto.randomUUID().slice(0, 8)}`;
+                    const initOrch: OrchestratorState = {
+                      run_id: runId,
+                      user_text: t,
+                      status: "running",
+                    };
+                    setEvents((p) => [...p, {
+                      type: "orchestrator_run",
+                      ts: Date.now() / 1000,
+                      agent: "orchestrator",
+                      run_id: runId,
+                      api_base: apiBase,
+                      orchestrator_state: initOrch,
+                    } as any]);
+
+                    const updateRow = (next: OrchestratorState) => {
+                      setEvents((evs) => evs.map((e: any) =>
+                        e.run_id === runId ? { ...e, orchestrator_state: next } : e));
+                    };
+                    let curOrch: OrchestratorState = initOrch;
+                    let dispatchedSlash: string | null = null;
+                    try {
+                      const r = await fetch(`${apiBase}/api/orchestrator/run`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          session_id: chatSid,
+                          text: t,
+                          smiles: currentSmiles ?? null,
+                          pathogen: selectedPathogen,
+                          pdb_id: selectedPdbId ?? null,
+                          last_composite: null,
+                          n_candidates: 0,
+                        }),
+                      });
+                      if (!r.ok || !r.body) {
+                        curOrch = { ...curOrch, status: "error",
+                          error: `HTTP ${r.status}` };
+                        updateRow(curOrch);
+                        return;
+                      }
+                      const reader = r.body.getReader();
+                      const decoder = new TextDecoder();
+                      let buf = "";
+                      for (;;) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        buf += decoder.decode(value, { stream: true });
+                        const blocks = buf.split("\n\n");
+                        buf = blocks.pop() ?? "";
+                        for (const block of blocks) {
+                          const line = block.trim();
+                          if (!line.startsWith("data:")) continue;
+                          const json = line.slice(5).trim();
+                          if (!json) continue;
+                          try {
+                            const ev = JSON.parse(json);
+                            curOrch = reduceOrchestratorEvent(curOrch, ev);
+                            updateRow(curOrch);
+                            // Capture dispatch_slash so we can fire it
+                            // automatically once the orchestrator is done.
+                            if (ev?.event === "orchestrator.dispatch_slash" && ev.rendered) {
+                              dispatchedSlash = ev.rendered;
+                            }
+                            // AGENT TOOL → UI dispatcher: when the
+                            // orchestrator delegates to the agent loop
+                            // and a `tool.result` lands inside, mirror
+                            // it into the actual UI containers (radar,
+                            // resistance halos, pose halos) so the user
+                            // sees the agent doing the work, not just
+                            // chatting about it.
+                            if (ev?.event === "orchestrator.delegate"
+                                && ev.sub_kind === "agent"
+                                && ev.sub_event?.event === "tool.result") {
+                              const callId = ev.sub_event.call_id;
+                              for (let k = (curOrch.sub_events?.length ?? 0) - 1; k >= 0; k--) {
+                                const s = curOrch.sub_events?.[k];
+                                if (s?.event === "tool.call" && s.call_id === callId) {
+                                  dispatchAgentToolResultRef.current?.(
+                                    s.tool, s.args, ev.sub_event.result,
+                                  );
+                                  break;
+                                }
+                              }
+                            }
+                            // WORKFLOW STEP → UI dispatcher + chat narration.
+                            // Two side effects per completed step:
+                            //   (1) propagate the result into chemistry
+                            //       visuals via dispatchAgentToolResult
+                            //   (2) emit a per-agent chat row narrating
+                            //       what just happened so the user sees
+                            //       strategist/critic/editor actively
+                            //       doing work in the timeline, not just
+                            //       a workflow card collapsing.
+                            if (ev?.event === "orchestrator.delegate"
+                                && ev.sub_kind === "workflow"
+                                && ev.sub_event?.event === "step.done"
+                                && ev.sub_event.result) {
+                              const stepId = ev.sub_event.step_id;
+                              const planEv = curOrch.sub_events?.find(
+                                (s) => s?.event === "workflow.plan");
+                              const stepDef = planEv?.steps?.find(
+                                (s: any) => s.id === stepId);
+                              if (stepDef?.tool && stepDef.tool !== "__inline__"
+                                  && stepDef.tool !== "__loop__") {
+                                const wfStart = curOrch.sub_events?.find(
+                                  (s) => s?.event === "workflow.start");
+                                const synthArgs = wfStart?.inputs ?? {};
+                                dispatchAgentToolResultRef.current?.(
+                                  stepDef.tool, synthArgs, ev.sub_event.result,
+                                );
+                              }
+                              // Narrate the step in the chat: pick the
+                              // owning agent (strategist/critic/editor)
+                              // and emit a human message summarizing
+                              // what the result revealed.
+                              const role = roleForStep(stepDef?.tool, stepId);
+                              const narration = narrateStepResult(
+                                stepDef, ev.sub_event.result, ev.sub_event.elapsed_ms,
+                              );
+                              if (narration) {
+                                setEvents((p) => [...p, {
+                                  type: "agent_message",
+                                  ts: Date.now() / 1000,
+                                  agent: role,
+                                  content: narration,
+                                } as any]);
+                              }
+                              // Debate → emit ProposalCard for multi-option pick.
+                              if (stepId === "debate"
+                                  && ev.sub_event.result?.winner
+                                  && ev.sub_event.result?.runner_up) {
+                                setEvents((p) => [...p, {
+                                  type: "agent_message",
+                                  ts: Date.now() / 1000,
+                                  agent: "strategist",
+                                  content: "",
+                                  card_kind: "proposal",
+                                  data: {
+                                    api_base: apiBase,
+                                    session_id: chatSid,
+                                    pathogen: selectedPathogen,
+                                    title: "Strategist's verdict — pick your winner",
+                                    verdict: ev.sub_event.result.justification ?? "",
+                                    options: [
+                                      { smiles: ev.sub_event.result.winner, label: "winner",
+                                        rationale: ev.sub_event.result.justification ?? "" },
+                                      { smiles: ev.sub_event.result.runner_up, label: "runner-up",
+                                        rationale: "Strategist's second-choice — useful for A/B vs winner." },
+                                    ],
+                                  },
+                                } as any]);
+                              }
+                            }
+                            // When the delegated workflow finishes,
+                            // mine the inner workflow.done event for
+                            // candidates (same as the direct /wf path).
+                            if (ev?.event === "orchestrator.delegate"
+                                && ev.sub_kind === "workflow"
+                                && ev.sub_event?.event === "workflow.done") {
+                              // Build a synthetic workflow_state from
+                              // all the delegated workflow events so
+                              // emitWorkflowCandidates has the same
+                              // input shape as the direct path.
+                              let syntheticWf: any = null;
+                              for (const sub of curOrch.sub_events ?? []) {
+                                if (sub.sub_kind && sub.sub_kind !== "workflow") continue;
+                                syntheticWf = reduceWorkflowEvent(syntheticWf, sub);
+                              }
+                              if (syntheticWf) {
+                                await emitWorkflowCandidatesRef.current?.(syntheticWf);
+                              }
+                            }
+                          } catch { /* malformed line */ }
+                        }
+                      }
                     } catch (exc: any) {
-                      setEvents((p) => [...p, {
-                        type: "agent_message",
-                        ts: Date.now() / 1000,
-                        agent: "system",
-                        content: `network error: ${exc?.message ?? exc}`,
-                      } as any]);
+                      curOrch = { ...curOrch, status: "error",
+                        error: String(exc?.message ?? exc) };
+                      updateRow(curOrch);
+                    }
+
+                    // Auto-dispatch the slash command the orchestrator chose.
+                    // Fire-and-forget: re-enter onSend with the rendered
+                    // slash so the existing /score / /design / /harden …
+                    // handlers run end-to-end. This is the "auto-slash
+                    // routing" the user asked for — agent understands `/`
+                    // commands from plain English without the user typing
+                    // them explicitly.
+                    if (dispatchedSlash) {
+                      // setTimeout to let the current setEvents flush,
+                      // and avoid a synchronous recursive call.
+                      const renderedFinal = dispatchedSlash;
+                      setTimeout(() => {
+                        const composer = (document.querySelector(
+                          "textarea[data-lys-composer]"
+                        ) as HTMLTextAreaElement | null);
+                        // Also push a tiny "auto-routed" status pill
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: "orchestrator",
+                          content: `→ auto-routed: \`${renderedFinal}\``,
+                        } as any]);
+                        // Trigger the actual slash by re-entering onSend.
+                        // We can't easily call the closure from here, so
+                        // we dispatch a window event the composer owns.
+                        window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                          detail: { text: renderedFinal },
+                        }));
+                        if (composer) composer.focus();
+                      }, 60);
                     }
                   }}
                   onIntervene={intervene}
@@ -1213,7 +2323,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     // Order = medchem workflow: build → dock → resist-test → compare.
                     // 1) 2D builder is the primary canvas: design / edit the
                     //    molecule, with atoms/bonds/library/SMARTS embedded.
-                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", size: 2, expandedH: 680, body:
+                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", size: 2, expandedH: 540, body:
                       <Mol2DBuilderWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
@@ -1223,11 +2333,13 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         bindingAtoms={poseBindingAtoms}
                         clashingAtoms={poseClashingAtoms}
                         vulnerableAtoms={vulnerableAtoms}
+                        focusedAtom={focusedAtomIdx}
                         onLoadFromLibrary={(smi, name) => {
                           loadSmilesIntoCanvas(smi, {
                             createdBy: "user",
                             parentId: null,
                             logLabel: `[library · ${name}]`,
+                            quiet: true,  // tiny status pill, no candidate card
                           });
                         }}
                         onCursorHover={(atomIdx) => {
@@ -1280,6 +2392,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           setPoseClashingAtoms(pose?.clashing_atoms ?? []);
                         }}
                         onTargetChange={(pdbId) => setSelectedPdbId(pdbId)}
+                        externalFocusedResidue={focusedResidueId}
                       /> },
                     // 3) Resistance escape: check the same molecule against the
                     //    curated CARD subset of clinical mutations for this target.
@@ -1289,7 +2402,22 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         apiBase={apiBase}
                         smiles={currentSmiles}
                         pdbId={selectedPdbId}
+                        sessionId={activeChatId}
                         onVulnerableChange={(atoms) => setVulnerableAtoms(atoms)}
+                        onAtomFocus={(idx) => setFocusedAtomIdx(idx)}
+                        onResidueFocus={(resid) => setFocusedResidueId(resid)}
+                        onAgentMessage={(msg) => sendAgentMessage(msg)}
+                        onLoadSmiles={(smi, label) => {
+                          // Direct cross-link: harden Apply → 2D/3D + auto-score.
+                          // The user's "harden actually changes the molecule"
+                          // demand: we DON'T round-trip through the agent for
+                          // this — we mutate the canvas state directly.
+                          loadSmilesIntoCanvas(smi, {
+                            createdBy: "harden",
+                            parentId: currentMoleculeId,
+                            logLabel: label ?? "[harden · apply]",
+                          });
+                        }}
                       /> },
                     // 4) Pareto lab: compare this candidate against the rest
                     //    of the session's frontier on the chosen objectives.
@@ -1303,6 +2431,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           parentId: null,
                           logLabel: "[pareto · load]",
                         })}
+                        onAgentMessage={(msg) => sendAgentMessage(msg)}
                       /> },
                     // (2D builder lives at top of this list — see above.)
                     // Atoms / Bonds / Build / Properties / Library / SMARTS
@@ -1347,6 +2476,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         scores={lastScores ?? {}}
                         weights={REWARD_WEIGHTS}
                         best={bestScores ?? {}}
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
                       /> },
                     { id: "toxicity", title: "Toxicity · ADME-Tox", body:
                       <ToxicityProfileCard apiBase={apiBase} smiles={currentSmiles} /> },
@@ -1378,13 +2510,18 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       /> },
                     { id: "workflow", title: "Workflow phase · medchem protocol tracker", size: 2, expandedH: 220, body:
                       <WorkflowPhaseTracker apiBase={apiBase} sessionId={activeChatId} /> },
+                    // The new AgentsHubCard subsumes Roster + Metrics +
+                    // ActionLog into a single live, polling, integrated
+                    // surface with flow graph + sparklines + inspector.
+                    // The legacy three cards stay imported but unused —
+                    // ready to bring back as standalone windows if needed.
+                    { id: "agents-hub", title: "Multi-agent activity hub · live", size: 2, expandedH: 720, body:
+                      <AgentsHubCard apiBase={apiBase} sessionId={activeChatId} /> },
                     { id: "trace", title: "Reasoning trace · 4 specialists", size: 2, body:
                       <AgentReasoningTraceWindow events={events as any[]} /> },
-                    { id: "roster", title: "Agent roster · live state", size: 2, body:
-                      <AgentRosterCard apiBase={apiBase} sessionId={activeChatId} /> },
-                    { id: "metrics", title: "Agent metrics · KPIs per role", size: 2, body:
+                    { id: "metrics", title: "Agent metrics · KPIs per role (legacy)", size: 2, body:
                       <AgentMetricsCard apiBase={apiBase} sessionId={activeChatId} /> },
-                    { id: "actionlog", title: "Action log · DB-backed history", size: 2, body:
+                    { id: "actionlog", title: "Action log · DB-backed history (legacy)", size: 2, body:
                       <AgentActionLogCard apiBase={apiBase} sessionId={activeChatId} /> },
                   ],
                 },
@@ -1435,6 +2572,23 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         onPathogenChange={setSelectedPathogen}
                         drugClassFilter={drugClassFilter}
                         onDrugClassChange={setDrugClassFilter}
+                      /> },
+                    { id: "knowledge-hub", title: "", size: 2, body:
+                      <KnowledgeHubCard
+                        apiBase={apiBase}
+                        pathogen={selectedPathogen}
+                        onFireSlash={(slash) => sendAgentMessage(slash)}
+                        onLoadPdb={(pdbId) => setSelectedPdbId(pdbId)}
+                      /> },
+                    { id: "champion", title: `🏆 Champion · ${selectedPathogen}`, body:
+                      <KnowledgeChampionPane
+                        apiBase={apiBase}
+                        pathogen={selectedPathogen}
+                        onLoadSmiles={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: `[champion · ${selectedPathogen} load]`,
+                        })}
                       /> },
                     { id: "pathogen-intel", title: "Pathogen intel · profile", body:
                       <PathogenIntelCard apiBase={apiBase} pathogen={selectedPathogen} /> },
@@ -1498,7 +2652,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 },
               ];
               return viewMode === "tabs" ? (
-                <TabbedView groups={playgroundGroups} actions={viewToggle} />
+                <TabbedView
+                  groups={playgroundGroups}
+                  actions={viewToggle}
+                  controlledActiveId={playgroundActiveTabId}
+                />
               ) : (
                 <>
                 {floatingToggle}

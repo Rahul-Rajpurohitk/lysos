@@ -116,6 +116,21 @@ class ChatRequest(BaseModel):
             "the main timeline uses thread_id=null."
         ),
     )
+    # ---- Per-request context overrides ----
+    # The chat is an AI surface — the user shouldn't have to repeat
+    # "for MRSA" / "on c1ccccc1" in every slash command. The frontend
+    # passes the currently-selected pathogen + loaded SMILES + PDB so
+    # commands like `/explain` (no args) and `/score` (no args) can
+    # resolve from this request's context.
+    pathogen: Optional[str] = Field(
+        None, description="Currently-selected pathogen — used as fallback for /explain, /design, etc."
+    )
+    smiles: Optional[str] = Field(
+        None, description="Currently-loaded SMILES — used as fallback for /score, /harden, etc."
+    )
+    pdb_id: Optional[str] = Field(
+        None, description="Currently-selected PDB target."
+    )
 
 
 class ChatResponse(BaseModel):
@@ -477,13 +492,22 @@ async def chat(req: ChatRequest) -> ChatResponse:
     except Exception as exc:  # noqa: BLE001
         log.warning("session start (sandbox) failed: %s", exc)
 
+    # Per-request context overrides — frontend passes the currently
+    # selected pathogen / loaded SMILES so bare slash commands like
+    # `/explain` and `/score` resolve from natural conversation context
+    # instead of demanding explicit args every time.
+    if req.pathogen:
+        sess.set_active_target(req.pathogen)
+    if req.smiles:
+        sess.set_active_smiles(req.smiles)
+
     from workspace.agents.harness.orchestrator import SessionState
 
     state = SessionState(
         session_id=req.session_id,
         user_id=req.user_id,
-        active_smiles=sess.meta.active_smiles,
-        active_target=sess.meta.active_target,
+        active_smiles=req.smiles or sess.meta.active_smiles,
+        active_target=req.pathogen or sess.meta.active_target,
         sandbox=sess,
         settings=sess.meta.settings,
     )

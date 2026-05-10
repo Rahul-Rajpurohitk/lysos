@@ -181,6 +181,17 @@ class Harness:
                 card_kind = "compare"
             elif head in ("library", "lib", "sessions") and result.data and "sessions" in result.data:
                 card_kind = "library"
+            elif head == "champion" and result.data:
+                card_kind = "champion"
+                # Reshape the output payload into the shape the frontend
+                # ChampionCard expects (mode-discriminated).
+                d = result.data
+                if "ab_compare" in d:
+                    result.data = {"mode": "compare", "ab": d["ab_compare"], "pathogen": d.get("pathogen")}
+                elif "champion_promotion" in d:
+                    result.data = {"mode": "promote", "promotion": d["champion_promotion"], "pathogen": d.get("pathogen")}
+                else:
+                    result.data = {"mode": "show", "champion": d.get("champion"), "pathogen": d.get("pathogen")}
 
             return HarnessResponse(
                 session_id=session.session_id,

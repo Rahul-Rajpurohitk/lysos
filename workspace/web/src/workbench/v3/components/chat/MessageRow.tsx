@@ -25,8 +25,13 @@ import { DesignSessionCard } from "./DesignSessionCard";
 import { ExplainCard } from "./ExplainCard";
 import { ScaffoldTreeCard } from "./ScaffoldTreeCard";
 import { StressTestCard } from "./StressTestCard";
+import { AgentMessageCard } from "./AgentMessageCard";
+import { WorkflowCard } from "./WorkflowCard";
+import { OrchestratorCard } from "./OrchestratorCard";
 import { ComparisonCard } from "./ComparisonCard";
 import { LibraryCard } from "./LibraryCard";
+import { ProposalCard } from "./ProposalCard";
+import ChampionCard from "./ChampionCard";
 
 export interface ChatMsg {
   id?: string;
@@ -97,7 +102,58 @@ interface MessageRowProps {
 const REPLYABLE_AGENTS = new Set(["designer", "critic", "editor", "strategist", "orchestrator"]);
 
 export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onReplyToAgent, onArtifact, onReplaySession }: MessageRowProps) {
-  if (msg.type === "candidate_added") return <CandidateRow msg={msg} onLoadSmiles={onLoadSmiles} />;
+  // SSE-streamed orchestrator run — front-door routing. Mutates state via
+  // reduceOrchestratorEvent; renders the plan + delegated sub-events.
+  // Wrapper padding kept to a minimum — the new card is a flat
+  // Claude Desktop-style surface, no card border, just inline text.
+  if (msg.type === "orchestrator_run" && (msg as any).orchestrator_state) {
+    return (
+      <div style={{ paddingLeft: 0, paddingRight: 0, paddingTop: 2 }}>
+        <OrchestratorCard
+          state={(msg as any).orchestrator_state}
+          apiBase={(msg as any).api_base ?? ""}
+        />
+      </div>
+    );
+  }
+  // SSE-streamed agent run — Gemini Pro tool-calling. Renders the full
+  // {thinking, tool.call(s), text} timeline inside one card; updates
+  // live as new SSE events mutate `agent_state` on this row.
+  if (msg.type === "agent_run" && (msg as any).agent_state) {
+    return (
+      <div style={{ paddingLeft: 12, paddingRight: 8, paddingTop: 4 }}>
+        <AgentMessageCard state={(msg as any).agent_state} />
+      </div>
+    );
+  }
+  // SSE-streamed workflow run — multi-step pipeline. Each step renders
+  // as a row with status icon + tool + elapsed; click to expand result.
+  if (msg.type === "workflow_run" && (msg as any).workflow_state) {
+    return (
+      <div style={{ paddingLeft: 12, paddingRight: 8, paddingTop: 4 }}>
+        <WorkflowCard state={(msg as any).workflow_state}
+          apiBase={(msg as any).api_base ?? ""} />
+      </div>
+    );
+  }
+  // Tiny one-line "loaded" pill for library / scaffold inserts. NO full
+  // candidate card — those wait for scoring. Avoids "composite 0.000"
+  // spam in the timeline. Silent loads (default benzene seed,
+  // programmatic refreshes) still hit the event stream so currentSmiles
+  // updates, but render NOTHING in the chat.
+  if (msg.type === "load_status") {
+    if ((msg as any).silent) return null;
+    return <LoadStatusRow msg={msg} onLoadSmiles={onLoadSmiles} />;
+  }
+  if (msg.type === "candidate_added") {
+    // Defensive: hide unscored candidate rows if they ever sneak in
+    // (e.g. from a legacy session). Real candidate cards always have a
+    // composite > 0 because the auto-score effect gates emission.
+    if ((msg.composite ?? 0) <= 0 && !(msg.scores && Object.keys(msg.scores).length)) {
+      return null;
+    }
+    return <CandidateRow msg={msg} onLoadSmiles={onLoadSmiles} />;
+  }
   if (msg.type === "mol_edit") return <EditRow msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.type === "state_change") return <StateRow msg={msg} />;
   // Structured chat cards from slash commands (/score, /design, /explain, …)
@@ -108,14 +164,114 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onRepl
   if (msg.card_kind === "stress" && msg.data) return <StressTestCard msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.card_kind === "compare" && msg.data) return <ComparisonCard msg={msg} onLoadSmiles={onLoadSmiles} />;
   if (msg.card_kind === "library" && msg.data) return <LibraryCard msg={msg} onReplaySession={onReplaySession} />;
+  if (msg.card_kind === "champion" && msg.data) return <ChampionCard msg={msg as any} onLoadSmiles={onLoadSmiles} />;
+  if (msg.card_kind === "proposal" && msg.data) {
+    const data = msg.data as any;
+    return (
+      <div style={{ paddingTop: 2 }}>
+        <ProposalCard
+          apiBase={data.api_base ?? ""}
+          sessionId={data.session_id ?? null}
+          pathogen={data.pathogen}
+          criteria={data.criteria}
+          options={data.options ?? []}
+          title={data.title ?? "Agent proposal"}
+          verdict={data.verdict}
+        />
+      </div>
+    );
+  }
 
-  const agent = msg.agent ?? msg.type ?? "system";
+  const agent = msg.agent ?? "system";  // never fall through to msg.type
   const color = agentColor(agent);
   const { body, embeddedSmiles } = parseBody(msg.content ?? "");
+  // Defensive: an SSE-streamed agent_message with no agent + no body is
+  // junk (heartbeat, malformed chunk). Render nothing rather than
+  // shouting "agent_message · system · empty" at the user.
+  if (msg.type === "agent_message" && !msg.agent && !body && !msg.thinking) {
+    return null;
+  }
   const canReply = !!onReplyToAgent && REPLYABLE_AGENTS.has(agent.toLowerCase());
   const isThreadedReply = !!msg.thread_id && !!msg.parent_message_id;
+  const isUser = agent.toLowerCase() === "user";
+  const isAssistantPure = agent.toLowerCase() === "assistant" || agent.toLowerCase() === "orchestrator";
   const [hover, setHover] = useState(false);
   const [replyOpen, setReplyOpen] = useState(false);
+
+  // Minimal Claude-style: user gets a right-aligned tinted bubble,
+  // assistant gets clean left-flowing prose with a tiny faint
+  // "assistant" tag above so it's identifiable but not boxed.
+  if (isUser && body && !msg.thinking && !embeddedSmiles && !toolCalls?.length) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.18, ease: "easeOut" }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        style={{
+          display: "flex", justifyContent: "flex-end",
+          paddingLeft: 28, paddingRight: 0,
+        }}>
+        <div style={{
+          maxWidth: "82%",
+          padding: "7px 12px",
+          borderRadius: 14,
+          background: "rgba(15, 23, 42, 0.05)",
+          fontSize: 13.5,
+          lineHeight: 1.5,
+          color: "var(--lys-text)",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          position: "relative",
+          fontFamily: "var(--lys-font-body)",
+        }}>
+          {body}
+          {hover && (
+            <span style={{
+              position: "absolute",
+              right: 4, bottom: -14,
+              fontFamily: "var(--lys-font-mono)",
+              fontSize: 9.5, color: "var(--lys-text-faint)",
+              opacity: 0.6,
+            }}>{formatTs(msg.ts)}</span>
+          )}
+        </div>
+      </motion.div>
+    );
+  }
+
+  if (isAssistantPure && body && !msg.thinking && !embeddedSmiles && !toolCalls?.length && !msg.iteration) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 4 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.18, ease: "easeOut" }}
+        style={{
+          padding: "2px 0 2px 0",
+          fontFamily: "var(--lys-font-body)",
+        }}>
+        <div style={{
+          fontSize: 9.5, fontWeight: 700,
+          color: "var(--lys-text-faint)",
+          fontFamily: "var(--lys-font-mono)",
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          marginBottom: 2,
+        }}>
+          {agent.toLowerCase() === "orchestrator" ? "orchestrator" : "assistant"}
+        </div>
+        <div style={{
+          fontSize: 13.5,
+          lineHeight: 1.6,
+          color: "var(--lys-text)",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+        }}>
+          {body}
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -377,6 +533,60 @@ function InlineReplyComposer({ agent, color, onSubmit, onCancel }: {
 
 
 // ── Specialized row variants ─────────────────────────────────────────
+
+/** Tiny one-line "loaded" status pill. Used when the user picks a
+ *  scaffold from the library or 3D picker — shows the source label
+ *  + first 36 chars of SMILES + a copy / load-into-3D pair. Avoids
+ *  the bulky CandidateRow card with its premature "composite 0.000"
+ *  badge. The real CandidateRow appears later, once the auto-score
+ *  effect resolves with a non-zero composite. */
+function LoadStatusRow({ msg, onLoadSmiles }: { msg: ChatMsg; onLoadSmiles?: (s: string) => void }) {
+  const content = msg.content ?? "";
+  const m = content.match(/^\[([^\]]+)\]\s+(.*)$/);
+  const label = m?.[1] ?? "load";
+  const smi = (m?.[2] ?? msg.smiles ?? "").trim();
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 2 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.15 }}
+      style={{
+        display: "flex", alignItems: "center", gap: 6,
+        paddingLeft: 12,
+        borderLeft: "2px solid rgba(174, 158, 244, 0.42)",
+        fontFamily: "var(--lys-font-mono)", fontSize: 10.5,
+      }}>
+      <span style={{
+        padding: "1px 6px",
+        background: "rgba(174, 158, 244, 0.10)",
+        color: "#6041d0",
+        border: "1px solid rgba(174, 158, 244, 0.32)",
+        borderRadius: 3, fontWeight: 700,
+        textTransform: "uppercase", letterSpacing: "0.05em",
+        fontSize: 9,
+      }}>{label}</span>
+      <span style={{
+        color: "var(--lys-text-faint)",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        flex: 1, minWidth: 0, fontSize: 10.5,
+      }}>{smi.slice(0, 60)}{smi.length > 60 ? "…" : ""}</span>
+      {smi && onLoadSmiles && (
+        <button
+          onClick={() => onLoadSmiles(smi)}
+          title="Load this SMILES"
+          style={{
+            border: 0, background: "transparent",
+            color: "#6041d0", fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+            cursor: "pointer", padding: "1px 4px",
+            textTransform: "uppercase", letterSpacing: "0.04em",
+          }}>load</button>
+      )}
+      <span style={{ color: "var(--lys-text-faint)", opacity: 0.6, fontSize: 9 }}>
+        {formatTs(msg.ts)}
+      </span>
+    </motion.div>
+  );
+}
 
 function CandidateRow({ msg, onLoadSmiles }: { msg: ChatMsg; onLoadSmiles?: (s: string) => void }) {
   const composite = msg.composite ?? 0;
@@ -697,4 +907,32 @@ function formatTs(ts: number): string {
   if (elapsed < 3600) return `${Math.round(elapsed / 60)}m`;
   const d = new Date(ms);
   return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+// Reverted: avatar layout was bulkier than the cleaner Claude-style
+// right-aligned bubble. Keep RoleAvatar function in case we want to
+// re-enable per-message avatars later. Marked void so the unused-symbol
+// linter stays happy without deleting the implementation.
+void RoleAvatar;
+function RoleAvatar({ kind }: { kind: "user" | "assistant" | "workflow" | "system" }) {
+  const palette = {
+    user:      { bg: "#3b82f6", glyph: "U" },
+    assistant: { bg: "#7c63d8", glyph: "✦" },
+    workflow:  { bg: "#6041d0", glyph: "⚙" },
+    system:    { bg: "#64748b", glyph: "·" },
+  } as const;
+  const c = palette[kind];
+  return (
+    <div style={{
+      width: 26, height: 26, flexShrink: 0,
+      borderRadius: 999,
+      background: c.bg,
+      color: "white",
+      display: "grid", placeItems: "center",
+      fontFamily: "var(--lys-font-body)",
+      fontSize: 13, fontWeight: 700,
+      marginTop: 1,
+      boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+    }}>{c.glyph}</div>
+  );
 }

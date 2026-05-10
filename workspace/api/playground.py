@@ -144,12 +144,83 @@ async def upsert_session_molecule(sid: str, req: CreateMolRequest) -> dict[str, 
         "n_atoms": len(atoms),
         "n_bonds": len(bonds),
     })
+
+    # ─── REAL-TIME AUTO-SCORE — fire-and-forget background task ───
+    # Every new candidate goes through the full RDKit reward stack
+    # immediately so the Pareto lab populates LIVE without the user
+    # clicking "score N". The same logic the manual /pareto/score-missing
+    # endpoint uses, hoisted into a background task. Errors are swallowed
+    # to keep the main POST fast (the score WS event surfaces failures).
+    import asyncio
+    asyncio.create_task(_auto_score_candidate(sid, mol.id, mol.canonical_smiles))
+
     return {
         "molecule_id": mol.id,
         "smiles": mol.canonical_smiles,
         "n_atoms": len(atoms),
         "n_bonds": len(bonds),
     }
+
+
+async def _auto_score_candidate(sid: str, molecule_id: str, smiles: str) -> None:
+    """Background task: compute the full reward stack for one candidate
+    and persist + broadcast. Errors stay local — the WS event lets
+    consumers surface them."""
+    import time as _t
+    import uuid as _uuid
+    try:
+        from .sandbox import _score_smiles
+        from workspace.playground.store import ScoreSnapshot
+        # Best-effort: use session pathogen if known, else MRSA default.
+        target_pathogen = "MRSA"
+        try:
+            sess = get_store().get_session(sid) if hasattr(get_store(), "get_session") else None
+            if sess and sess.get("target_pathogen"):
+                target_pathogen = sess["target_pathogen"]
+        except Exception:
+            pass
+
+        WEIGHTS = {
+            "validity": 0.10, "predicted_mic": 0.25,
+            "drug_likeness_qed": 0.15, "synthesizability": 0.10,
+            "hemolysis_safety": 0.10, "novelty": 0.15,
+            "structural_alerts": 0.15,
+        }
+        comps = _score_smiles(smiles, target_pathogen)
+        comps_f = {k: float(comps.get(k, 0.0)) for k in WEIGHTS}
+        composite = sum(comps_f[k] * w for k, w in WEIGHTS.items())
+        sorted_axes = sorted(comps_f.items(), key=lambda kv: kv[1])
+        weakest = sorted_axes[0][0] if sorted_axes else ""
+        strongest = sorted_axes[-1][0] if sorted_axes else ""
+        snap = ScoreSnapshot(
+            id=_uuid.uuid4().hex[:12],
+            molecule_id=molecule_id,
+            ts=_t.time(),
+            composite=round(composite, 4),
+            components={k: round(v, 4) for k, v in comps_f.items()},
+            weakest=weakest, strongest=strongest,
+            model_used="reward_stack_v1",
+        )
+        get_store().append_score(snap)
+        get_bus().publish(sid, {
+            "event": "score.applied",
+            "candidate_id": molecule_id,
+            "smiles": smiles,
+            "composite": snap.composite,
+            "components": snap.components,
+            "weakest": weakest, "strongest": strongest,
+            "auto": True,
+        })
+    except Exception as exc:  # noqa: BLE001
+        try:
+            get_bus().publish(sid, {
+                "event": "score.failed",
+                "candidate_id": molecule_id,
+                "smiles": smiles,
+                "error": str(exc)[:240],
+            })
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------

@@ -33,13 +33,19 @@ interface Props {
   groups: WindowGroup[];
   /** Optional actions slot rendered at left edge of tab strip. */
   actions?: React.ReactNode;
+  /** When set, the tab strip is hidden — the parent header renders its
+   *  own copy via TabbedViewTabs. The active tab id is read from this
+   *  controlled prop so the parent can drive tab selection. */
+  controlledActiveId?: string;
 }
 
-export function TabbedView({ groups, actions }: Props) {
+export function TabbedView({ groups, actions, controlledActiveId }: Props) {
   const visible = groups.filter((g) => g.cards.length > 0);
-  const [activeId, setActiveId] = useState<string>(visible[0]?.id ?? "");
+  const [internalActiveId, setInternalActiveId] = useState<string>(visible[0]?.id ?? "");
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const activeId = controlledActiveId ?? internalActiveId;
   const active = visible.find((g) => g.id === activeId) ?? visible[0];
+  const showLocalStrip = controlledActiveId == null;
 
   return (
     <div style={{
@@ -49,73 +55,76 @@ export function TabbedView({ groups, actions }: Props) {
       overflow: "hidden",
       fontFamily: "var(--lys-font-body)",
     }}>
-      {/* Tab strip — clean, 36px tall, subtle separator below */}
-      <div role="tablist" style={{
-        display: "flex", alignItems: "stretch", height: 36,
-        background: "var(--lys-bg-2, #ffffff)",
-        borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
-        flexShrink: 0,
-        overflowX: "auto",
-        overflowY: "hidden",
-      }}>
-        {actions && (
-          <div style={{
-            display: "flex", alignItems: "center",
-            padding: "0 10px",
-            flexShrink: 0,
-          }}>
-            {actions}
-          </div>
-        )}
-        {visible.map((g) => {
-          const isActive = g.id === active?.id;
-          const isHover = g.id === hoverId;
-          const c = CATEGORY_COLOR[g.category] ?? "#6b7280";
-          return (
-            <button
-              key={g.id}
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveId(g.id)}
-              onMouseEnter={() => setHoverId(g.id)}
-              onMouseLeave={() => setHoverId(null)}
-              type="button"
-              style={{
-                position: "relative",
-                padding: "0 16px",
-                background: isActive
-                  ? "var(--lys-bg, #fafafa)"
-                  : isHover
-                    ? "rgba(0,0,0,0.025)"
-                    : "transparent",
-                border: 0,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                fontFamily: "var(--lys-font-body)",
-                fontSize: 12,
-                fontWeight: isActive ? 600 : 500,
-                color: isActive
-                  ? "var(--lys-text, #0f172a)"
-                  : "var(--lys-text-faint, #94a3b8)",
-                letterSpacing: 0,
-                textTransform: "none",
-                transition: "color 120ms, background 120ms",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {g.category}
-              {isActive && (
-                <span style={{
-                  position: "absolute", left: 8, right: 8, bottom: -1, height: 2,
-                  background: c, borderRadius: 1,
-                }} />
-              )}
-            </button>
-          );
-        })}
-        <div style={{ flex: 1 }} />
-      </div>
+      {/* Tab strip — only when uncontrolled. When controlled (e.g. by
+          TopHeader) the strip is hoisted into the header bar. */}
+      {showLocalStrip && (
+        <div role="tablist" style={{
+          display: "flex", alignItems: "stretch", height: 36,
+          background: "var(--lys-bg-2, #ffffff)",
+          borderBottom: "1px solid var(--lys-border-faint, rgba(0,0,0,0.06))",
+          flexShrink: 0,
+          overflowX: "auto",
+          overflowY: "hidden",
+        }}>
+          {actions && (
+            <div style={{
+              display: "flex", alignItems: "center",
+              padding: "0 10px",
+              flexShrink: 0,
+            }}>
+              {actions}
+            </div>
+          )}
+          {visible.map((g) => {
+            const isActive = g.id === active?.id;
+            const isHover = g.id === hoverId;
+            const c = CATEGORY_COLOR[g.category] ?? "#6b7280";
+            return (
+              <button
+                key={g.id}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setInternalActiveId(g.id)}
+                onMouseEnter={() => setHoverId(g.id)}
+                onMouseLeave={() => setHoverId(null)}
+                type="button"
+                style={{
+                  position: "relative",
+                  padding: "0 16px",
+                  background: isActive
+                    ? "var(--lys-bg, #fafafa)"
+                    : isHover
+                      ? "rgba(0,0,0,0.025)"
+                      : "transparent",
+                  border: 0,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  fontFamily: "var(--lys-font-body)",
+                  fontSize: 12,
+                  fontWeight: isActive ? 600 : 500,
+                  color: isActive
+                    ? "var(--lys-text, #0f172a)"
+                    : "var(--lys-text-faint, #94a3b8)",
+                  letterSpacing: 0,
+                  textTransform: "none",
+                  transition: "color 120ms, background 120ms",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {g.category}
+                {isActive && (
+                  <span style={{
+                    position: "absolute", left: 8, right: 8, bottom: -1, height: 2,
+                    background: c, borderRadius: 1,
+                  }} />
+                )}
+              </button>
+            );
+          })}
+          <div style={{ flex: 1 }} />
+        </div>
+      )}
 
       {/* Active tab body — vertical scroll, sub-containers stack full-width.
           Tight horizontal padding (12px) so content lives close to the
@@ -136,6 +145,97 @@ export function TabbedView({ groups, actions }: Props) {
           />
         )}
       </div>
+    </div>
+  );
+}
+
+
+/** Compact tab strip — same visual language as TabbedView's internal
+ *  strip but standalone, intended for embedding in TopHeader. The parent
+ *  owns activeId state via controlledActiveId/onChange. */
+export function TabbedViewTabs({
+  groups, activeId, onActiveIdChange, leftSlot,
+}: {
+  groups: WindowGroup[];
+  activeId: string;
+  onActiveIdChange: (id: string) => void;
+  leftSlot?: React.ReactNode;
+}) {
+  const visible = groups.filter((g) => g.cards.length > 0);
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  return (
+    <div role="tablist" style={{
+      display: "flex", alignItems: "stretch", height: "100%",
+      flex: "1 1 0", minWidth: 0, width: "100%",
+      // Auto on x — when the strip is genuinely too narrow for all
+      // tabs at natural width, user can scroll. Tabs themselves never
+      // shrink/clip text. Hidden y to suppress vertical scrollbar.
+      overflowX: "auto", overflowY: "hidden",
+      scrollbarWidth: "none",  // Firefox: no native scrollbar
+    }}>
+      {/* WebKit/Chromium: hide scrollbar via pseudo-element. The strip
+          still scrolls (mousewheel) but no chrome takes vertical space. */}
+      <style>{`[role="tablist"]::-webkit-scrollbar { display: none; }`}</style>
+      {leftSlot && (
+        <div style={{
+          display: "flex", alignItems: "center",
+          padding: "0 6px", flexShrink: 0,
+        }}>
+          {leftSlot}
+        </div>
+      )}
+      {visible.map((g) => {
+        const isActive = g.id === activeId;
+        const isHover = g.id === hoverId;
+        const c = CATEGORY_COLOR[g.category] ?? "#6b7280";
+        return (
+          <button
+            key={g.id}
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onActiveIdChange(g.id)}
+            onMouseEnter={() => setHoverId(g.id)}
+            onMouseLeave={() => setHoverId(null)}
+            type="button"
+            style={{
+              position: "relative",
+              padding: "0 10px",
+              // Tabs hold their natural width — no shrink, no clip,
+              // no ellipsis. If the strip overall is tighter than the
+              // sum of tab widths the parent's overflow rule applies
+              // (auto when tight, hidden otherwise).
+              flex: "0 0 auto",
+              background: isActive
+                ? "rgba(124,99,216,0.06)"
+                : isHover
+                  ? "rgba(0,0,0,0.025)"
+                  : "transparent",
+              border: 0,
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              fontFamily: "var(--lys-font-body)",
+              fontSize: 11.5,
+              fontWeight: isActive ? 600 : 500,
+              color: isActive
+                ? "var(--lys-text, #0f172a)"
+                : "var(--lys-text-faint, #94a3b8)",
+              letterSpacing: 0,
+              textTransform: "none",
+              transition: "color 120ms, background 120ms",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {g.category}
+            {isActive && (
+              <span style={{
+                position: "absolute", left: 6, right: 6, bottom: 0, height: 2,
+                background: c, borderRadius: 1,
+              }} />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

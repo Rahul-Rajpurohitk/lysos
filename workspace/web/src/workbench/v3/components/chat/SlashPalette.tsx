@@ -116,7 +116,14 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
 
   const all = commands ?? DEFAULT_COMMANDS;
 
-  const prefix = query.startsWith("/") ? query.slice(1).split(" ")[0].toLowerCase() : "";
+  // Extract just the FIRST slash token from the query — earlier we
+  // grabbed everything up to the first space, but multi-line input
+  // like "/wf\n/help" leaked the newline into the prefix and yielded
+  // a literal "no commands match `/wf /help`" message. Parse the
+  // first non-empty line, take leading slash + word characters.
+  const firstLine = (query.split(/[\n\r]/).find((l) => l.trim().startsWith("/")) ?? query).trim();
+  const m = firstLine.match(/^\/([\w-]*)/);
+  const prefix = m ? m[1].toLowerCase() : "";
   const filtered = useMemo(() => {
     if (!prefix) return all;
     return all.filter((c) => {
@@ -154,28 +161,49 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
       if (e.key === "ArrowDown") {
         e.preventDefault();
         setHighlightIdx((i) => Math.min(i + 1, filtered.length - 1));
-      } else if (e.key === "ArrowUp") {
+        return;
+      }
+      if (e.key === "ArrowUp") {
         e.preventDefault();
         setHighlightIdx((i) => Math.max(i - 1, 0));
-      } else if ((e.key === "Enter" || e.key === "Tab") && filtered.length) {
+        return;
+      }
+      // Tab → always autocomplete to the highlighted command name.
+      if (e.key === "Tab" && filtered.length) {
+        e.preventDefault();
+        onPick(filtered[highlightIdx]);
+        return;
+      }
+      // Enter → if the user's typed prefix EXACTLY matches the highlighted
+      // command name (or any command), bypass the palette and let the
+      // textarea's send fire. Otherwise autocomplete. The earlier
+      // unconditional autocomplete made `/design` <Enter> silently
+      // re-insert `/design ` instead of submitting.
+      if (e.key === "Enter" && filtered.length) {
+        const exact = filtered.find((c) =>
+          c.name.toLowerCase() === prefix
+          || (c.aliases ?? []).some((a) => a.toLowerCase() === prefix)
+        );
+        if (exact) {
+          // Don't preventDefault — let the textarea's keydown handler
+          // run send(). Just close the palette so it stops handling keys.
+          onClose();
+          return;
+        }
         e.preventDefault();
         onPick(filtered[highlightIdx]);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, filtered, highlightIdx, onPick, onClose]);
+  }, [open, filtered, highlightIdx, onPick, onClose, prefix]);
 
   if (!open) return null;
-  if (filtered.length === 0) {
-    return (
-      <div className="lys-slash-palette lys-slash-empty" role="listbox">
-        <div className="lys-slash-empty-text">
-          No commands match <code>/{prefix}</code>. Type <kbd>/help</kbd> for the full list.
-        </div>
-      </div>
-    );
-  }
+  // No matches → render nothing rather than a hard-coded "no commands
+  // match /xyz" line. The user can keep typing free text without the
+  // palette nagging them. They can still hit /help by typing it
+  // explicitly — there's no value in shouting the empty state.
+  if (filtered.length === 0) return null;
 
   let flatIdx = -1;
   return (

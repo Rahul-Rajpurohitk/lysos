@@ -28,11 +28,12 @@ interface AgentFilterStripProps {
 const AGENTS = ["designer", "critic", "editor", "strategist", "user"];
 
 export function AgentFilterStrip(p: AgentFilterStripProps) {
-  // Show the row only when there's actually something to filter.
-  // The "all" chip + the SubAgentPicker (+) button were dead weight per
-  // user feedback — removed.
-  const hasActiveAgents = AGENTS.some((a) => (p.counts[a] ?? 0) > 0);
-  if (!hasActiveAgents) return null;
+  // Show the row only when there are MULTIPLE agents to filter between.
+  // A single "user 1" chip is noise — there's nothing to filter to. Hides
+  // until the agent loop has actually contributed messages from a second
+  // role (designer, critic, etc.) so the strip earns its space.
+  const distinctAgentsWithMsgs = AGENTS.filter((a) => (p.counts[a] ?? 0) > 0);
+  if (distinctAgentsWithMsgs.length < 2) return null;
 
   return (
     <div style={{

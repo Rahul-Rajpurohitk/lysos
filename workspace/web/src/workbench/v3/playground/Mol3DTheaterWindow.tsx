@@ -28,7 +28,7 @@
  *   /workbench/chem/place-in-pocket        → on SMILES + selectedTarget change
  *   onPoseChange(binding[], clashing[])    → bubble up to WorkbenchV3 → 2D
  */
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Target, RefreshCw } from "lucide-react";
 import { Mol3D } from "../components/Mol3D";
 
@@ -78,6 +78,11 @@ interface Props {
    *  the new PDB ID upstream — the Resistance Escape Map card consumes it
    *  to know which target to predict mutations against. */
   onTargetChange?: (pdbId: string | null) => void;
+  /** Cross-link from the Resistance Escape Map (or any sibling card): a
+   *  residue position to flash as the active contact in 3D. We treat it
+   *  as a higher-priority pinned contact than the local hover/click —
+   *  external focus wins. */
+  externalFocusedResidue?: number | null;
 }
 
 interface MatchResult {
@@ -141,7 +146,16 @@ export function Mol3DTheaterWindow(p: Props) {
   // Pinned wins over hover for the displayed highlight.
   const [hoverContact, setHoverContact] = useState<{ resi: number; chain: string } | null>(null);
   const [pinnedContact, setPinnedContact] = useState<{ resi: number; chain: string } | null>(null);
-  const activeContact = pinnedContact ?? hoverContact;
+  // External focus from the Resistance Escape Map card overrides local
+  // hover/pinned state — when the user clicks a heatmap cell we want the
+  // 3D viewer to flash that exact residue, regardless of where the cursor is.
+  const externalFocus = p.externalFocusedResidue;
+  const externalContact = useMemo(() => {
+    if (externalFocus == null) return null;
+    const chain = selectedTarget?.active_site_chain ?? "A";
+    return { resi: externalFocus, chain };
+  }, [externalFocus, selectedTarget?.active_site_chain]);
+  const activeContact = externalContact ?? pinnedContact ?? hoverContact;
   // Resistance robustness — fetched from /chem/resistance/predict
   // when SMILES + target are set. Same backend Service 2 uses; we
   // surface the headline robustness score as a chip on the viewer

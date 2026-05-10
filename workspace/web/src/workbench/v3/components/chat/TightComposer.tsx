@@ -35,6 +35,11 @@ interface TightComposerProps {
   /** When true, render a starter-prompt chip strip above the input.
    *  Auto-hides once the user has sent the first message. */
   chatEmpty?: boolean;
+  /** Free-form slot rendered above EVERYTHING in the composer (above
+   *  constraints, starters, palette, input). Used for the agent
+   *  suggestion strip so context-aware "what next" chips live right
+   *  above the input regardless of whether the chat is empty. */
+  headerSlot?: React.ReactNode;
 }
 
 interface StarterPrompt {
@@ -138,6 +143,21 @@ export function TightComposer(p: TightComposerProps) {
     reset();
   }
 
+  // Auto-slash dispatch — when the orchestrator picks a slash route, it
+  // emits the rendered command via window event. We catch it here and
+  // re-fire onSend so the existing slash-command pipeline runs without
+  // duplicating routing logic.
+  useEffect(() => {
+    function onAutoSlash(ev: Event) {
+      const detail = (ev as CustomEvent).detail as { text?: string } | undefined;
+      const slash = detail?.text;
+      if (!slash) return;
+      p.onSend(slash);
+    }
+    window.addEventListener("lysos:auto-slash", onAutoSlash);
+    return () => window.removeEventListener("lysos:auto-slash", onAutoSlash);
+  }, [p.onSend]);
+
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (paletteOpen) {
       // Palette manages its own ↑↓↵Esc Tab — let it handle, but still
@@ -163,6 +183,10 @@ export function TightComposer(p: TightComposerProps) {
     /* No padding here — outer .lys-chat__composer handles the
        3-sided gap (8px top + sides) + 16px bottom seat. */
     <div style={{ position: "relative" }}>
+      {/* Free header slot — agent-suggestion strip + workflow palette
+          live here. Rendered before constraints/starters so the
+          "what's next" guidance is the FIRST thing the user sees. */}
+      {p.headerSlot}
       {/* Constraint chip strip — only when constraints exist */}
       {p.constraints.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
@@ -292,15 +316,22 @@ export function TightComposer(p: TightComposerProps) {
           rows={2}
           placeholder={p.isRunning
             ? "Intervene… type a directive or constraint"
-            : "Describe a target — e.g. non-toxic macrolide for MRSA that escapes mecA"}
+            : "Ask the agent · type / for commands or /wf for workflows"}
           value={text}
           onChange={(e) => {
             const v = e.target.value;
             setText(v);
-            setPaletteOpen(v.startsWith("/"));
+            // Open palette only when the FIRST non-empty line begins
+            // with "/" — multi-line input where the slash is on a
+            // later line shouldn't summon a "no commands match" pop.
+            const firstNonEmpty = v.split(/[\n\r]/).find((l) => l.trim().length > 0) ?? "";
+            setPaletteOpen(firstNonEmpty.trim().startsWith("/"));
           }}
           onKeyDown={handleKey}
-          onFocus={() => setPaletteOpen(text.startsWith("/"))}
+          onFocus={() => {
+            const firstNonEmpty = text.split(/[\n\r]/).find((l) => l.trim().length > 0) ?? "";
+            setPaletteOpen(firstNonEmpty.trim().startsWith("/"));
+          }}
           style={{
             width: "100%",
             border: 0,

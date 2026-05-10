@@ -19,6 +19,7 @@ import { MessageRow, ChatMsg } from "./MessageRow";
 import { IterationDivider } from "./IterationDivider";
 import { TypingIndicator } from "./TypingIndicator";
 import { ChatTabsBar, ChatTab } from "./ChatTabsBar";
+import { RunningProcessesTray, type RunningProcess } from "./RunningProcessesTray";
 
 interface ChatPanelProps {
   events: ChatMsg[];
@@ -66,6 +67,10 @@ interface ChatPanelProps {
   onCloseChat?: (id: string) => void;
   onCreateChat?: () => void;
   onRenameChat?: (id: string, title: string) => void;
+  /** In-flight processes derived from the events stream (agent_run /
+   *  workflow_run / orchestrator_run with status=running). Drives the
+   *  sticky RunningProcessesTray at the top of the chat. */
+  runningProcesses?: RunningProcess[];
 }
 
 export function ChatPanel(p: ChatPanelProps) {
@@ -100,12 +105,16 @@ export function ChatPanel(p: ChatPanelProps) {
     return set;
   }, [p.events]);
 
-  // Last agent that produced a message — used for typing indicator placement
+  // Last NON-USER agent that produced a message — used for typing
+  // indicator. Without the user filter we'd show "user is reasoning…"
+  // right after the user typed something, which is obviously wrong —
+  // it should be an assistant/agent role doing the reasoning.
   const lastAgent = useMemo(() => {
     if (!p.isRunning) return null;
     for (let i = p.events.length - 1; i >= 0; i--) {
       const e = p.events[i];
-      if (e.type === "agent_message" && e.agent) return e.agent;
+      if (e.type === "agent_message" && e.agent
+          && e.agent.toLowerCase() !== "user") return e.agent;
     }
     return null;
   }, [p.events, p.isRunning]);
@@ -223,6 +232,13 @@ export function ChatPanel(p: ChatPanelProps) {
           scrollBehavior: "smooth",
         }}
       >
+        {/* Sticky strip at top of stream — fades in when there are
+         *  in-flight processes (agent / workflow / orchestrator / score),
+         *  fades out when nothing is running. Single source of truth for
+         *  "what is the system doing right now." */}
+        {p.runningProcesses && p.runningProcesses.length > 0 && (
+          <RunningProcessesTray processes={p.runningProcesses} />
+        )}
         {p.totalMsgs === 0 && p.showOnboarding}
 
         {filtered.map((row, i) => {
@@ -256,33 +272,54 @@ export function ChatPanel(p: ChatPanelProps) {
             <TypingIndicator agent={lastAgent} label={`${lastAgent} is reasoning…`} />
           </AnimatePresence>
         )}
+      </div>
 
-        {!autoScroll && (
+      {/* Jump-to-latest button — pinned ABOVE the composer (outside the
+       *  scroll container) so it stays anchored to the visual bottom of
+       *  the chat regardless of how far the user scrolled up. The
+       *  earlier position-absolute inside the scroll container floated
+       *  to the bottom of the scroll CONTENT, which is below view. */}
+      {!autoScroll && (
+        <div style={{
+          position: "relative",
+          height: 0,
+          pointerEvents: "none",
+        }}>
           <button
             onClick={jumpToLatest}
+            title="Jump to latest message"
             style={{
               position: "absolute",
-              bottom: 16,
-              right: 16,
-              padding: "6px 10px 6px 8px",
+              bottom: 6,
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: 28, height: 28,
+              padding: 0,
               background: "var(--lys-text)",
               color: "white",
               border: 0,
               borderRadius: 999,
-              boxShadow: "var(--lys-shadow-md)",
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "inherit",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.18)",
               cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
+              display: "grid",
+              placeItems: "center",
+              opacity: 0.92,
+              pointerEvents: "auto",
+              transition: "opacity 0.15s, transform 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.opacity = "1";
+              e.currentTarget.style.transform = "translateX(-50%) translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.opacity = "0.85";
+              e.currentTarget.style.transform = "translateX(-50%)";
             }}
           >
-            <ArrowDownCircle size={14} /> Jump to latest
+            <ArrowDownCircle size={15} />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="lys-chat__composer">{p.composer}</div>
     </div>
