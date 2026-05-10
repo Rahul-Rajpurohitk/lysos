@@ -283,30 +283,10 @@ function renderInline(text: string, onLoadSmiles?: (smi: string) => void): React
             </a>
           );
         }
-        if (s.clickable && onLoadSmiles) {
-          return (
-            <button
-              key={i}
-              type="button"
-              onClick={() => onLoadSmiles(s.text)}
-              title="Load this SMILES into the 2D + 3D canvas"
-              style={{
-                fontFamily: "var(--lys-font-mono)", fontSize: "0.92em",
-                padding: "1px 5px",
-                background: "rgba(174,158,244,0.10)",
-                border: "1px solid rgba(174,158,244,0.32)",
-                borderRadius: 3,
-                color: "#6041d0", fontWeight: 600,
-                cursor: "pointer",
-                margin: "0 1px",
-                display: "inline",
-                lineHeight: 1.3,
-              }}>{s.text}</button>
-          );
-        }
         // Slash command chip — clicking re-fires it through the composer
         // pipeline so `/wf harden_candidate {…}` actually streams the
-        // workflow instead of being inert text.
+        // workflow instead of being inert text. CHECK FIRST so the
+        // narrower discriminant is selected before s.clickable below.
         if (s.kind === "slash") {
           return (
             <button
@@ -333,6 +313,29 @@ function renderInline(text: string, onLoadSmiles?: (smi: string) => void): React
               <span style={{ opacity: 0.7 }}>▸</span>
               {s.text.length > 60 ? s.text.slice(0, 57) + "…" : s.text}
             </button>
+          );
+        }
+        // Below this point: s.kind === "code". Inline SMILES clickable
+        // for load-in-3D, otherwise plain inline code.
+        if (s.clickable && onLoadSmiles) {
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onLoadSmiles(s.text)}
+              title="Load this SMILES into the 2D + 3D canvas"
+              style={{
+                fontFamily: "var(--lys-font-mono)", fontSize: "0.92em",
+                padding: "1px 5px",
+                background: "rgba(174,158,244,0.10)",
+                border: "1px solid rgba(174,158,244,0.32)",
+                borderRadius: 3,
+                color: "#6041d0", fontWeight: 600,
+                cursor: "pointer",
+                margin: "0 1px",
+                display: "inline",
+                lineHeight: 1.3,
+              }}>{s.text}</button>
           );
         }
         return (
