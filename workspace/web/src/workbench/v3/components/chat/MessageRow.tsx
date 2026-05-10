@@ -20,6 +20,7 @@ import { motion } from "framer-motion";
 import { ChevronRight, Star, ArrowRight, Flag, Wrench, BrainCircuit, Reply, X as IconX, ArrowUp } from "lucide-react";
 import { agentColor } from "./AgentAvatar";
 import { InlineSmilesCard } from "./InlineSmilesCard";
+import { MarkdownText } from "./MarkdownText";
 import { RewardCard } from "./RewardCard";
 import { DesignSessionCard } from "./DesignSessionCard";
 import { ExplainCard } from "./ExplainCard";
@@ -260,14 +261,24 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onRepl
         }}>
           {agent.toLowerCase() === "orchestrator" ? "orchestrator" : "assistant"}
         </div>
-        <div style={{
-          fontSize: 13.5,
-          lineHeight: 1.6,
-          color: "var(--lys-text)",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}>
-          {body}
+        <div style={{ color: "var(--lys-text)" }}>
+          {/* MarkdownText renders **bold**, _italic_, code, lists, AND
+            * makes backtick-wrapped SMILES into clickable load buttons
+            * (via onLoadSmiles → /load global event). Without this the
+            * raw `**#2**` literal-stars problem the user saw shows up. */}
+          <MarkdownText
+            text={body}
+            fontSize={13.5}
+            onLoadSmiles={(smi) => {
+              if (onLoadSmiles) {
+                onLoadSmiles(smi);
+              } else {
+                window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                  detail: { text: `/load ${smi}` },
+                }));
+              }
+            }}
+          />
         </div>
       </motion.div>
     );

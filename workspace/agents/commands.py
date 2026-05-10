@@ -479,20 +479,26 @@ class EditCommand(Command):
                         data=gemini_smi,
                     )
                 new_smi = gemini_smi.get("smiles")
-                rationale = gemini_smi.get("rationale", "")
+                rationale = (gemini_smi.get("rationale") or "").rstrip(". ")
                 if not new_smi:
-                    return CommandResult(error="Gemini returned no SMILES.", data=gemini_smi)
+                    return CommandResult(
+                        output=(f"I tried to interpret \"{body}\" but didn't get a "
+                                f"chemistry-valid edit back. Want to describe the swap "
+                                f"differently, or pick a different atom?"),
+                        data=gemini_smi,
+                    )
                 return CommandResult(
                     output=(
-                        f"Edited `{active_smi}` at atom **#{atom_idx}**.\n\n"
-                        f"_{rationale}_\n\n"
-                        f"Result: `{new_smi}`\n\n"
-                        f"_Click below to load it into the canvas._"
-                    ),
+                        (rationale + ". " if rationale else "")
+                        + f"New structure: `{new_smi}`. "
+                        f"Want me to score it, or run `/wf harden_candidate "
+                        f"{{\"smiles\": \"{new_smi}\"}}` to red-team it?"
+                    ).strip(),
                     data={"smiles": new_smi, "edit": body, "atom_idx": atom_idx,
                           "parent_smiles": active_smi, "rationale": rationale,
                           "via": "gemini"},
-                    follow_ups=[f"/load {new_smi}", f"/score {new_smi}"],
+                    follow_ups=[f"/score {new_smi}",
+                                f"/wf harden_candidate {{\"smiles\": \"{new_smi}\"}}"],
                 )
 
             try:
@@ -537,32 +543,39 @@ class EditCommand(Command):
                               "gemini_attempt": gemini_smi},
                     )
                 new_smi = gemini_smi["smiles"]
-                rationale = gemini_smi.get("rationale", "")
+                rationale = gemini_smi.get("rationale", "") or ""
+                # Two-sentence agent response — first the rationale (the
+                # WHY), then the SMILES + a useful next-step nudge. The
+                # backtick SMILES auto-renders as a load chip.
+                rationale_clean = rationale.rstrip(". ") + "." if rationale else ""
                 return CommandResult(
                     output=(
-                        f"Keyword swap hit a valence wall at atom **#{atom_idx}**, "
-                        f"so I asked Gemini for a chemistry-valid alternative.\n\n"
-                        f"_{rationale}_\n\n"
-                        f"Result: `{new_smi}`\n\n"
-                        f"_Click below to load it into the canvas._"
-                    ),
+                        f"{rationale_clean} New structure: `{new_smi}`. "
+                        f"Want me to score it, or run `/wf harden_candidate "
+                        f"{{\"smiles\": \"{new_smi}\"}}` to red-team it?"
+                    ).strip(),
                     data={"smiles": new_smi, "edit": body, "atom_idx": atom_idx,
                           "parent_smiles": active_smi, "rationale": rationale,
                           "via": "gemini_fallback"},
-                    follow_ups=[f"/load {new_smi}", f"/score {new_smi}"],
+                    follow_ups=[f"/score {new_smi}",
+                                f"/wf harden_candidate {{\"smiles\": \"{new_smi}\"}}"],
                 )
             if not new_smi:
                 return CommandResult(error=f"edit returned no SMILES: {d}")
             descr = fg or f"swap → {new_element}"
+            # Lead with one short conversational sentence — no headers,
+            # no "Click below" boilerplate. The SMILES backtick is
+            # auto-rendered as a clickable load chip by MarkdownText.
             return CommandResult(
                 output=(
-                    f"Edited `{active_smi}` at atom **#{atom_idx}** ({descr}).\n\n"
-                    f"Result: `{new_smi}`\n\n"
-                    f"_Click below to load it into the canvas._"
+                    f"Done — atom **#{atom_idx}** got a {descr.replace('swap → ', 'swap to ')}, "
+                    f"and the new structure is `{new_smi}`. Want me to score it next, "
+                    f"or run `/wf harden_candidate` against the same target?"
                 ),
                 data={"smiles": new_smi, "edit": descr, "atom_idx": atom_idx,
                       "parent_smiles": active_smi},
-                follow_ups=[f"/load {new_smi}", f"/score {new_smi}"],
+                follow_ups=[f"/score {new_smi}",
+                            f"/wf harden_candidate {{\"smiles\": \"{new_smi}\"}}"],
             )
         except Exception as exc:  # noqa: BLE001
             # Outermost guard — anything that escapes the inner Gemini
