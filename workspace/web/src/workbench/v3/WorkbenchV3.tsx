@@ -2113,6 +2113,18 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     };
                     let curOrch: OrchestratorState = initOrch;
                     let dispatchedSlash: string | null = null;
+                    // Ship the last ~14 visible chat messages so the
+                    // orchestrator agent has conversational context for
+                    // follow-up turns ("check the current candidate",
+                    // "list commands", "check the agent traces").
+                    const recentMessages = events
+                      .filter((e: any) => e.type === "agent_message" && (e.content || "").length > 0)
+                      .slice(-14)
+                      .map((e: any) => ({
+                        agent: e.agent || "system",
+                        content: String(e.content || "").slice(0, 500),
+                        ts: e.ts,
+                      }));
                     try {
                       const r = await fetch(`${apiBase}/api/orchestrator/run`, {
                         method: "POST",
@@ -2125,6 +2137,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           pdb_id: selectedPdbId ?? null,
                           last_composite: null,
                           n_candidates: 0,
+                          recent_messages: recentMessages,
                         }),
                       });
                       if (!r.ok || !r.body) {

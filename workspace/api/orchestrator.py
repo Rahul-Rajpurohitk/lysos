@@ -104,9 +104,16 @@ _KNOWN_WORKFLOWS = [
 
 _KNOWN_SLASH = [
     {"cmd": "/help",
-     "phrases": ["help", "what can you do", "commands", "options"],
+     "phrases": ["help", "what can you do", "what commands", "list commands",
+                 "tell me which commands", "available commands", "options"],
      "args_hint": "/help",
-     "what_it_does": "List every registered slash command + workflow with descriptions. Use when the user types `/help` or asks 'what can you do'.",
+     "what_it_does": "List every registered slash command + workflow with descriptions. Use when the user asks 'what can you do', 'which commands', 'list commands', or types /help.",
+    },
+    {"cmd": "/trace",
+     "phrases": ["trace", "agent traces", "agent history", "show traces",
+                 "what did the agents do", "check traces", "recent events"],
+     "args_hint": "/trace [n]",
+     "what_it_does": "Return the last N harness events: tool calls, agent messages, errors. Use when the user asks for traces / history / 'what did the agents do recently'.",
     },
     {"cmd": "/score",
      "phrases": ["score", "evaluate", "rate this", "assess", "grade"],
@@ -302,6 +309,25 @@ async def _gemini_route(text: str, ctx: dict[str, Any], session_id: Optional[str
     if memory_brief:
         ctx_block += "\n" + memory_brief + "\n"
 
+    # Recent visible chat messages so the orchestrator agent can ground
+    # follow-up turns (e.g. "score the other one", "tell me which
+    # commands you can run") in what's already on screen. The frontend
+    # ships oldest→newest. Cap at 12 to keep latency low.
+    recent_msgs = ctx.get("recent_messages") or []
+    if recent_msgs:
+        lines = ["", "Recent chat (oldest → newest):"]
+        for m in recent_msgs[-12:]:
+            if not isinstance(m, dict):
+                continue
+            a = (m.get("agent") or "system").lower()
+            c = (m.get("content") or "").strip().replace("\n", " ")
+            if not c:
+                continue
+            if len(c) > 280:
+                c = c[:277] + "…"
+            lines.append(f"  - {a}: {c}")
+        ctx_block += "\n".join(lines) + "\n"
+
     payload = {
         "system_instruction": {"parts": [{"text": system_text}]},
         "contents": [{"role": "user", "parts": [{"text": f"{ctx_block}\n\nUser prompt:\n{text}"}]}],
@@ -374,6 +400,12 @@ class OrchestratorRunRequest(BaseModel):
     pdb_id: Optional[str] = None
     last_composite: Optional[float] = None
     n_candidates: int = 0
+    # Recent visible chat messages for conversational grounding. The
+    # orchestrator agent needs to see "what was the previous turn
+    # about" to handle follow-ups like "check this one" or "now do
+    # that for the other one." Frontend ships last ~12 visible
+    # messages oldest→newest.
+    recent_messages: Optional[list[dict]] = None
 
 
 async def _orchestrator_loop(req: OrchestratorRunRequest, api_base: str) -> AsyncIterator[str]:
@@ -398,6 +430,7 @@ async def _orchestrator_loop(req: OrchestratorRunRequest, api_base: str) -> Asyn
         "pathogen": req.pathogen,
         "last_composite": req.last_composite,
         "n_candidates": req.n_candidates,
+        "recent_messages": req.recent_messages or [],
     }
 
     plan: dict[str, Any]

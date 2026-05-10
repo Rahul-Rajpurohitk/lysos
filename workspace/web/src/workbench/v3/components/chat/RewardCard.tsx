@@ -68,8 +68,13 @@ export function RewardCard({ msg, onLoadSmiles }: RewardCardProps) {
         background: "var(--lys-surface)",
         borderRadius: 8,
         border: "1px solid var(--lys-border)",
-        overflow: "hidden",
+        // overflow:visible so the per-axis bar list doesn't clip when
+        // a parent flex container computes a shorter natural height
+        // than the card's content (user saw 4 of 8 axes truncated).
+        overflow: "visible",
         fontSize: 11.5,
+        // Don't let the card collapse below its natural content height.
+        flex: "0 0 auto",
       }}
     >
       {/* Header: smiles + target  |  big composite */}
@@ -146,10 +151,10 @@ export function RewardCard({ msg, onLoadSmiles }: RewardCardProps) {
 
       {/* Per-component bars */}
       <div style={{
-        padding: "6px 12px",
+        padding: "8px 12px 10px 12px",
         display: "flex",
         flexDirection: "column",
-        gap: 3,
+        gap: 4,
       }}>
         {sortedComponents.map((c) => {
           const valuePct = Math.round(c.value * 100);
