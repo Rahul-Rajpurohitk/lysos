@@ -1936,20 +1936,30 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       // when the user types `/wf do anyworkflow from the
                       // options`.
                       if (!KNOWN_WORKFLOWS.has(wfName.toLowerCase())) {
-                        const stripped = t.trim().replace(/^\/wf\s+/i, "");
-                        // Re-fire as plain free text so the orchestrator
-                        // branch downstream (Gemini Pro) picks the right
-                        // workflow from natural language.
+                        // Render the workflow catalog inline as clickable
+                        // chips. No auto-routing through the orchestrator
+                        // (caused double user-message echo) and no
+                        // robotic "rerouting" text. The user sees the
+                        // 7 real workflows and picks one.
+                        const wfs = [
+                          ["design_with_debate",   "Designer ↔ Critic ↔ Editor ↔ Strategist debate to propose new candidates"],
+                          ["harden_candidate",     "Find weak atoms + propose hardening edits against PBP2a / target"],
+                          ["broad_spectrum_screen","Screen one SMILES against all priority pathogens"],
+                          ["compare_top_n",        "Side-by-side comparison of N candidates on every axis"],
+                          ["optimize_for_property","Iteratively improve a SMILES on one property (logP, MW, etc.)"],
+                          ["pareto_explore",       "Explore the Pareto frontier across multiple objectives"],
+                          ["discover_and_assess",  "Pull a candidate from the library + score it"],
+                        ] as const;
+                        const md = [
+                          `I don't recognize \`${wfName}\` as a workflow. Pick one of these (click to run):`,
+                          "",
+                          ...wfs.map(([n, d]) => `- \`/wf ${n}\` — ${d}`),
+                        ].join("\n");
                         setEvents((p) => [...p, {
                           type: "agent_message", ts: Date.now() / 1000,
                           agent: "orchestrator",
-                          content: `\`${wfName}\` isn't a known workflow. Routing "${stripped.slice(0, 90)}${stripped.length > 90 ? "…" : ""}" through the orchestrator.`,
+                          content: md,
                         } as any]);
-                        setTimeout(() => {
-                          window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
-                            detail: { text: stripped },
-                          }));
-                        }, 30);
                         return;
                       }
                       let wfInputs: Record<string, any> = {};
