@@ -782,9 +782,32 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
 
   /** Send a message into the chat harness from a sibling card (Resistance
    *  "ask agent", Pareto "explain" with agent fall-through, etc.). Mirrors
-   *  the TightComposer onSend flow but skips the input box. */
+   *  the TightComposer onSend flow but skips the input box.
+   *
+   *  Workflow + special-slash pre-translation: any text that the composer
+   *  pipeline knows how to upgrade (e.g. /harden → /wf harden_candidate,
+   *  /wf <name> → SSE stream) gets routed through the global auto-slash
+   *  channel so the side-card buttons share the SAME agentic path as
+   *  composer-typed slashes. Everything else continues to /api/chat for
+   *  the legacy harness. */
   const sendAgentMessage = useCallback(async (text: string) => {
     if (!text || !activeChatId) return;
+    const trimmed = text.trim();
+    // Slashes that the composer's regex translators upgrade into real
+    // workflows must dispatch via lysos:auto-slash so they reach the
+    // composer pipeline. Otherwise they hit /api/chat and the harness
+    // returns "Unknown command: /harden" (since /harden is a frontend
+    // pre-translator into /wf harden_candidate, not a registered slash).
+    const SHOULD_AUTO_SLASH = (
+      /^\/harden\b/i.test(trimmed) ||
+      /^\/wf\b/i.test(trimmed)
+    );
+    if (SHOULD_AUTO_SLASH) {
+      window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+        detail: { text: trimmed },
+      }));
+      return;
+    }
     setEvents((p) => [...p, {
       type: "agent_message", ts: Date.now() / 1000,
       agent: "user", content: text,
@@ -1627,6 +1650,48 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     //      So `/load <SMILES>` and `/swap <atom> <element>`
                     //      fire the actual canvas mutation immediately.
                     const trimmed = t.trim();
+
+                    // /harden <smiles>? pdb=<pdb>?  →  /wf harden_candidate
+                    // Buttons (Resistance Escape Map "send to harden",
+                    // candidate row "harden", etc.) fire `/harden`. The
+                    // backend has no slash for it — it's a workflow.
+                    // Pre-translate so the user gets a real streaming
+                    // WorkflowCard with steps + critic narration instead
+                    // of "Unknown command: /harden".
+                    const hardenMatch = trimmed.match(/^\/harden\b\s*(.*)$/i);
+                    if (hardenMatch) {
+                      const tail = (hardenMatch[1] || "").trim();
+                      const inputs: Record<string, any> = {};
+                      // Parse "smiles pdb=1VQQ" or "pdb=1VQQ smiles"
+                      // or just bare "/harden" (use ambient context).
+                      const parts = tail.split(/\s+/).filter(Boolean);
+                      for (const p of parts) {
+                        if (/^pdb=/i.test(p)) {
+                          inputs.pdb_id = p.slice(4).toUpperCase();
+                        } else if (/^max_atoms?=\d+$/i.test(p)) {
+                          inputs.max_atoms = parseInt(p.split("=")[1], 10);
+                        } else if (!inputs.smiles) {
+                          // First non-flag token = SMILES
+                          inputs.smiles = p;
+                        }
+                      }
+                      // Fall back to ambient context if missing
+                      inputs.smiles ??= currentSmilesRef.current ?? currentSmiles ?? null;
+                      inputs.pdb_id ??= selectedPdbId ?? "1VQQ";
+                      if (!inputs.smiles) {
+                        setEvents((p) => [...p, {
+                          type: "agent_message", ts: Date.now() / 1000,
+                          agent: "user", content: trimmed,
+                        } as any, {
+                          type: "agent_message", ts: Date.now() / 1000,
+                          agent: "orchestrator",
+                          content: "Hardening needs a candidate SMILES. Load one (or run `/design`) and try `/harden` again.",
+                        } as any]);
+                        return;
+                      }
+                      await runWorkflow("harden_candidate", inputs);
+                      return;
+                    }
 
                     // /load <SMILES>  → load directly into 2D + 3D + auto-score
                     const loadMatch = trimmed.match(/^\/load\s+(\S.*)$/i);
