@@ -542,8 +542,17 @@ class EditCommand(Command):
                 if rationale:
                     lines.append(f"_{rationale}._")
                 lines.append(f"Applied → `{new_smi}`.{tweak_tag}")
-                lines.append(f"Want to score it next, or run `/wf harden_candidate "
-                             f"{{\"smiles\": \"{new_smi}\"}}` to red-team it?")
+                # Vary the suggested next step so the chat doesn't
+                # feel templated. Pick one of three based on a hash of
+                # the new SMILES (stable per-candidate, varied across
+                # candidates so the user sees different next-action
+                # framing each time).
+                _opts = [
+                    f"Next move? `/score {new_smi}` for the 12-axis decomposition.",
+                    f"Want to red-team it against the same target? `/wf harden_candidate {{\"smiles\": \"{new_smi}\"}}`",
+                    f"To compare against the reigning champion: `/champion {new_smi}`.",
+                ]
+                lines.append(_opts[hash(new_smi) % len(_opts)])
                 return CommandResult(
                     output="\n\n".join(lines),
                     data={"smiles": new_smi, "edit": body, "atom_idx": atom_idx,
@@ -599,15 +608,18 @@ class EditCommand(Command):
                     )
                 new_smi = gemini_smi["smiles"]
                 rationale = gemini_smi.get("rationale", "") or ""
-                # Two-sentence agent response — first the rationale (the
-                # WHY), then the SMILES + a useful next-step nudge. The
-                # backtick SMILES auto-renders as a load chip.
                 rationale_clean = rationale.rstrip(". ") + "." if rationale else ""
+                # Vary the next-step suggestion so chat doesn't feel templated.
+                _opts = [
+                    f"`/score {new_smi}` for the 12-axis breakdown.",
+                    f"`/wf harden_candidate {{\"smiles\": \"{new_smi}\"}}` to red-team it.",
+                    f"`/champion {new_smi}` to A/B against the reigning best.",
+                ]
+                nudge = _opts[hash(new_smi) % len(_opts)]
                 return CommandResult(
                     output=(
                         f"{rationale_clean} New structure: `{new_smi}`. "
-                        f"Want me to score it, or run `/wf harden_candidate "
-                        f"{{\"smiles\": \"{new_smi}\"}}` to red-team it?"
+                        f"Next: {nudge}"
                     ).strip(),
                     data={"smiles": new_smi, "edit": body, "atom_idx": atom_idx,
                           "parent_smiles": active_smi, "rationale": rationale,
@@ -621,11 +633,16 @@ class EditCommand(Command):
             # Lead with one short conversational sentence — no headers,
             # no "Click below" boilerplate. The SMILES backtick is
             # auto-rendered as a clickable load chip by MarkdownText.
+            _opts = [
+                f"`/score {new_smi}` for the 12-axis breakdown.",
+                f"`/wf harden_candidate {{\"smiles\": \"{new_smi}\"}}` to red-team it.",
+                f"`/champion {new_smi}` to A/B against the reigning best.",
+            ]
+            nudge = _opts[hash(new_smi) % len(_opts)]
             return CommandResult(
                 output=(
                     f"Done — atom **#{atom_idx}** got a {descr.replace('swap → ', 'swap to ')}, "
-                    f"and the new structure is `{new_smi}`. Want me to score it next, "
-                    f"or run `/wf harden_candidate` against the same target?"
+                    f"new structure `{new_smi}`. Next: {nudge}"
                 ),
                 data={"smiles": new_smi, "edit": descr, "atom_idx": atom_idx,
                       "parent_smiles": active_smi},

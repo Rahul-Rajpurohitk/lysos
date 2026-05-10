@@ -2353,17 +2353,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                 </span>
               ) : null}
               onLoadSmiles={(smi) => {
-                // Inject as a candidate so the 3D + 2D viewers update.
-                setEvents((p) => [
-                  ...p,
-                  {
-                    type: "candidate_added",
-                    ts: Date.now() / 1000,
-                    smiles: smi,
-                    composite: 0,
-                    agent: "user",
-                  } as any,
-                ]);
+                // The "Load in 3D" button on InlineSmilesCard fires this.
+                // Two things must happen:
+                //   1. Actually update the 2D + 3D canvas + auto-score
+                //      (loadSmilesIntoCanvas does this end-to-end)
+                //   2. Echo a chat row so the user sees the action
+                loadSmilesIntoCanvas(smi, {
+                  createdBy: "user",
+                  parentId: null,
+                  logLabel: "[chat · load-in-3D]",
+                });
               }}
               subAgents={activeSubAgents}
               onToggleSubAgent={(id) =>

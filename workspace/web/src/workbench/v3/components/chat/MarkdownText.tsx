@@ -252,7 +252,20 @@ type Span =
   | { kind: "bold"; text: string }
   | { kind: "italic"; text: string }
   | { kind: "code"; text: string; clickable: boolean }
+  // Slash command embedded inside backticks (e.g. `/wf harden_candidate {...}`)
+  // — clicking fires it through the composer's lysos:auto-slash channel.
+  | { kind: "slash"; text: string }
   | { kind: "link"; text: string; href: string };
+
+// Matches a slash command like:
+//   /wf harden_candidate {"smiles": "..."}
+//   /wf design_with_debate
+//   /explain mecA
+//   /score CCO
+//   /harden CCO pdb=1VQQ
+//   /champion
+// Anything that starts with / + an alphanumeric command name + optional args.
+const RE_SLASH = /^\/[a-z][a-z0-9_-]*(?:\s+.+)?$/i;
 
 function renderInline(text: string, onLoadSmiles?: (smi: string) => void): React.ReactNode {
   const spans = parseInline(text);
@@ -289,6 +302,37 @@ function renderInline(text: string, onLoadSmiles?: (smi: string) => void): React
                 display: "inline",
                 lineHeight: 1.3,
               }}>{s.text}</button>
+          );
+        }
+        // Slash command chip — clicking re-fires it through the composer
+        // pipeline so `/wf harden_candidate {…}` actually streams the
+        // workflow instead of being inert text.
+        if (s.kind === "slash") {
+          return (
+            <button
+              key={i}
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                  detail: { text: s.text },
+                }));
+              }}
+              title={`Click to fire: ${s.text}`}
+              style={{
+                fontFamily: "var(--lys-font-mono)", fontSize: "0.92em",
+                padding: "2px 7px",
+                background: "linear-gradient(135deg, rgba(132,88,255,0.14), rgba(93,138,255,0.10))",
+                border: "1px solid rgba(132,88,255,0.40)",
+                borderRadius: 4,
+                color: "#7c63d8", fontWeight: 700,
+                cursor: "pointer",
+                margin: "0 2px",
+                display: "inline-flex", alignItems: "center", gap: 3,
+                lineHeight: 1.3,
+              }}>
+              <span style={{ opacity: 0.7 }}>▸</span>
+              {s.text.length > 60 ? s.text.slice(0, 57) + "…" : s.text}
+            </button>
           );
         }
         return (
@@ -328,7 +372,14 @@ function parseInline(text: string): Span[] {
       out.push({ kind: "italic", text: tok.slice(1, -1) });
     } else if (tok.startsWith("`")) {
       const inner = tok.slice(1, -1);
-      out.push({ kind: "code", text: inner, clickable: RE_SMILES.test(inner) });
+      // Priority: a slash command beats a SMILES match (so `/wf X` doesn't
+      // get mistaken for a SMILES). Pure SMILES (no leading "/") still
+      // becomes the load-in-3D clickable.
+      if (RE_SLASH.test(inner)) {
+        out.push({ kind: "slash", text: inner });
+      } else {
+        out.push({ kind: "code", text: inner, clickable: RE_SMILES.test(inner) });
+      }
     } else if (tok.startsWith("[")) {
       const lm = tok.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (lm) out.push({ kind: "link", text: lm[1], href: lm[2] });
