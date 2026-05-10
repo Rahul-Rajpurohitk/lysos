@@ -191,6 +191,144 @@ def build_knowledge_brief(pathogen: str) -> dict[str, Any]:
     return payload
 
 
+@router.get("/knowledge/matrix")
+async def knowledge_matrix() -> dict[str, Any]:
+    """Pathogen × drug-class pressure matrix.
+
+    Iterates the 8 priority pathogens and for each, computes how many
+    resistance genes hit each drug class. Rolls up into a single
+    matrix the frontend renders as a heatmap (rows = pathogens,
+    columns = top N drug classes union-aggregated across all)."""
+    out_rows: list[dict[str, Any]] = []
+    class_universe: dict[str, int] = {}  # class → total n_genes across all pathogens
+    for p in _CANONICAL_PATHOGENS:
+        try:
+            brief = build_knowledge_brief(p)
+        except HTTPException:
+            continue
+        cls_map: dict[str, int] = {}
+        for entry in brief.get("class_pressure", []):
+            k = entry.get("drug_class")
+            v = entry.get("n_genes") or 0
+            if not k:
+                continue
+            cls_map[k] = v
+            class_universe[k] = class_universe.get(k, 0) + v
+        out_rows.append({
+            "pathogen": p,
+            "full_name": brief.get("full_name"),
+            "class_pressure": cls_map,
+            "n_total_genes": brief.get("n_total_resistance_genes", 0),
+            "first_line_count": len(brief.get("empirical", {}).get("first_line", [])),
+            "validated_target_count": len(brief.get("validated_targets", [])),
+        })
+    # Pick the top 12 drug classes universe-wide for the columns
+    top_classes = sorted(class_universe.items(), key=lambda kv: -kv[1])[:12]
+    columns = [c for c, _ in top_classes]
+    return {
+        "rows": out_rows,
+        "columns": columns,
+        "column_totals": {c: class_universe[c] for c in columns},
+        "n_pathogens": len(out_rows),
+    }
+
+
+@router.get("/knowledge/champions/all")
+async def knowledge_champions_all() -> dict[str, Any]:
+    """All 8 pathogen champions in one call — drives the champion vault
+    card. Each entry: pathogen name + reigning best (or null) + brief
+    headline."""
+    from . import champions as _champ
+    out: list[dict[str, Any]] = []
+    for p in _CANONICAL_PATHOGENS:
+        c = _champ.get(p)
+        try:
+            brief = build_knowledge_brief(p)
+            full_name = brief.get("full_name")
+        except HTTPException:
+            full_name = p
+        out.append({
+            "pathogen": p,
+            "full_name": full_name,
+            "champion": c,
+            "has_champion": bool(c),
+        })
+    return {
+        "vault": out,
+        "n_with_champion": sum(1 for e in out if e["has_champion"]),
+        "n_total": len(out),
+    }
+
+
+@router.get("/knowledge/mutations/{pdb_id}")
+async def knowledge_mutations(pdb_id: str) -> dict[str, Any]:
+    """Known clinical mutations for a PDB target — used by the mutation
+    atlas card on the Knowledge tab. Routes through the existing
+    chem_resistance endpoint and returns the same shape."""
+    from . import chem_resistance as _cr
+    try:
+        rec = await _cr.known_mutations(pdb_id.upper())
+        return rec
+    except HTTPException as exc:
+        # No curated set — return empty shell so the frontend renders a
+        # graceful "no mutations" state instead of a 404 popup.
+        if exc.status_code == 404:
+            return {"pdb_id": pdb_id.upper(), "target_name": "",
+                    "pathogen": "", "n_mutations": 0, "mutations": []}
+        raise
+
+
+@router.get("/knowledge/network/{pathogen}")
+async def knowledge_network(pathogen: str) -> dict[str, Any]:
+    """Build a pathogen → gene → class graph for the resistance network
+    visualization. Returns nodes + edges suitable for a force-directed
+    or hierarchical layout."""
+    pathogen = _normalize_pathogen(pathogen)
+    brief = build_knowledge_brief(pathogen)
+
+    nodes: list[dict[str, Any]] = [{"id": pathogen, "kind": "pathogen",
+                                    "label": brief.get("full_name", pathogen),
+                                    "tier": 0}]
+    edges: list[dict[str, Any]] = []
+    seen_classes: set[str] = set()
+
+    for g in brief.get("top_resistance", []):
+        gene_id = f"gene::{g.get('gene')}"
+        nodes.append({
+            "id": gene_id, "kind": "gene",
+            "label": g.get("gene"), "mechanism": g.get("mechanism"),
+            "tier": 1,
+        })
+        edges.append({"source": pathogen, "target": gene_id, "kind": "carries"})
+        for cls in (g.get("drug_classes_affected") or []):
+            cls_id = f"class::{cls}"
+            if cls not in seen_classes:
+                seen_classes.add(cls)
+                nodes.append({"id": cls_id, "kind": "drug_class",
+                              "label": cls, "tier": 2})
+            edges.append({"source": gene_id, "target": cls_id, "kind": "blocks"})
+
+    # First-line drugs as a fourth tier (what we should advance against)
+    for drug in (brief.get("empirical", {}).get("first_line") or [])[:6]:
+        drug_id = f"drug::{drug}"
+        nodes.append({"id": drug_id, "kind": "first_line",
+                      "label": drug, "tier": 3})
+
+    return {
+        "pathogen": pathogen,
+        "full_name": brief.get("full_name"),
+        "nodes": nodes,
+        "edges": edges,
+        "n_genes": sum(1 for n in nodes if n["kind"] == "gene"),
+        "n_classes": sum(1 for n in nodes if n["kind"] == "drug_class"),
+        "n_first_line": sum(1 for n in nodes if n["kind"] == "first_line"),
+    }
+
+
+# Path-with-variable LAST so the literal `/matrix`, `/champions/all`,
+# `/mutations/{pdb_id}`, `/network/{pathogen}` routes get a chance to
+# match before the catch-all {pathogen} parameter.
+
 @router.get("/knowledge/{pathogen}")
 async def knowledge(pathogen: str) -> dict[str, Any]:
     """Unified per-pathogen knowledge brief (structured + markdown)."""
@@ -200,5 +338,5 @@ async def knowledge(pathogen: str) -> dict[str, Any]:
 @router.post("/knowledge/{pathogen}/refresh")
 async def knowledge_refresh(pathogen: str) -> dict[str, Any]:
     """Force a refresh — bust the cache and rebuild."""
-    _brief_cache.pop(pathogen.upper(), None)
+    _brief_cache.pop(_normalize_pathogen(pathogen), None)
     return build_knowledge_brief(pathogen)

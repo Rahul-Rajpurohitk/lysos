@@ -76,6 +76,10 @@ void ChemistryNavbar;  // keeping import in case we want to switch back
 import { KnowledgeNavbar } from "./playground/KnowledgeNavbar";
 import { KnowledgeChampionPane } from "./playground/KnowledgeChampionPane";
 import { KnowledgeHubCard } from "./playground/KnowledgeHubCard";
+import { PathogenMatrixCard } from "./playground/PathogenMatrixCard";
+import { MutationAtlasCard } from "./playground/MutationAtlasCard";
+import { ResistanceNetworkCard } from "./playground/ResistanceNetworkCard";
+import { ChampionVaultCard } from "./playground/ChampionVaultCard";
 import { ScoringNavbar } from "./playground/ScoringNavbar";
 import { AgentsNavbar } from "./playground/AgentsNavbar";
 import { LiveNavbar } from "./playground/LiveNavbar";
@@ -2672,7 +2676,56 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         }}
                         onLoadPdb={(pdbId) => setSelectedPdbId(pdbId)}
                       /> },
-                    { id: "champion", title: `🏆 Champion · ${selectedPathogen}`, body:
+                    // Pathogen × drug-class pressure heatmap — at-a-glance
+                    // view of which classes are already broken everywhere.
+                    { id: "pathogen-matrix", title: "Pathogen × drug-class pressure matrix", size: 2, body:
+                      <PathogenMatrixCard
+                        apiBase={apiBase}
+                        activePathogen={selectedPathogen}
+                        onPathogenChange={setSelectedPathogen}
+                      /> },
+                    // Resistance gene network — tier graph for the active
+                    // pathogen showing pathogen → genes → classes → drugs.
+                    { id: "resistance-network", title: "Resistance gene network · live graph", size: 2, body:
+                      <ResistanceNetworkCard
+                        apiBase={apiBase}
+                        pathogen={selectedPathogen}
+                        onFireSlash={(slash) => {
+                          window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                            detail: { text: slash },
+                          }));
+                        }}
+                      /> },
+                    // Mutation atlas — known clinical mutations on the
+                    // currently-selected target PDB, color-coded by class.
+                    { id: "mutation-atlas", title: `Mutation atlas · ${selectedPdbId ?? "(no target)"}`, size: 2, body:
+                      <MutationAtlasCard
+                        apiBase={apiBase}
+                        pdbId={selectedPdbId}
+                        onFireSlash={(slash) => {
+                          window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                            detail: { text: slash },
+                          }));
+                        }}
+                      /> },
+                    // Champion vault — all 8 reigning champions side-by-side.
+                    { id: "champion-vault", title: "Champion vault · all pathogens", size: 2, body:
+                      <ChampionVaultCard
+                        apiBase={apiBase}
+                        activePathogen={selectedPathogen}
+                        onPathogenChange={setSelectedPathogen}
+                        onLoadSmiles={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: `[champion vault · load]`,
+                        })}
+                        onFireSlash={(slash) => {
+                          window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                            detail: { text: slash },
+                          }));
+                        }}
+                      /> },
+                    { id: "champion", title: `🏆 Active champion · ${selectedPathogen}`, body:
                       <KnowledgeChampionPane
                         apiBase={apiBase}
                         pathogen={selectedPathogen}
