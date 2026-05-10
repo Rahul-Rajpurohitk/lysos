@@ -245,7 +245,7 @@ export function ProposalCard({
           display: "flex", alignItems: "center", gap: 4,
         }}>
           <ArrowRight size={9} />
-          via gemini · ${agentChoice.cost.toFixed(4)}
+          ${agentChoice.cost.toFixed(4)}
         </div>
       )}
 

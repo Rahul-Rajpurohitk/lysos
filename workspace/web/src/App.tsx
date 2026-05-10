@@ -497,7 +497,7 @@ function CandidateCard({ index, candidate }: { index: number; candidate: Candida
         <div className="mt-3 pt-3 border-t border-ink-700/50">
           <div className="flex items-center justify-between mb-2">
             <span className="text-[10px] uppercase tracking-widest text-slate-500 font-mono">
-              top {similar?.length ?? 0} known antibiotics (Gemini Embedding 2 cosine)
+              top {similar?.length ?? 0} known antibiotics (semantic cosine)
             </span>
             <button
               onClick={() => { setSimilar(null); setSimError(null); }}

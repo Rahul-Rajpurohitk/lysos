@@ -153,19 +153,30 @@ async def _gemini_edit_translator(
     model_id = os.getenv("LYSOS_EDIT_MODEL", "gemini-2.5-pro")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent"
     system = (
-        "You are a medicinal-chemistry SMILES editor. Given a parent "
-        "SMILES, an atom index (0-indexed), and a natural-language edit "
-        "description, return the resulting SMILES that an RDKit parser "
-        "would accept.\n\n"
-        "Output STRICT JSON: {\"smiles\": \"<RDKit-valid SMILES>\", "
-        "\"rationale\": \"<one sentence: what changed and why it makes "
-        "chemical sense>\"}\n\n"
+        "You are a senior medicinal-chemistry agent reviewing a proposed "
+        "edit to a candidate antibiotic. You receive: parent SMILES, an "
+        "atom index (0-indexed), and a natural-language description of "
+        "what to do at that atom.\n\n"
+        "Your job is twofold:\n"
+        "  1. REASON about whether the proposed edit makes sense at this "
+        "     position (valence, aromaticity, biological plausibility).\n"
+        "  2. APPLY the edit (or your improved version of it) and return "
+        "     a valid SMILES.\n\n"
+        "Output STRICT JSON:\n"
+        "{\n"
+        "  \"reasoning\": \"<2-3 sentences: did the proposal make chemical "
+        "sense? did you tweak it? why?>\",\n"
+        "  \"smiles\": \"<RDKit-valid SMILES — the edit applied>\",\n"
+        "  \"rationale\": \"<one sentence: chemistry of what changed>\",\n"
+        "  \"action\": \"applied_as_is\" | \"applied_with_tweak\" | \"impossible\"\n"
+        "}\n\n"
         "Rules:\n"
-        "- Preserve the rest of the scaffold; only modify what the "
-        "  description says.\n"
-        "- Make sure valences and aromaticity are valid.\n"
-        "- If the edit is impossible without breaking valence, suggest "
-        "  the closest valid alternative AND explain in rationale.\n"
+        "- If the user's description is sensible at this atom → applied_as_is.\n"
+        "- If the description has issues (e.g. valence violation, wrong "
+        "  position type) → improve it and return applied_with_tweak.\n"
+        "- If totally impossible → action=impossible, smiles=parent (unchanged), "
+        "  rationale explains why.\n"
+        "- Preserve the rest of the scaffold.\n"
         "- Do NOT wrap output in markdown code fences."
     )
     user = (
@@ -441,11 +452,35 @@ class EditCommand(Command):
             "phosphate": "phosphate", "phosphonate": "phosphonate",
         }
         body_low = body.lower()
-        fg = next((v for k, v in FG_KEYWORDS.items() if k in body_low), None)
+        # Word-boundary keyword match — fixes false-positive where
+        # "methyl" inside "trifluoromethyl" was selecting the methyl FG.
+        # Sort longest-first so "trifluoromethyl" is checked before
+        # "methyl" (substring trap).
+        fg = None
+        sorted_keys = sorted(FG_KEYWORDS.keys(), key=len, reverse=True)
+        for k in sorted_keys:
+            # \b doesn't work for keys starting with -, so build the
+            # boundary by hand: must start at word boundary or after
+            # a hyphen (e.g. "-cf3" should still match in "the -cf3 group").
+            pattern = r"(?:\b|-)" + _re.escape(k) + r"\b"
+            if _re.search(pattern, body_low):
+                fg = FG_KEYWORDS[k]
+                break
 
         # Element swap detection (single capital letter or common 2-letter)
         elem_m = _re.search(r"\b(swap|replace|to|->)\s*[=:]?\s*([A-Z][a-z]?)\b", body)
         new_element = elem_m.group(2) if elem_m else None
+
+        # Force Gemini path when the description is multi-word — that's
+        # the signal the user wants reasoning + a decision, not a bare
+        # keyword swap. Pure 1-word inputs ("methyl", "F") still take
+        # the fast keyword path. Anything more (e.g. "Ortho-trifluoromethyl
+        # group", "please review and apply this swap…") goes through
+        # Gemini for real reasoning.
+        word_count = len([w for w in body.split() if len(w) > 1])
+        if word_count >= 2:
+            fg = None
+            new_element = None
 
         try:
             from api.workbench import molecule_edit, AtomEditRequest
@@ -479,23 +514,43 @@ class EditCommand(Command):
                         data=gemini_smi,
                     )
                 new_smi = gemini_smi.get("smiles")
+                reasoning = (gemini_smi.get("reasoning") or "").rstrip(". ")
                 rationale = (gemini_smi.get("rationale") or "").rstrip(". ")
-                if not new_smi:
+                action = (gemini_smi.get("action") or "applied_as_is").lower()
+                if not new_smi or action == "impossible":
+                    # Agent decided NOT to apply — surface the reasoning
+                    # so the user sees why and can ask differently.
+                    msg = "I looked at this and decided not to apply it."
+                    if reasoning:
+                        msg = f"**My take:** {reasoning}."
                     return CommandResult(
-                        output=(f"I tried to interpret \"{body}\" but didn't get a "
-                                f"chemistry-valid edit back. Want to describe the swap "
-                                f"differently, or pick a different atom?"),
-                        data=gemini_smi,
+                        output=msg + " Want to describe a different swap, or pick a different atom?",
+                        data={"edit_attempt": body, "atom_idx": atom_idx,
+                              "parent_smiles": active_smi,
+                              "agent_reasoning": reasoning,
+                              "agent_decision": "rejected",
+                              "via": "gemini"},
                     )
+                # Build a chat response that LEADS with the agent's reasoning,
+                # then shows the result + flags whether it was tweaked.
+                tweak_tag = ""
+                if action == "applied_with_tweak":
+                    tweak_tag = " _(I tweaked your description to keep it chemistry-valid.)_"
+                lines = []
+                if reasoning:
+                    lines.append(f"**My take:** {reasoning}.")
+                if rationale:
+                    lines.append(f"_{rationale}._")
+                lines.append(f"Applied → `{new_smi}`.{tweak_tag}")
+                lines.append(f"Want to score it next, or run `/wf harden_candidate "
+                             f"{{\"smiles\": \"{new_smi}\"}}` to red-team it?")
                 return CommandResult(
-                    output=(
-                        (rationale + ". " if rationale else "")
-                        + f"New structure: `{new_smi}`. "
-                        f"Want me to score it, or run `/wf harden_candidate "
-                        f"{{\"smiles\": \"{new_smi}\"}}` to red-team it?"
-                    ).strip(),
+                    output="\n\n".join(lines),
                     data={"smiles": new_smi, "edit": body, "atom_idx": atom_idx,
-                          "parent_smiles": active_smi, "rationale": rationale,
+                          "parent_smiles": active_smi,
+                          "agent_reasoning": reasoning,
+                          "rationale": rationale,
+                          "agent_decision": action,
                           "via": "gemini"},
                     follow_ups=[f"/score {new_smi}",
                                 f"/wf harden_candidate {{\"smiles\": \"{new_smi}\"}}"],

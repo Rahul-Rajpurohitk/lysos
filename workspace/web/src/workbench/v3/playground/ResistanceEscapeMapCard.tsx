@@ -1400,7 +1400,7 @@ function HardenMode({
                 borderRadius: 4, fontSize: 9.5,
                 color: RED.fg, fontFamily: "var(--lys-font-mono)",
               }}>
-                AI tier failed — check backend logs for Gemini call.
+                AI tier failed — check backend logs.
                 Playbook suggestions still available below.
               </div>
             )}
@@ -1764,7 +1764,15 @@ function SuggestionCard({ s, atomIdx, onAgentMessage, onLoadSmiles }: {
           )}
           {onAgentMessage && (
             <button
-              onClick={() => onAgentMessage(`/edit atom=${atomIdx} ${s.swap}`)}
+              onClick={() => {
+                // Build a rich, multi-word prompt so the EditCommand routes
+                // through the Gemini reasoning path (not the keyword shortcut).
+                // Includes the rationale so the agent can reason about WHY
+                // this swap was suggested and decide if it's right or tweak it.
+                const rationale = (s.rationale || "").replace(/\s+/g, " ").slice(0, 240);
+                const msg = `/edit atom=${atomIdx} please review and apply this swap: ${s.swap}. Rationale from harden suggestion: ${rationale}`;
+                onAgentMessage(msg);
+              }}
               title="Send the swap as a slash command for the agent to enact"
               style={{
                 padding: "1px 7px",

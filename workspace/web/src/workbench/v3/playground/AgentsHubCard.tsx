@@ -225,7 +225,7 @@ function CostMeter({ metrics }: { metrics: MetricsResponse | null }) {
     }}>
       <BigStat
         label="cost so far" value={`$${cost.toFixed(4)}`}
-        sub="cumulative gemini spend" color="#7c63d8"
+        sub="cumulative LLM spend" color="#7c63d8"
       />
       <BigStat
         label="tokens in" value={fmtN(tin)}

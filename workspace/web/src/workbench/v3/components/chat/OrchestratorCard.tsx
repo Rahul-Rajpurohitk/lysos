@@ -211,15 +211,14 @@ function AnswerView({ state }: { state: OrchestratorState }) {
           <AlertTriangle size={11} /> {state.error}
         </div>
       )}
-      {!isWaiting && (text || state.error) && (
+      {!isWaiting && (text || state.error) && elapsed && (
         <div style={{
           marginTop: 6,
           fontFamily: "var(--lys-font-mono)",
           fontSize: 10, color: COL.fgFaint,
           opacity: 0.7,
         }}>
-          ↳ via {(state.plan_source ?? "gemini").split(" ")[0]}
-          {elapsed && ` · ${elapsed}`}
+          ↳ {elapsed}
         </div>
       )}
     </div>

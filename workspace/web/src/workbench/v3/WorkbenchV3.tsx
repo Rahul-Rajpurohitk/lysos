@@ -846,8 +846,22 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         card_kind: d?.card_kind ?? undefined,
         data: d?.data ?? undefined,
       } as any]);
+      // Auto-load the new SMILES into the canvas if the slash returned
+      // one (e.g. /edit, /swap, /fg). The user's mental model: when the
+      // agent says "Done, new structure is X" → the canvas should
+      // visually update WITHOUT them clicking apply.
+      const newSmi = (d?.data && typeof d.data === "object" && (d.data as any).smiles) as string | undefined;
+      if (newSmi && !d?.error) {
+        try {
+          await loadSmilesIntoCanvas(newSmi, {
+            createdBy: "agent",
+            parentId: null,
+            logLabel: `[agent edit · ${(d.data as any).edit ?? "edit"}]`,
+          });
+        } catch {/* canvas already in sync, or load failed silently */}
+      }
     } catch { /* */ }
-  }, [activeChatId, apiBase, selectedPathogen, selectedPdbId]);
+  }, [activeChatId, apiBase, selectedPathogen, selectedPdbId, loadSmilesIntoCanvas]);
 
   /** Refresh the recent edit log from /sessions/{sid}/edits — drives the
    *  Edit-log card so the user sees every persisted MoleculeEdit row. */
@@ -1206,14 +1220,20 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // can read the live value without taking it as a dependency.
   useEffect(() => { currentSmilesRef.current = currentSmiles; }, [currentSmiles]);
 
+  // lastScores: the latest reward decomposition for the CURRENT SMILES.
+  // Tied to currentSmiles so when the canvas changes (via /edit, /load,
+  // harden Apply, etc), the radar + score breakdown clear and re-fetch
+  // for the new structure instead of showing stale numbers.
   const lastScores = useMemo<Record<string, number> | null>(() => {
     for (let i = events.length - 1; i >= 0; i--) {
-      const e = events[i];
-      if (e.type === "score" && e.scores) return e.scores;
-      if (e.type === "candidate_added" && e.scores) return e.scores;
+      const e = events[i] as any;
+      const smi = e.smiles ?? e.parent_smiles;
+      const scoresMatchCurrent = !currentSmiles || !smi || smi === currentSmiles;
+      if (e.type === "score" && e.scores && scoresMatchCurrent) return e.scores;
+      if (e.type === "candidate_added" && e.scores && scoresMatchCurrent) return e.scores;
     }
     return null;
-  }, [events]);
+  }, [events, currentSmiles]);
 
   const bestScores = useMemo<Record<string, number> | null>(() => {
     let best: { composite: number; scores: Record<string, number> } | null = null;
@@ -1422,7 +1442,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
           procs.push({
             id: e.run_id ?? `ag-${e.ts}`,
             kind: "agent",
-            name: "gemini-pro",
+            name: "lysos",
             status: ast.n_tool_calls
               ? `${ast.n_tool_calls} tool call${ast.n_tool_calls === 1 ? "" : "s"}`
               : "thinking…",
