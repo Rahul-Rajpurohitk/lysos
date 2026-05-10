@@ -656,9 +656,12 @@ class ExplainCommand(Command):
         except Exception as exc:  # noqa: BLE001
             return CommandResult(error=f"explain start failed: {exc}")
 
+        # Header text is hidden when the ExplainCard renders inline,
+        # but kept for compatibility / replay logs. The streaming
+        # markdown shows up directly in the chat now.
         line = (
-            f"explain session started for **{target}** — "
-            f"{resp.grounding_count} grounding entries, streaming to artifact pane"
+            f"Pulling a brief on **{target}** "
+            f"(grounded on {resp.grounding_count} sources) — streaming inline below."
         )
         return CommandResult(
             output=line,

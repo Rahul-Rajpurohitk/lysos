@@ -9,8 +9,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { BookOpen, Activity, FileText } from "lucide-react";
+import { BookOpen, Activity } from "lucide-react";
 import { ChatMsg } from "./MessageRow";
+import { MarkdownText } from "./MarkdownText";
 
 interface ExplainCardProps {
   msg: ChatMsg;
@@ -125,6 +126,11 @@ export function ExplainCard({ msg, onArtifact }: ExplainCardProps) {
     };
   }, [sessionId, sseUrl, target, groundingCount]);
 
+  // The streaming markdown — concatenate all chunks. We show this
+  // inline in the chat so the user reads the brief WITHOUT having to
+  // hunt for an artifact pane.
+  const markdown = chunks.join("");
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 4 }}
@@ -133,56 +139,67 @@ export function ExplainCard({ msg, onArtifact }: ExplainCardProps) {
       style={{
         background: "rgba(59, 130, 246, 0.04)",
         border: "1px solid rgba(59, 130, 246, 0.18)",
-        borderRadius: 8,
+        borderLeft: "3px solid #3b82f6",
+        borderRadius: 6,
         padding: "8px 12px",
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
         fontSize: 11.5,
       }}
     >
-      <BookOpen size={14} style={{ color: "#3b82f6", flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
+      {/* Compact status header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: markdown ? 6 : 0 }}>
+        <BookOpen size={13} style={{ color: "#3b82f6", flexShrink: 0 }} />
         <div style={{
+          flex: 1, minWidth: 0,
           fontSize: 10,
           fontFamily: "var(--lys-font-mono)",
-          color: "var(--lys-text-faint)",
+          color: "#1e40af",
           letterSpacing: "0.06em",
           textTransform: "uppercase",
+          fontWeight: 700,
         }}>
-          explain · {target}
+          brief · {target}
         </div>
         <div style={{
-          color: "var(--lys-text-dim)",
-          fontSize: 11,
-          marginTop: 1,
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
+          padding: "2px 7px",
+          background: streaming ? "rgba(59, 130, 246, 0.14)" : "rgba(0,0,0,0.04)",
+          color: streaming ? "#1e40af" : "var(--lys-text-faint)",
+          borderRadius: 999,
+          fontFamily: "var(--lys-font-mono)",
+          fontSize: 9, fontWeight: 700,
         }}>
-          {error
-            ? <span style={{ color: "#dc2626" }}>error: {error}</span>
-            : streaming
-              ? <span><FileText size={9} style={{ verticalAlign: "middle" }}/> streaming to artifact pane …</span>
-              : <span>brief ready in artifact pane</span>}
+          <Activity size={9} />
+          {streaming
+            ? `live · ${chunks.length} chunk${chunks.length === 1 ? "" : "s"}`
+            : `done · ${chunks.length} chunks`}
+          {groundingCount > 0 && <span style={{ opacity: 0.7 }}>· g{groundingCount}</span>}
         </div>
       </div>
-      <div style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        padding: "2px 8px",
-        background: streaming
-          ? "rgba(59, 130, 246, 0.14)"
-          : "var(--lys-surface-2)",
-        color: streaming ? "#1e40af" : "var(--lys-text-faint)",
-        borderRadius: 999,
-        fontFamily: "var(--lys-font-mono)",
-        fontSize: 9.5,
-        fontWeight: 600,
-        flexShrink: 0,
-      }}>
-        <Activity size={10} />
-        {streaming ? `live · ${chunks.length}` : `${chunks.length} sections`}
-        {groundingCount > 0 && <span style={{ opacity: 0.7 }}>· g{groundingCount}</span>}
-      </div>
+
+      {/* Inline markdown body — the brief content itself, NOT just a
+        * receipt. MarkdownText handles bold / italic / lists / pipe
+        * tables / clickable backtick SMILES. */}
+      {error ? (
+        <div style={{
+          fontSize: 11.5, color: "#dc2626",
+          padding: "4px 0",
+        }}>
+          The brief stream errored: {error}. Want me to try a different target or rephrase?
+        </div>
+      ) : markdown ? (
+        <div style={{ color: "var(--lys-text)", paddingTop: 2 }}>
+          <MarkdownText text={markdown} fontSize={12.5} />
+        </div>
+      ) : (
+        <div style={{
+          fontSize: 11, color: "var(--lys-text-dim)",
+          fontStyle: "italic", padding: "4px 0",
+        }}>
+          {streaming ? "Building the brief…" : "(empty brief — try /explain <target> again)"}
+        </div>
+      )}
     </motion.div>
   );
 }
