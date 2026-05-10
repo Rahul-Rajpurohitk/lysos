@@ -64,9 +64,16 @@ router = APIRouter(prefix="/api/orchestrator", tags=["orchestrator"])
 
 _KNOWN_WORKFLOWS = [
     {
+        "name": "design_with_debate",
+        "description": "Multi-agent debate (Designer drafts → Critic challenges → Editor refines → Strategist crowns winner) — use this for any 'design / propose / make me a molecule' intent. This is the agentic flow that lights up all 4 roles.",
+        "intent_phrases": ["design", "propose", "make me a molecule", "create a molecule",
+                           "generate a candidate", "better than the seed", "improve on this"],
+        "inputs": {"pathogen": "MRSA"},
+    },
+    {
         "name": "discover_and_assess",
-        "description": "Generate fresh candidates for a pathogen + objective, score them, screen for resistance vulnerability, and suggest the top hit.",
-        "intent_phrases": ["design", "find", "discover", "generate candidates", "find me a", "propose"],
+        "description": "Generate fresh candidates from a SMILES generator (no debate), score them, screen for resistance. Use only if user explicitly asks for a 'broad candidate sweep' rather than agentic design.",
+        "intent_phrases": ["broad sweep", "candidate sweep", "bulk discover"],
         "inputs": {"pathogen": "MRSA", "objective": "β-lactam"},
     },
     {
@@ -99,8 +106,10 @@ _KNOWN_SLASH = [
     {"cmd": "/score", "phrases": ["score", "evaluate", "rate this"]},
     {"cmd": "/explain", "phrases": ["explain", "what is", "tell me about"]},
     {"cmd": "/spectrum", "phrases": ["spectrum", "coverage"]},
-    {"cmd": "/design", "phrases": ["design", "propose", "make me"]},
-    {"cmd": "/harden", "phrases": ["harden", "escape proof"]},
+    # /design intentionally NOT routed here — design intents go to the
+    # design_with_debate workflow above so the user sees the full
+    # Designer→Critic→Editor→Strategist flow in the Agents tab.
+    {"cmd": "/champion", "phrases": ["champion", "current best", "reigning"]},
 ]
 
 
