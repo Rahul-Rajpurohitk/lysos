@@ -252,19 +252,40 @@ class Harness:
         is_slash = text.startswith("/")
 
         if is_slash:
-            # parse "/cmd args"
-            head, _, args = text[1:].partition(" ")
+            # parse "/cmd args" — case-insensitive lookup so /HELP and
+            # /Help both find /help
+            head_raw, _, args = text[1:].partition(" ")
+            head = head_raw.lower()
             cmd = self.registry.get(head)
             trace("resolve.slash", cmd=head, args=args, found=bool(cmd))
             if cmd is None:
-                return HarnessResponse(
-                    session_id=session.session_id,
-                    message_id=msg_id,
-                    error=f"Unknown command: /{head}. Type / to see options or /help.",
-                    elapsed_ms=int((time.perf_counter() - t0) * 1000),
-                    events=events,
-                )
+                # Don't error out — the orchestrator IS the main agent
+                # and should reinterpret unknown slashes as natural-
+                # language intent. `/debate lets build to fight mrsa`
+                # → orchestrator picks design_with_debate workflow.
+                # Strip the leading slash and treat the whole line as
+                # free text. Phase 2-4 below picks up via the
+                # is_slash=False path.
+                stripped = text[1:].strip()
+                if not stripped:
+                    return HarnessResponse(
+                        session_id=session.session_id,
+                        message_id=msg_id,
+                        error=(
+                            f"Empty slash — type `/help` for the command list "
+                            f"or describe what you want to do in plain English."
+                        ),
+                        elapsed_ms=int((time.perf_counter() - t0) * 1000),
+                        events=events,
+                    )
+                user_text = stripped
+                text = stripped
+                is_slash = False
+                # Fall through to phase 2 (skills) / phase 4 (LLM agent
+                # loop). All `cmd.*` calls below are inside this same
+                # `if is_slash:` block so they're skipped entirely.
 
+        if is_slash:
             ok, err = cmd.is_enabled(self._mk_cmd_ctx(session))
             if not ok:
                 return HarnessResponse(
