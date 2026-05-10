@@ -85,6 +85,112 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+
+# ── Per-step Gemini narration ───────────────────────────────────────
+# Each step's narrator_role triggers a real Gemini Pro call after the
+# tool runs. Replaces frontend template strings with genuine LLM
+# reasoning so the chat reads like agents thinking, not data fetched.
+_NARRATOR_PROMPTS = {
+    "critic": (
+        "You are the **Critic** in a multi-agent antibiotic-design loop. "
+        "A tool just returned data. Write 2-3 sentences of ACTUAL "
+        "reasoning over that data — call out the strongest signal, the "
+        "weakest signal, and what the team should do next. Be opinionated; "
+        "DON'T just restate the numbers. Use plain prose, no headings, "
+        "no bullet lists. Bold key terms with **double-asterisks** but "
+        "NEVER nest them inside another bolded phrase."
+    ),
+    "strategist": (
+        "You are the **Strategist** deciding the next move. The tool's "
+        "output is below. In 2 sentences, name the candidate's strongest "
+        "asset, then commit to ONE next step (harden? branch? terminate? "
+        "score?) with a one-line justification. No bullets, no headings."
+    ),
+    "editor": (
+        "You are the **Editor** — you decide which structural edit to "
+        "apply. The tool returned proposed swaps. Pick the one you'd ship "
+        "and say WHY in 2-3 sentences. Reference the swap's mechanism + "
+        "predicted Δrobustness. End with a clear 'I'd apply X' line. "
+        "No bullets, no headings."
+    ),
+    "designer": (
+        "You are the **Designer** reviewing this step's output. In 2-3 "
+        "sentences explain what the result means for the next scaffold "
+        "iteration. Plain prose, no bullets."
+    ),
+}
+
+
+async def _gemini_narrate(role: str, step_label: str, result: Any) -> Optional[str]:
+    """Call Gemini Pro to write a per-step agent commentary. Returns
+    plain markdown text the frontend renders directly. Returns None on
+    any failure — the chat falls back to the structured summary."""
+    key = os.getenv("GEMINI_API_KEY")
+    if not key:
+        return None
+    sys_prompt = _NARRATOR_PROMPTS.get(role) or _NARRATOR_PROMPTS["designer"]
+    # Trim the result to the most informative subset so we don't blow
+    # context on full RDKit dumps.
+    try:
+        compact = json.dumps(_compact_for_narrator(result), ensure_ascii=False)
+    except Exception:
+        compact = str(result)[:2000]
+    if len(compact) > 4000:
+        compact = compact[:4000] + "...(truncated)"
+    model = os.getenv("LYSOS_NARRATOR_MODEL", "gemini-2.5-pro")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    user_text = (
+        f"Step that just ran: **{step_label}**.\n\n"
+        f"Tool result:\n```json\n{compact}\n```\n\n"
+        f"Write your {role} commentary now (2-3 sentences max)."
+    )
+    payload = {
+        "system_instruction": {"parts": [{"text": sys_prompt}]},
+        "contents": [{"role": "user", "parts": [{"text": user_text}]}],
+        "generationConfig": {
+            "maxOutputTokens": 512,
+            "temperature": 0.4,
+            "thinkingConfig": {"thinkingBudget": 256, "includeThoughts": False},
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cx:
+            r = await cx.post(
+                url, json=payload,
+                headers={"x-goog-api-key": key, "Content-Type": "application/json"},
+            )
+        if r.status_code != 200:
+            return None
+        body = r.json()
+        cands = body.get("candidates") or []
+        if not cands:
+            return None
+        parts = (cands[0].get("content") or {}).get("parts") or []
+        text = "".join((p.get("text") or "") for p in parts).strip()
+        return text or None
+    except Exception:
+        return None
+
+
+def _compact_for_narrator(result: Any, depth: int = 0) -> Any:
+    """Compact a tool result for the narrator prompt — drop the noisy
+    `_factors`, `all_residue_scores`, and other internals the LLM
+    doesn't need, keep the structural signal."""
+    if depth > 4:
+        return "..."
+    DROP = {"_factors", "all_residue_scores", "contact_residue_details", "axis_reasoning"}
+    if isinstance(result, dict):
+        out: dict[str, Any] = {}
+        for k, v in result.items():
+            if k in DROP:
+                continue
+            out[k] = _compact_for_narrator(v, depth + 1)
+        return out
+    if isinstance(result, list):
+        # cap arrays at 6 items
+        return [_compact_for_narrator(x, depth + 1) for x in result[:6]]
+    return result
+
 log = logging.getLogger("api.workflows")
 router = APIRouter(prefix="/api", tags=["workflows"])
 
@@ -121,6 +227,13 @@ class Step:
     # `tool`. Used by the design_with_debate workflow's `debate` step which
     # runs a multi-Gemini orchestration in-process.
     inline_fn: Optional[Callable[[dict], Any]] = None
+    # Agentic narration — when set, after the step completes the
+    # executor calls Gemini with `narrator_role` as persona to produce
+    # REAL reasoning over the step's result. The output streams as a
+    # `step.narration` SSE event, which the frontend renders as a
+    # critic/editor/strategist message. Turns the chat from template
+    # strings into actual LLM-generated commentary.
+    narrator_role: Optional[str] = None  # "critic" | "editor" | "strategist" | None
 
 
 @dataclass
@@ -315,6 +428,7 @@ _register(Workflow(
             tool="predict_resistance",
             args_fn=lambda st: {"smiles": st["smiles"], "pdb_id": st.get("pdb_id", "1VQQ")},
             on_result=lambda st, r: st.__setitem__("prediction", r),
+            narrator_role="critic",  # real Gemini critic commentary
         ),
         Step(
             id="pick_atoms",
@@ -341,6 +455,7 @@ _register(Workflow(
                           for idx in st.get("weak_atoms", [])],
             },
             on_result=lambda st, r: st.__setitem__("hardenings", r),
+            narrator_role="editor",  # real Gemini editor commentary
         ),
     ],
     synthesize_fn=lambda st: _synth_harden(st),
@@ -952,7 +1067,8 @@ async def _execute_workflow(
             "run_id": run_id,
             "steps": [
                 {"id": s.id, "label": s.label, "tool": s.tool,
-                 "depends_on": s.depends_on, "description": s.description}
+                 "depends_on": s.depends_on, "description": s.description,
+                 "narrator_role": s.narrator_role}
                 for s in steps
             ],
         })
@@ -1112,6 +1228,29 @@ async def _execute_workflow(
                 "event": "step.done", "run_id": run_id, "step_id": step.id,
                 "elapsed_ms": elapsed_ms, "result": _truncate(data),
             })
+
+            # ── Agentic narration ──
+            # When a step declares a narrator_role, fire a Gemini call
+            # to produce REAL reasoning over the result. The chat
+            # renders this as a critic/editor/strategist message
+            # instead of a Python-templated stat dump. This is what
+            # makes the loop genuinely agentic — every step closes
+            # with an LLM-written opinion, not a string format.
+            if step.narrator_role:
+                try:
+                    narration = await _gemini_narrate(
+                        step.narrator_role, step.label, data,
+                    )
+                except Exception:
+                    narration = None
+                if narration:
+                    yield _sse({
+                        "event": "step.narration",
+                        "run_id": run_id,
+                        "step_id": step.id,
+                        "role": step.narrator_role,
+                        "text": narration,
+                    })
 
         # Final synthesis
         synth = ""

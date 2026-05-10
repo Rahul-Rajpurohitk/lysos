@@ -844,10 +844,25 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
             const ev = JSON.parse(json);
             curWf = reduceWorkflowEvent(curWf, ev);
             updateWf(curWf);
-            // Per-step UI dispatch + chat narration — same pattern as
-            // the orchestrator delegate path so direct /wf invocations
-            // also drive the chemistry visuals AND emit per-agent chat
-            // rows as steps complete.
+            // ── Real-LLM agent commentary ──
+            // When the backend emits step.narration, it's a real
+            // Gemini-written critic/editor/strategist commentary over
+            // the just-completed step. Render it as that agent's
+            // message. No template strings — this is the actual
+            // agentic surface the user asked for.
+            if (ev?.event === "step.narration" && ev.text) {
+              setEvents((p) => [...p, {
+                type: "agent_message",
+                ts: Date.now() / 1000,
+                agent: ev.role || "assistant",
+                content: ev.text,
+              } as any]);
+              continue;
+            }
+            // Per-step UI dispatch + (legacy) template narration —
+            // template only fires if the step had no narrator_role on
+            // the backend, so steps without LLM commentary still get
+            // a status line.
             if (ev?.event === "step.done" && ev.result) {
               const stepDef = curWf?.steps?.find((s: any) => s.id === ev.step_id);
               if (stepDef?.tool && stepDef.tool !== "__inline__"
@@ -856,8 +871,15 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   stepDef.tool, curWf.inputs ?? {}, ev.result,
                 );
               }
+              // Skip template narration for steps that have a real
+              // narrator — the step.narration event above already
+              // emitted a per-agent message. Otherwise fall back to
+              // the template so the chat still has a status line.
+              const hasNarrator = !!(stepDef?.narrator_role);
               const role = roleForStep(stepDef?.tool, ev.step_id);
-              const narration = narrateStepResult(stepDef, ev.result, ev.elapsed_ms);
+              const narration = hasNarrator
+                ? null
+                : narrateStepResult(stepDef, ev.result, ev.elapsed_ms);
               if (narration) {
                 setEvents((p) => [...p, {
                   type: "agent_message",
