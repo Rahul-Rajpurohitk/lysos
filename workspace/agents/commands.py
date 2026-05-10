@@ -495,8 +495,62 @@ class EditCommand(Command):
                     follow_ups=[f"/load {new_smi}", f"/score {new_smi}"],
                 )
 
-            d = await molecule_edit(req)
-            new_smi = d.get("smiles") if isinstance(d, dict) else None
+            try:
+                d = await molecule_edit(req)
+                new_smi = d.get("smiles") if isinstance(d, dict) else None
+            except Exception as fast_exc:  # noqa: BLE001
+                # Fast keyword path failed (commonly a 422 valence
+                # violation from the chemistry kernel). Fall through
+                # to the Gemini translator with the original natural-
+                # language body — the LLM can pick a chemistry-valid
+                # alternative or explain why the edit isn't possible.
+                # This is what makes the chat conversational instead
+                # of dumping a raw `{'code': 'valence_violation', ...}`
+                # dict into the orchestrator bubble.
+                gemini_smi = await _gemini_edit_translator(
+                    parent_smiles=active_smi,
+                    atom_idx=atom_idx,
+                    edit_description=(
+                        body
+                        + f"\n\n(Note: a fast keyword swap to {fg or new_element} "
+                        + f"was rejected by the chemistry kernel: {fast_exc}. "
+                        + "Pick a chemistry-valid alternative that preserves valence.)"
+                    ),
+                )
+                if gemini_smi.get("error") or not gemini_smi.get("smiles"):
+                    rationale = gemini_smi.get("rationale", "")
+                    why = (gemini_smi.get("error")
+                           or "no chemistry-valid alternative came back")
+                    return CommandResult(
+                        output=(
+                            f"I tried `{fg or new_element}` at atom **#{atom_idx}** of "
+                            f"`{active_smi}` but the chemistry kernel rejected it "
+                            f"(valence/bond constraint). Asked Gemini for a smarter "
+                            f"alternative — {why}.\n\n"
+                            f"{('_' + rationale + '_') if rationale else ''}\n\n"
+                            f"Try a different atom (lower-valence neighbor) or "
+                            f"describe a swap that fits the existing bonding."
+                        ),
+                        data={"edit_attempt": body, "atom_idx": atom_idx,
+                              "parent_smiles": active_smi,
+                              "fast_path_error": str(fast_exc)[:300],
+                              "gemini_attempt": gemini_smi},
+                    )
+                new_smi = gemini_smi["smiles"]
+                rationale = gemini_smi.get("rationale", "")
+                return CommandResult(
+                    output=(
+                        f"Keyword swap hit a valence wall at atom **#{atom_idx}**, "
+                        f"so I asked Gemini for a chemistry-valid alternative.\n\n"
+                        f"_{rationale}_\n\n"
+                        f"Result: `{new_smi}`\n\n"
+                        f"_Click below to load it into the canvas._"
+                    ),
+                    data={"smiles": new_smi, "edit": body, "atom_idx": atom_idx,
+                          "parent_smiles": active_smi, "rationale": rationale,
+                          "via": "gemini_fallback"},
+                    follow_ups=[f"/load {new_smi}", f"/score {new_smi}"],
+                )
             if not new_smi:
                 return CommandResult(error=f"edit returned no SMILES: {d}")
             descr = fg or f"swap → {new_element}"
@@ -511,7 +565,18 @@ class EditCommand(Command):
                 follow_ups=[f"/load {new_smi}", f"/score {new_smi}"],
             )
         except Exception as exc:  # noqa: BLE001
-            return CommandResult(error=f"edit failed: {exc}")
+            # Outermost guard — anything that escapes the inner Gemini
+            # fallback. Frame as a polite agent response.
+            return CommandResult(
+                output=(
+                    f"I couldn't apply that edit at atom **#{atom_idx}** of "
+                    f"`{active_smi}` — the underlying chemistry tool errored: "
+                    f"`{str(exc)[:160]}`. Want to try a different atom or "
+                    f"describe the swap differently?"
+                ),
+                data={"edit_attempt": body, "atom_idx": atom_idx,
+                      "parent_smiles": active_smi, "error": str(exc)},
+            )
 
 
 class ScoreCommand(Command):
