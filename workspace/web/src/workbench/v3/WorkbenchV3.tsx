@@ -298,16 +298,65 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // We store events scoped by chat session id (Map preserves insertion order
   // for ordered tab list).
   type ChatTabMeta = { id: string; title: string; userRenamed?: boolean };
+  // ── Session persistency ──
+  // Chat tabs + their event timelines persist across page refreshes
+  // via localStorage. Keyed by user (single-user app for now), schema
+  // versioned so future migrations don't blow up old saves.
+  const SESSION_KEY = "lysos.session.v1";
+  type PersistedSession = {
+    tabs: ChatTabMeta[];
+    activeChatId: string;
+    eventsBySid: Record<string, TraceEvent[]>;
+  };
+  const _loadPersistedSession = (): PersistedSession | null => {
+    try {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as PersistedSession;
+      if (!Array.isArray(parsed.tabs) || parsed.tabs.length === 0) return null;
+      return parsed;
+    } catch {
+      return null;
+    }
+  };
+  const _initialSession = _loadPersistedSession();
   const [chatTabs, setChatTabs] = useState<ChatTabMeta[]>(() => {
+    if (_initialSession?.tabs?.length) return _initialSession.tabs;
     const id = `chat-${crypto.randomUUID().slice(0, 8)}`;
     return [{ id, title: "New chat", userRenamed: false }];
   });
-  const [activeChatId, setActiveChatId] = useState<string>(() => "");
+  const [activeChatId, setActiveChatId] = useState<string>(
+    () => _initialSession?.activeChatId || ""
+  );
   // Lazily seed activeChatId after the initial tab is set
   useEffect(() => {
     if (!activeChatId && chatTabs.length > 0) setActiveChatId(chatTabs[0].id);
   }, [activeChatId, chatTabs]);
-  const [chatEventsBySid, setChatEventsBySid] = useState<Record<string, TraceEvent[]>>({});
+  const [chatEventsBySid, setChatEventsBySid] = useState<Record<string, TraceEvent[]>>(
+    () => _initialSession?.eventsBySid || {}
+  );
+
+  // Persist session to localStorage on any change. Debounce-style via
+  // microtask: setting state batched in React, single write per tick.
+  // Cap each tab's events at 500 so storage doesn't grow unbounded.
+  useEffect(() => {
+    try {
+      const trimmed: Record<string, TraceEvent[]> = {};
+      for (const [sid, evs] of Object.entries(chatEventsBySid)) {
+        trimmed[sid] = (evs as TraceEvent[]).slice(-500);
+      }
+      const payload: PersistedSession = {
+        tabs: chatTabs,
+        activeChatId,
+        eventsBySid: trimmed,
+      };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(payload));
+    } catch (exc) {
+      // QuotaExceededError or similar — silently drop, the in-memory
+      // state is still good for this session.
+      void exc;
+    }
+  }, [chatTabs, activeChatId, chatEventsBySid]);
   // (Slash registry no longer pre-fetched — every slash now goes
   // through the orchestrator agent the same way free text does. The
   // orchestrator decides whether to dispatch it, run a workflow, hand
