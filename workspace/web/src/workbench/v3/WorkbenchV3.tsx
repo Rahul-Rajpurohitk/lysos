@@ -308,6 +308,33 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     if (!activeChatId && chatTabs.length > 0) setActiveChatId(chatTabs[0].id);
   }, [activeChatId, chatTabs]);
   const [chatEventsBySid, setChatEventsBySid] = useState<Record<string, TraceEvent[]>>({});
+  // Live slash-command registry. Fetched from /api/commands/list at
+  // mount so the composer can recognize "this isn't a real command —
+  // route through the orchestrator instead of failing with an
+  // 'Unknown command' wall." Modern agentic apps (Claude, Cursor, …)
+  // never reject a user's message; the agent always sees it and
+  // decides what to do. This makes Lysos behave the same way.
+  const [knownSlashes, setKnownSlashes] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${apiBase}/api/commands/list`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => {
+        if (cancelled || !Array.isArray(d)) return;
+        const names: string[] = [];
+        for (const c of d as any[]) {
+          if (c?.name) names.push(c.name.toLowerCase());
+          for (const a of c?.aliases ?? []) names.push(String(a).toLowerCase());
+        }
+        // Frontend-only fast-path slashes that don't live in the
+        // backend registry but are still valid (handled inline in
+        // onSend before any /api/chat call).
+        ["wf", "load", "swap", "fg", "harden"].forEach((s) => names.push(s));
+        setKnownSlashes(new Set(names));
+      })
+      .catch(() => {/* keep empty set; orchestrator handles all */});
+    return () => { cancelled = true; };
+  }, [apiBase]);
   const events: TraceEvent[] = chatEventsBySid[activeChatId] ?? [];
   function setEvents(updater: TraceEvent[] | ((prev: TraceEvent[]) => TraceEvent[])): void {
     setChatEventsBySid((bySid) => {
@@ -2017,6 +2044,87 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       return;
                     }
                     if (t.trim().startsWith("/")) {
+                      // Modern-agent behavior: if the typed slash isn't
+                      // a known command, hand the WHOLE message to the
+                      // orchestrator (Gemini) instead of erroring with
+                      // "Unknown command". This matches how Claude /
+                      // Cursor handle slashes — the agent ALWAYS sees
+                      // the message and decides what to do.
+                      const slashHead = t.trim().slice(1).split(/\s+/)[0].toLowerCase();
+                      if (knownSlashes.size > 0 && !knownSlashes.has(slashHead)) {
+                        // Re-route as plain text through orchestrator
+                        // by dispatching the auto-slash channel with
+                        // the original line (slash and all). The
+                        // orchestrator path picks intent. Also fall
+                        // through to the orchestrator branch below by
+                        // mutating `t` … but we can't mutate it here,
+                        // so dispatch and return.
+                        setEvents((p) => [...p, {
+                          type: "agent_message", ts: Date.now() / 1000,
+                          agent: "orchestrator",
+                          content: `\`/${slashHead}\` isn't a registered command. Letting the orchestrator interpret your intent…`,
+                        } as any]);
+                        const stripped = t.trim().replace(/^\/\S+\s*/, "").trim() || t.trim();
+                        // Fire orchestrator endpoint directly — same
+                        // path that free text takes, no auto-slash
+                        // re-entry (which caused double sends).
+                        setPendingChat(true);
+                        const runId = `run-${crypto.randomUUID().slice(0, 8)}`;
+                        setEvents((p) => [...p, {
+                          type: "orchestrator_run",
+                          ts: Date.now() / 1000,
+                          agent: "orchestrator",
+                          run_id: runId,
+                          api_base: apiBase,
+                          orchestrator_state: { run_id: runId, user_text: stripped, status: "running" },
+                        } as any]);
+                        try {
+                          const r = await fetch(`${apiBase}/api/orchestrator/run`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              session_id: chatSid,
+                              text: stripped,
+                              smiles: currentSmiles ?? null,
+                              pathogen: selectedPathogen,
+                              pdb_id: selectedPdbId ?? null,
+                              n_candidates: 0,
+                            }),
+                          });
+                          if (!r.ok || !r.body) {
+                            setEvents((evs) => evs.map((e: any) =>
+                              e.run_id === runId ? { ...e, orchestrator_state: { ...e.orchestrator_state, status: "error", error: `HTTP ${r.status}` } } : e));
+                            return;
+                          }
+                          const reader = r.body.getReader();
+                          const decoder = new TextDecoder();
+                          let buf = "";
+                          let cur: any = { run_id: runId, user_text: stripped, status: "running" };
+                          for (;;) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+                            buf += decoder.decode(value, { stream: true });
+                            const blocks = buf.split("\n\n");
+                            buf = blocks.pop() ?? "";
+                            for (const block of blocks) {
+                              const line = block.trim();
+                              if (!line.startsWith("data:")) continue;
+                              try {
+                                const ev = JSON.parse(line.slice(5).trim());
+                                cur = reduceOrchestratorEvent(cur, ev);
+                                setEvents((evs) => evs.map((e: any) =>
+                                  e.run_id === runId ? { ...e, orchestrator_state: cur } : e));
+                              } catch {/* malformed line */}
+                            }
+                          }
+                        } catch (exc: any) {
+                          setEvents((evs) => evs.map((e: any) =>
+                            e.run_id === runId ? { ...e, orchestrator_state: { ...e.orchestrator_state, status: "error", error: String(exc?.message ?? exc) } } : e));
+                        } finally {
+                          setPendingChat(false);
+                        }
+                        return;
+                      }
                       try {
                         const r = await fetch(`${apiBase}/api/chat`, {
                           method: "POST",
