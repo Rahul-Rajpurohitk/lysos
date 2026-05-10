@@ -24,6 +24,10 @@ import { RunningProcessesTray, type RunningProcess } from "./RunningProcessesTra
 interface ChatPanelProps {
   events: ChatMsg[];
   isRunning: boolean;
+  /** Set true when a chat-message fetch is in flight before the first
+   *  response token lands. Drives the typing indicator so the chat
+   *  doesn't appear blank between user-press and first-token. */
+  isPending?: boolean;
   showOnboarding: React.ReactNode;
   composer: React.ReactNode;
   totalMsgs: number;
@@ -110,14 +114,29 @@ export function ChatPanel(p: ChatPanelProps) {
   // right after the user typed something, which is obviously wrong —
   // it should be an assistant/agent role doing the reasoning.
   const lastAgent = useMemo(() => {
-    if (!p.isRunning) return null;
+    if (!p.isRunning && !p.isPending) return null;
     for (let i = p.events.length - 1; i >= 0; i--) {
       const e = p.events[i];
       if (e.type === "agent_message" && e.agent
           && e.agent.toLowerCase() !== "user") return e.agent;
     }
-    return null;
-  }, [p.events, p.isRunning]);
+    // Fallback: chat is pending but no assistant message has landed yet
+    // (between user-sent and first response token). Show the
+    // orchestrator as the role doing the work — that's who routes
+    // the user's request to the right downstream agent.
+    return (p.isPending || p.isRunning) ? "orchestrator" : null;
+  }, [p.events, p.isRunning, p.isPending]);
+
+  // Detect in-flight workflow / agent runs as additional pending hints.
+  const hasPendingWorkflow = useMemo(() => {
+    for (let i = p.events.length - 1; i >= 0; i--) {
+      const e = p.events[i] as any;
+      if (e.type === "workflow_run" && e.workflow_state?.status === "running") return true;
+      if (e.type === "orchestrator_run" && e.orchestrator_state?.status === "running") return true;
+      if (e.type === "agent_run" && e.agent_state?.status === "running") return true;
+    }
+    return false;
+  }, [p.events]);
 
   // Filtered timeline
   const filtered = useMemo(() => {
@@ -267,9 +286,18 @@ export function ChatPanel(p: ChatPanelProps) {
             );
           })}
 
-        {p.isRunning && lastAgent && (
+        {(p.isRunning || p.isPending || hasPendingWorkflow) && lastAgent && (
           <AnimatePresence>
-            <TypingIndicator agent={lastAgent} label={`${lastAgent} is reasoning…`} />
+            <TypingIndicator
+              agent={lastAgent}
+              label={
+                hasPendingWorkflow
+                  ? "workflow streaming…"
+                  : p.isPending
+                    ? `${lastAgent} is thinking…`
+                    : `${lastAgent} is reasoning…`
+              }
+            />
           </AnimatePresence>
         )}
       </div>

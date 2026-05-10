@@ -288,6 +288,11 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Session state
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  // Lifecycle of a single chat-message fetch (set on submit, cleared
+  // when response/stream returns). Powers the "agent is thinking…"
+  // typing indicator so the chat doesn't go blank for 2-9s while the
+  // model is processing.
+  const [pendingChat, setPendingChat] = useState(false);
   // ---- Multi-chat tabs (Claude.ai-style) -------------------------------
   // Each tab is an independent chat: own events, own slash history.
   // We store events scoped by chat session id (Map preserves insertion order
@@ -649,6 +654,22 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     emitWorkflowCandidatesRef.current = emitWorkflowCandidates;
   }, [emitWorkflowCandidates]);
 
+  // Auto-clear pendingChat when ANY non-user agent_message lands OR
+  // when a workflow_run / orchestrator_run row appears. This drains
+  // the typing-indicator state for every code path that produces a
+  // visible response, including the slash early-returns (`/load`,
+  // `/swap`, `/fg`, `/wf help`, etc) where threading try/finally into
+  // every branch is fragile.
+  useEffect(() => {
+    if (!pendingChat) return;
+    if (events.length === 0) return;
+    const last = events[events.length - 1] as any;
+    const isUser = last.type === "agent_message" && last.agent === "user";
+    const isAssistant = last.type === "agent_message" && !isUser;
+    const isStream = last.type === "workflow_run" || last.type === "orchestrator_run";
+    if (isAssistant || isStream) setPendingChat(false);
+  }, [events, pendingChat]);
+
   /** Stream a workflow run via SSE and inject one workflow_run row into
    *  the chat timeline whose state mutates as events arrive. Reusable
    *  from both the /wf slash command path AND the AgentSuggestionStrip
@@ -803,6 +824,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       /^\/wf\b/i.test(trimmed)
     );
     if (SHOULD_AUTO_SLASH) {
+      setPendingChat(true);
       window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
         detail: { text: trimmed },
       }));
@@ -812,6 +834,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       type: "agent_message", ts: Date.now() / 1000,
       agent: "user", content: text,
     } as any]);
+    setPendingChat(true);
     try {
       const r = await fetch(`${apiBase}/api/chat`, {
         method: "POST",
@@ -860,7 +883,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
           });
         } catch {/* canvas already in sync, or load failed silently */}
       }
-    } catch { /* */ }
+    } catch { /* */ } finally { setPendingChat(false); }
   }, [activeChatId, apiBase, selectedPathogen, selectedPdbId, loadSmilesIntoCanvas]);
 
   /** Refresh the recent edit log from /sessions/{sid}/edits — drives the
@@ -1591,6 +1614,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
             <ChatPanel
               events={events as any}
               isRunning={isRunning}
+              isPending={pendingChat}
               totalMsgs={messages.length}
               runningProcesses={runningProcesses}
               showOnboarding={
@@ -1661,6 +1685,9 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       agent: "user",
                       content: t,
                     } as any]);
+                    // Light up the typing indicator instantly so the user
+                    // sees "agent is thinking…" while the model warms up.
+                    setPendingChat(true);
                     const chatSid = activeChatId;
 
                     // 1.5) Frontend-side fast-path slash commands that mutate
@@ -1887,12 +1914,38 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       return;
                     }
 
-                    const wfMatch = t.trim().match(/^\/wf\s+(\S+)(?:\s+(\{.*\}))?\s*$/);
+                    // Accept BOTH JSON and key=value forms:
+                    //   /wf harden_candidate {"smiles": "...", "pdb_id": "1VQQ"}
+                    //   /wf harden_candidate smiles=Cc1c(C#N)... pdb_id=1VQQ
+                    //   /wf harden_candidate                          ← bare, ambient context
+                    // Also tolerates newlines inside the JSON body
+                    // (so wrapped chat-rendered slashes still parse).
+                    const wfMatch = t.trim().match(/^\/wf\s+(\S+)\s*([\s\S]*)$/i);
                     if (wfMatch) {
                       const wfName = wfMatch[1];
                       let wfInputs: Record<string, any> = {};
-                      try { if (wfMatch[2]) wfInputs = JSON.parse(wfMatch[2]); }
-                      catch {/* ignore parse error, send empty */}
+                      const argTail = (wfMatch[2] || "").trim();
+                      // Try JSON first if the tail looks JSON-y
+                      try {
+                        if (argTail.startsWith("{")) {
+                          // Extract just the {…} block (in case there's trailing text)
+                          const m = argTail.match(/\{[\s\S]*\}/);
+                          if (m) wfInputs = JSON.parse(m[0]);
+                        } else if (argTail) {
+                          // key=value form — split on whitespace, parse each pair
+                          for (const pair of argTail.split(/\s+/)) {
+                            const eq = pair.indexOf("=");
+                            if (eq <= 0) continue;
+                            const k = pair.slice(0, eq).trim();
+                            const v = pair.slice(eq + 1).trim();
+                            if (k && v) {
+                              // Try numeric coercion for things like max_atoms=3
+                              const numV = Number(v);
+                              wfInputs[k] = !isNaN(numV) && /^\d+(?:\.\d+)?$/.test(v) ? numV : v;
+                            }
+                          }
+                        }
+                      } catch (_e) {/* fall through with empty inputs — ambient context fallback below fills them */}
                       // Auto-fill obvious context defaults
                       if (wfName === "harden_candidate" || wfName === "broad_spectrum_screen" ||
                           wfName === "optimize_for_property") {
@@ -1978,6 +2031,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           agent: "orchestrator",
                           content: `Network hiccup while routing that to the agent — ${exc?.message ?? exc}. Want to retry?`,
                         } as any]);
+                      } finally {
+                        setPendingChat(false);
                       }
                       return;
                     }
@@ -2173,6 +2228,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       curOrch = { ...curOrch, status: "error",
                         error: String(exc?.message ?? exc) };
                       updateRow(curOrch);
+                    } finally {
+                      // Orchestrator stream finished (or crashed) — drop
+                      // the pending flag so the typing indicator clears.
+                      // The orchestrator's own status pill remains, and
+                      // any downstream slash that gets auto-dispatched
+                      // sets pendingChat back to true via setPendingChat
+                      // in its own onSend recursion.
+                      setPendingChat(false);
                     }
 
                     // Auto-dispatch the slash command the orchestrator chose.
@@ -2298,6 +2361,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   parent_message_id: parentMessageId,
                   reply_agent: targetAgent,
                 } as any]);
+                setPendingChat(true);
                 try {
                   const r = await fetch(`${apiBase}/api/chat`, {
                     method: "POST",
@@ -2330,6 +2394,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     content: `Couldn't deliver your reply to ${targetAgent} — ${exc?.message ?? exc}. Want to try again?`,
                     thread_id: threadId,
                   } as any]);
+                } finally {
+                  setPendingChat(false);
                 }
               }}
               composite={composite}
