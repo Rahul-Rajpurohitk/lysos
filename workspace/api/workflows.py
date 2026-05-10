@@ -367,10 +367,17 @@ def _synth_harden(state: dict) -> str:
         if not all_s:
             continue
         top = all_s[0]
+        # If the swap was applied successfully, surface the resulting
+        # SMILES in backticks so the chat renders it as a clickable
+        # apply-pill (MarkdownText turns `c1ccc(O)cc1` into a "Load
+        # in 3D" chip wired to lysos:auto-slash).
+        after = top.get("after_smiles")
+        suffix = f" → `{after}`" if after else ""
         lines.append(
             f"  • atom {weak[i]} → **{top.get('swap')}** "
             f"(conf {top.get('confidence', 0):.2f}, "
-            f"{top.get('source')})  — {top.get('rationale', '')[:120]}"
+            f"{top.get('source')}){suffix}  — "
+            f"{top.get('rationale', '')[:120]}"
         )
     return "\n".join(lines)
 

@@ -535,6 +535,68 @@ class HardenRequest(BaseModel):
     use_llm: bool = True
 
 
+def _swap_label_to_fg(swap_label: str) -> str | None:
+    """Map a free-form Gemini/playbook swap label to one of the FG_TEMPLATES
+    keys (`hydroxyl`, `methyl`, `carboxyl`, …). Returns None when no
+    obvious match — the suggestion is shown without an Apply button.
+
+    Order matters: longest/most-specific labels first so "trifluoromethyl"
+    isn't shadowed by "methyl".
+    """
+    s = (swap_label or "").lower()
+    table = [
+        ("trifluoromethyl", "trifluoromethyl"), ("cf3", "trifluoromethyl"),
+        ("trichloromethyl", "trichloromethyl"),
+        ("sulfonamide", "sulfonamide"), ("sulfonyl", "sulfonyl"),
+        ("phosphonate", "phosphonate"), ("phosphate", "phosphate"),
+        ("carboxylate", "carboxyl"), ("carboxyl", "carboxyl"),
+        ("aldehyde", "aldehyde"), ("carbonyl", "carbonyl"),
+        ("ester", "ester"), ("amide", "amide"),
+        ("nitro", "nitro"), ("cyano", "cyano"), ("nitrile", "cyano"),
+        ("hydroxy", "hydroxyl"), ("phenol", "hydroxyl"), ("-oh", "hydroxyl"), (" oh", "hydroxyl"),
+        ("methoxy", "methoxy"),
+        ("ethoxy", "ethoxy"),
+        ("tert-butyl", "tert-butyl"), ("t-butyl", "tert-butyl"),
+        ("isopropyl", "isopropyl"),
+        ("ethynyl", "ethynyl"), ("vinyl", "vinyl"),
+        ("ethyl", "ethyl"),
+        ("methyl", "methyl"),
+        ("amine", "amine"), ("amino", "amine"), ("-nh2", "amine"),
+        ("fluorine", "fluorine"), ("fluoro", "fluorine"), ("-f ", "fluorine"), (" f ", "fluorine"),
+        ("chlorine", "chlorine"), ("chloro", "chlorine"),
+        ("bromine", "bromine"), ("bromo", "bromine"),
+        ("iodine", "iodine"), ("iodo", "iodine"),
+        ("thiol", "thiol"), ("sulfhydryl", "thiol"),
+        ("azide", "azido"), ("azido", "azido"),
+        ("isocyanide", "isocyano"),
+    ]
+    for needle, fg in table:
+        if needle in s:
+            return fg
+    return None
+
+
+def _apply_fg_to_smiles(smiles: str, atom_idx: int, fg_name: str) -> str | None:
+    """Apply a functional group at the given atom index using RDKit and
+    return the canonical SMILES of the result. None on any failure —
+    callers should treat absence of after_smiles as "non-applicable".
+    """
+    try:
+        from workspace.tools.chem_workbench.edit_molecule import edit_molecule
+        result = edit_molecule(
+            smiles=smiles,
+            op="add_functional_group_at",
+            atom_index=atom_idx,
+            functional_group=fg_name,
+        )
+        out = getattr(result, "smiles", None) or (
+            result.get("smiles") if isinstance(result, dict) else None
+        )
+        return out if out and out != smiles else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 @router.post("/resistance/harden")
 async def harden_atom(req: HardenRequest) -> dict:
     """Suggest substituent swaps that reduce escape-score for the picked
@@ -630,6 +692,23 @@ async def harden_atom(req: HardenRequest) -> dict:
                 "grantham": int(_grantham(mut.get("wt", ""), mut.get("mutant", ""))),
             },
         })
+
+    # Annotate each suggestion with `after_smiles` whenever the swap
+    # label maps to a known functional group. The frontend uses this to
+    # render an "Apply" chip that loads the modified SMILES into 2D + 3D
+    # — turning a verbal recommendation into a one-click visual change.
+    def _annotate(items: list[dict]) -> list[dict]:
+        out = []
+        for item in items:
+            fg = _swap_label_to_fg(item.get("swap", ""))
+            after = _apply_fg_to_smiles(req.smiles, req.atom_idx, fg) if fg else None
+            if after and after != req.smiles:
+                item = {**item, "after_smiles": after, "fg_applied": fg}
+            out.append(item)
+        return out
+
+    suggestions = _annotate(suggestions)
+    llm_suggestions = _annotate(llm_suggestions)
 
     # Combined response — BOTH llm_suggestions AND playbook suggestions.
     # The frontend renders them as two separate sections. Each suggestion

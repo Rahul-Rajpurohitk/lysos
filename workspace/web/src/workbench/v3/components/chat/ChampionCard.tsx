@@ -11,7 +11,7 @@
  *   - workflow.done auto-promotion event
  *   - Knowledge tab champion pane (KnowledgeHubCard)
  */
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
 interface ChampionRecord {
@@ -164,6 +164,24 @@ const Stat: React.FC<{ label: string; value: string; accent?: boolean }> = ({ la
 
 const ChampionCard: React.FC<Props> = ({ msg, onLoadSmiles }) => {
   const data = msg.data;
+
+  // Auto-load the champion's SMILES into the 2D + 3D canvas when this
+  // card first mounts. Fixes user-reported "I asked to show the best
+  // component but nothing appeared in the visuals" — they had to click
+  // the SMILES pill manually before, easy to miss. Now the visuals
+  // light up the moment /champion runs.
+  const autoLoadedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!onLoadSmiles) return;
+    let smi: string | undefined;
+    if (data.mode === "show" && data.champion?.smiles) smi = data.champion.smiles;
+    else if (data.mode === "compare" && data.ab?.champion?.smiles) smi = data.ab.champion.smiles;
+    else if (data.mode === "promote" && data.promotion?.new?.smiles) smi = data.promotion.new.smiles;
+    if (smi && autoLoadedRef.current !== smi) {
+      autoLoadedRef.current = smi;
+      onLoadSmiles(smi);
+    }
+  }, [data, onLoadSmiles]);
 
   if (data.mode === "show") {
     const c = data.champion;
