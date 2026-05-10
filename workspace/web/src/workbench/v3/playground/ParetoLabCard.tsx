@@ -324,7 +324,20 @@ export function ParetoLabCard({ apiBase, sessionId, onLoad, onAgentMessage }: Pr
             )}
             {sessionId && onAgentMessage && (
               <ChipBtn
-                onClick={() => onAgentMessage(`/pareto-summary session=${sessionId}`)}
+                onClick={() => {
+                  // Fire the agentic Pareto workflow through the global
+                  // auto-slash channel so it goes through the composer
+                  // pipeline (workflow detection + SSE streaming) and
+                  // renders as a real WorkflowCard with Critic verdict.
+                  const inputs = JSON.stringify({
+                    session_id: sessionId,
+                    x_axis: xAxis,
+                    y_axis: yAxis,
+                  });
+                  window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                    detail: { text: `/wf pareto_explore ${inputs}` },
+                  }));
+                }}
                 icon={<Sparkles size={10} />}
                 label="ask agent"
               />

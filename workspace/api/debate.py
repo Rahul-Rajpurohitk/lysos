@@ -118,6 +118,27 @@ Rules:
 - Don't make edits that lose the original scaffold's pharmacophore.
 """
 
+CRITIC_PARETO_PROMPT = """You are the Critic agent narrating a Pareto frontier of antibiotic
+candidates the team has been scoring. You receive structured Pareto
+data (which candidates are non-dominated, dimension values per
+candidate, axis names). Your job is to translate the frontier into
+actionable strategy.
+
+Output STRICT JSON:
+{
+  "thinking": "<one paragraph — what the frontier shape implies (knee point? clear leader? scattered?)>",
+  "advance_smiles": "<SMILES of the candidate that should be advanced (clinical priority)>",
+  "advance_reason": "<one sentence — why: the SPECIFIC numbers that justify advancing this one>",
+  "secondary_smiles": "<SMILES of an A/B partner — different trade-off so the team learns from compare>",
+  "secondary_reason": "<one sentence — why this is a useful A/B partner>",
+  "drop_smiles": "<SMILES of a clearly dominated candidate that should be dropped>",
+  "drop_reason": "<one sentence — name the dominator and the dimensions where it loses>",
+  "trade_off_insight": "<one sentence — what trade-off is the frontier exposing? e.g. potency vs ADMET>",
+  "next_action": "harden" | "score_missing" | "expand_set" | "ship"
+}
+"""
+
+
 CRITIC_COMPARE_PROMPT = """You are the Critic agent narrating a side-by-side comparison of N
 antibiotic candidates against the same target. You receive structured
 resistance / scoring data; you do NOT redo the analysis. Your job is
@@ -356,6 +377,61 @@ async def editor_refine(
         tokens_in=res.tokens_in, tokens_out=res.tokens_out,
         triggered_by="critic",
         tags=["gemini", "refine"],
+    )
+    return res
+
+
+async def critic_narrate_pareto(
+    session_id: str, pareto: dict, pathogen: str = "MRSA",
+) -> RoleResult:
+    """Critic looks at a structured Pareto frontier (all_points + axis
+    metadata) and produces an advance / A/B / drop recommendation with
+    specific candidate-id and SMILES citations."""
+    points = pareto.get("all_points") or []
+    if not points:
+        return RoleResult(role="critic", raw={}, elapsed_ms=0,
+                          tokens_in=0, tokens_out=0, cost_usd=0.0,
+                          error="no points in pareto frontier")
+    # Filter to scored points only — the agent can't reason about None
+    scored = [p for p in points if p.get("x_value") is not None and p.get("y_value") is not None]
+    if not scored:
+        return RoleResult(role="critic", raw={}, elapsed_ms=0,
+                          tokens_in=0, tokens_out=0, cost_usd=0.0,
+                          error="no scored candidates yet — kick score-missing first")
+    x_meta = pareto.get("x_axis_meta") or {}
+    y_meta = pareto.get("y_axis_meta") or {}
+    x_label = x_meta.get("label") or pareto.get("x_axis", "x")
+    y_label = y_meta.get("label") or pareto.get("y_axis", "y")
+    rows_block = "\n".join(
+        f"  - SMILES `{p.get('smiles')}` "
+        f"(id {p.get('candidate_id', '')[:10]}, {p.get('created_by', '?')}): "
+        f"{x_label} = {p.get('x_value'):.3f}, {y_label} = {p.get('y_value'):.3f}"
+        f"{' [PARETO]' if p.get('on_pareto') else ''}"
+        for p in scored[:10]
+    )
+    user = (
+        f"Pathogen: {pathogen}\n"
+        f"Pareto frontier on **{x_label}** vs **{y_label}**\n"
+        f"Scored candidates ({len(scored)} of {len(points)} total; "
+        f"{pareto.get('stats', {}).get('n_pareto', '?')} on the frontier):\n\n"
+        f"{rows_block}\n\n"
+        f"Pick: which to advance, which to A/B, which to drop. Be concrete with numbers."
+        + _pathogen_brief(pathogen)
+    )
+    res = await _gemini_call("critic", CRITIC_PARETO_PROMPT, user, temperature=0.3, max_tokens=4096)
+    msg = (
+        f"narrated pareto · advance: `{res.raw.get('advance_smiles', '?')[:30]}…` · "
+        f"trade-off: {(res.raw.get('trade_off_insight') or '')[:80]}"
+    )
+    agent_activity.record(
+        session_id, "critic", "narrate_pareto",
+        message=msg or (res.error or "(no narration)"),
+        confidence=0.85 if not res.error else 0.0,
+        elapsed_ms=res.elapsed_ms,
+        status="error" if res.error else "ok",
+        tokens_in=res.tokens_in, tokens_out=res.tokens_out,
+        triggered_by="strategist",
+        tags=["gemini", "pareto"],
     )
     return res
 

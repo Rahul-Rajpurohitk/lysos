@@ -2660,7 +2660,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       <KnowledgeHubCard
                         apiBase={apiBase}
                         pathogen={selectedPathogen}
-                        onFireSlash={(slash) => sendAgentMessage(slash)}
+                        onFireSlash={(slash) => {
+                          // Use auto-slash so the composer pipeline
+                          // catches it — that path runs slash detection,
+                          // workflow regex, and Gemini fallback. Going
+                          // direct to /api/chat would skip workflow
+                          // routing for /wf <name> chips.
+                          window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                            detail: { text: slash },
+                          }));
+                        }}
                         onLoadPdb={(pdbId) => setSelectedPdbId(pdbId)}
                       /> },
                     { id: "champion", title: `🏆 Champion · ${selectedPathogen}`, body:

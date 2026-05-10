@@ -596,7 +596,168 @@ def _synth_optimize(state: dict) -> str:
     )
 
 
-# ── Workflow 6: design_with_debate ───────────────────────────────────
+# ── Workflow 6: pareto_explore (agentic — score → frontier → critic) ─
+# Runs the full Pareto loop: kicks scoring on any unscored candidates,
+# fetches the frontier on the chosen axes, then has Gemini Pro Critic
+# narrate the trade-offs and recommend advance/A-B/drop.
+
+async def _pareto_score_missing_step(state: dict) -> dict:
+    """Inline step: kick the score-missing job for the session.
+    Best-effort — workflow continues even if no missing candidates."""
+    sid = state.get("session_id") or state.get("_session_id") or ""
+    if not sid:
+        return {"skipped": "no session_id"}
+    try:
+        from . import chem_pareto as _cp
+        # session_pareto_score_missing returns {"queued": int}
+        rv = await _cp.session_pareto_score_missing(sid)
+        return rv if isinstance(rv, dict) else {"result": rv}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"score-missing skipped: {exc}"}
+
+
+async def _pareto_fetch_step(state: dict) -> dict:
+    """Inline step: fetch the Pareto frontier on the requested axes."""
+    sid = state.get("session_id") or state.get("_session_id") or ""
+    if not sid:
+        return {"error": "no session_id"}
+    x = state.get("x_axis") or "predicted_mic"
+    y = state.get("y_axis") or "composite_reward"
+    try:
+        from . import chem_pareto as _cp
+        rv = await _cp.session_pareto(sid, x=x, y=y)
+        return rv
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)}
+
+
+async def _pareto_critic_step(state: dict) -> dict:
+    """Inline step: Critic narrates the frontier."""
+    from . import debate
+    pareto = state.get("pareto_frontier") or {}
+    if pareto.get("error") or not pareto.get("all_points"):
+        return {"error": pareto.get("error") or "no Pareto points to narrate"}
+    pathogen = state.get("pathogen") or "MRSA"
+    sid = state.get("_session_id") or state.get("session_id") or ""
+    res = await debate.critic_narrate_pareto(sid, pareto, pathogen=pathogen)
+    if res.error:
+        return {"error": res.error, "elapsed_ms": res.elapsed_ms,
+                "tokens_in": res.tokens_in, "tokens_out": res.tokens_out}
+    out = dict(res.raw)
+    out["elapsed_ms"] = res.elapsed_ms
+    out["tokens_in"] = res.tokens_in
+    out["tokens_out"] = res.tokens_out
+    out["cost_usd"] = res.cost_usd
+    return out
+
+
+_register(Workflow(
+    name="pareto_explore",
+    label="Pareto frontier · explore",
+    description=("Kick scoring on unscored candidates, fetch the "
+                 "Pareto frontier, and have the Critic narrate which "
+                 "candidate to advance, A/B partner, and drop with "
+                 "specific dimension citations."),
+    inputs=[
+        {"name": "session_id", "type": "string", "required": False,
+         "description": "Defaults to the active chat session"},
+        {"name": "x_axis", "type": "string", "default": "predicted_mic"},
+        {"name": "y_axis", "type": "string", "default": "composite_reward"},
+        {"name": "pathogen", "type": "string", "default": "MRSA"},
+    ],
+    tags=["pareto", "critic", "explore"],
+    steps=[
+        Step(
+            id="score_missing",
+            label="Kick scoring on unscored candidates",
+            tool="__inline__",
+            inline_fn=_pareto_score_missing_step,
+            on_result=lambda st, r: st.__setitem__("score_missing_result", r),
+            optional=True,
+        ),
+        Step(
+            id="fetch_frontier",
+            label="Fetch Pareto frontier",
+            tool="__inline__",
+            inline_fn=_pareto_fetch_step,
+            on_result=lambda st, r: st.__setitem__("pareto_frontier", r),
+        ),
+        Step(
+            id="critic_narrate_pareto",
+            label="Critic narrates the frontier",
+            tool="__inline__",
+            inline_fn=_pareto_critic_step,
+            on_result=lambda st, r: st.__setitem__("pareto_critic", r),
+            optional=True,
+        ),
+    ],
+    synthesize_fn=lambda st: _synth_pareto_explore(st),
+))
+
+
+def _synth_pareto_explore(state: dict) -> str:
+    pareto = state.get("pareto_frontier") or {}
+    critic = state.get("pareto_critic") or {}
+    score_missing = state.get("score_missing_result") or {}
+    if pareto.get("error"):
+        return f"_Pareto frontier unavailable: {pareto['error']}_"
+    points = pareto.get("all_points") or []
+    scored = [p for p in points if p.get("x_value") is not None and p.get("y_value") is not None]
+    pareto_set = pareto.get("pareto_set") or []
+    x_label = (pareto.get("x_axis_meta") or {}).get("label") or pareto.get("x_axis", "x")
+    y_label = (pareto.get("y_axis_meta") or {}).get("label") or pareto.get("y_axis", "y")
+    out: list[str] = [f"### Pareto frontier · **{x_label}** vs **{y_label}**"]
+    out.append("")
+    n_kicked = score_missing.get("queued") or score_missing.get("n_queued") or 0
+    if n_kicked:
+        out.append(f"_Kicked scoring on {n_kicked} unscored candidate(s) — "
+                   f"results may need a refresh._")
+        out.append("")
+    out.append(
+        f"**{len(scored)} scored** of {len(points)} total · "
+        f"**{len(pareto_set)} on the frontier**"
+    )
+    out.append("")
+    if scored:
+        out.append("| candidate | SMILES | x | y | pareto |")
+        out.append("|---|---|---:|---:|:---:|")
+        for p in scored[:8]:
+            cid = (p.get("candidate_id") or "")[:10]
+            smi = p.get("smiles") or "?"
+            smi_short = smi if len(smi) <= 28 else smi[:27] + "…"
+            on = "★" if p.get("on_pareto") else ""
+            out.append(
+                f"| `{cid}` | `{smi_short}` | "
+                f"{p.get('x_value', 0):.3f} | {p.get('y_value', 0):.3f} | {on} |"
+            )
+    if critic and not critic.get("error"):
+        out.append("")
+        out.append("---")
+        out.append("")
+        out.append("**Critic's verdict** (Gemini Pro):")
+        if critic.get("advance_smiles"):
+            out.append(f"  - 🚀 **Advance**: `{critic['advance_smiles']}` — "
+                       f"{critic.get('advance_reason', '')}")
+        if critic.get("secondary_smiles"):
+            out.append(f"  - ⚖️ **A/B partner**: `{critic['secondary_smiles']}` — "
+                       f"{critic.get('secondary_reason', '')}")
+        if critic.get("drop_smiles"):
+            out.append(f"  - 🗑️ **Drop**: `{critic['drop_smiles']}` — "
+                       f"{critic.get('drop_reason', '')}")
+        if critic.get("trade_off_insight"):
+            out.append(f"  - 💡 **Trade-off**: {critic['trade_off_insight']}")
+        if critic.get("next_action"):
+            out.append(f"  - ➡ **Next**: `{critic['next_action']}`")
+        if critic.get("thinking"):
+            out.append("")
+            out.append(f"_{critic['thinking']}_")
+    elif critic and critic.get("error"):
+        out.append("")
+        out.append(f"_(Critic narration unavailable: {critic['error']})_")
+    return "\n".join(out)
+
+
+# ── Workflow 7: design_with_debate ───────────────────────────────────
 # REAL multi-agent debate. Each role is a separate Gemini Pro call with
 # a role-specific system prompt. Designer proposes → Critic challenges
 # → Editor refines → repeat for N rounds → Strategist picks winner.

@@ -179,9 +179,12 @@ async def _gemini_edit_translator(
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "maxOutputTokens": 512,
+            # Gemini 2.5's thinking budget eats from the same pool as
+            # the JSON response, so 512 was hitting the cap mid-string.
+            # 4096 gives the model headroom for complex SMILES edits.
+            "maxOutputTokens": 4096,
             "temperature": 0.2,
-            "thinkingConfig": {"thinkingBudget": 512, "includeThoughts": False},
+            "thinkingConfig": {"thinkingBudget": 1024, "includeThoughts": False},
         },
     }
     try:
