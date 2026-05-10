@@ -174,29 +174,9 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
         onPick(filtered[highlightIdx]);
         return;
       }
-      // Enter → multiple cases:
-      //   1. User typed past the command name (has whitespace after the
-      //      slash) → DO NOT autocomplete. Close the palette so the
-      //      textarea's onKeyDown can fire send(). The palette eating
-      //      Enter here was the root cause of the user-reported
-      //      "Enter doesn't work" bug.
-      //   2. Typed prefix is an EXACT command match (no args yet) →
-      //      same: close + let textarea send.
-      //   3. Otherwise → autocomplete to the highlighted command.
-      if (e.key === "Enter" && filtered.length) {
-        const hasArgs = /\s/.test(query.trim());
-        const exact = filtered.find((c) =>
-          c.name.toLowerCase() === prefix
-          || (c.aliases ?? []).some((a) => a.toLowerCase() === prefix)
-        );
-        if (hasArgs || exact) {
-          // Don't preventDefault — textarea handles send().
-          onClose();
-          return;
-        }
-        e.preventDefault();
-        onPick(filtered[highlightIdx]);
-      }
+      // Enter is OWNED by the textarea — never consume it from the
+      // palette. The textarea's onKeyDown closes the palette and
+      // sends. Autocomplete happens via Tab or click.
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -177,30 +177,17 @@ export function TightComposer(p: TightComposerProps) {
         setPaletteOpen(false);
         return;
       }
-      // Tab + arrow keys belong to the palette (autocomplete +
-      // navigation). Enter, however, must always send when the user
-      // has typed past the bare command name (e.g. `/wf do anything`)
-      // — otherwise the palette eats Enter, fires onPick on its own
-      // schedule, and the message never sends. The previous
-      // implementation deferred Enter to the palette's window
-      // listener, which created a race against React state updates
-      // and made Enter feel broken.
+      // Tab + arrow keys belong to the palette (autocomplete + nav).
+      // Everything else — including Enter — belongs to the textarea.
+      // Earlier versions deferred Enter to the palette listener and
+      // hit a React-state race that made Enter feel broken.
       if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Tab") {
         return;
       }
-      const hasArgs = /\s/.test(text.trim());  // typed past the slash command
-      if (e.key === "Enter" && !e.shiftKey && hasArgs) {
-        e.preventDefault();
-        setPaletteOpen(false);
-        send();
-        return;
-      }
-      // Plain `/cmd` + Enter (no args) → let palette handle (it autocompletes
-      // or, on exact match, closes itself and lets the next branch send).
-      if (e.key === "Enter") return;
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
+      setPaletteOpen(false);
       send();
     }
   }
