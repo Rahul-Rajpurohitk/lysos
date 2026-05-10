@@ -2362,6 +2362,20 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   reply_agent: targetAgent,
                 } as any]);
                 setPendingChat(true);
+                // Ship the last ~14 visible chat messages so the
+                // per-agent reply path on the backend has the SAME
+                // context the user sees on screen. Workflow narration
+                // ("Generate hardening suggestions complete (20710ms)")
+                // and result blobs are SSE-only — without this they're
+                // invisible to the harness.
+                const recentMessages = events
+                  .filter((e: any) => e.type === "agent_message" && (e.content || "").length > 0)
+                  .slice(-18)
+                  .map((e: any) => ({
+                    agent: e.agent || "system",
+                    content: String(e.content || "").slice(0, 600),
+                    ts: e.ts,
+                  }));
                 try {
                   const r = await fetch(`${apiBase}/api/chat`, {
                     method: "POST",
@@ -2372,6 +2386,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       reply_to_agent: targetAgent,
                       parent_message_id: parentMessageId,
                       thread_id: threadId,
+                      // Forward ambient context so the per-agent reply
+                      // path in the harness has the live SMILES /
+                      // pathogen / PDB to reference instead of "(none
+                      // loaded)" and giving a generic deflection.
+                      pathogen: selectedPathogen,
+                      smiles: currentSmilesRef.current ?? null,
+                      pdb_id: selectedPdbId ?? null,
+                      recent_messages: recentMessages,
                     }),
                   });
                   const d = await r.json();

@@ -41,6 +41,99 @@ from .tracing import Tracer, get_tracer
 log = logging.getLogger("workbench.agents.harness.orchestrator")
 
 
+# ----- Per-agent thread-reply prompts ------------------------------------
+# The original DESIGNER_SYSTEM/CRITIC_SYSTEM/EDITOR_SYSTEM in prompts.py
+# are debate-loop prompts (telling the agent "your turn, propose / argue /
+# transform"). For one-off thread replies ("where?", "why atom 2?", "what
+# was the escape score?") we need a different prompt: the agent needs to
+# answer THE USER'S QUESTION grounded in the recent conversation, not
+# initiate a new debate turn.
+_ROLE_BLURB = {
+    "designer":   "You propose new candidate antibiotics and explain scaffold choices.",
+    "critic":     "You identify weaknesses in candidates — resistance escape, ADMET liabilities, off-targets — and propose transformations.",
+    "editor":     "You apply structural transformations (atom swaps, functional-group adds, SMARTS edits) and report the resulting SMILES.",
+    "strategist": "You make routing decisions — continue, branch, terminate, or red-team — based on the Pareto frontier and lineage tree.",
+}
+
+_PER_AGENT_REPLY_SYSTEM = """\
+You are the **{title}** agent in the Lysos antibiotic-design workspace.
+The user just asked you a FOLLOW-UP question about your earlier work in
+this session. Answer DIRECTLY and CONCRETELY using the context below.
+
+# Your role
+{role}
+
+# Recent session activity (oldest → newest)
+{history}
+
+# Ambient context
+- Current SMILES: `{smiles}`
+- Target pathogen: {pathogen}
+- PDB target: {pdb}
+
+# Rules
+1. Answer the user's question using the activity above. If a workflow
+   already produced concrete numbers (atom indices, escape scores,
+   robustness, residue positions, transformations), QUOTE THEM.
+2. If they ask "where?" — name specific atom indices, residue positions
+   (e.g. K247T, S365A), or transformation locations from the activity.
+3. If they ask "why?" — give the chemical / biological reason
+   (active-site catalytic residue, H-bond donor, electrostatic
+   complementarity), not generic disclaimers.
+4. NEVER deflect with "please specify" or "I'm focused on antibiotics" —
+   you ALREADY have the context, USE IT.
+5. Stay in character. Editor talks structure edits. Critic talks
+   weaknesses. Designer talks scaffolds. Strategist talks decisions.
+6. Be concise — 2-4 sentences unless the user asks for detail.
+"""
+
+
+def _format_ledger_for_agent(orch_state, target_agent: str, k: int = 12) -> str:
+    """Build a compact "you said X, then user said Y" history that
+    grounds the per-agent reply. Pulls the last k ledger entries that are
+    either from THIS agent or are user messages, so the LLM sees its own
+    output + the user's prompts in order.
+
+    Workflow step results (predict, harden, score) are reformatted as
+    "[tool]" lines so the agent can quote concrete numbers.
+    """
+    try:
+        ledger = orch_state.ledger
+    except AttributeError:
+        return "(no recent activity)"
+    if not ledger:
+        return "(no recent activity)"
+
+    relevant = []
+    for entry in ledger[-60:]:  # cap at 60 so we don't blow context
+        agent = (entry.agent or "").lower()
+        if entry.kind == "message" and (agent == "user" or agent == target_agent):
+            relevant.append(entry)
+        elif entry.kind in ("tool_call", "candidate", "score"):
+            # All agents benefit from seeing tool results / new candidates
+            relevant.append(entry)
+
+    if not relevant:
+        return "(no recent activity)"
+
+    lines = []
+    for entry in relevant[-k:]:
+        agent = (entry.agent or "system").lower()
+        summary = entry.summary or "(empty)"
+        if len(summary) > 280:
+            summary = summary[:277] + "…"
+        if entry.kind == "message":
+            lines.append(f"- **{agent}**: {summary}")
+        elif entry.kind == "tool_call":
+            tool = (entry.payload or {}).get("tool", "tool")
+            lines.append(f"- _{tool}_: {summary}")
+        elif entry.kind == "candidate":
+            lines.append(f"- _new candidate_: {summary}")
+        elif entry.kind == "score":
+            lines.append(f"- _score_: {summary}")
+    return "\n".join(lines) if lines else "(no recent activity)"
+
+
 @dataclass
 class HarnessResponse:
     """What the harness returns per user message."""
@@ -111,6 +204,7 @@ class Harness:
             orch = get_orchestrator()
         except Exception:  # noqa: BLE001
             orch = None
+        target_agent: Optional[str] = None
         if orch is not None:
             orch.ingest(session.session_id, {
                 "type": "agent_message", "agent": "user",
@@ -130,6 +224,28 @@ class Harness:
                     events=events,
                     elapsed_ms=int((time.perf_counter() - t0) * 1000),
                 )
+
+            # Per-agent thread reply: the user replied to a specific agent
+            # bubble. Build a context-aware system prompt with the recent
+            # ledger so the agent answers IN CHARACTER and grounded in
+            # what's already on screen — fixes "where?" → editor giving a
+            # generic "please specify" deflection.
+            if mode == "single" and target_agent and target_agent in _ROLE_BLURB:
+                if not user_text.strip().startswith("/"):
+                    ans = await self._reply_as_agent(
+                        agent=target_agent,
+                        user_text=user_text,
+                        session=session,
+                        orch=orch,
+                        trace=trace,
+                    )
+                    return HarnessResponse(
+                        session_id=session.session_id,
+                        message_id=msg_id,
+                        text=ans,
+                        events=events,
+                        elapsed_ms=int((time.perf_counter() - t0) * 1000),
+                    )
 
         # ---- phase 1: resolve ----
         text = user_text.strip()
@@ -268,6 +384,96 @@ class Harness:
         )
 
     # ---- helpers ----
+
+    async def _reply_as_agent(
+        self,
+        agent: str,
+        user_text: str,
+        session: SessionState,
+        orch,
+        trace,
+    ) -> str:
+        """Generate a context-aware reply when the user clicks "reply to
+        editor / critic / designer / strategist". Uses orchestrator state
+        to ground the response in recent activity instead of inviting
+        generic boilerplate.
+        """
+        if self.llm is None:
+            return f"({agent.title()} can't reply — no LLM configured.)"
+
+        # Prefer the frontend-shipped on-screen context: the workflow
+        # narration ("Generate hardening suggestions complete") and the
+        # blob explaining "atom 2 → 2-fluoro substitution" only land in
+        # the chat via SSE-driven client-side events; they may not be
+        # in the orchestrator ledger. Frontend-context is more accurate.
+        history = "(no recent activity)"
+        recent = session.settings.get("recent_messages") or []
+        if recent:
+            try:
+                lines = []
+                for m in recent[-14:]:
+                    if not isinstance(m, dict):
+                        continue
+                    a = (m.get("agent") or "system").lower()
+                    c = (m.get("content") or "").strip().replace("\n", " ")
+                    if not c:
+                        continue
+                    if len(c) > 320:
+                        c = c[:317] + "…"
+                    lines.append(f"- **{a}**: {c}")
+                if lines:
+                    history = "\n".join(lines)
+            except Exception as exc:  # noqa: BLE001
+                trace("agent.reply.frontend_history_error", err=str(exc))
+        # Fallback to ledger if frontend didn't ship anything.
+        if history == "(no recent activity)":
+            try:
+                orch_state = orch.get(session.session_id)
+                history = _format_ledger_for_agent(orch_state, agent, k=12)
+            except Exception as exc:  # noqa: BLE001
+                trace("agent.reply.history_error", err=str(exc))
+                history = "(history unavailable)"
+
+        sys_prompt = _PER_AGENT_REPLY_SYSTEM.format(
+            title=agent.title(),
+            role=_ROLE_BLURB.get(agent, ""),
+            history=history,
+            smiles=session.active_smiles or "(none loaded)",
+            pathogen=session.active_target or "(unset)",
+            pdb=session.settings.get("pdb_id") or "(unset)",
+        )
+        trace("agent.reply.start", agent=agent, history_len=len(history))
+        try:
+            llm_out = await self.llm.acomplete(
+                messages=[{"role": "user", "content": user_text}],
+                tools=[],
+                system=sys_prompt,
+            )
+            text = (llm_out.get("content") or "").strip()
+        except Exception as exc:  # noqa: BLE001
+            trace("agent.reply.error", agent=agent, err=str(exc))
+            return f"({agent.title()} hit an LLM error: {exc})"
+
+        trace("agent.reply.done", agent=agent, chars=len(text))
+        if not text:
+            return (
+                f"({agent.title()} returned an empty response — try "
+                f"rephrasing or asking the orchestrator instead.)"
+            )
+
+        # Persist the agent's reply into the ledger so subsequent thread
+        # replies see it as part of "your prior output".
+        try:
+            orch.ingest(session.session_id, {
+                "type": "agent_message",
+                "agent": agent,
+                "data": {"content": text},
+                "thread_id": session.settings.get("thread_id"),
+            })
+        except Exception:  # noqa: BLE001
+            pass
+
+        return text
 
     def _mk_cmd_ctx(self, session: SessionState) -> CommandContext:
         return CommandContext(

@@ -131,6 +131,20 @@ class ChatRequest(BaseModel):
     pdb_id: Optional[str] = Field(
         None, description="Currently-selected PDB target."
     )
+    # ---- On-screen conversation context (for per-agent thread replies) ----
+    # When the user clicks "reply to editor" on a chat bubble, they
+    # expect the editor to remember what was on screen. The orchestrator
+    # ledger may not have all the workflow narration events (those are
+    # rendered client-side from SSE streams), so the frontend optionally
+    # ships the last few visible chat messages to ground the reply.
+    recent_messages: Optional[list[dict]] = Field(
+        None,
+        description=(
+            "Optional last-N visible chat messages, oldest→newest. Each "
+            "entry: {agent: str, content: str, ts?: float}. Used by the "
+            "per-agent reply path to ground responses in on-screen context."
+        ),
+    )
 
 
 class ChatResponse(BaseModel):
@@ -520,6 +534,10 @@ async def chat(req: ChatRequest) -> ChatResponse:
         state.settings["parent_message_id"] = req.parent_message_id
     if req.thread_id:
         state.settings["thread_id"] = req.thread_id
+    if req.pdb_id:
+        state.settings["pdb_id"] = req.pdb_id
+    if req.recent_messages:
+        state.settings["recent_messages"] = req.recent_messages
 
     harness = _harness_singleton()
     resp = await harness.handle_message(state, req.text)
