@@ -41,6 +41,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -544,16 +545,24 @@ def _swap_label_to_fg(swap_label: str) -> str | None:
     isn't shadowed by "methyl".
     """
     s = (swap_label or "").lower()
+    # Order matters: long/specific labels first so 'trifluoromethyl'
+    # isn't shadowed by 'methyl', 'phenyl' isn't shadowed by 'ethyl',
+    # etc. Also handle "X to Y" / "X -> Y" / "swap to Y" / "add Y"
+    # patterns where the FG identity is the LAST chemistry word.
     table = [
         ("trifluoromethyl", "trifluoromethyl"), ("cf3", "trifluoromethyl"),
         ("trichloromethyl", "trichloromethyl"),
+        ("spiro-cyclopropyl", "phenyl"),  # closest available — adds a ring atom set
+        ("cyclopropyl", "phenyl"),
+        ("phenyl", "phenyl"), ("aryl", "phenyl"), ("benzyl", "phenyl"),
         ("sulfonamide", "sulfonamide"), ("sulfonyl", "sulfonyl"),
         ("phosphonate", "phosphonate"), ("phosphate", "phosphate"),
         ("carboxylate", "carboxyl"), ("carboxyl", "carboxyl"),
         ("aldehyde", "aldehyde"), ("carbonyl", "carbonyl"),
         ("ester", "ester"), ("amide", "amide"),
         ("nitro", "nitro"), ("cyano", "cyano"), ("nitrile", "cyano"),
-        ("hydroxy", "hydroxyl"), ("phenol", "hydroxyl"), ("-oh", "hydroxyl"), (" oh", "hydroxyl"),
+        ("hydroxy", "hydroxyl"), ("phenol", "hydroxyl"),
+        ("-oh", "hydroxyl"), (" oh", "hydroxyl"),
         ("methoxy", "methoxy"),
         ("ethoxy", "ethoxy"),
         ("tert-butyl", "tert-butyl"), ("t-butyl", "tert-butyl"),
@@ -562,7 +571,8 @@ def _swap_label_to_fg(swap_label: str) -> str | None:
         ("ethyl", "ethyl"),
         ("methyl", "methyl"),
         ("amine", "amine"), ("amino", "amine"), ("-nh2", "amine"),
-        ("fluorine", "fluorine"), ("fluoro", "fluorine"), ("-f ", "fluorine"), (" f ", "fluorine"),
+        ("fluorine", "fluorine"), ("fluoro", "fluorine"),
+        ("-f ", "fluorine"), (" f ", "fluorine"),
         ("chlorine", "chlorine"), ("chloro", "chlorine"),
         ("bromine", "bromine"), ("bromo", "bromine"),
         ("iodine", "iodine"), ("iodo", "iodine"),
@@ -570,9 +580,18 @@ def _swap_label_to_fg(swap_label: str) -> str | None:
         ("azide", "azido"), ("azido", "azido"),
         ("isocyanide", "isocyano"),
     ]
+    # First pass: look for any FG word in the whole label.
     for needle, fg in table:
         if needle in s:
             return fg
+    # Second pass: pull the LAST chemistry-like token (for "swap X to Y"
+    # phrasings Gemini sometimes returns). Strip parentheticals first.
+    cleaned = re.sub(r"\([^)]*\)", "", s)
+    tokens = re.findall(r"[a-z][a-z0-9-]+", cleaned)
+    for tok in reversed(tokens):
+        for needle, fg in table:
+            if needle == tok:
+                return fg
     return None
 
 

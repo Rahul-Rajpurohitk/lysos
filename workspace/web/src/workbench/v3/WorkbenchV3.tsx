@@ -189,13 +189,27 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
     }
   }
 
-  // Hardening — editor's domain
+  // Hardening — editor's domain. Surface the actual applied SMILES
+  // (when the swap could be realized) so the user gets a clickable
+  // load-pill, not a dead-end "complete" status.
   if (tool === "harden_atom") {
     const sugs = result.gemini_suggestions ?? result.suggestions ?? [];
-    if (sugs.length === 0) return `**${label}** complete${ms}: no viable hardenings found for atom **#${result.atom_idx}**.`;
-    const top = sugs.slice(0, 2).map((s: any) =>
-      `**${s.swap}** (conf ${(s.confidence ?? 0).toFixed(2)})`).join(" · ");
-    return `**${label}** for atom **#${result.atom_idx}**${ms}: ${sugs.length} swap${sugs.length === 1 ? "" : "s"} proposed — ${top}.`;
+    if (sugs.length === 0) return `**${label}** complete${ms}: no viable hardenings found for atom **#${result.atom_idx}**. Try a different atom or run \`/wf optimize_for_property\` instead.`;
+    const top = sugs[0];
+    const after = top?.after_smiles;
+    const head = `**Editor** picked **${top?.swap ?? "?"}** for atom **#${result.atom_idx}**${ms} (conf ${(top?.confidence ?? 0).toFixed(2)})`;
+    const tail = after
+      ? ` → \`${after}\` ← _click to load into 2D + 3D_`
+      : ` — couldn't auto-generate the SMILES; rationale: ${(top?.rationale ?? "").slice(0, 120)}`;
+    return head + tail;
+  }
+
+  // Pick weak atoms — strategist's pick. Don't just say "complete".
+  if (stepDef.id === "pick_atoms") {
+    const weak = result?.weak_atoms ?? result?.atoms ?? [];
+    if (weak.length > 0) {
+      return `**Strategist** picked atoms **[${weak.join(", ")}]** as the hardening targets${ms}. Editor will now propose swaps for each.`;
+    }
   }
 
   // Compare workflow — the backend returns `best_idx` (an int),
@@ -239,8 +253,21 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
     return out.join("");
   }
 
-  // Inline / loop / unknown — generic acknowledgement
-  return `**${label}** complete${ms}.`;
+  // Inline / loop / unknown — emit a concrete summary if the result
+  // has structure we can describe; otherwise return null so the chat
+  // doesn't fill with vacuous "complete" rows.
+  if (stepDef.id === "harden_each") {
+    // The loop step's result is the aggregate of all atom hardenings.
+    // Frontend renders the rich summary block separately, so just
+    // mark the editor's hand-off here.
+    const n = Array.isArray(result) ? result.length : 0;
+    if (n > 0) {
+      return `**Editor** finished — ${n} hardened variant${n === 1 ? "" : "s"} ready${ms}. Click any \`SMILES\` chip above to load into 2D + 3D.`;
+    }
+  }
+  // No structured detail to narrate — skip the row entirely instead
+  // of saying "complete" with no payload (the dead-end the user saw).
+  return null;
 }
 
 export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
