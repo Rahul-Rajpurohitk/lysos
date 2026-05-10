@@ -103,19 +103,45 @@ _KNOWN_WORKFLOWS = [
 ]
 
 _KNOWN_SLASH = [
-    {"cmd": "/score", "phrases": ["score", "evaluate", "rate this"]},
-    {"cmd": "/explain", "phrases": ["explain", "what is", "tell me about"]},
-    {"cmd": "/spectrum", "phrases": ["spectrum", "coverage"]},
+    {"cmd": "/score",
+     "phrases": ["score", "evaluate", "rate this", "assess", "grade"],
+     "args_hint": "/score <smiles>",
+     "what_it_does": "12-axis composite scoring (activity, novelty, drug-likeness, ADMET, safety) for ONE SMILES. Use when user wants a single quality readout.",
+    },
+    {"cmd": "/explain",
+     "phrases": ["explain target", "tell me about target", "what is mecA",
+                 "what is PBP2a", "explain gene", "explain pathogen"],
+     "args_hint": "/explain <pathogen | gene | PDB>",
+     "what_it_does": "Pull a structured BRIEF on a TARGET (pathogen / gene / PDB id). Does NOT accept SMILES — for molecules use /score. Use when user asks about a biological target.",
+    },
+    {"cmd": "/load",
+     "phrases": ["show", "visualize", "render", "display", "load this", "open in 2d", "open in 3d", "see the molecule", "show the structure"],
+     "args_hint": "/load <smiles>",
+     "what_it_does": "Load a SMILES into the 2D + 3D viewers and auto-score it. Use when user wants to SEE / VISUALIZE / DISPLAY / RENDER a molecule on the canvas.",
+    },
+    {"cmd": "/harden",
+     "phrases": ["harden", "make resistant", "fix vulnerability", "escape proof"],
+     "args_hint": "/harden [smiles] [pdb=1VQQ]",
+     "what_it_does": "Find weak atoms in the current candidate and propose hardening edits. Uses ambient SMILES if not given.",
+    },
     # /design intentionally NOT routed here — design intents go to the
     # design_with_debate workflow above so the user sees the full
     # Designer→Critic→Editor→Strategist flow in the Agents tab.
-    {"cmd": "/champion", "phrases": ["champion", "current best", "reigning"]},
+    {"cmd": "/champion",
+     "phrases": ["champion", "current best", "reigning"],
+     "args_hint": "/champion [pathogen]",
+     "what_it_does": "Show the reigning best candidate for a pathogen (auto-promoted from session winners).",
+    },
 ]
 
 
 def _build_routing_system_prompt() -> str:
     wf_list = "\n".join(f"  - {w['name']}: {w['description']}" for w in _KNOWN_WORKFLOWS)
-    slash_list = "\n".join(f"  - {s['cmd']}" for s in _KNOWN_SLASH)
+    slash_list = "\n".join(
+        f"  - {s['cmd']} ({s.get('args_hint', s['cmd'])}): "
+        f"{s.get('what_it_does', '')}"
+        for s in _KNOWN_SLASH
+    )
     return (
         "You are the Lysos Orchestrator. Your job is to ROUTE a free-text user "
         "prompt to one of four execution paths. You DO NOT execute the work "
@@ -153,6 +179,15 @@ def _build_routing_system_prompt() -> str:
         "  - For slash, the 'inputs' object should match the command's "
         "argument syntax — for /score, return inputs={\"smiles\": ...}.\n"
         "  - DO NOT invent workflow names. Pick from the list above ONLY.\n"
+        "  - CRITICAL distinction:\n"
+        "      • SHOW / VISUALIZE / DISPLAY / RENDER a SMILES → /load (NEVER "
+        "/explain — /explain is for biological targets, not molecules).\n"
+        "      • EXPLAIN a target/gene/PDB (mecA, PBP2a, 1VQQ) → /explain.\n"
+        "      • Score a SMILES → /score.\n"
+        "      • If the user says 'execute the recommendation' or 'do the "
+        "improvement you suggested', they want a workflow that actually "
+        "MODIFIES the molecule — pick optimize_for_property or "
+        "harden_candidate (NOT /explain).\n"
     )
 
 

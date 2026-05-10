@@ -147,11 +147,24 @@ export function TightComposer(p: TightComposerProps) {
   // emits the rendered command via window event. We catch it here and
   // re-fire onSend so the existing slash-command pipeline runs without
   // duplicating routing logic.
+  //
+  // Module-level dedup ref: under React 18 StrictMode useEffect runs
+  // twice in dev, so a single dispatched event was firing onSend twice
+  // → two identical user bubbles + two backend roundtrips. The window
+  // event itself is not duplicated; the listener registration is.
+  // A static "last fired text + ts" ref drops duplicates within 1500ms.
   useEffect(() => {
     function onAutoSlash(ev: Event) {
       const detail = (ev as CustomEvent).detail as { text?: string } | undefined;
-      const slash = detail?.text;
+      const slash = (detail?.text || "").trim();
       if (!slash) return;
+      const w = window as any;
+      const now = Date.now();
+      const last = w.__lysAutoSlashLast as { text: string; ts: number } | undefined;
+      if (last && last.text === slash && (now - last.ts) < 1500) {
+        return;  // de-dup
+      }
+      w.__lysAutoSlashLast = { text: slash, ts: now };
       p.onSend(slash);
     }
     window.addEventListener("lysos:auto-slash", onAutoSlash);
