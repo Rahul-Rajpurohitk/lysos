@@ -175,18 +175,23 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
     if (va.length === 0) {
       return `Robustness against \`${target}\` lands at **${rb.toFixed(2)}** — clean. No mutation in the curated CARD subset breaches our 0.30 escape threshold, so this candidate is structurally insensitive to known clinical β-lactam resistance pathways. _The risk left is what we don't know yet, not what's in the literature._`;
     }
-    const verdict = rb >= 0.9
-      ? `solid — robustness **${rb.toFixed(2)}** sits well above the 0.70 floor.`
+    // Tier the candidate honestly. Inline bold only on the single
+    // adjective + the number — nesting **...** inside another **...**
+    // breaks the markdown renderer (user saw "**solid — robustness
+    // **0.93** sits...**" rendered literally).
+    const tier = rb >= 0.9 ? "solid" : rb >= 0.7 ? "borderline" : "fragile";
+    const tierLine = rb >= 0.9
+      ? `${tier} — robustness ${rb.toFixed(2)} sits well above the 0.70 floor`
       : rb >= 0.7
-        ? `borderline — robustness **${rb.toFixed(2)}** is in the watch zone (0.70-0.90).`
-        : `fragile — robustness **${rb.toFixed(2)}** below 0.70 means at least one common mutation breaks this binding mode.`;
+        ? `${tier} — robustness ${rb.toFixed(2)} is in the watch zone (0.70-0.90)`
+        : `${tier} — robustness ${rb.toFixed(2)} below 0.70 means at least one common mutation breaks this binding mode`;
     // Triage atoms: priority = clinically frequent + high escape; soft
-    // = "very_rare" or counter-selected ("kills enzyme") mutations.
+    // = very_rare or counter-selected ("kills enzyme") mutations.
     const priority: string[] = [];
     const soft: string[] = [];
     for (const v of va.slice(0, 4)) {
       const m = v.top_mutation ?? {};
-      const tag = `atom **#${v.atom_idx}** (${m.wt}${m.position}${m.mutant}, escape ${(v.escape_score ?? 0).toFixed(2)})`;
+      const tag = `atom #${v.atom_idx} (${m.wt}${m.position}${m.mutant}, escape ${(v.escape_score ?? 0).toFixed(2)})`;
       const note = (m.note ?? "").toLowerCase();
       const isSoft = (m.frequency === "very_rare")
         || note.includes("counter-selected")
@@ -194,12 +199,12 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
         || (v.escape_score ?? 0) < 0.04;
       (isSoft ? soft : priority).push(tag);
     }
-    const lines: string[] = [`This candidate is **${verdict}**`];
+    const lines: string[] = [`Reading the prediction: this candidate looks **${tier}**. ${tierLine}.`];
     if (priority.length) {
-      lines.push(`Real priority: ${priority.join(", ")} — these are the atoms worth hardening.`);
+      lines.push(`Worth hardening: ${priority.join("; ")}.`);
     }
     if (soft.length) {
-      lines.push(`Soft flags I'd skip: ${soft.join(", ")} — too rare or counter-selected to over-engineer for.`);
+      lines.push(`I'd skip ${soft.join("; ")} — the mutation is too rare or counter-selected in the wild to over-engineer for.`);
     }
     return lines.join(" ");
   }
