@@ -363,9 +363,16 @@ async def editor_refine(
     user = "Refine each proposal per the Critic's suggested_fix:\n" + "\n".join(pairs)
     res = await _gemini_call("editor", EDITOR_PROMPT, user, temperature=0.3)
     refined = res.raw.get("refined") or []
+    # Note: r.get(k, '?') returns None when k is explicitly null in
+    # Gemini's JSON (default only fires for *missing* keys). `(... or "?")`
+    # collapses None to the placeholder before slicing — without this,
+    # `None[:25]` raised "NoneType is not subscriptable" and crashed
+    # the whole inline_fn / debate step.
     diffs = " / ".join(
-        f"`{r.get('original_smiles', '?')[:25]}` → `{r.get('refined_smiles', '?')[:25]}`"
+        f"`{(r.get('original_smiles') or '?')[:25]}` → "
+        f"`{(r.get('refined_smiles') or '?')[:25]}`"
         for r in refined
+        if isinstance(r, dict)
     )
     msg = f"refined {len(refined)} proposals. {diffs}"
     agent_activity.record(
@@ -404,7 +411,7 @@ async def critic_narrate_pareto(
     y_label = y_meta.get("label") or pareto.get("y_axis", "y")
     rows_block = "\n".join(
         f"  - SMILES `{p.get('smiles')}` "
-        f"(id {p.get('candidate_id', '')[:10]}, {p.get('created_by', '?')}): "
+        f"(id {(p.get('candidate_id') or '')[:10]}, {p.get('created_by') or '?'}): "
         f"{x_label} = {p.get('x_value'):.3f}, {y_label} = {p.get('y_value'):.3f}"
         f"{' [PARETO]' if p.get('on_pareto') else ''}"
         for p in scored[:10]
@@ -420,7 +427,7 @@ async def critic_narrate_pareto(
     )
     res = await _gemini_call("critic", CRITIC_PARETO_PROMPT, user, temperature=0.3, max_tokens=4096)
     msg = (
-        f"narrated pareto · advance: `{res.raw.get('advance_smiles', '?')[:30]}…` · "
+        f"narrated pareto · advance: `{(res.raw.get('advance_smiles') or '?')[:30]}…` · "
         f"trade-off: {(res.raw.get('trade_off_insight') or '')[:80]}"
     )
     agent_activity.record(
@@ -477,8 +484,8 @@ async def critic_narrate_compare(
     res = await _gemini_call("critic", CRITIC_COMPARE_PROMPT, user, temperature=0.3, max_tokens=4096)
     msg = (
         f"narrated {len(rows)}-candidate compare · winner: "
-        f"`{res.raw.get('winner_smiles', '?')[:30]}…` · "
-        f"next: {res.raw.get('next_action', '?')}"
+        f"`{(res.raw.get('winner_smiles') or '?')[:30]}…` · "
+        f"next: {res.raw.get('next_action') or '?'}"
     )
     agent_activity.record(
         session_id, "critic", "narrate_compare",
@@ -511,7 +518,7 @@ async def strategist_arbitrate(
     res = await _gemini_call("strategist", STRATEGIST_PROMPT, user, temperature=0.15)
     msg = (
         f"arbitrated · winner: `{res.raw.get('winner_smiles', '?')}` · "
-        f"{res.raw.get('justification', '')[:120]}"
+        f"{(res.raw.get('justification') or '')[:120]}"
     )
     agent_activity.record(
         session_id, "strategist", "arbitrate",

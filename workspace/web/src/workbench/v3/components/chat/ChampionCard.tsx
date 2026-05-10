@@ -11,7 +11,7 @@
  *   - workflow.done auto-promotion event
  *   - Knowledge tab champion pane (KnowledgeHubCard)
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { motion } from "framer-motion";
 
 interface ChampionRecord {
@@ -45,6 +45,7 @@ interface PromotionData {
 
 interface Props {
   msg: {
+    ts?: number;
     data: {
       mode: "show" | "compare" | "promote";
       champion?: ChampionRecord | null;
@@ -166,22 +167,23 @@ const ChampionCard: React.FC<Props> = ({ msg, onLoadSmiles }) => {
   const data = msg.data;
 
   // Auto-load the champion's SMILES into the 2D + 3D canvas when this
-  // card first mounts. Fixes user-reported "I asked to show the best
-  // component but nothing appeared in the visuals" — they had to click
-  // the SMILES pill manually before, easy to miss. Now the visuals
-  // light up the moment /champion runs.
-  const autoLoadedRef = useRef<string | null>(null);
+  // card first mounts. Window-level dedup so React 18 StrictMode's
+  // double-mount in dev doesn't fire the chat-row + canvas update
+  // twice for the same SMILES. The msg.ts uniquifies per chat row so
+  // re-running /champion in the same session still loads.
   useEffect(() => {
     if (!onLoadSmiles) return;
     let smi: string | undefined;
     if (data.mode === "show" && data.champion?.smiles) smi = data.champion.smiles;
     else if (data.mode === "compare" && data.ab?.champion?.smiles) smi = data.ab.champion.smiles;
     else if (data.mode === "promote" && data.promotion?.new?.smiles) smi = data.promotion.new.smiles;
-    if (smi && autoLoadedRef.current !== smi) {
-      autoLoadedRef.current = smi;
-      onLoadSmiles(smi);
-    }
-  }, [data, onLoadSmiles]);
+    if (!smi) return;
+    const w = window as any;
+    const cardKey = `${msg.ts ?? 0}::${smi}`;
+    if (w.__lysChampLoaded === cardKey) return;
+    w.__lysChampLoaded = cardKey;
+    onLoadSmiles(smi);
+  }, [data, onLoadSmiles, msg.ts]);
 
   if (data.mode === "show") {
     const c = data.champion;
