@@ -815,7 +815,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         : (d?.error || "(no response)");
       setEvents((p) => [...p, {
         type: "agent_message", ts: Date.now() / 1000,
-        agent: d?.error ? "system" : "assistant",
+        // Errors from side-card "send to agent" buttons render under
+        // the orchestrator persona too — the chat is a conversation
+        // with agents; we never want a raw "system" bubble.
+        agent: d?.error ? "orchestrator" : "assistant",
         content: finalContent,
         card_kind: d?.card_kind ?? undefined,
         data: d?.data ?? undefined,
@@ -1678,16 +1681,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           setEvents((p) => [...p, {
                             type: "agent_message",
                             ts: Date.now() / 1000,
-                            agent: "system",
-                            content: `swap failed: ${d.error ?? "unknown"}`,
+                            agent: "orchestrator",
+                            content: `I tried to swap atom ${atomIdx}, but the chemistry tool refused: ${d.error ?? "unknown reason"}. Want me to try a different atom or element?`,
                           } as any]);
                         }
                       } catch (exc: any) {
                         setEvents((p) => [...p, {
                           type: "agent_message",
                           ts: Date.now() / 1000,
-                          agent: "system",
-                          content: `swap network error: ${exc?.message ?? exc}`,
+                          agent: "orchestrator",
+                          content: `I lost the connection while swapping that atom — ${exc?.message ?? exc}. Mind retrying once we're back?`,
                         } as any]);
                       }
                       return;
@@ -1728,16 +1731,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           setEvents((p) => [...p, {
                             type: "agent_message",
                             ts: Date.now() / 1000,
-                            agent: "system",
-                            content: `fg add failed: ${d.error ?? "unknown"}`,
+                            agent: "orchestrator",
+                            content: `Couldn't add the ${fg} group at atom ${atomIdx} — ${d.error ?? "the chemistry tool refused"}. Want me to suggest a different position?`,
                           } as any]);
                         }
                       } catch (exc: any) {
                         setEvents((p) => [...p, {
                           type: "agent_message",
                           ts: Date.now() / 1000,
-                          agent: "system",
-                          content: `fg network error: ${exc?.message ?? exc}`,
+                          agent: "orchestrator",
+                          content: `Network blipped while adding the functional group — ${exc?.message ?? exc}.`,
                         } as any]);
                       }
                       return;
@@ -1762,8 +1765,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         if (!r.ok) {
                           setEvents((p) => [...p, {
                             type: "agent_message", ts: Date.now() / 1000,
-                            agent: "system",
-                            content: `error fetching workflows: ${r.status}`,
+                            agent: "orchestrator",
+                            content: `I couldn't reach the workflow registry (HTTP ${r.status}). Backend might be reloading — try again in a sec.`,
                           } as any]);
                           return;
                         }
@@ -1792,8 +1795,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       } catch (exc: any) {
                         setEvents((p) => [...p, {
                           type: "agent_message", ts: Date.now() / 1000,
-                          agent: "system",
-                          content: `wf list failed: ${exc?.message ?? exc}`,
+                          agent: "orchestrator",
+                          content: `I had trouble fetching the workflow list — ${exc?.message ?? exc}. Want to keep going manually with \`/wf <name>\`?`,
                         } as any]);
                       }
                       return;
@@ -1858,8 +1861,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           setEvents((p) => [...p, {
                             type: "agent_message",
                             ts: Date.now() / 1000,
-                            agent: "system",
-                            content: `error ${r.status}: ${errTxt.slice(0, 200)}`,
+                            agent: "orchestrator",
+                            content: `That command came back with HTTP ${r.status}: ${errTxt.slice(0, 180)}. Try again or rephrase — I can also pick a different workflow if you tell me what you want.`,
                           } as any]);
                           return;
                         }
@@ -1875,7 +1878,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         setEvents((p) => [...p, {
                           type: "agent_message",
                           ts: Date.now() / 1000,
-                          agent: d.error ? "system" : "assistant",
+                          // Even harness errors render under the orchestrator
+                          // persona — chat is a conversation with agents,
+                          // not a system-bubble dump.
+                          agent: d.error ? "orchestrator" : "assistant",
                           content: finalContent,
                           card_kind: d.card_kind ?? undefined,
                           data: d.data ?? undefined,
@@ -1884,8 +1890,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         setEvents((p) => [...p, {
                           type: "agent_message",
                           ts: Date.now() / 1000,
-                          agent: "system",
-                          content: `network error: ${exc?.message ?? exc}`,
+                          agent: "orchestrator",
+                          content: `Network hiccup while routing that to the agent — ${exc?.message ?? exc}. Want to retry?`,
                         } as any]);
                       }
                       return;
@@ -2235,8 +2241,8 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   setEvents((p) => [...p, {
                     type: "agent_message",
                     ts: Date.now() / 1000,
-                    agent: "system",
-                    content: `reply network error: ${exc?.message ?? exc}`,
+                    agent: "orchestrator",
+                    content: `Couldn't deliver your reply to ${targetAgent} — ${exc?.message ?? exc}. Want to try again?`,
                     thread_id: threadId,
                   } as any]);
                 }
