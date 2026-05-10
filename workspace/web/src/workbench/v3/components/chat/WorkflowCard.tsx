@@ -39,6 +39,10 @@ export interface WorkflowStep {
   /** For __loop__ steps — current item / total items. */
   progress?: { i: number; n: number; tool: string; args: any };
   retry_attempts?: number;
+  /** If set, the backend will emit a step.narration SSE event with a
+   *  real Gemini-written commentary for this role. The WorkbenchV3
+   *  consumer uses this flag to suppress the legacy template. */
+  narrator_role?: "critic" | "editor" | "strategist" | "designer" | null;
 }
 
 export interface WorkflowState {
@@ -76,6 +80,11 @@ export function reduceWorkflowEvent(prev: WorkflowState | null, ev: any): Workfl
         steps: (ev.steps || []).map((s: any) => ({
           id: s.id, label: s.label, tool: s.tool,
           description: s.description, depends_on: s.depends_on,
+          // Preserve narrator_role so the WorkbenchV3 SSE consumer
+          // can tell which steps will fire a real Gemini step.narration
+          // event and skip the legacy template. Without this the
+          // template fires and the user sees the old stat-dump message.
+          narrator_role: s.narrator_role,
           status: "pending",
         } as WorkflowStep)),
       };
