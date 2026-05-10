@@ -712,17 +712,33 @@ async def harden_atom(req: HardenRequest) -> dict:
             },
         })
 
-    # Annotate each suggestion with `after_smiles` whenever the swap
-    # label maps to a known functional group. The frontend uses this to
-    # render an "Apply" chip that loads the modified SMILES into 2D + 3D
-    # — turning a verbal recommendation into a one-click visual change.
+    # Annotate each suggestion with `after_smiles` so the frontend can
+    # render a click-to-apply pill. Priority order:
+    #   1. Gemini-provided `proposed_smiles` if it's marked valid (the
+    #      AI agent ALREADY did the chemistry, no need to re-derive).
+    #   2. Fall back to our FG mapper which knows a few dozen swap
+    #      labels and applies them via RDKit.
+    # This fixes the user-reported bug where "spiro-cyclopropyl" had
+    # no SMILES in chat: Gemini was returning proposed_smiles all
+    # along, we just weren't surfacing it.
     def _annotate(items: list[dict]) -> list[dict]:
         out = []
         for item in items:
-            fg = _swap_label_to_fg(item.get("swap", ""))
-            after = _apply_fg_to_smiles(req.smiles, req.atom_idx, fg) if fg else None
-            if after and after != req.smiles:
-                item = {**item, "after_smiles": after, "fg_applied": fg}
+            after: Optional[str] = None
+            # Prefer Gemini's own SMILES when valid
+            ps = item.get("proposed_smiles")
+            ps_valid = item.get("proposed_smiles_valid", True)
+            if ps and ps_valid and isinstance(ps, str) and ps != req.smiles:
+                after = ps
+            # Fallback: derive from swap-label → FG
+            if not after:
+                fg = _swap_label_to_fg(item.get("swap", ""))
+                derived = _apply_fg_to_smiles(req.smiles, req.atom_idx, fg) if fg else None
+                if derived and derived != req.smiles:
+                    after = derived
+                    item = {**item, "fg_applied": fg}
+            if after:
+                item = {**item, "after_smiles": after}
             out.append(item)
         return out
 

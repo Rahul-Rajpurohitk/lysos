@@ -163,18 +163,45 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
   const tool = (stepDef.tool || "").toLowerCase();
   const ms = elapsedMs ? ` _(${elapsedMs}ms)_` : "";
 
-  // Resistance prediction — the critic's specialty
+  // Resistance prediction — the critic's specialty.
+  // Opinionated reasoning over the numbers: prioritize, contextualize
+  // mutation frequency, and call out the threshold floor. NOT a stat
+  // dump (user feedback: 'repetitive, unnatural, just bringing data
+  // from db that's it, no real reasoning').
   if (tool === "predict_resistance") {
     const va = (result.vulnerable_atoms ?? []) as any[];
-    const rb = result.robustness_score;
-    if (va.length === 0 && typeof rb === "number") {
-      return `**${label}** complete${ms}. Robustness against \`${result.target_name ?? result.pdb_id}\`: **${rb.toFixed(2)}**. No vulnerable atoms above threshold — candidate is robust.`;
+    const rb = result.robustness_score ?? 0;
+    const target = result.target_name ?? result.pdb_id;
+    if (va.length === 0) {
+      return `Robustness against \`${target}\` lands at **${rb.toFixed(2)}** — clean. No mutation in the curated CARD subset breaches our 0.30 escape threshold, so this candidate is structurally insensitive to known clinical β-lactam resistance pathways. _The risk left is what we don't know yet, not what's in the literature._`;
     }
-    const top = va.slice(0, 3).map((v) => {
+    const verdict = rb >= 0.9
+      ? `solid — robustness **${rb.toFixed(2)}** sits well above the 0.70 floor.`
+      : rb >= 0.7
+        ? `borderline — robustness **${rb.toFixed(2)}** is in the watch zone (0.70-0.90).`
+        : `fragile — robustness **${rb.toFixed(2)}** below 0.70 means at least one common mutation breaks this binding mode.`;
+    // Triage atoms: priority = clinically frequent + high escape; soft
+    // = "very_rare" or counter-selected ("kills enzyme") mutations.
+    const priority: string[] = [];
+    const soft: string[] = [];
+    for (const v of va.slice(0, 4)) {
       const m = v.top_mutation ?? {};
-      return `atom **#${v.atom_idx}** (escape ${(v.escape_score ?? 0).toFixed(2)}, ${m.wt}${m.position}${m.mutant} · ${m.drug_class ?? "?"})`;
-    }).join(", ");
-    return `**${label}**${ms}: robustness **${(rb ?? 0).toFixed(2)}** against \`${result.target_name ?? result.pdb_id}\`. ${va.length} vulnerable atoms detected — top: ${top}.`;
+      const tag = `atom **#${v.atom_idx}** (${m.wt}${m.position}${m.mutant}, escape ${(v.escape_score ?? 0).toFixed(2)})`;
+      const note = (m.note ?? "").toLowerCase();
+      const isSoft = (m.frequency === "very_rare")
+        || note.includes("counter-selected")
+        || note.includes("kills enzyme")
+        || (v.escape_score ?? 0) < 0.04;
+      (isSoft ? soft : priority).push(tag);
+    }
+    const lines: string[] = [`This candidate is **${verdict}**`];
+    if (priority.length) {
+      lines.push(`Real priority: ${priority.join(", ")} — these are the atoms worth hardening.`);
+    }
+    if (soft.length) {
+      lines.push(`Soft flags I'd skip: ${soft.join(", ")} — too rare or counter-selected to over-engineer for.`);
+    }
+    return lines.join(" ");
   }
 
   // Scoring — designer's domain
@@ -189,27 +216,30 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
     }
   }
 
-  // Hardening — editor's domain. Surface the actual applied SMILES
-  // (when the swap could be realized) so the user gets a clickable
-  // load-pill, not a dead-end "complete" status.
+  // Hardening — editor's domain. Surface Gemini's mechanism + delta
+  // estimate so the chat looks like reasoning, not stat-dump.
   if (tool === "harden_atom") {
     const sugs = result.gemini_suggestions ?? result.suggestions ?? [];
-    if (sugs.length === 0) return `**${label}** complete${ms}: no viable hardenings found for atom **#${result.atom_idx}**. Try a different atom or run \`/wf optimize_for_property\` instead.`;
+    if (sugs.length === 0) return `For atom **#${result.atom_idx}** I couldn't find a viable hardening that beats the current robustness. Try a different atom or run \`/wf optimize_for_property\` to attack a different objective.`;
     const top = sugs[0];
     const after = top?.after_smiles;
-    const head = `**Editor** picked **${top?.swap ?? "?"}** for atom **#${result.atom_idx}**${ms} (conf ${(top?.confidence ?? 0).toFixed(2)})`;
+    const mech = top?.mechanism ? ` via **${top.mechanism}** chemistry` : "";
+    const delta = typeof top?.predicted_robustness_delta === "number"
+      ? `, projected Δrobustness +${top.predicted_robustness_delta.toFixed(2)}`
+      : "";
+    const head = `For atom **#${result.atom_idx}** I'd push **${top?.swap ?? "?"}**${mech} (conf ${(top?.confidence ?? 0).toFixed(2)}${delta})`;
     const tail = after
-      ? ` → \`${after}\` ← _click to load into 2D + 3D_`
-      : ` — couldn't auto-generate the SMILES; rationale: ${(top?.rationale ?? "").slice(0, 120)}`;
+      ? `. New structure: \`${after}\` — click to load.`
+      : top?.rationale
+        ? ` — ${String(top.rationale).slice(0, 140)}`
+        : ".";
     return head + tail;
   }
 
-  // Pick weak atoms — strategist's pick. Don't just say "complete".
+  // Pick weak atoms — strategist's call. Frame it as a decision with
+  // rationale, not a status line.
   if (stepDef.id === "pick_atoms") {
-    const weak = result?.weak_atoms ?? result?.atoms ?? [];
-    if (weak.length > 0) {
-      return `**Strategist** picked atoms **[${weak.join(", ")}]** as the hardening targets${ms}. Editor will now propose swaps for each.`;
-    }
+    return null;  // suppress — predict_resistance already named atoms
   }
 
   // Compare workflow — the backend returns `best_idx` (an int),
@@ -256,15 +286,9 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
   // Inline / loop / unknown — emit a concrete summary if the result
   // has structure we can describe; otherwise return null so the chat
   // doesn't fill with vacuous "complete" rows.
-  if (stepDef.id === "harden_each") {
-    // The loop step's result is the aggregate of all atom hardenings.
-    // Frontend renders the rich summary block separately, so just
-    // mark the editor's hand-off here.
-    const n = Array.isArray(result) ? result.length : 0;
-    if (n > 0) {
-      return `**Editor** finished — ${n} hardened variant${n === 1 ? "" : "s"} ready${ms}. Click any \`SMILES\` chip above to load into 2D + 3D.`;
-    }
-  }
+  // harden_each loop suppressed — each harden_atom emits its own
+  // editor narration via the branch above, plus the summary block
+  // shows the full structured output. Don't duplicate.
   // No structured detail to narrate — skip the row entirely instead
   // of saying "complete" with no payload (the dead-end the user saw).
   return null;
