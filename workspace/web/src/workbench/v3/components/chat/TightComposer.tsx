@@ -160,16 +160,31 @@ export function TightComposer(p: TightComposerProps) {
 
   function handleKey(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (paletteOpen) {
-      // Palette manages its own ↑↓↵Esc Tab — let it handle, but still
-      // intercept Enter-without-modifier here in case palette is closed.
       if (e.key === "Escape") {
         setPaletteOpen(false);
         return;
       }
-      if (e.key === "Enter" || e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Tab") {
-        // Palette handles via window keydown listener
+      // Tab + arrow keys belong to the palette (autocomplete +
+      // navigation). Enter, however, must always send when the user
+      // has typed past the bare command name (e.g. `/wf do anything`)
+      // — otherwise the palette eats Enter, fires onPick on its own
+      // schedule, and the message never sends. The previous
+      // implementation deferred Enter to the palette's window
+      // listener, which created a race against React state updates
+      // and made Enter feel broken.
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Tab") {
         return;
       }
+      const hasArgs = /\s/.test(text.trim());  // typed past the slash command
+      if (e.key === "Enter" && !e.shiftKey && hasArgs) {
+        e.preventDefault();
+        setPaletteOpen(false);
+        send();
+        return;
+      }
+      // Plain `/cmd` + Enter (no args) → let palette handle (it autocompletes
+      // or, on exact match, closes itself and lets the next branch send).
+      if (e.key === "Enter") return;
     }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();

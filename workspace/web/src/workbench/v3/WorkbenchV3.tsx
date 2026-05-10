@@ -1920,9 +1920,38 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     //   /wf harden_candidate                          ← bare, ambient context
                     // Also tolerates newlines inside the JSON body
                     // (so wrapped chat-rendered slashes still parse).
+                    const KNOWN_WORKFLOWS = new Set([
+                      "design_with_debate", "harden_candidate",
+                      "broad_spectrum_screen", "compare_top_n",
+                      "optimize_for_property", "pareto_explore",
+                      "discover_and_assess",
+                    ]);
                     const wfMatch = t.trim().match(/^\/wf\s+(\S+)\s*([\s\S]*)$/i);
                     if (wfMatch) {
                       const wfName = wfMatch[1];
+                      // If the typed name isn't a real workflow, treat the
+                      // whole `/wf <natural language>` line as free text and
+                      // let the orchestrator (Gemini) pick the right
+                      // workflow. Avoids the 404 "unknown workflow: do"
+                      // when the user types `/wf do anyworkflow from the
+                      // options`.
+                      if (!KNOWN_WORKFLOWS.has(wfName.toLowerCase())) {
+                        const stripped = t.trim().replace(/^\/wf\s+/i, "");
+                        // Re-fire as plain free text so the orchestrator
+                        // branch downstream (Gemini Pro) picks the right
+                        // workflow from natural language.
+                        setEvents((p) => [...p, {
+                          type: "agent_message", ts: Date.now() / 1000,
+                          agent: "orchestrator",
+                          content: `\`${wfName}\` isn't a known workflow. Routing "${stripped.slice(0, 90)}${stripped.length > 90 ? "…" : ""}" through the orchestrator.`,
+                        } as any]);
+                        setTimeout(() => {
+                          window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                            detail: { text: stripped },
+                          }));
+                        }, 30);
+                        return;
+                      }
                       let wfInputs: Record<string, any> = {};
                       const argTail = (wfMatch[2] || "").trim();
                       // Try JSON first if the tail looks JSON-y

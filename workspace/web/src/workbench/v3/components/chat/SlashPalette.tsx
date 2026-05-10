@@ -174,19 +174,23 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
         onPick(filtered[highlightIdx]);
         return;
       }
-      // Enter → if the user's typed prefix EXACTLY matches the highlighted
-      // command name (or any command), bypass the palette and let the
-      // textarea's send fire. Otherwise autocomplete. The earlier
-      // unconditional autocomplete made `/design` <Enter> silently
-      // re-insert `/design ` instead of submitting.
+      // Enter → multiple cases:
+      //   1. User typed past the command name (has whitespace after the
+      //      slash) → DO NOT autocomplete. Close the palette so the
+      //      textarea's onKeyDown can fire send(). The palette eating
+      //      Enter here was the root cause of the user-reported
+      //      "Enter doesn't work" bug.
+      //   2. Typed prefix is an EXACT command match (no args yet) →
+      //      same: close + let textarea send.
+      //   3. Otherwise → autocomplete to the highlighted command.
       if (e.key === "Enter" && filtered.length) {
+        const hasArgs = /\s/.test(query.trim());
         const exact = filtered.find((c) =>
           c.name.toLowerCase() === prefix
           || (c.aliases ?? []).some((a) => a.toLowerCase() === prefix)
         );
-        if (exact) {
-          // Don't preventDefault — let the textarea's keydown handler
-          // run send(). Just close the palette so it stops handling keys.
+        if (hasArgs || exact) {
+          // Don't preventDefault — textarea handles send().
           onClose();
           return;
         }
@@ -196,7 +200,7 @@ export function SlashPalette({ query, open, onPick, onClose, commands }: Props) 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, filtered, highlightIdx, onPick, onClose, prefix]);
+  }, [open, filtered, highlightIdx, onPick, onClose, prefix, query]);
 
   if (!open) return null;
   // No matches → render nothing rather than a hard-coded "no commands
