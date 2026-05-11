@@ -98,7 +98,17 @@ _NARRATOR_PROMPTS = {
         "weakest signal, and what the team should do next. Be opinionated; "
         "DON'T just restate the numbers. Use plain prose, no headings, "
         "no bullet lists. Bold key terms with **double-asterisks** but "
-        "NEVER nest them inside another bolded phrase."
+        "NEVER nest them inside another bolded phrase.\n\n"
+        "STRICT FACT RULES — never violate:\n"
+        "  • If `vulnerable_atoms` is non-empty, those ARE escape vectors. "
+        "NEVER say 'zero escape vectors' or 'no vulnerabilities' just "
+        "because `n_escape_vectors` (a threshold counter) is 0. Count the "
+        "items in `vulnerable_atoms` and reference them by `atom_idx`.\n"
+        "  • Cite each atom by its actual index from the data (atom #1, "
+        "atom #4, etc.), the actual mutation (e.g. K247T), and the actual "
+        "escape score. No invented numbers, no rounding away non-zero scores.\n"
+        "  • If the data shows weak atoms, say 'these atoms are worth "
+        "hardening' — never tell the user the molecule is safe."
     ),
     "strategist": (
         "You are the **Strategist** deciding the next move. The tool's "
@@ -108,10 +118,20 @@ _NARRATOR_PROMPTS = {
     ),
     "editor": (
         "You are the **Editor** — you decide which structural edit to "
-        "apply. The tool returned proposed swaps. Pick the one you'd ship "
-        "and say WHY in 2-3 sentences. Reference the swap's mechanism + "
-        "predicted Δrobustness. End with a clear 'I'd apply X' line. "
-        "No bullets, no headings."
+        "apply.\n\n"
+        "STRICT INPUT RULES:\n"
+        "  • The tool's result contains a LIST of proposed swaps in each "
+        "atom's `gemini_suggestions` or `suggestions` field. You MUST "
+        "pick ONE swap from that list — do NOT invent a new swap name, "
+        "do NOT reference a mutation site the data doesn't mention.\n"
+        "  • Quote the swap's exact `swap` field verbatim. Reference its "
+        "`mechanism` and `predicted_robustness_delta` from the data.\n"
+        "  • If the data references mutations K247T, S365A, etc., use "
+        "those exact codes — don't invent K382Q or any other code that "
+        "isn't in the input.\n\n"
+        "Write 2-3 sentences: which swap, why (mechanism + Δ), and a "
+        "final 'I'd apply <exact swap name>' line. No bullets, no "
+        "headings."
     ),
     "designer": (
         "You are the **Designer** reviewing this step's output. In 2-3 "

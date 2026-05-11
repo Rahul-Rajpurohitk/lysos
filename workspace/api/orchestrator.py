@@ -127,9 +127,13 @@ _KNOWN_SLASH = [
      "what_it_does": "Pull a structured BRIEF on a TARGET (pathogen / gene / PDB id). Does NOT accept SMILES — for molecules use /score. Use when user asks about a biological target.",
     },
     {"cmd": "/load",
-     "phrases": ["show", "visualize", "render", "display", "load this", "open in 2d", "open in 3d", "see the molecule", "show the structure"],
+     "phrases": ["show", "visualize", "render", "display", "load this",
+                 "open in 2d", "open in 3d", "see the molecule",
+                 "show the structure", "apply", "apply that",
+                 "apply the suggestion", "do it", "go ahead",
+                 "use that one", "then apply", "make the change"],
      "args_hint": "/load <smiles>",
-     "what_it_does": "Load a SMILES into the 2D + 3D viewers and auto-score it. Use when user wants to SEE / VISUALIZE / DISPLAY / RENDER a molecule on the canvas.",
+     "what_it_does": "Load a SMILES into the 2D + 3D viewers and auto-score it. ALSO use when the user says 'apply', 'apply that', 'do it', 'go ahead' — pull the most-recently mentioned SMILES from the recent_messages context and dispatch /load with it. Use when the user wants to SEE / VISUALIZE / DISPLAY / APPLY a molecule on the canvas.",
     },
     {"cmd": "/harden",
      "phrases": ["harden", "make resistant", "fix vulnerability", "escape proof"],
@@ -202,10 +206,18 @@ def _build_routing_system_prompt() -> str:
         "/explain — /explain is for biological targets, not molecules).\n"
         "      • EXPLAIN a target/gene/PDB (mecA, PBP2a, 1VQQ) → /explain.\n"
         "      • Score a SMILES → /score.\n"
+        "      • 'apply', 'apply that', 'apply the suggestion', 'do it', "
+        "'go ahead', 'then apply', 'use that one' → route='slash', "
+        "name='/load', inputs={smiles: <THE MOST RECENT SMILES SUGGESTED "
+        "in recent_messages>}. Scan recent_messages for the LAST SMILES "
+        "the editor/critic proposed (anything inside `backticks` that "
+        "parses as SMILES, especially after 'I'd apply' or 'New "
+        "structure:'). NEVER route 'apply' to optimize_for_property or "
+        "any workflow — apply means LOAD THE MOLECULE, not start a new "
+        "workflow.\n"
         "      • If the user says 'execute the recommendation' or 'do the "
-        "improvement you suggested', they want a workflow that actually "
-        "MODIFIES the molecule — pick optimize_for_property or "
-        "harden_candidate (NOT /explain).\n"
+        "improvement you suggested', and they want a NEW design loop "
+        "(not just loading a candidate), pick a workflow.\n"
     )
 
 
@@ -645,6 +657,9 @@ class RouteOnlyRequest(BaseModel):
     last_composite: Optional[float] = None
     n_candidates: int = 0
     session_id: Optional[str] = None
+    # Recent chat history so 'apply that' / 'do it' can resolve which
+    # SMILES the editor suggested last.
+    recent_messages: Optional[list[dict]] = None
 
 
 @router.post("/route")
@@ -654,6 +669,7 @@ async def route_only(req: RouteOnlyRequest) -> dict:
         "pathogen": req.pathogen,
         "last_composite": req.last_composite,
         "n_candidates": req.n_candidates,
+        "recent_messages": req.recent_messages or [],
     }
     # Mirror the recording behavior of /run so /route also builds session
     # memory. Some preview/fast-path callers only use /route.
