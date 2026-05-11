@@ -329,10 +329,21 @@ export function ParetoLabCard({ apiBase, sessionId, onLoad, onAgentMessage }: Pr
                   // auto-slash channel so it goes through the composer
                   // pipeline (workflow detection + SSE streaming) and
                   // renders as a real WorkflowCard with Critic verdict.
+                  // Pick the axis pair with the richest frontier (most
+                  // pareto-optimal candidates) when we're in matrix mode
+                  // so the agent narrates the panel that actually has
+                  // signal, not whatever scatter pair was last clicked.
+                  let pickX = xAxis, pickY = yAxis;
+                  if (mode === "matrix" && multi.length > 0) {
+                    const best = [...multi].sort(
+                      (a, b) => (b.stats?.n_pareto ?? 0) - (a.stats?.n_pareto ?? 0)
+                    )[0];
+                    if (best) { pickX = best.x; pickY = best.y; }
+                  }
                   const inputs = JSON.stringify({
                     session_id: sessionId,
-                    x_axis: xAxis,
-                    y_axis: yAxis,
+                    x_axis: pickX,
+                    y_axis: pickY,
                   });
                   window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
                     detail: { text: `/wf pareto_explore ${inputs}` },
@@ -800,7 +811,9 @@ function MatrixMode({ panels, onPick }: {
   if (panels.length === 0) return <Empty msg="Loading multi-axis matrix…" />;
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, height: "100%",
+      display: "grid", gridTemplateColumns: "1fr 1fr",
+      gridTemplateRows: "1fr 1fr",
+      gap: 10, height: "100%", minHeight: 0,
     }}>
       {panels.slice(0, 4).map((panel) => (
         <MiniScatter key={`${panel.x}_${panel.y}`} panel={panel} onPick={onPick} />
@@ -809,63 +822,143 @@ function MatrixMode({ panels, onPick }: {
   );
 }
 
+/** Single panel of the 2×2 multi-axis matrix. Renders an honest empty
+ *  state when no candidate has BOTH axes scored, axis tick labels at
+ *  0/0.5/1, and pads the plot area so dots at value=1.0 don't clip the
+ *  frame (the previous layout placed `xToPx(1) = PAD + plotW`, which
+ *  put dots flush against the right border with no room for the dot
+ *  radius). */
 function MiniScatter({ panel, onPick }: {
   panel: MultiPanel;
   onPick: (x: string, y: string) => void;
 }) {
-  const W = 260, H = 200, PAD = 18;
-  const plotW = W - PAD * 2;
-  const plotH = H - PAD * 2;
-  const validPts = (panel.all_points || []).filter((p) => p.valid && p.x_value !== null && p.y_value !== null);
-  const xToPx = (v: number) => PAD + v * plotW;
-  const yToPx = (v: number) => PAD + plotH - v * plotH;
+  // Asymmetric padding leaves room for left y-tick labels + bottom
+  // x-tick labels. DOT_PAD then insets the data area inside the plot
+  // rectangle so points at the axis extremes (often value=1.0 for
+  // hemolysis safety or validity) don't hug the frame edge.
+  const W = 320, H = 220;
+  const PAD_L = 30, PAD_R = 12, PAD_T = 10, PAD_B = 22;
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_T - PAD_B;
+  const DOT_PAD = 7;
+  const validPts = (panel.all_points || []).filter(
+    (p) => p.valid && p.x_value !== null && p.y_value !== null
+  );
+  const xToPx = (v: number) => PAD_L + DOT_PAD + v * (plotW - 2 * DOT_PAD);
+  const yToPx = (v: number) => PAD_T + DOT_PAD + (plotH - 2 * DOT_PAD) - v * (plotH - 2 * DOT_PAD);
+
+  const hasData = validPts.length > 0;
+  const xLabel = panel.x_axis_meta?.label ?? panel.x;
+  const yLabel = panel.y_axis_meta?.label ?? panel.y;
 
   return (
     <div style={{
       background: LAV.bg, border: `1px solid ${LAV.border}`,
-      borderRadius: 4, padding: 6,
+      borderRadius: 6, padding: 8,
       backdropFilter: "blur(10px)",
-      cursor: "pointer",
+      cursor: hasData ? "pointer" : "default",
+      display: "flex", flexDirection: "column",
+      minHeight: 0, overflow: "hidden",
     }}
-      onClick={() => onPick(panel.x, panel.y)}
-      title="click to open in scatter view"
+      onClick={hasData ? () => onPick(panel.x, panel.y) : undefined}
+      title={hasData ? "click to open in scatter view" : "no scored candidates on these axes yet"}
     >
       <div style={{
-        fontSize: 8.5, fontFamily: "var(--lys-font-mono)", fontWeight: 700,
-        color: LAV.fgDeep, marginBottom: 2, letterSpacing: "0.04em",
+        fontSize: 9.5, fontFamily: "var(--lys-font-mono)", fontWeight: 700,
+        color: LAV.fgDeep, marginBottom: 3, letterSpacing: "0.05em",
         textTransform: "uppercase", textAlign: "center",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
       }}>
-        {panel.x_axis_meta.label} × {panel.y_axis_meta.label}
-        <span style={{ marginLeft: 5, color: GREEN.fg }}>({panel.stats.n_pareto})</span>
+        <span>{xLabel}</span>
+        <span style={{ color: LAV.fg, opacity: 0.55 }}>×</span>
+        <span>{yLabel}</span>
+        <span style={{ color: hasData ? GREEN.fg : "var(--lys-text-faint)" }}>
+          ({panel.stats.n_pareto})
+        </span>
       </div>
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto" }}>
-        {/* Frame */}
-        <rect x={PAD} y={PAD} width={plotW} height={plotH}
-              fill="rgba(255,255,255,0.5)" stroke="rgba(124,99,216,0.15)" />
-        {/* Frontier */}
-        {(() => {
-          const ppts = validPts.filter((p) => p.on_pareto).sort((a, b) => (a.x_value! - b.x_value!));
-          if (ppts.length < 2) return null;
-          const path = ppts.map((p, i) =>
-            `${i === 0 ? "M" : "L"} ${xToPx(p.x_value!)} ${yToPx(p.y_value!)}`
-          ).join(" ");
-          return <path d={path} stroke={GREEN.fg} strokeWidth={1.2}
-                       strokeDasharray="3,2" fill="none" opacity={0.55} />;
-        })()}
-        {validPts.map((p) => {
-          const cx = xToPx(p.x_value!);
-          const cy = yToPx(p.y_value!);
-          const c = AGENT_DOT_COLOR[(p.created_by || "agent").toLowerCase()] ?? "#6b7280";
-          const r = p.on_pareto ? 4 : 2.5;
-          return (
-            <g key={p.candidate_id}>
-              {p.on_pareto && <circle cx={cx} cy={cy} r={7} fill="rgba(16,185,129,0.22)" />}
-              <circle cx={cx} cy={cy} r={r} fill={c}
-                      stroke={p.on_pareto ? GREEN.fg : "white"} strokeWidth={p.on_pareto ? 1.2 : 0.8} />
+      {hasData ? (
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet"
+             style={{ flex: 1, minHeight: 0, width: "100%", height: "100%" }}>
+          {/* Plot frame */}
+          <rect x={PAD_L} y={PAD_T} width={plotW} height={plotH}
+                fill="rgba(255,255,255,0.55)" stroke="rgba(124,99,216,0.18)" rx={3} />
+          {/* Half-axis guide lines */}
+          <line x1={xToPx(0.5)} y1={PAD_T} x2={xToPx(0.5)} y2={H - PAD_B}
+                stroke="rgba(124,99,216,0.08)" strokeWidth={0.7} />
+          <line x1={PAD_L} y1={yToPx(0.5)} x2={W - PAD_R} y2={yToPx(0.5)}
+                stroke="rgba(124,99,216,0.08)" strokeWidth={0.7} />
+          {/* X axis ticks: 0, 0.5, 1 */}
+          {[0, 0.5, 1].map((t) => (
+            <g key={`x${t}`}>
+              <line x1={xToPx(t)} y1={H - PAD_B} x2={xToPx(t)} y2={H - PAD_B + 3}
+                    stroke="rgba(124,99,216,0.42)" strokeWidth={0.8} />
+              <text x={xToPx(t)} y={H - PAD_B + 13} textAnchor="middle"
+                    fontSize={9} fill="var(--lys-text-faint)" fontFamily="var(--lys-font-mono)">
+                {t.toFixed(1)}
+              </text>
             </g>
-          );
-        })}
-      </svg>
+          ))}
+          {/* Y axis ticks: 0, 0.5, 1 */}
+          {[0, 0.5, 1].map((t) => (
+            <g key={`y${t}`}>
+              <line x1={PAD_L - 3} y1={yToPx(t)} x2={PAD_L} y2={yToPx(t)}
+                    stroke="rgba(124,99,216,0.42)" strokeWidth={0.8} />
+              <text x={PAD_L - 5} y={yToPx(t) + 3} textAnchor="end"
+                    fontSize={9} fill="var(--lys-text-faint)" fontFamily="var(--lys-font-mono)">
+                {t.toFixed(1)}
+              </text>
+            </g>
+          ))}
+          {/* Pareto frontier — sorted by x ascending so the dashed line
+              traces the actual frontier shape, not a tangled mess. */}
+          {(() => {
+            const ppts = validPts.filter((p) => p.on_pareto).sort((a, b) => (a.x_value! - b.x_value!));
+            if (ppts.length < 2) return null;
+            const path = ppts.map((p, i) =>
+              `${i === 0 ? "M" : "L"} ${xToPx(p.x_value!)} ${yToPx(p.y_value!)}`
+            ).join(" ");
+            return <path d={path} stroke={GREEN.fg} strokeWidth={1.4}
+                         strokeDasharray="3,2" fill="none" opacity={0.7} />;
+          })()}
+          {/* Dots */}
+          {validPts.map((p) => {
+            const cx = xToPx(p.x_value!);
+            const cy = yToPx(p.y_value!);
+            const c = AGENT_DOT_COLOR[(p.created_by || "agent").toLowerCase()] ?? "#6b7280";
+            const r = p.on_pareto ? 4.5 : 3;
+            return (
+              <g key={p.candidate_id}>
+                {p.on_pareto && <circle cx={cx} cy={cy} r={8} fill="rgba(16,185,129,0.22)" />}
+                <circle cx={cx} cy={cy} r={r} fill={c}
+                        stroke={p.on_pareto ? GREEN.fg : "white"} strokeWidth={p.on_pareto ? 1.4 : 0.8} />
+              </g>
+            );
+          })}
+        </svg>
+      ) : (
+        <div style={{
+          flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+          color: "var(--lys-text-faint)", fontSize: 10.5, fontFamily: "var(--lys-font-body)",
+          textAlign: "center", padding: 12, gap: 4, flexDirection: "column",
+        }}>
+          <div style={{ fontFamily: "var(--lys-font-mono)", fontSize: 9.5, opacity: 0.7 }}>
+            no candidates scored on both axes yet
+          </div>
+          <div style={{ fontSize: 9, opacity: 0.6 }}>
+            run /design to populate
+          </div>
+        </div>
+      )}
+      <div style={{
+        fontSize: 8.5, color: "var(--lys-text-faint)", textAlign: "center",
+        marginTop: 3, fontFamily: "var(--lys-font-mono)",
+        letterSpacing: "0.04em",
+      }}>
+        {hasData
+          ? `${validPts.length} pts · ${panel.stats.n_pareto} on frontier · click to expand`
+          : `${panel.stats.n_total ?? 0} total · 0 with both axes scored`}
+      </div>
     </div>
   );
 }
