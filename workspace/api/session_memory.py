@@ -29,6 +29,15 @@ _MAX_BRIEF_CHARS = 4000     # safety cap on rendered context size
 
 _lock = RLock()
 _store: dict[str, deque[dict[str, Any]]] = {}
+# ── Pending proposals queue ─────────────────────────────────────────
+# When the agent suggests a structural change ("I'd apply para-Fluoro
+# → c1ccc(F)cc1..."), it goes here UNTIL the user accepts it. The
+# orchestrator pops from this queue when the user says "apply that",
+# "do it", "go ahead", etc. — so a follow-up apply intent always
+# resolves to the most recently *proposed* SMILES, not the loaded one
+# (which is stale until the proposal is accepted).
+_proposals: dict[str, deque[dict[str, Any]]] = {}
+_MAX_PROPOSALS = 8
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -68,6 +77,83 @@ def snapshot(session_id: str, kinds: Optional[Iterable[str]] = None) -> list[dic
 def clear(session_id: str) -> None:
     with _lock:
         _store.pop(session_id, None)
+        _proposals.pop(session_id, None)
+
+
+# ────────────────────────────────────────────────────────────────────
+# Pending-proposal API
+#
+# An agent calls record_proposal() right after it commits to a swap
+# ("I'd apply para-Fluoro" + the resolved SMILES). The orchestrator
+# calls pop_proposal() when the user says "apply" — that returns the
+# most recently queued, un-applied proposal AND removes it. If the
+# proposal was auto-applied at workflow-exit time, the workflow
+# executor pops it itself so the queue never holds stale entries.
+
+def record_proposal(
+    session_id: str,
+    smiles: str,
+    *,
+    source: str = "editor",
+    swap_label: Optional[str] = None,
+    rationale: Optional[str] = None,
+) -> None:
+    """Queue a new pending proposal. Called from the workflow executor
+    after an editor narration, from the harden card "Apply" hint, or
+    anywhere the agent makes a 'I'd apply X' commitment."""
+    if not session_id or not smiles:
+        return
+    with _lock:
+        q = _proposals.get(session_id)
+        if q is None:
+            q = deque(maxlen=_MAX_PROPOSALS)
+            _proposals[session_id] = q
+        q.append({
+            "ts": time(),
+            "smiles": smiles,
+            "source": source,
+            "swap_label": swap_label,
+            "rationale": rationale,
+        })
+
+
+def pop_proposal(session_id: str) -> Optional[dict[str, Any]]:
+    """Return + remove the most recently queued proposal. Returns None
+    if the queue is empty. Use when the user accepts an 'apply' intent."""
+    with _lock:
+        q = _proposals.get(session_id)
+        if q is None or not q:
+            return None
+        return q.pop()
+
+
+def peek_proposal(session_id: str) -> Optional[dict[str, Any]]:
+    """Return (without removing) the most recently queued proposal.
+    Used by the orchestrator prompt to know there's a pending swap so
+    it can resolve 'apply that' correctly."""
+    with _lock:
+        q = _proposals.get(session_id)
+        if q is None or not q:
+            return None
+        return q[-1]
+
+
+def clear_proposal_for(session_id: str, smiles: str) -> None:
+    """Drop any pending proposal matching this SMILES. Called when the
+    user loads that SMILES via a different path (chip click, direct
+    /load), so the queue doesn't double-fire."""
+    if not session_id or not smiles:
+        return
+    with _lock:
+        q = _proposals.get(session_id)
+        if q is None:
+            return
+        # Build a new deque without the matching entries
+        remaining = deque(maxlen=q.maxlen)
+        for p in q:
+            if p.get("smiles") != smiles:
+                remaining.append(p)
+        _proposals[session_id] = remaining
 
 
 # ────────────────────────────────────────────────────────────────────
@@ -137,6 +223,19 @@ def brief(session_id: str) -> str:
         recent = workflows[-3:]
         lines.append("- recent workflows: " + " · ".join(
             f"{w.get('name')}({w.get('status', '?')})" for w in recent))
+
+    # Pending agent proposal — what's queued for "apply that" intent.
+    # Surface this prominently so the routing LLM sees it as the
+    # ground-truth target when the user says apply/do it/go ahead.
+    pending = peek_proposal(session_id)
+    if pending:
+        smi = pending.get("smiles", "")
+        swap = pending.get("swap_label") or pending.get("source") or "swap"
+        lines.append(
+            f"- **PENDING PROPOSAL** (from {pending.get('source', 'agent')}): "
+            f"`{swap}` → `{smi}` — if user says 'apply', 'do it', "
+            f"'go ahead', etc., this is the SMILES they mean."
+        )
 
     out = "\n".join(lines)
     if len(out) > _MAX_BRIEF_CHARS:

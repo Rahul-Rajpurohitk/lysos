@@ -445,14 +445,41 @@ async def _orchestrator_loop(req: OrchestratorRunRequest, api_base: str) -> Asyn
         "recent_messages": req.recent_messages or [],
     }
 
+    # ── Pending-proposal fast path ──
+    # If the user typed a short accept phrase and there's a queued
+    # proposal from the agent (editor swap, etc.), route directly to
+    # /load with that SMILES. No Gemini round-trip needed — the
+    # proposal is ground truth. Pops the queue so the same accept
+    # phrase doesn't re-fire the same load.
     plan: dict[str, Any]
     plan_source = "gemini"
-    try:
-        plan = await _gemini_route(req.text, ctx, session_id=req.session_id)
-    except Exception as exc:
-        log.warning("gemini routing failed (%s) — falling back to heuristic", exc)
-        plan = _heuristic_route(req.text, ctx)
-        plan_source = f"heuristic (gemini: {exc})"
+    accept_re = re.compile(
+        r"^(apply|apply that|apply it|do it|go ahead|then apply|"
+        r"yes apply|yes do it|use that|use that one|make the change|"
+        r"ship it|approved|accept|accept it|ok apply)\.?\s*$",
+        re.IGNORECASE,
+    )
+    if accept_re.match((req.text or "").strip()):
+        pending = session_memory.pop_proposal(req.session_id or "")
+        if pending and pending.get("smiles"):
+            plan = {
+                "route": "slash",
+                "rationale": (
+                    f"User accepted the pending {pending.get('source', 'agent')} "
+                    f"proposal '{pending.get('swap_label') or 'swap'}'."
+                ),
+                "name": "/load",
+                "inputs": {"smiles": pending["smiles"]},
+            }
+            plan_source = "pending-proposal-fastpath"
+
+    if plan_source == "gemini":
+        try:
+            plan = await _gemini_route(req.text, ctx, session_id=req.session_id)
+        except Exception as exc:
+            log.warning("gemini routing failed (%s) — falling back to heuristic", exc)
+            plan = _heuristic_route(req.text, ctx)
+            plan_source = f"heuristic (gemini: {exc})"
 
     # Record the routing decision so future turns know what the
     # orchestrator did last time.
@@ -677,6 +704,31 @@ async def route_only(req: RouteOnlyRequest) -> dict:
         session_memory.record(req.session_id, "user", {"text": req.text})
         if req.smiles:
             session_memory.record(req.session_id, "load", {"smiles": req.smiles})
+
+    # Pending-proposal fast path — see /run for full reasoning.
+    accept_re = re.compile(
+        r"^(apply|apply that|apply it|do it|go ahead|then apply|"
+        r"yes apply|yes do it|use that|use that one|make the change|"
+        r"ship it|approved|accept|accept it|ok apply)\.?\s*$",
+        re.IGNORECASE,
+    )
+    if accept_re.match((req.text or "").strip()):
+        pending = session_memory.pop_proposal(req.session_id or "")
+        if pending and pending.get("smiles"):
+            return {
+                "plan": {
+                    "route": "slash",
+                    "rationale": (
+                        f"User accepted the pending "
+                        f"{pending.get('source', 'agent')} proposal "
+                        f"'{pending.get('swap_label') or 'swap'}'."
+                    ),
+                    "name": "/load",
+                    "inputs": {"smiles": pending["smiles"]},
+                },
+                "source": "pending-proposal-fastpath",
+            }
+
     try:
         plan = await _gemini_route(req.text, ctx, session_id=req.session_id)
         return {"plan": plan, "source": "gemini"}

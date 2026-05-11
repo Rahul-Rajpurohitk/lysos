@@ -1334,6 +1334,21 @@ async def _execute_workflow(
                 if step.narrator_role == "editor" and narration:
                     applied = _extract_applied_smiles(narration, data)
                     if applied:
+                        # Queue the proposal so a follow-up 'apply that'
+                        # / 'do it' from chat finds the right SMILES
+                        # even if the auto-apply event was missed by
+                        # the frontend (older session, race, etc.).
+                        try:
+                            from . import session_memory as _sm
+                            _sm.record_proposal(
+                                session_id or "",
+                                applied["smiles"],
+                                source="editor",
+                                swap_label=applied.get("swap"),
+                                rationale=applied.get("rationale"),
+                            )
+                        except Exception:
+                            pass
                         yield _sse({
                             "event": "step.apply_smiles",
                             "run_id": run_id,
