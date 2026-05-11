@@ -236,6 +236,51 @@ _TOOL_DEFS: list[dict[str, Any]] = [
             "required": ["session_id", "candidate_id"],
         },
     },
+    # ── Agentic close-the-loop tool ──
+    # Every analysis MUST end with this. Queues a concrete swap or
+    # follow-up SMILES for the user to accept with "apply". Closes
+    # the "narrates but never executes" gap once and for all.
+    {
+        "name": "propose_next_action",
+        "description": (
+            "Commit to the SPECIFIC next move. Call this EXACTLY ONCE at "
+            "the end of every multi-step analysis, BEFORE writing your "
+            "final summary. Queues a pending proposal — the user can "
+            "accept it by saying 'apply', 'do it', 'go ahead', etc. "
+            "Use this to make a concrete recommendation (a new SMILES "
+            "to load, or a workflow to run) rather than hand-waving "
+            "with 'future work could focus on...'. Failing to call "
+            "this means the agent didn't deliver an actionable next "
+            "step."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "description": "'load_smiles' if you have a concrete modified molecule to apply; 'run_workflow' if the right move is a multi-step workflow.",
+                    "enum": ["load_smiles", "run_workflow"],
+                },
+                "smiles": {
+                    "type": "string",
+                    "description": "Required when kind='load_smiles'. The exact SMILES you want loaded into 2D + 3D + auto-scored.",
+                },
+                "swap_label": {
+                    "type": "string",
+                    "description": "Short human label for the change (e.g. 'add 6α-methoxy', 'replace ester with amide').",
+                },
+                "workflow_name": {
+                    "type": "string",
+                    "description": "Required when kind='run_workflow'. e.g. 'harden_candidate', 'compare_top_n', 'optimize_for_property'.",
+                },
+                "rationale": {
+                    "type": "string",
+                    "description": "One-sentence WHY — what signal in the prior tool results justifies this move.",
+                },
+            },
+            "required": ["kind", "rationale"],
+        },
+    },
 ]
 
 
@@ -303,6 +348,36 @@ async def _dispatch_tool(name: str, args: dict[str, Any], api_base: str) -> dict
                 "x_axis": args.get("x_axis", "predicted_mic"),
                 "y_axis": args.get("y_axis", "composite_reward"),
             })
+        elif name == "propose_next_action":
+            # Local dispatch — queues the proposal in session memory.
+            # No external HTTP call; we synthesize a response object.
+            from . import session_memory as _sm
+            kind = args.get("kind", "load_smiles")
+            sid = args.get("_session_id") or ""
+            queued = False
+            if kind == "load_smiles" and args.get("smiles"):
+                _sm.record_proposal(
+                    sid,
+                    args["smiles"],
+                    source="agent",
+                    swap_label=args.get("swap_label"),
+                    rationale=args.get("rationale"),
+                )
+                queued = True
+            return {
+                "ok": True,
+                "queued": queued,
+                "kind": kind,
+                "smiles": args.get("smiles"),
+                "workflow_name": args.get("workflow_name"),
+                "swap_label": args.get("swap_label"),
+                "rationale": args.get("rationale"),
+                "user_hint": (
+                    "Say 'apply' to load this SMILES into the canvas."
+                    if kind == "load_smiles" and queued
+                    else "Say 'go ahead' to run this workflow."
+                ),
+            }
         else:
             raise HTTPException(400, f"unknown tool: {name}")
 
@@ -350,12 +425,29 @@ async def _agent_loop(req: AgentRunRequest, api_base: str) -> AsyncIterator[str]
         "than guessing. After each tool call's result lands, synthesize what "
         "you found, then either call another tool or reply to the user.\n\n"
         f"Current session context:\n"
+        f"  session_id: {req.session_id}\n"
         f"  smiles: {req.smiles or '(none)'}\n"
         f"  pathogen: {req.pathogen or 'MRSA'}\n"
         f"  pdb_id: {req.pdb_id or '(none)'}\n"
         f"\nWhen the user asks a question, plan: WHICH tools should I call, in "
         f"what ORDER, with what ARGS? Then execute. Cite numerical results in "
-        f"your final answer. Be concise but rigorous."
+        f"your final answer. Be concise but rigorous.\n\n"
+        "## STRICT CONTRACT — close the loop\n"
+        "Every multi-tool analysis (anything beyond a single score / explain) "
+        "MUST end with a call to `propose_next_action` BEFORE you write your "
+        "final user-facing answer. The proposal is a concrete next step the "
+        "user can accept with one word ('apply'). Do NOT hand-wave with "
+        "'future work could focus on...'. Pick a specific swap (with the "
+        "exact SMILES from harden_atom's `after_smiles` field, or a SMILES "
+        "you build by reasoning over the candidate) or a specific workflow.\n\n"
+        "## Truncation policy\n"
+        "Tool results may include `_truncated_partial: true` along with the "
+        "high-signal fields. The summary fields you need (key_contacts, "
+        "vulnerable_atoms, binding_atoms, clashing_atoms, composite, "
+        "robustness_score, etc.) are ALWAYS preserved. NEVER cite atom "
+        "indices, residue numbers, or distances that aren't in the result. "
+        "If you need verbose detail that was truncated, re-call the tool "
+        "with a narrower scope."
     )
 
     contents: list[dict] = [
@@ -431,6 +523,11 @@ async def _agent_loop(req: AgentRunRequest, api_base: str) -> AsyncIterator[str]
                 })
                 t0 = time.perf_counter()
                 try:
+                    # Thread session_id into propose_next_action so the
+                    # local dispatcher can write to the right session's
+                    # pending-proposal queue.
+                    if tool_name == "propose_next_action":
+                        tool_args = {**tool_args, "_session_id": req.session_id}
                     result = await _dispatch_tool(tool_name, tool_args, api_base)
                     elapsed_ms = int((time.perf_counter() - t0) * 1000)
                     yield _sse({
@@ -489,13 +586,99 @@ def _chunks(s: str, size: int):
         yield s[i:i + size]
 
 
+# Engineered truncation — preserve high-signal summary fields even
+# when the verbose raw arrays get clipped. Without this, oversized tool
+# results (e.g. place_in_pocket with 152 contacts) collapsed into a
+# 6-KB string preview, and the UI lost the clash_atoms / binding_atoms
+# / key_contacts arrays that the agent's narration actually cites.
+_KEEP_FIELDS_VERBATIM = {
+    # Scoring
+    "composite", "weakest", "strongest", "components", "axis_reasoning",
+    "rdkit_properties", "rules",
+    # Resistance
+    "robustness_score", "n_escape_vectors", "vulnerable_atoms",
+    "clinical_overlap", "drug_class_profile", "summary",
+    "n_total_known_mutations", "n_residues_with_contacts",
+    # Pose / contacts
+    "pose_score", "n_contacts", "n_clashes", "key_contacts",
+    "binding_atoms", "clashing_atoms", "target_name", "pathogen",
+    # Hardening
+    "weak_atoms", "n_vulnerable_total", "max_atoms",
+    "gemini_suggestions", "playbook_suggestions", "suggestions",
+    "after_smiles", "proposed_smiles", "mechanism",
+    "predicted_robustness_delta", "confidence", "swap", "rationale",
+    # Workflow
+    "ranking", "candidates", "winner", "runner_up", "next_action",
+    # Identifiers — never truncate
+    "smiles", "pdb_id", "atom_idx", "atom_index",
+}
+
+_DROP_FIELDS = {
+    # Noisy internals the agent doesn't need to reason from
+    "_factors", "all_residue_scores", "contact_residue_details",
+    "contacts",  # huge — `key_contacts` carries the signal
+    "clashes",   # huge — `clashing_atoms` carries the signal
+}
+
+
 def _truncate_for_event(obj: Any, max_chars: int = 6000) -> Any:
-    """Rough payload size guard so SSE events don't blow up the connection."""
+    """Smart compaction:
+    1. Drop verbose internal fields the agent doesn't read from.
+    2. Keep all high-signal summary fields verbatim (key_contacts,
+       vulnerable_atoms, etc.).
+    3. If the result is STILL too big, cap arrays at 8 items each.
+    4. As last resort, emit a preview envelope — but it's now a
+       dict that retains the kept fields PLUS the preview.
+
+    Note: this only affects the SSE event sent to the UI for display.
+    The agent's tool_response_parts (line ~445) still get the FULL
+    untouched result.
+    """
+    def _compact(o: Any, depth: int = 0) -> Any:
+        if depth > 6:
+            return "..."
+        if isinstance(o, dict):
+            out: dict[str, Any] = {}
+            for k, v in o.items():
+                if k in _DROP_FIELDS:
+                    continue
+                out[k] = _compact(v, depth + 1)
+            return out
+        if isinstance(o, list):
+            return [_compact(x, depth + 1) for x in o]
+        return o
+
     try:
-        as_str = json.dumps(obj)
+        compacted = _compact(obj)
+        as_str = json.dumps(compacted)
         if len(as_str) <= max_chars:
-            return obj
-        return {"_truncated": True, "_len": len(as_str), "preview": as_str[:max_chars]}
+            return compacted
+        # Still too big — cap arrays at 8 items
+        def _cap_arrays(o: Any, depth: int = 0) -> Any:
+            if depth > 6:
+                return "..."
+            if isinstance(o, dict):
+                return {k: _cap_arrays(v, depth + 1) for k, v in o.items()}
+            if isinstance(o, list):
+                return [_cap_arrays(x, depth + 1) for x in o[:8]]
+            return o
+        capped = _cap_arrays(compacted)
+        as_str = json.dumps(capped)
+        if len(as_str) <= max_chars:
+            return capped
+        # Final fallback — preserve top-level scalar/short fields and
+        # a preview of the rest. The agent / UI still gets composite,
+        # robustness, pose_score, n_clashes, etc. as first-class.
+        if isinstance(capped, dict):
+            keep: dict[str, Any] = {"_truncated_partial": True}
+            for k, v in capped.items():
+                if k in _KEEP_FIELDS_VERBATIM and not isinstance(v, (list, dict)):
+                    keep[k] = v
+            keep["_len"] = len(as_str)
+            keep["_preview"] = as_str[:max_chars]
+            return keep
+        return {"_truncated": True, "_len": len(as_str),
+                "preview": as_str[:max_chars]}
     except Exception:
         return {"_unserializable": True}
 
