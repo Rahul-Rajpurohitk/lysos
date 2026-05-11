@@ -415,8 +415,15 @@ async def _agent_loop(req: AgentRunRequest, api_base: str) -> AsyncIterator[str]
         yield _sse({"event": "agent.done", "elapsed_ms": 0, "n_tool_calls": 0})
         return
 
-    model_id = os.getenv("LYSOS_AGENT_GEMINI_MODEL", "gemini-2.5-pro")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent"
+    # Primary + fallback model. Gemini 2.5 Pro hits 503 (Service
+    # Unavailable) under load — when that happens we automatically
+    # retry the same payload on Gemini 2.5 Flash so the agent loop
+    # never silently bails with an empty 0.8s response.
+    primary_model = os.getenv("LYSOS_AGENT_GEMINI_MODEL", "gemini-2.5-pro")
+    fallback_model = os.getenv("LYSOS_AGENT_GEMINI_FALLBACK", "gemini-2.5-flash")
+    def _model_url(m: str) -> str:
+        return f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
+    url = _model_url(primary_model)
 
     system_text = (
         "You are Lysos, an AI medicinal-chemistry research partner specializing "
@@ -478,13 +485,32 @@ async def _agent_loop(req: AgentRunRequest, api_base: str) -> AsyncIterator[str]
                 "thinkingConfig": {"thinkingBudget": 1024, "includeThoughts": True},
             },
         }
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as cx:
-                r = await cx.post(url, headers=headers, json=payload)
-        except Exception as exc:
-            yield _sse({"event": "agent.error", "error": f"gemini network: {exc}"})
+        # Try primary; on 503 (Service Unavailable) or 429 (rate limit),
+        # fall through to the Flash fallback so the run isn't silently
+        # killed by Google's load shedding.
+        r = None
+        used_model = primary_model
+        for attempt_model in (primary_model, fallback_model):
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as cx:
+                    r = await cx.post(_model_url(attempt_model),
+                                       headers=headers, json=payload)
+            except Exception as exc:
+                yield _sse({"event": "agent.error",
+                            "error": f"gemini network ({attempt_model}): {exc}"})
+                r = None
+                break
+            if r.status_code == 200:
+                used_model = attempt_model
+                break
+            # Retry-eligible statuses fall through to fallback
+            if r.status_code not in (429, 503):
+                break
+            yield _sse({"event": "agent.fallback",
+                        "from": attempt_model, "to": fallback_model,
+                        "reason": f"http {r.status_code}"})
+        if r is None:
             break
-
         if r.status_code != 200:
             yield _sse({"event": "agent.error",
                         "error": f"gemini http {r.status_code}: {r.text[:240]}"})

@@ -306,8 +306,14 @@ async def _gemini_route(text: str, ctx: dict[str, Any], session_id: Optional[str
     if not key:
         raise RuntimeError("GEMINI_API_KEY missing")
 
-    model_id = os.getenv("LYSOS_ORCHESTRATOR_MODEL", "gemini-2.5-pro")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent"
+    # Primary + fallback. Gemini 2.5 Pro hits 503 under demand; auto-
+    # retry the routing call on Flash so the orchestrator never
+    # silently fails over to the heuristic-only path.
+    primary_model = os.getenv("LYSOS_ORCHESTRATOR_MODEL", "gemini-2.5-pro")
+    fallback_model = os.getenv("LYSOS_ORCHESTRATOR_FALLBACK", "gemini-2.5-flash")
+    def _model_url(m: str) -> str:
+        return f"https://generativelanguage.googleapis.com/v1beta/models/{m}:generateContent"
+    url = _model_url(primary_model)
 
     system_text = _build_routing_system_prompt()
     memory_brief = session_memory.brief(session_id) if session_id else ""
@@ -351,10 +357,20 @@ async def _gemini_route(text: str, ctx: dict[str, Any], session_id: Optional[str
         },
     }
     headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=20.0) as cx:
-        r = await cx.post(url, headers=headers, json=payload)
-    if r.status_code != 200:
-        raise RuntimeError(f"gemini http {r.status_code}: {r.text[:200]}")
+    r = None
+    for attempt_model in (primary_model, fallback_model):
+        async with httpx.AsyncClient(timeout=20.0) as cx:
+            r = await cx.post(_model_url(attempt_model), headers=headers, json=payload)
+        if r.status_code == 200:
+            break
+        if r.status_code not in (429, 503):
+            break
+        log.warning("gemini routing %s returned %d; falling back to %s",
+                    attempt_model, r.status_code, fallback_model)
+    if r is None or r.status_code != 200:
+        code = r.status_code if r is not None else 0
+        body = r.text[:200] if r is not None else "no response"
+        raise RuntimeError(f"gemini http {code}: {body}")
     body = r.json()
     cands = body.get("candidates", [])
     if not cands:
