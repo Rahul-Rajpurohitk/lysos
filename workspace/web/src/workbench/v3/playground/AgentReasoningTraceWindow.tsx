@@ -91,7 +91,30 @@ function buildChain(events: ChatLikeEvent[], agent: AgentName): ChainEntry[] {
       });
     }
   }
-  return out.sort((a, b) => a.ts - b.ts);
+  out.sort((a, b) => a.ts - b.ts);
+
+  // Dedup consecutive identical think-text from the same agent. The
+  // workflow re-ran 4 times → the same critic narration appeared 4
+  // times in the trace. Collapse them and surface "·×N" so the user
+  // knows it happened more than once without scrolling through dups.
+  const collapsed: ChainEntry[] = [];
+  for (const entry of out) {
+    const prev = collapsed[collapsed.length - 1];
+    if (
+      prev
+      && prev.kind === "think"
+      && entry.kind === "think"
+      && (prev.text || "").trim() === (entry.text || "").trim()
+    ) {
+      // Collapse — bump a `repeat` counter on the last entry.
+      (prev as any).repeat = ((prev as any).repeat ?? 1) + 1;
+      // Carry the latest ts so the entry stays "fresh" for auto-scroll.
+      prev.ts = entry.ts;
+      continue;
+    }
+    collapsed.push({ ...entry });
+  }
+  return collapsed;
 }
 
 export function AgentReasoningTraceWindow({ events }: Props) {
@@ -211,6 +234,22 @@ function ChainEntryCard({ entry, accent }: { entry: ChainEntry; accent: string }
             marginBottom: 1, fontWeight: 700 }}>
             iter {entry.iteration}
           </div>
+        )}
+        {(entry as any).repeat && (entry as any).repeat > 1 && (
+          <span style={{
+            display: "inline-block",
+            padding: "1px 6px",
+            background: accent + "20",
+            color: accent,
+            borderRadius: 999,
+            fontSize: 9,
+            fontWeight: 700,
+            fontFamily: "var(--lys-font-mono)",
+            marginBottom: 3,
+            letterSpacing: "0.04em",
+          }} title="This reasoning fired multiple times — collapsed to keep the trace clean">
+            ·×{(entry as any).repeat}
+          </span>
         )}
         <div style={{
           display: "-webkit-box",

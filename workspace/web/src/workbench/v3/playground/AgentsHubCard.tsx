@@ -609,6 +609,8 @@ function FlowGraph({ metrics, recent }: { metrics: MetricsResponse | null; recen
   );
   const counts: Record<string, number> = {};
   for (const m of metrics?.agents ?? []) counts[m.agent] = m.n_actions;
+  const totalActions = (metrics?.agents ?? []).reduce((s, a) => s + a.n_actions, 0);
+  const isEmpty = totalActions === 0;
   return (
     <div style={{
       padding: "10px 12px",
@@ -616,7 +618,25 @@ function FlowGraph({ metrics, recent }: { metrics: MetricsResponse | null; recen
       border: "1px solid rgba(0,0,0,0.06)",
       borderRadius: 6,
     }}>
-      <SectionTitle>Multi-agent flow · live</SectionTitle>
+      <SectionTitle>Multi-agent flow · this session</SectionTitle>
+      {isEmpty && (
+        <div style={{
+          marginTop: 6, padding: "8px 10px",
+          background: "rgba(99, 102, 241, 0.06)",
+          border: "1px dashed rgba(99, 102, 241, 0.30)",
+          borderRadius: 6,
+          fontSize: 11, color: "var(--lys-text-dim)",
+          fontFamily: "var(--lys-font-body)",
+          lineHeight: 1.45,
+        }}>
+          <strong>No agent actions yet in this session.</strong> Run a
+          workflow like <code>/wf design_with_debate</code> or
+          <code>/wf harden_candidate</code> — each step the
+          Designer / Critic / Editor / Strategist takes will light up
+          here in real time. Past activity is in the "all-time" card
+          below.
+        </div>
+      )}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         gap: 6, marginTop: 6,

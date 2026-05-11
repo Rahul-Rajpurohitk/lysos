@@ -2987,7 +2987,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       <AgentsHubCard apiBase={apiBase} sessionId={activeChatId} /> },
                     { id: "trace", title: "Reasoning trace · 4 specialists", size: 2, body:
                       <AgentReasoningTraceWindow events={events as any[]} /> },
-                    { id: "metrics", title: "Agent metrics · KPIs per role (legacy)", size: 2, body:
+                    { id: "metrics", title: "Agent metrics · all-time activity", size: 2, body:
                       <AgentMetricsCard apiBase={apiBase} sessionId={activeChatId} /> },
                     { id: "actionlog", title: "Action log · DB-backed history (legacy)", size: 2, body:
                       <AgentActionLogCard apiBase={apiBase} sessionId={activeChatId} /> },
