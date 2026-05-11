@@ -131,7 +131,11 @@ export function PropertiesCard({ apiBase, smiles }: Props) {
   // continuous insights surface.
   return (
     <div style={containerStyle}>
-      <div style={{ flex: 1, overflow: "hidden", display: "flex",
+      {/* `overflow: hidden` here was clipping the DRUG-CLASS MATCHES
+          chips when the panel got tight — switching to `auto` lets the
+          card scroll its own content instead of swallowing the last
+          section under the bottom edge. */}
+      <div style={{ flex: 1, minHeight: 0, overflow: "auto", display: "flex",
         flexDirection: "column" }}>
 
         {/* SECTION 1 · DRUG-LIKENESS · 4 hero KPI tiles with rule status

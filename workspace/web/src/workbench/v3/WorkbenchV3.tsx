@@ -163,7 +163,12 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
   if (!stepDef || !result) return null;
   const label = stepDef.label || stepDef.id || "step";
   const tool = (stepDef.tool || "").toLowerCase();
-  const ms = elapsedMs ? ` _(${elapsedMs}ms)_` : "";
+  // Timing is shown subtly in the agent badge already — keeping the
+  // raw `_(7984ms)_` debug markup inside the narrative body made every
+  // step read like a log line, not an agent. Drop it from the prose.
+  // (kept the elapsedMs param for backward-compat with callers.)
+  void elapsedMs;
+  const ms = "";
 
   // Resistance prediction — the critic's specialty.
   // Opinionated reasoning over the numbers: prioritize, contextualize
@@ -211,15 +216,24 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
     return lines.join(" ");
   }
 
-  // Scoring — designer's domain
+  // Scoring — designer's domain. Keep this conversational, like the
+  // designer is reading the result out loud, not dumping JSON.
   if (tool === "score_explain" || tool === "score_molecule" || tool === "score_each") {
+    void label; void ms; // older callers passed `label`+`ms`; we craft prose instead
     if (Array.isArray(result)) {
       const tops = result.slice(0, 3).map((r: any) =>
-        `\`${r.smiles}\` → composite **${(r.composite ?? 0).toFixed(3)}**`).join(", ");
-      return `**${label}** complete${ms}. Scored ${result.length} candidate${result.length === 1 ? "" : "s"} — ${tops}.`;
+        `\`${r.smiles}\` at **${(r.composite ?? 0).toFixed(3)}**`).join(", ");
+      const n = result.length;
+      return `Scored ${n} candidate${n === 1 ? "" : "s"}. Top: ${tops}.`;
     }
     if (typeof result.composite === "number") {
-      return `**${label}**${ms}: \`${result.smiles}\` → composite **${result.composite.toFixed(3)}**${result.weakest ? `, weakest axis: \`${result.weakest}\`` : ""}.`;
+      const c = result.composite as number;
+      const tier = c >= 0.70 ? "strong" : c >= 0.50 ? "decent" : c >= 0.35 ? "borderline" : "weak";
+      const weakest = result.weakest;
+      const weakestLine = weakest
+        ? ` Weakest axis is \`${weakest}\` — that's the lever for the next pass.`
+        : "";
+      return `\`${result.smiles}\` lands at composite **${c.toFixed(3)}** — ${tier}.${weakestLine}`;
     }
   }
 
@@ -1953,12 +1967,53 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         parentId: null,
                         logLabel: "[/load]",
                       });
+                      if (!id) {
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: "lysos",
+                          content: `Couldn't parse \`${smi}\` as a valid SMILES. Try \`/design\` for a fresh candidate or paste a canonical form.`,
+                        } as any]);
+                        return;
+                      }
+                      // Agent-voiced placeholder so the chat reads as the
+                      // agent owning the action — NOT the old "Loaded X
+                      // into 2D+3D. Re-scoring…" script. Once Gemini Flash
+                      // returns with the proper narration we splice in the
+                      // model's line over this placeholder.
+                      const narratorId = `narr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
                       setEvents((p) => [...p, {
                         type: "agent_message",
                         ts: Date.now() / 1000,
-                        agent: "assistant",
-                        content: id ? `Loaded \`${smi}\` into 2D + 3D. Re-scoring…` : `Could not load \`${smi}\` (invalid SMILES?)`,
+                        agent: "lysos",
+                        content: `On it — picking up \`${smi}\` and scoring against ${selectedPathogen || "MRSA"} now.`,
+                        _narratorId: narratorId,
                       } as any]);
+                      void (async () => {
+                        try {
+                          const r = await fetch(`${apiBase}/api/orchestrator/narrate`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              session_id: chatSid,
+                              action: "load",
+                              smiles: smi,
+                              pathogen: selectedPathogen || "MRSA",
+                              last_composite: lastComposite,
+                              trigger: "manual",
+                            }),
+                          });
+                          const d = await r.json();
+                          const line = (d && d.narration) ? String(d.narration).trim() : "";
+                          if (line) {
+                            setEvents((p) => p.map((e: any) =>
+                              e._narratorId === narratorId
+                                ? { ...e, content: line }
+                                : e
+                            ));
+                          }
+                        } catch { /* keep the placeholder line, the canvas already updated */ }
+                      })();
                       return;
                     }
 

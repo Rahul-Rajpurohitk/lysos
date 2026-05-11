@@ -804,3 +804,157 @@ async def health() -> dict:
         "n_workflows": len(_KNOWN_WORKFLOWS),
         "n_slash": len(_KNOWN_SLASH),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Action narrator — when the user clicks a button that fast-paths a
+# slash command (Load / Apply / Ship / Swap), the canvas updates
+# instantly but the chat used to emit a robotic "Loaded X into 2D + 3D.
+# Re-scoring…" string. That made every button feel like a script, not
+# an agent. This endpoint asks Gemini Flash for a single-sentence
+# in-voice acknowledgment grounded in session memory + the action
+# context, so the chat reads as the agent owning the action.
+# ─────────────────────────────────────────────────────────────────────
+
+class NarrateActionRequest(BaseModel):
+    session_id: Optional[str] = None
+    action: str                          # "load" | "swap" | "harden" | "score"
+    smiles: Optional[str] = None
+    pathogen: Optional[str] = "MRSA"
+    last_composite: Optional[float] = None
+    trigger: Optional[str] = None        # "champion" | "candidate" | "winner" | "manual" | etc.
+    context_hint: Optional[str] = None   # human-readable why ("debate winner", "user-typed", …)
+    weakest_axis: Optional[str] = None   # optional, used after a score lands
+
+
+def _action_narrator_prompt() -> str:
+    return (
+        "You are the **Lysos agent** speaking in the chat — one voice, "
+        "first-person, conversational. The UI just executed an action "
+        "(load / swap / harden) on the user's behalf. Your job is a "
+        "single sentence (≤ 200 chars) that:\n"
+        "  - Acknowledges the action in agent voice (\"on it\", "
+        "\"picked up\", \"locking in\" — not \"loaded into 2D+3D\").\n"
+        "  - Grounds the action in *why* it matters (winner of a debate, "
+        "weakest axis from a score, etc.) when the context says so.\n"
+        "  - When a composite score is known, name the number and the "
+        "weakest axis (if given) in plain language.\n"
+        "  - Ends with the natural next step (\"worth a /harden pass\", "
+        "\"want me to compare against the prior best\", \"running /score "
+        "now\"). Skip if obvious.\n"
+        "Rules:\n"
+        "  - Single sentence. No fenced code, no markdown headers, no "
+        "emojis, no timing stats, no bullet lists.\n"
+        "  - You MAY backtick the SMILES.\n"
+        "  - Never invent scores you weren't told. If composite is "
+        "unknown, say \"scoring now\".\n"
+        "Return STRICT JSON: {\"narration\": \"<your line>\"}."
+    )
+
+
+@router.post("/narrate")
+async def narrate_action(req: NarrateActionRequest) -> dict:
+    """Return a single agent-voiced sentence for a UI action. The
+    canvas already fired; this just gives the chat an in-voice line."""
+    t0 = time.perf_counter()
+    key = os.getenv("GEMINI_API_KEY")
+    fallback_line = _fallback_narration(req)
+    if not key:
+        return {"narration": fallback_line, "model": "fallback",
+                "elapsed_ms": int((time.perf_counter() - t0) * 1000)}
+
+    primary = os.getenv("LYSOS_NARRATOR_MODEL", "gemini-2.5-flash")
+    brief = session_memory.brief(req.session_id) if req.session_id else ""
+    ctx_lines = [
+        f"action: {req.action}",
+        f"smiles: {req.smiles or '(none)'}",
+        f"pathogen: {req.pathogen or 'MRSA'}",
+        f"trigger: {req.trigger or 'manual'}",
+    ]
+    if req.context_hint:
+        ctx_lines.append(f"why: {req.context_hint}")
+    if req.last_composite is not None:
+        ctx_lines.append(f"last_composite: {req.last_composite:.3f}")
+    if req.weakest_axis:
+        ctx_lines.append(f"weakest_axis: {req.weakest_axis}")
+    ctx_block = "\n".join(ctx_lines)
+    if brief:
+        ctx_block += "\n\n" + brief
+
+    payload = {
+        "system_instruction": {"parts": [{"text": _action_narrator_prompt()}]},
+        "contents": [{"role": "user", "parts": [{"text": f"Action context:\n{ctx_block}"}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 256,
+            "temperature": 0.55,
+            "thinkingConfig": {"thinkingBudget": 0, "includeThoughts": False},
+        },
+    }
+    headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{primary}:generateContent"
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as cx:
+            r = await cx.post(url, headers=headers, json=payload)
+        if r.status_code != 200:
+            log.warning("narrator http %d: %s", r.status_code, r.text[:160])
+            return {"narration": fallback_line, "model": f"fallback (http {r.status_code})",
+                    "elapsed_ms": int((time.perf_counter() - t0) * 1000)}
+        body = r.json()
+        parts = ((body.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+        raw = "".join(p.get("text", "") for p in parts).strip()
+        s = raw
+        if s.startswith("```"):
+            s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.M).strip()
+        try:
+            parsed = json.loads(s)
+            line = (parsed.get("narration") or "").strip()
+        except json.JSONDecodeError:
+            line = s.strip().strip('"').strip()
+        if not line:
+            line = fallback_line
+        if len(line) > 280:
+            line = line[:277] + "…"
+        # Record the agent action so it shows up in session memory + the
+        # agent activity log. This is what makes button-clicks feel
+        # *agentic* — the agent's voice is the one in the chat AND the
+        # one whose action shows up in the Agents container.
+        if req.session_id:
+            try:
+                session_memory.record(req.session_id, "agent_say",
+                                       {"agent": "lysos", "content": line,
+                                        "action": req.action,
+                                        "trigger": req.trigger or "manual"})
+            except Exception:
+                pass
+        return {"narration": line, "model": primary,
+                "elapsed_ms": int((time.perf_counter() - t0) * 1000)}
+    except Exception as exc:
+        log.warning("narrator failed: %s", exc)
+        return {"narration": fallback_line, "model": f"fallback ({exc})",
+                "elapsed_ms": int((time.perf_counter() - t0) * 1000)}
+
+
+def _fallback_narration(req: NarrateActionRequest) -> str:
+    """Deterministic fallback when Gemini is unreachable. Still in
+    agent voice — not the robotic 'Loaded X into 2D+3D' line."""
+    smi = req.smiles or ""
+    smi_disp = f"`{smi}`" if smi else "the candidate"
+    trigger = (req.trigger or "").lower()
+    if req.action == "load":
+        if trigger == "winner" or "debate winner" in (req.context_hint or "").lower():
+            base = f"Locking in the debate winner {smi_disp}"
+        elif trigger == "champion":
+            base = f"Pulling {smi_disp} from the champion table"
+        elif trigger == "candidate":
+            base = f"Picking up {smi_disp}"
+        else:
+            base = f"On it — loading {smi_disp}"
+        if req.last_composite is not None:
+            return f"{base} — prior composite {req.last_composite:.3f}. Re-scoring."
+        return f"{base} — scoring against {req.pathogen or 'MRSA'} now."
+    if req.action == "swap":
+        return f"Applying the swap on {smi_disp} and re-scoring."
+    if req.action == "harden":
+        return f"Hardening {smi_disp} — looking for the worst escape vulnerability."
+    return f"Running {req.action} on {smi_disp}."
