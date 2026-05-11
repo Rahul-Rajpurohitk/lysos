@@ -1061,6 +1061,26 @@ async def _debate_step(state: dict, session_id_in_state: bool = True) -> dict:
         "proposals": outcome.proposals,
         "refined": outcome.refined,
     }
+    # ── Queue the winner as a pending agent proposal ──
+    # Strategist's `next_action` is frequently 'ship' — meaning the
+    # user should accept this candidate. Push the winner SMILES onto
+    # the proposal queue so when the user types 'ship'/'ship it'/
+    # 'apply'/'accept', the orchestrator's accept-phrase fast-path
+    # pops it and loads the winner into the canvas. Without this,
+    # 'ship' fell through to Gemini and got hallucinated as a SMILES
+    # ('/load ship' → 'invalid SMILES').
+    if outcome.winner and sid:
+        try:
+            from . import session_memory as _sm
+            _sm.record_proposal(
+                sid,
+                outcome.winner,
+                source="strategist",
+                swap_label=f"debate winner ({outcome.next_action})",
+                rationale=outcome.justification or "Strategist picked this as the round's winner.",
+            )
+        except Exception:
+            pass
     state["candidates"] = [
         r.get("refined_smiles") or r.get("original_smiles")
         for r in outcome.refined if r.get("refined_smiles") or r.get("original_smiles")

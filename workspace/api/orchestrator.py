@@ -472,7 +472,8 @@ async def _orchestrator_loop(req: OrchestratorRunRequest, api_base: str) -> Asyn
     accept_re = re.compile(
         r"^(apply|apply that|apply it|do it|go ahead|then apply|"
         r"yes apply|yes do it|use that|use that one|make the change|"
-        r"ship it|approved|accept|accept it|ok apply)\.?\s*$",
+        r"ship|ship it|ship the winner|ship this|lets ship|let's ship|"
+        r"approved|accept|accept it|ok apply|ok ship)\.?\s*$",
         re.IGNORECASE,
     )
     if accept_re.match((req.text or "").strip()):
@@ -725,7 +726,8 @@ async def route_only(req: RouteOnlyRequest) -> dict:
     accept_re = re.compile(
         r"^(apply|apply that|apply it|do it|go ahead|then apply|"
         r"yes apply|yes do it|use that|use that one|make the change|"
-        r"ship it|approved|accept|accept it|ok apply)\.?\s*$",
+        r"ship|ship it|ship the winner|ship this|lets ship|let's ship|"
+        r"approved|accept|accept it|ok apply|ok ship)\.?\s*$",
         re.IGNORECASE,
     )
     if accept_re.match((req.text or "").strip()):
