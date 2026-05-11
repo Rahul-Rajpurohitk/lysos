@@ -89,6 +89,35 @@ export function WorkflowPhaseTracker({ apiBase, sessionId }: Props) {
     );
   }
 
+  // Honest empty state: the phase derivation is heuristic from action
+  // counts. When the session truly has nothing real (no candidates,
+  // no scores, no resistance checks), the heuristic was confidently
+  // claiming SCOPE/ANCHOR/DESIGN with '1 evidence' each — which the
+  // user correctly called out as faking. Now we show a clear empty
+  // state UNTIL there's real evidence of medchem activity.
+  const totalEvidence = (data?.phases ?? []).reduce(
+    (sum, p) => sum + (p.evidence_count ?? 0), 0
+  );
+  if (data && totalEvidence === 0) {
+    return (
+      <div style={{
+        padding: "12px 14px",
+        background: "rgba(139, 92, 246, 0.04)",
+        border: "1px dashed rgba(139, 92, 246, 0.25)",
+        borderRadius: 6,
+        fontSize: 11, color: "var(--lys-text-dim)",
+        lineHeight: 1.5,
+      }}>
+        <strong>Medchem protocol tracker</strong> stays empty until the
+        agents do real work in this session. The 6 phases — <em>SCOPE
+        → ANCHOR → DESIGN → VALIDATE → STRESS-TEST → REPORT</em> —
+        light up as the Designer queries the resistome, the Critic
+        runs pose / resistance checks, etc. Kick it off with{" "}
+        <code>/wf design_with_debate</code> or <code>/score &lt;smi&gt;</code>.
+      </div>
+    );
+  }
+
   return (
     <div style={{
       padding: "8px 10px",

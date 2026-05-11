@@ -602,14 +602,24 @@ function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; va
 // ── Flow graph ──────────────────────────────────────────────────────
 
 function FlowGraph({ metrics, recent }: { metrics: MetricsResponse | null; recent: ActionRecord[] }) {
-  // Compute the most recent transition between agents (last 10s)
+  // Time-window the counts so the widget shows what the agents did
+  // RIGHT NOW, not cumulative totals from earlier work in the same
+  // session (which user correctly called out as misleading — same
+  // numbers as the all-time card).
+  const WINDOW_S = 300;   // last 5 minutes
+  const ACTIVE_S = 4;     // pulsing pill if seen in last 4s
   const now = Date.now() / 1000;
+  const recentInWindow = recent.filter((r) => now - r.ts < WINDOW_S);
   const activeRoles = new Set(
-    recent.filter((r) => now - r.ts < 4).map((r) => r.agent_name)
+    recentInWindow.filter((r) => now - r.ts < ACTIVE_S).map((r) => r.agent_name)
   );
+  // Per-role count inside the time window (NOT the cumulative
+  // metrics.agents[].n_actions which spans the whole session).
   const counts: Record<string, number> = {};
-  for (const m of metrics?.agents ?? []) counts[m.agent] = m.n_actions;
-  const totalActions = (metrics?.agents ?? []).reduce((s, a) => s + a.n_actions, 0);
+  for (const r of recentInWindow) {
+    counts[r.agent_name] = (counts[r.agent_name] ?? 0) + 1;
+  }
+  const totalActions = recentInWindow.length;
   const isEmpty = totalActions === 0;
   return (
     <div style={{
@@ -618,7 +628,7 @@ function FlowGraph({ metrics, recent }: { metrics: MetricsResponse | null; recen
       border: "1px solid rgba(0,0,0,0.06)",
       borderRadius: 6,
     }}>
-      <SectionTitle>Multi-agent flow · this session</SectionTitle>
+      <SectionTitle>Multi-agent flow · last 5 minutes</SectionTitle>
       {isEmpty && (
         <div style={{
           marginTop: 6, padding: "8px 10px",
@@ -629,12 +639,12 @@ function FlowGraph({ metrics, recent }: { metrics: MetricsResponse | null; recen
           fontFamily: "var(--lys-font-body)",
           lineHeight: 1.45,
         }}>
-          <strong>No agent actions yet in this session.</strong> Run a
+          <strong>No agent activity in the last 5 minutes.</strong> Run a
           workflow like <code>/wf design_with_debate</code> or
           <code>/wf harden_candidate</code> — each step the
           Designer / Critic / Editor / Strategist takes will light up
-          here in real time. Past activity is in the "all-time" card
-          below.
+          here in real time. Cumulative totals are in the "all-time"
+          card below.
         </div>
       )}
       <div style={{
