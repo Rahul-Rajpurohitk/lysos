@@ -644,6 +644,79 @@ def _synth_spectrum(state: dict) -> str:
 
 
 # ── Workflow 4: compare_top_n (agentic — multi-step deep dive) ──────
+def _build_compare_args(state: dict) -> dict:
+    """Resolve smiles_list with graceful fallbacks. Order:
+      1. Explicit smiles_list from inputs.
+      2. Session candidates (recent loaded SMILES from session memory).
+      3. Current SMILES + champion for the pathogen.
+      4. Current SMILES alone (1-candidate compare still produces a
+         valid step.done, even if 'side-by-side' is moot).
+    Raises ValueError only when there is literally no SMILES anywhere
+    — at which point the workflow can fail with a clear user-facing
+    error instead of a KeyError stack trace.
+    """
+    sl = state.get("smiles_list") or []
+    if isinstance(sl, list) and len(sl) >= 2:
+        return {
+            "smiles_list": sl,
+            "labels": sl,
+            "pdb_id": state.get("pdb_id", "1VQQ"),
+        }
+
+    # Pull from session memory: recent loads + scores
+    candidates: list[str] = list(sl) if isinstance(sl, list) else []
+    try:
+        from . import session_memory as _sm
+        sid = state.get("_session_id") or ""
+        if sid:
+            for ev in _sm.snapshot(sid, kinds=("load", "score", "candidate")):
+                smi = ev.get("smiles")
+                if smi and smi not in candidates:
+                    candidates.append(smi)
+    except Exception:
+        pass
+
+    # Champion for this pathogen
+    pathogen = state.get("pathogen", "MRSA")
+    try:
+        from . import champions as _ch
+        champ = _ch.get(pathogen)
+        if champ and champ.get("smiles") and champ["smiles"] not in candidates:
+            candidates.append(champ["smiles"])
+    except Exception:
+        pass
+
+    # Current SMILES (the just-loaded molecule)
+    cur = state.get("smiles")
+    if cur and cur not in candidates:
+        candidates.insert(0, cur)
+
+    # Dedup + cap at 6
+    seen = set()
+    final = []
+    for c in candidates:
+        if c and c not in seen:
+            seen.add(c)
+            final.append(c)
+        if len(final) >= 6:
+            break
+
+    if not final:
+        raise ValueError(
+            "compare_top_n needs at least one SMILES — pass smiles_list "
+            "explicitly or load a candidate / promote a champion first."
+        )
+    if len(final) == 1:
+        # Single-candidate compare is still informative (drug-class
+        # profile + clinical_overlap) — don't crash.
+        pass
+    return {
+        "smiles_list": final,
+        "labels": final,
+        "pdb_id": state.get("pdb_id", "1VQQ"),
+    }
+
+
 async def _critic_narrate_step(state: dict) -> dict:
     """Inline step: hand the structured compare result to the Critic
     Gemini call so the user gets a real narrative instead of a static
@@ -671,7 +744,10 @@ _register(Workflow(
     label="Compare candidates",
     description="Side-by-side resistance comparison of N candidates plus a Gemini-driven Critic narrative naming the winner, loser's specific weakness, and recommended next action.",
     inputs=[
-        {"name": "smiles_list", "type": "array", "required": True},
+        # smiles_list is no longer required — workflow auto-fills from
+        # session candidates + champion + current_smiles when missing.
+        # User can still pass explicit list to override.
+        {"name": "smiles_list", "type": "array", "required": False},
         {"name": "pdb_id", "type": "string", "default": "1VQQ"},
         {"name": "pathogen", "type": "string", "default": "MRSA"},
     ],
@@ -681,13 +757,11 @@ _register(Workflow(
             id="compare",
             label="Compare resistance profiles",
             tool="compare_resistance",
-            # Pass the SMILES strings as labels so the agent's narration
-            # references real structures — not "cand_1" / "cand_2".
-            args_fn=lambda st: {
-                "smiles_list": st["smiles_list"],
-                "labels": st["smiles_list"],
-                "pdb_id": st.get("pdb_id", "1VQQ"),
-            },
+            # Defensive args_fn: when user says 'A/B test' / 'compare
+            # both' without passing smiles_list, auto-fill from
+            # 1) explicit input, 2) session candidates, 3) champion +
+            # current SMILES. Avoids KeyError 'smiles_list' crash.
+            args_fn=lambda st: _build_compare_args(st),
             on_result=lambda st, r: st.__setitem__("comparison", r),
         ),
         Step(
