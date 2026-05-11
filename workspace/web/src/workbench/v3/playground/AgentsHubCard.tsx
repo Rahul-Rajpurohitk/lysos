@@ -759,15 +759,33 @@ function KpiGrid({ metrics, timeline, onInspect, inspect }: {
                 fontFamily: "var(--lys-font-mono)", fontSize: 9.5, fontWeight: 700,
               }}>{m?.n_actions ?? 0}</span>
             </div>
-            <Sparkline data={buckets(r)} color={meta.color} />
+            {/* Activity strip — one tick per action in the last 15 min.
+                Replaces the unlabeled sparkline (user feedback: 'no
+                y-axis context, just decoration'). Real semantic
+                strip: each bucket → action count, no fake smoothing. */}
+            <ActivityStrip data={buckets(r)} color={meta.color} />
+            {/* Compact metrics row — kept for diagnostics but with
+                clearer labels and explicit units. */}
             <div style={{
-              display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 3,
+              display: "flex", flexWrap: "wrap", gap: 8,
               fontFamily: "var(--lys-font-mono)", fontSize: 9.5,
               color: "var(--lys-text-dim)",
             }}>
-              <Pip label="lat" value={m?.avg_latency_ms ? formatMs(m.avg_latency_ms) : "—"} />
-              <Pip label="ok" value={m ? `${(m.ok_rate * 100).toFixed(0)}%` : "—"} />
-              <Pip label="conf" value={m?.avg_confidence ? m.avg_confidence.toFixed(2) : "—"} />
+              {m?.avg_latency_ms != null && (
+                <span title="Average latency per action">
+                  ⏱ {formatMs(m.avg_latency_ms)}
+                </span>
+              )}
+              {m && (
+                <span title="Fraction of actions that completed without error">
+                  ✓ {(m.ok_rate * 100).toFixed(0)}% ok
+                </span>
+              )}
+              {m?.avg_confidence != null && (
+                <span title="Mean confidence score recorded per action (0-1)">
+                  ◷ {m.avg_confidence.toFixed(2)} conf
+                </span>
+              )}
             </div>
             <div style={{
               fontSize: 10, color: "var(--lys-text-faint)",
@@ -781,41 +799,62 @@ function KpiGrid({ metrics, timeline, onInspect, inspect }: {
   );
 }
 
-function Pip({ label, value }: { label: string; value: string }) {
+// (Pip removed — KpiGrid now renders metrics inline with explicit
+// unit icons + tooltips instead of an unlabeled 3-column grid.)
+
+// ActivityStrip — explicit per-bucket histogram with bucket count
+// shown on hover. No fake Y-axis smoothing; each tick = N actions
+// in a fixed time bucket. User feedback: the old sparkline 'just
+// popped pulses without semantic axis' — this version labels what
+// the height + count actually mean.
+function ActivityStrip({ data, color }: { data: number[]; color: string }) {
+  if (!data.length) {
+    return (
+      <div style={{
+        height: 14, opacity: 0.5,
+        fontSize: 9, color: "var(--lys-text-faint)",
+        fontFamily: "var(--lys-font-mono)",
+        display: "flex", alignItems: "center",
+      }}>
+        no recent activity
+      </div>
+    );
+  }
+  const max = Math.max(1, ...data);
+  // Compact bars — one rect per bucket, scaled to max in series.
+  // Empty buckets render as a thin baseline line so the user sees
+  // gaps in activity, not just present spikes.
   return (
     <div style={{
-      display: "flex", flexDirection: "column", alignItems: "flex-start",
-    }}>
-      <span style={{ fontSize: 8.5, opacity: 0.7,
-        textTransform: "uppercase", letterSpacing: "0.04em",
-      }}>{label}</span>
-      <span style={{ fontWeight: 700, color: "var(--lys-text)" }}>{value}</span>
+      display: "flex", alignItems: "flex-end",
+      gap: 1,
+      height: 14,
+      width: "100%",
+      paddingBottom: 1,
+      borderBottom: `1px solid ${color}30`,
+    }}
+      title={`Per-bucket action count (max ${max} in series of ${data.length})`}>
+      {data.map((v, i) => {
+        const h = v > 0 ? Math.max(2, (v / max) * 12) : 1;
+        return (
+          <div key={i}
+            style={{
+              flex: 1,
+              minWidth: 1,
+              height: h,
+              background: v > 0 ? color : `${color}30`,
+              borderRadius: 1,
+            }}
+            title={v > 0 ? `${v} action${v === 1 ? "" : "s"} in this bucket` : "no activity"}
+          />
+        );
+      })}
     </div>
   );
 }
 
-function Sparkline({ data, color }: { data: number[]; color: string }) {
-  if (!data.length) {
-    return <div style={{ height: 22, opacity: 0.4 }} />;
-  }
-  const max = Math.max(1, ...data);
-  const W = 100; const H = 22;
-  const dx = data.length > 1 ? W / (data.length - 1) : W;
-  const pts = data.map((v, i) => `${(i * dx).toFixed(1)},${(H - (v / max) * (H - 2) - 1).toFixed(1)}`);
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-      style={{ width: "100%", height: H, display: "block" }}>
-      <polyline
-        fill="none" stroke={color} strokeWidth="1.4"
-        points={pts.join(" ")}
-      />
-      <polyline
-        fill={color} fillOpacity="0.15" stroke="none"
-        points={`0,${H} ${pts.join(" ")} ${W},${H}`}
-      />
-    </svg>
-  );
-}
+// (Sparkline removed — was unlabeled decoration. ActivityStrip above
+// replaces it with explicit per-bucket bars + count tooltips.)
 
 // ── Timeline (stacked area) ─────────────────────────────────────────
 

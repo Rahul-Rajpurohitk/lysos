@@ -40,7 +40,9 @@ import { TabbedView, TabbedViewTabs } from "./playground/TabbedView";
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
-import { WorkflowPhaseTracker } from "./playground/WorkflowPhaseTracker";
+// WorkflowPhaseTracker removed — heuristic phase derivation was faking
+// SCOPE/VALIDATE evidence counts. Real workflow progress is now
+// visible per-step inside the WorkflowCard in the chat.
 import { ReportBuilderCard } from "./playground/ReportBuilderCard";
 import { ValidatedTargetsCard } from "./playground/ValidatedTargetsCard";
 import { RewardRadarWindow } from "./playground/RewardRadarWindow";
@@ -2976,8 +2978,15 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         actionFilter={actionFilter}
                         onActionChange={setActionFilter}
                       /> },
-                    { id: "workflow", title: "Workflow phase · medchem protocol tracker", size: 2, expandedH: 220, body:
-                      <WorkflowPhaseTracker apiBase={apiBase} sessionId={activeChatId} /> },
+                    // Removed: medchem-protocol-tracker. The heuristic
+                    // phase derivation (SCOPE → ANCHOR → DESIGN →
+                    // VALIDATE → STRESS-TEST → REPORT) was confidently
+                    // showing '1 evidence' on phases the user never
+                    // intentionally entered — counts came from any
+                    // loaded SMILES / score call, which the user
+                    // correctly called out as faking. Real workflow
+                    // progress now lives inside WorkflowCard per-step
+                    // in the chat where it actually happened.
                     // The new AgentsHubCard subsumes Roster + Metrics +
                     // ActionLog into a single live, polling, integrated
                     // surface with flow graph + sparklines + inspector.
