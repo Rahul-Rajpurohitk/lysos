@@ -1419,6 +1419,23 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     return null;
   }, [events, currentSmiles]);
 
+  // lastComposite: backend-authoritative composite for the CURRENT
+  // SMILES. Single source of truth so Chat card / Reward radar /
+  // Score breakdown can't disagree (user saw 0.463 / 0.473 / 0.355
+  // for the same molecule — the breakdown was recomputing Σ wᵢ·sᵢ
+  // from a different axis set). Now they all consume this same value.
+  const lastComposite = useMemo<number | null>(() => {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i] as any;
+      const smi = e.smiles ?? e.parent_smiles;
+      const matches = !currentSmiles || !smi || smi === currentSmiles;
+      if (!matches) continue;
+      if (e.type === "score" && typeof e.composite === "number") return e.composite;
+      if (e.type === "candidate_added" && typeof e.composite === "number") return e.composite;
+    }
+    return null;
+  }, [events, currentSmiles]);
+
   const bestScores = useMemo<Record<string, number> | null>(() => {
     let best: { composite: number; scores: Record<string, number> } | null = null;
     for (const e of events) {
@@ -1901,10 +1918,36 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       return;
                     }
 
-                    // /load <SMILES>  → load directly into 2D + 3D + auto-score
+                    // /load <SMILES>  → load directly into 2D + 3D + auto-score.
+                    // Pre-flight: reject obvious non-SMILES tokens (English
+                    // words, accept-phrases the orchestrator may have
+                    // hallucinated into smiles, etc.) so the canvas
+                    // doesn't error with "Could not load 'ship'". Real
+                    // SMILES have at least one non-letter chemistry char
+                    // or are length>=2 with explicit atom syntax.
                     const loadMatch = trimmed.match(/^\/load\s+(\S.*)$/i);
                     if (loadMatch) {
                       const smi = loadMatch[1].trim();
+                      // Lightweight SMILES sniff. Real SMILES contain at
+                      // least one of: digit, parenthesis, bracket, =, #,
+                      // /, \, @, -, +, or are a multi-atom string. Plain
+                      // English words ("ship", "apply", "do it") fail
+                      // this check and don't waste a canvas reload.
+                      const looksLikeSmiles = /[0-9()\[\]=#\/\\@+\-]/.test(smi)
+                        || /[A-Z][a-z]?[A-Z]/.test(smi)   // multi-cap (BrCl etc.)
+                        || smi.length === 1 && /[A-Z]/.test(smi);  // single-atom
+                      if (!looksLikeSmiles) {
+                        setEvents((p) => [...p, {
+                          type: "agent_message",
+                          ts: Date.now() / 1000,
+                          agent: "orchestrator",
+                          content: `\`${smi}\` doesn't look like a SMILES — `
+                            + `it might be a chat phrase like 'ship it' or `
+                            + `'apply'. Did you mean to say **apply**? `
+                            + `(That accepts a pending agent proposal.)`,
+                        } as any]);
+                        return;
+                      }
                       const id = await loadSmilesIntoCanvas(smi, {
                         createdBy: "user",
                         parentId: null,
@@ -2924,6 +2967,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         current={lastScores ?? {}}
                         best={bestScores ?? {}}
                         weights={REWARD_WEIGHTS}
+                        composite={lastComposite ?? undefined}
                         predicted={predictedScores}
                         predictedLabel={predictedLabel}
                         history={(() => {
@@ -2946,6 +2990,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         scores={lastScores ?? {}}
                         weights={REWARD_WEIGHTS}
                         best={bestScores ?? {}}
+                        composite={lastComposite ?? undefined}
                         apiBase={apiBase}
                         smiles={currentSmiles}
                         pathogen={selectedPathogen}

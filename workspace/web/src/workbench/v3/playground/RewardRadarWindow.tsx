@@ -31,6 +31,10 @@ interface Props {
   predicted?: ScoreMap | null;
   /** Optional small hint label drawn in the header (e.g. "if +F at atom 5"). */
   predictedLabel?: string;
+  /** Backend-authoritative composite for the current SMILES. When set,
+   *  this overrides the local mean-of-weighted-axes calculation so the
+   *  chat card / radar / breakdown all show the SAME number. */
+  composite?: number;
 }
 
 function tierColor(v: number): string {
@@ -39,7 +43,7 @@ function tierColor(v: number): string {
   return "#9ca3af";
 }
 
-export function RewardRadarWindow({ current, best, weights, history, predicted, predictedLabel }: Props) {
+export function RewardRadarWindow({ current, best, weights, history, predicted, predictedLabel, composite: compositeProp }: Props) {
   void predictedLabel; // displayed in header subtitle (next iter polish)
   const axes = AXES.filter((a) => a in current || a in best || a in (weights ?? {}));
 
@@ -59,6 +63,10 @@ export function RewardRadarWindow({ current, best, weights, history, predicted, 
   }).join(" ");
 
   const composite = useMemo(() => {
+    // Prefer the backend-authoritative composite when provided so this
+    // widget agrees with the chat candidate card + Score breakdown.
+    // Falls back to local mean-of-weighted-axes when missing.
+    if (typeof compositeProp === "number") return compositeProp;
     let sum = 0, wSum = 0;
     for (const axis of axes) {
       const w = weights?.[axis] ?? 0.1;
@@ -66,7 +74,7 @@ export function RewardRadarWindow({ current, best, weights, history, predicted, 
       wSum += w;
     }
     return wSum ? sum / wSum : 0;
-  }, [current, weights, axes]);
+  }, [current, weights, axes, compositeProp]);
 
   return (
     <div style={{
