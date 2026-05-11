@@ -435,12 +435,19 @@ _register(Workflow(
             label="Pick weak atoms",
             tool="__inline__",
             depends_on=["predict"],
-            args_fn=lambda st: {},
             skip_if=lambda st: not (st.get("prediction") or {}).get("vulnerable_atoms"),
-            on_result=lambda st, _: st.__setitem__(
-                "weak_atoms",
-                [v["atom_idx"] for v in (st.get("prediction") or {}).get("vulnerable_atoms", [])][:st.get("max_atoms", 3)],
-            ),
+            # inline_fn returns the actual picked atoms so the step's
+            # `result` field carries real content (was `{}` before,
+            # which made the chat look like the strategist did nothing).
+            inline_fn=lambda st: {
+                "weak_atoms": [
+                    v["atom_idx"]
+                    for v in (st.get("prediction") or {}).get("vulnerable_atoms", [])
+                ][:st.get("max_atoms", 3)],
+                "n_vulnerable_total": len((st.get("prediction") or {}).get("vulnerable_atoms", [])),
+                "max_atoms": st.get("max_atoms", 3),
+            },
+            on_result=lambda st, r: st.__setitem__("weak_atoms", (r or {}).get("weak_atoms", [])),
         ),
         Step(
             id="harden_each",
