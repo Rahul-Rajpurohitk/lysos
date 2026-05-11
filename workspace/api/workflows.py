@@ -192,6 +192,53 @@ async def _gemini_narrate(role: str, step_label: str, result: Any) -> Optional[s
         return None
 
 
+def _extract_applied_smiles(narration: str, result: Any) -> Optional[dict]:
+    """Parse the editor's narration for 'I'd apply <swap name>' and
+    find the matching suggestion in the harden_each result. Returns
+    {smiles, swap, rationale} or None.
+
+    Two-pass match:
+      1. Exact substring match on swap label (case-insensitive).
+      2. Fall back to the top-ranked suggestion across all atoms if
+         no specific match (better than leaving the canvas unchanged).
+    """
+    if not narration or result is None:
+        return None
+    # Collect all suggestions across all atom loops.
+    all_sugs: list[dict] = []
+    if isinstance(result, list):
+        for item in result:
+            if not isinstance(item, dict):
+                continue
+            all_sugs.extend(item.get("gemini_suggestions") or [])
+            all_sugs.extend(item.get("playbook_suggestions") or [])
+    elif isinstance(result, dict):
+        all_sugs.extend(result.get("gemini_suggestions") or [])
+        all_sugs.extend(result.get("playbook_suggestions") or [])
+    # Only consider suggestions that have a usable after_smiles.
+    candidates = [s for s in all_sugs
+                  if isinstance(s, dict) and s.get("after_smiles")]
+    if not candidates:
+        return None
+    nlow = narration.lower()
+    # Pass 1: exact swap-label match.
+    for s in candidates:
+        swap = (s.get("swap") or "").strip().lower()
+        if swap and swap in nlow:
+            return {
+                "smiles": s["after_smiles"],
+                "swap": s.get("swap"),
+                "rationale": s.get("rationale"),
+            }
+    # Pass 2: top-confidence fallback.
+    top = max(candidates, key=lambda s: s.get("confidence", 0.0))
+    return {
+        "smiles": top["after_smiles"],
+        "swap": top.get("swap"),
+        "rationale": top.get("rationale"),
+    }
+
+
 def _compact_for_narrator(result: Any, depth: int = 0) -> Any:
     """Compact a tool result for the narrator prompt — drop the noisy
     `_factors`, `all_residue_scores`, and other internals the LLM
@@ -1278,6 +1325,23 @@ async def _execute_workflow(
                         "role": step.narrator_role,
                         "text": narration,
                     })
+                # ── Auto-apply: when the editor commits to a swap in
+                # its narration, find the matching after_smiles in the
+                # tool result and emit a step.apply_smiles SSE event.
+                # The frontend listens and loads that SMILES into the
+                # 2D + 3D canvas. Closes the "narrates but never
+                # executes" gap user pointed out.
+                if step.narrator_role == "editor" and narration:
+                    applied = _extract_applied_smiles(narration, data)
+                    if applied:
+                        yield _sse({
+                            "event": "step.apply_smiles",
+                            "run_id": run_id,
+                            "step_id": step.id,
+                            "smiles": applied["smiles"],
+                            "swap_label": applied.get("swap"),
+                            "rationale": applied.get("rationale"),
+                        })
 
         # Final synthesis
         synth = ""

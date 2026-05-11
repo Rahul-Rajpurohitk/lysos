@@ -859,6 +859,34 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               } as any]);
               continue;
             }
+            // ── Auto-apply: backend asks the canvas to load the
+            // editor's chosen SMILES. Closes the gap where the agent
+            // narrated 'I'd apply X' but never actually pushed X to
+            // the 2D viewer. User feedback: 'the agent dont even
+            // execute that updated smiles too'.
+            if (ev?.event === "step.apply_smiles" && ev.smiles) {
+              try {
+                await loadSmilesIntoCanvas(ev.smiles, {
+                  createdBy: "agent",
+                  parentId: null,
+                  logLabel: `[editor → ${ev.swap_label ?? "apply"}]`,
+                });
+                setEvents((p) => [...p, {
+                  type: "agent_message",
+                  ts: Date.now() / 1000,
+                  agent: "editor",
+                  content: `Applied **${ev.swap_label ?? "swap"}** to the canvas — new SMILES: \`${ev.smiles}\`. Re-scoring now.`,
+                } as any]);
+              } catch (exc: any) {
+                setEvents((p) => [...p, {
+                  type: "agent_message",
+                  ts: Date.now() / 1000,
+                  agent: "editor",
+                  content: `Couldn't auto-load \`${ev.smiles}\` (${exc?.message ?? exc}). Click the SMILES chip above to load manually.`,
+                } as any]);
+              }
+              continue;
+            }
             // Per-step UI dispatch + (legacy) template narration —
             // template only fires if the step had no narrator_role on
             // the backend, so steps without LLM commentary still get
