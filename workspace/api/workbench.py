@@ -1906,10 +1906,16 @@ async def workbench_explain(req: ExplainRequest) -> ExplainResponse:
             gemini_key = _os.getenv("GEMINI_API_KEY")
             if not gemini_key:
                 raise RuntimeError("GEMINI_API_KEY not set")
-            url = (
-                "https://generativelanguage.googleapis.com/v1beta/models/"
-                f"{_os.getenv('LYSOS_EXPLAIN_GEMINI_MODEL', 'gemini-2.5-pro')}:generateContent"
-            )
+            # Primary + fallback — gemini-2.5-pro hits 503 under demand,
+            # so the /explain brief was silently completing with 0 chunks
+            # (runner caught the exception). Auto-retry on Flash.
+            primary = _os.getenv("LYSOS_EXPLAIN_GEMINI_MODEL", "gemini-2.5-pro")
+            fallback = _os.getenv("LYSOS_EXPLAIN_GEMINI_FALLBACK", "gemini-2.5-flash")
+            def _model_url(m: str) -> str:
+                return (
+                    "https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{m}:generateContent"
+                )
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
                 "generationConfig": {
@@ -1922,15 +1928,25 @@ async def workbench_explain(req: ExplainRequest) -> ExplainResponse:
                     },
                 },
             }
-            async with httpx.AsyncClient(timeout=60.0) as cx:
-                r = await cx.post(
-                    url,
-                    headers={"x-goog-api-key": gemini_key,
-                             "Content-Type": "application/json"},
-                    json=payload,
-                )
-            if r.status_code != 200:
-                raise RuntimeError(f"gemini http {r.status_code}: {r.text[:200]}")
+            r = None
+            for attempt_model in (primary, fallback):
+                async with httpx.AsyncClient(timeout=60.0) as cx:
+                    r = await cx.post(
+                        _model_url(attempt_model),
+                        headers={"x-goog-api-key": gemini_key,
+                                 "Content-Type": "application/json"},
+                        json=payload,
+                    )
+                if r.status_code == 200:
+                    break
+                if r.status_code not in (429, 503):
+                    break
+                log.warning("explain %s returned %d; falling back to %s",
+                            attempt_model, r.status_code, fallback)
+            if r is None or r.status_code != 200:
+                code = r.status_code if r is not None else 0
+                body = (r.text[:200] if r is not None else "no response")
+                raise RuntimeError(f"gemini http {code}: {body}")
             d = r.json()
             cands = d.get("candidates") or []
             md = ""
