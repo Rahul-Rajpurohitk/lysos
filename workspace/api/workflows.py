@@ -882,11 +882,17 @@ def _synth_compare(state: dict) -> str:
 # ── Workflow 5: optimize_for_property ────────────────────────────────
 _register(Workflow(
     name="optimize_for_property",
-    label="Identify weakest axis",
-    description="Score the candidate, identify the weakest axis with the highest improvement Δ, and surface concrete medchem suggestions.",
+    label="Improvement plan",
+    description="Score the candidate, then build an improvement plan for the axis the user named (or the weakest axis if none given) with concrete medchem suggestions.",
     inputs=[
         {"name": "smiles", "type": "string", "required": True},
         {"name": "pathogen", "type": "string", "default": "MRSA"},
+        {"name": "axis", "type": "string", "required": False,
+         "description": ("Specific reward axis the user asked to improve "
+                         "(predicted_mic, drug_likeness_qed, "
+                         "synthesizability, hemolysis_safety, "
+                         "structural_alerts, novelty, …). When omitted, "
+                         "the mathematically weakest axis is targeted.")},
     ],
     tags=["score", "optimize"],
     steps=[
@@ -903,19 +909,128 @@ _register(Workflow(
 ))
 
 
+# Map free-form user terms to the canonical reward-axis name. The
+# orchestrator should already hand us a canonical name, but users (and
+# the model) say "MIC" / "drug-likeness" / "toxicity" — resolve those
+# so optimize_for_property always answers the axis the user MEANT.
+_AXIS_ALIASES: dict[str, list[str]] = {
+    "predicted_mic":      ["predicted_mic", "predicted mic", "mic", "potency",
+                           "activity", "efficacy", "kill", "antibacterial"],
+    "drug_likeness_qed":  ["drug_likeness_qed", "drug likeness", "drug-likeness",
+                           "druglikeness", "qed", "lipinski", "oral",
+                           "bioavailability"],
+    "synthesizability":   ["synthesizability", "synthesis", "synthesizable",
+                           "sa score", "sa_score", "makeability"],
+    "novelty":            ["novelty", "novel", "newness"],
+    "embedding_novelty":  ["embedding_novelty", "embedding novelty", "embedding"],
+    "hemolysis_safety":   ["hemolysis_safety", "hemolysis", "hemolytic", "rbc",
+                           "red blood cell", "membrane safety"],
+    "structural_alerts":  ["structural_alerts", "structural alerts", "alerts",
+                           "toxicophore", "pains", "toxicity", "toxic", "tox"],
+    "validity":           ["validity", "valid", "well-formed"],
+}
+
+
+def _resolve_axis_alias(text: str) -> Optional[str]:
+    """Resolve a free-form axis term to a canonical reward-axis name.
+    Returns None when nothing matches (caller falls back to argmin)."""
+    t = (text or "").strip().lower()
+    if not t:
+        return None
+    # Exact canonical name wins.
+    if t in _AXIS_ALIASES:
+        return t
+    # Longest alias substring match — check the most specific first so
+    # "embedding novelty" isn't shadowed by "novelty".
+    best: Optional[str] = None
+    best_len = 0
+    for canon, aliases in _AXIS_ALIASES.items():
+        for a in aliases:
+            if a in t and len(a) > best_len:
+                best, best_len = canon, len(a)
+    return best
+
+
 def _synth_optimize(state: dict) -> str:
+    """Improvement plan. Leads with the axis the USER named — not a
+    blind argmin. If the user said 'the MIC is bad' we answer
+    predicted_mic, even when embedding_novelty scores lower; the
+    mathematically-weakest axis is shown as a secondary note."""
     s = state.get("score") or {}
-    weakest = s.get("weakest")
-    reasoning = (s.get("axis_reasoning") or {}).get(weakest) or {}
+    reasoning_map = s.get("axis_reasoning") or {}
     rdkit = s.get("rdkit_properties") or {}
-    return (
-        f"Composite: **{s.get('composite', 0):.3f}** "
-        f"(MW {rdkit.get('mw')}, LogP {rdkit.get('logp')}).\n\n"
-        f"**Weakest axis**: `{weakest}`\n"
-        f"  • {reasoning.get('explanation', '')}\n"
-        f"  • Improve: {reasoning.get('improvement', '')}\n"
-        f"  • Predicted Δ: +{reasoning.get('predicted_delta', 0):.2f}"
+    composite = s.get("composite", 0) or 0
+    computed_weakest = s.get("weakest")
+    components = {
+        c.get("name"): c
+        for c in (s.get("components") or [])
+        if isinstance(c, dict) and c.get("name")
+    }
+
+    def _axis_val(ax: Optional[str]) -> Optional[float]:
+        c = components.get(ax or "")
+        if not c:
+            return None
+        try:
+            return float(c.get("value"))
+        except (TypeError, ValueError):
+            return None
+
+    # The user-named axis WINS over the argmin — answer what was asked.
+    requested = _resolve_axis_alias(state.get("axis") or "")
+    if requested and (requested in reasoning_map or requested in components):
+        focus, focus_src = requested, "requested"
+    else:
+        focus, focus_src = computed_weakest, "weakest"
+
+    fr = reasoning_map.get(focus) or {}
+    fv = _axis_val(focus)
+    fv_str = f"{fv:.3f}" if isinstance(fv, (int, float)) else "n/a"
+
+    lines: list[str] = [
+        f"Composite: **{composite:.3f}** "
+        f"(MW {rdkit.get('mw')}, LogP {rdkit.get('logp')}).",
+        "",
+    ]
+    if focus_src == "requested":
+        lines.append(f"**You flagged `{focus}`** — currently **{fv_str}**. "
+                      f"Here is how to lift it:")
+    else:
+        lines.append(f"**Weakest axis: `{focus}`** — currently **{fv_str}**. "
+                      f"Here is how to lift it:")
+    lines.append("")
+    # Real markdown `-` bullets (the old `•` char was not a recognised
+    # list marker, so the lines collapsed into one run-on paragraph).
+    if fr.get("explanation"):
+        lines.append(f"- {fr['explanation']}")
+    if fr.get("improvement"):
+        lines.append(f"- **Improve:** {fr['improvement']}")
+    pd = fr.get("predicted_delta")
+    if isinstance(pd, (int, float)) and pd:
+        lines.append(f"- **Projected Δ if applied:** +{pd:.2f}")
+
+    # If the user named an axis that ISN'T the math-weakest, say so —
+    # honest, not a silent override of their framing.
+    if (focus_src == "requested" and computed_weakest
+            and computed_weakest != focus):
+        wv = _axis_val(computed_weakest)
+        wv_str = f"{wv:.3f}" if isinstance(wv, (int, float)) else "n/a"
+        lines += ["", f"_The lowest-scoring axis overall is "
+                       f"`{computed_weakest}` ({wv_str}) — attack that "
+                       f"instead if you want the single biggest composite "
+                       f"lift._"]
+
+    # Surface the 3 lowest axes so a "these are bad" complaint gets a
+    # full picture, not just one number.
+    ranked = sorted(
+        ((n, _axis_val(n)) for n in components),
+        key=lambda kv: kv[1] if isinstance(kv[1], (int, float)) else 1.0,
     )
+    low3 = [f"`{n}` {v:.2f}" for n, v in ranked[:3]
+            if isinstance(v, (int, float))]
+    if low3:
+        lines += ["", f"Lowest axes right now: {', '.join(low3)}."]
+    return "\n".join(lines)
 
 
 # ── Workflow 6: pareto_explore (agentic — score → frontier → critic) ─

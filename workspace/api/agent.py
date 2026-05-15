@@ -215,6 +215,26 @@ _TOOL_DEFS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "analyze_toxicity",
+        "description": (
+            "QSAR toxicity / safety profile for a SMILES. Returns four "
+            "endpoints — hERG cardiotoxicity, hepatotoxicity, Ames "
+            "mutagenicity, and skin sensitization — each with a risk tier "
+            "(low / medium / high), a 0-1 score, and the specific "
+            "toxicophore or physicochemical rationale behind it, plus an "
+            "overall_safety_score. This IS the platform's toxicity model "
+            "— ALWAYS call it when the user asks about toxicity, safety, "
+            "side effects, hERG, cardiotoxicity, mutagenicity, "
+            "hepatotoxicity, or 'is this molecule safe'. Never tell the "
+            "user the platform lacks a toxicity tool."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"smiles": {"type": "string"}},
+            "required": ["smiles"],
+        },
+    },
+    {
         "name": "list_axes",
         "description": "List all Pareto axis options + their direction/source/unit.",
         "parameters": {"type": "object", "properties": {}, "required": []},
@@ -339,6 +359,9 @@ async def _dispatch_tool(name: str, args: dict[str, Any], api_base: str) -> dict
                 return {"properties": d.get("rdkit_properties"),
                         "rules": d.get("rules")}
             raise HTTPException(r.status_code, r.text)
+        elif name == "analyze_toxicity":
+            r = await cx.get(f"{api_base}/workbench/molecule/toxicity",
+                             params={"smiles": args["smiles"]})
         elif name == "list_axes":
             r = await cx.get(f"{api_base}/workbench/chem/session/__init/axes")
         elif name == "session_pareto_explain":
@@ -429,16 +452,49 @@ async def _agent_loop(req: AgentRunRequest, api_base: str) -> AsyncIterator[str]
         "You are Lysos, an AI medicinal-chemistry research partner specializing "
         "in antimicrobial drug discovery and resistance hardening. You have a "
         "rich toolkit of chemistry endpoints; USE them when relevant rather "
-        "than guessing. After each tool call's result lands, synthesize what "
-        "you found, then either call another tool or reply to the user.\n\n"
+        "than guessing.\n\n"
         f"Current session context:\n"
         f"  session_id: {req.session_id}\n"
         f"  smiles: {req.smiles or '(none)'}\n"
         f"  pathogen: {req.pathogen or 'MRSA'}\n"
-        f"  pdb_id: {req.pdb_id or '(none)'}\n"
-        f"\nWhen the user asks a question, plan: WHICH tools should I call, in "
-        f"what ORDER, with what ARGS? Then execute. Cite numerical results in "
-        f"your final answer. Be concise but rigorous.\n\n"
+        f"  pdb_id: {req.pdb_id or '(none)'}\n\n"
+        "## Answer the question that was ASKED\n"
+        "Ground every response in the user's EXACT words. If they name a "
+        "property — 'the MIC is bad', 'improve drug-likeness', 'is it toxic' "
+        "— your answer MUST be about THAT property, by name, with its real "
+        "number from a tool result. Do NOT pivot to a different axis just "
+        "because it is mathematically weakest: if the user asked about "
+        "predicted_mic, LEAD with predicted_mic. You may add 'the lowest "
+        "axis overall is X' as a secondary note — never as the headline.\n"
+        "NEVER deflect with 'the platform doesn't have an X model' before "
+        "checking your tool list. You almost certainly have a tool for it — "
+        "see the capability map.\n\n"
+        "## Capability map — user concept → tool / axis\n"
+        "  • toxicity / safety / side-effects / hERG / cardiotoxicity / "
+        "mutagenic / hepatotox / 'is it safe' → call `analyze_toxicity` "
+        "(hERG, hepatotox, Ames, skin sensitization). ALSO cite the "
+        "`structural_alerts` axis from score_explain — that is the "
+        "in-score toxicophore / PAINS signal; a low value means the "
+        "molecule HAS alert substructures.\n"
+        "  • potency / MIC / activity / 'does it kill the bug' → the "
+        "`predicted_mic` axis (score_molecule / score_explain).\n"
+        "  • drug-likeness / oral / Lipinski / QED → `drug_likeness_qed` "
+        "axis + the Lipinski / Veber / Egan rule flags in score_explain.\n"
+        "  • resistance / escape / will-it-survive-mutation → "
+        "`predict_resistance`, then `harden_atom` on the weak atoms.\n"
+        "  • synthesizability / can-we-make-it → `synthesizability` axis.\n"
+        "  • novelty / is-it-new → `novelty` + `embedding_novelty` axes.\n\n"
+        "## Plan, then execute\n"
+        "Decide WHICH tools to call, in what ORDER, with what ARGS — then "
+        "run them. After each result lands, synthesize what you found, cite "
+        "the actual numbers, then call the next tool or answer.\n\n"
+        "## Final answer shape (standardized — keep it tight, 2-5 sentences)\n"
+        "  1. Direct answer to the asked question — name the property and "
+        "its actual number.\n"
+        "  2. The WHY — the chemistry / structural reason behind that number.\n"
+        "  3. The concrete next step (which you have queued via "
+        "propose_next_action).\n"
+        "No rambling preamble, no 'let me think', no restating the question.\n\n"
         "## STRICT CONTRACT — close the loop\n"
         "**ANYTIME you write a concrete SMILES, suggest a structural "
         "modification, recommend a follow-up workflow, or end an analysis "
@@ -525,7 +581,32 @@ async def _agent_loop(req: AgentRunRequest, api_base: str) -> AsyncIterator[str]
         cand = cands[0]
         parts = (cand.get("content") or {}).get("parts") or []
         if not parts:
-            yield _sse({"event": "agent.error", "error": "gemini empty parts"})
+            # Gemini returned a candidate with no content parts. This
+            # happens when the model ends a tool-calling turn without a
+            # closing message, or hits MAX_TOKENS mid-thinking. If the
+            # agent has ALREADY done real work, NEVER dead-end the user
+            # with a bare error — force one final text-only call so the
+            # analysis actually gets answered. This is the fix for the
+            # "agent runs tools then says nothing" broken-response bug.
+            finish = cand.get("finishReason") or "unknown"
+            if n_tool_calls > 0:
+                final_txt = await _force_final_answer(
+                    contents, system_text, headers, _model_url,
+                    primary_model, fallback_model,
+                )
+                if final_txt:
+                    for chunk in _chunks(final_txt, 80):
+                        yield _sse({"event": "text.delta", "text": chunk})
+                        await asyncio.sleep(0.01)
+                else:
+                    yield _sse({"event": "text.delta", "text": (
+                        "I ran the analysis — the tool results above carry "
+                        "the numbers, but I couldn't compose a summary this "
+                        "turn. Ask me to recap and I'll pull it together."
+                    )})
+                break
+            yield _sse({"event": "agent.error",
+                        "error": f"gemini empty parts (finishReason={finish})"})
             break
 
         # Append the model's response to the conversation history
@@ -620,6 +701,52 @@ async def _agent_loop(req: AgentRunRequest, api_base: str) -> AsyncIterator[str]
 def _chunks(s: str, size: int):
     for i in range(0, len(s), size):
         yield s[i:i + size]
+
+
+async def _force_final_answer(
+    contents: list[dict], system_text: str, headers: dict,
+    model_url_fn, primary: str, fallback: str,
+) -> str:
+    """Last-resort closing call. When the main loop gets an empty-parts
+    response AFTER tool calls, this fires one more Gemini request with
+    NO tools (so the model CANNOT function-call — it must emit text)
+    and zero thinking budget (straight to the answer). Returns the
+    text, or '' if even this fails. This guarantees a tool-using turn
+    never dead-ends with silence."""
+    msgs = contents + [{
+        "role": "user",
+        "parts": [{"text": (
+            "Write your final answer to the user NOW, using the tool "
+            "results above. 2-5 sentences. Name the property the user "
+            "asked about and cite its actual number. Do not call any "
+            "tools — just answer."
+        )}],
+    }]
+    payload = {
+        "system_instruction": {"parts": [{"text": system_text}]},
+        "contents": msgs,
+        "generationConfig": {
+            "maxOutputTokens": 2048,
+            "temperature": 0.4,
+            "thinkingConfig": {"thinkingBudget": 0, "includeThoughts": False},
+        },
+    }
+    for m in (primary, fallback):
+        try:
+            async with httpx.AsyncClient(timeout=45.0) as cx:
+                r = await cx.post(model_url_fn(m), headers=headers, json=payload)
+            if r.status_code != 200:
+                continue
+            cands = r.json().get("candidates") or []
+            if not cands:
+                continue
+            parts = (cands[0].get("content") or {}).get("parts") or []
+            txt = "".join(p.get("text", "") for p in parts if "text" in p)
+            if txt.strip():
+                return txt.strip()
+        except Exception:  # noqa: BLE001
+            continue
+    return ""
 
 
 # Engineered truncation — preserve high-signal summary fields even

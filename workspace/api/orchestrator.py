@@ -96,9 +96,16 @@ _KNOWN_WORKFLOWS = [
     },
     {
         "name": "optimize_for_property",
-        "description": "Iteratively edit a SMILES to improve a chosen reward axis (e.g. drug-likeness, predicted MIC).",
-        "intent_phrases": ["improve", "optimize", "boost", "increase score"],
-        "inputs": {"smiles": "<current>", "axis": "predicted_mic"},
+        "description": ("Score a SMILES and build an improvement plan for "
+                        "ONE reward axis. Use this whenever the user says a "
+                        "property is bad / weak / low or asks to improve / "
+                        "boost / fix one ('the MIC is bad', 'improve "
+                        "drug-likeness', 'QED too low'). ALWAYS set "
+                        "inputs.axis to the axis the user named."),
+        "intent_phrases": ["improve", "optimize", "boost", "increase score",
+                           "is bad", "is weak", "is low", "too low",
+                           "fix the", "make it better", "bad score"],
+        "inputs": {"smiles": "<current>", "axis": "<canonical axis the user named>"},
     },
 ]
 
@@ -218,6 +225,29 @@ def _build_routing_system_prompt() -> str:
         "      • If the user says 'execute the recommendation' or 'do the "
         "improvement you suggested', and they want a NEW design loop "
         "(not just loading a candidate), pick a workflow.\n"
+        "  - PROPERTY COMPLAINTS — when the user says a property is "
+        "bad / weak / low / poor, or asks to improve / boost / fix one "
+        "(e.g. 'the predicted MIC is bad', 'improve drug-likeness', "
+        "'the QED is too low'), route to workflow 'optimize_for_property' "
+        "and YOU MUST set inputs.axis to the canonical reward axis. Axis "
+        "vocabulary:\n"
+        "      predicted_mic  ← MIC, potency, activity, efficacy, "
+        "'kills the bug'\n"
+        "      drug_likeness_qed ← drug-likeness, druglikeness, QED, "
+        "Lipinski, oral, bioavailability\n"
+        "      synthesizability ← synthesis, synthesizable, SA score\n"
+        "      hemolysis_safety ← hemolysis, RBC safety, membrane safety\n"
+        "      structural_alerts ← toxicophore, PAINS, structural alerts\n"
+        "      novelty / embedding_novelty ← novelty, 'is it new'\n"
+        "      validity ← validity, well-formed structure\n"
+        "    If the user names MULTIPLE properties, pick the most "
+        "important for an antibiotic for inputs.axis: predicted_mic > "
+        "drug_likeness_qed > hemolysis_safety > everything else. Always "
+        "also set inputs.smiles to the current_smiles.\n"
+        "  - TOXICITY — toxicity / safety / hERG / cardiotoxicity / "
+        "mutagenicity / 'is it toxic' / 'side effects' questions → "
+        "route='agent' (the agent has an analyze_toxicity tool). NEVER "
+        "route toxicity to /explain.\n"
     )
 
 
