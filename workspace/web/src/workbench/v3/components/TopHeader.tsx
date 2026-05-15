@@ -276,6 +276,14 @@ function PathogenPicker({
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.15 }}
           >
+            {pathogens.length === 0 && (
+              <div
+                className="lys-pathogen-picker__row"
+                style={{ cursor: "default", opacity: 0.7, fontSize: 11,
+                  fontFamily: "var(--lys-font-mono)" }}>
+                <span>connecting to backend — pathogens loading…</span>
+              </div>
+            )}
             {pathogens.map((p) => (
               <button
                 key={p.code}

@@ -1191,11 +1191,19 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [replayEvents, setReplayEvents] = useState<TraceEvent[] | null>(null);
   const [replayIdx, setReplayIdx] = useState(0);
 
-  // Load pathogens
+  // Load pathogens — with retry + backoff. A one-shot fetch that
+  // failed (backend restarting, cold-start race) used to strand the
+  // pathogen picker EMPTY forever: Vite HMR does not re-run a mount
+  // effect, so the user had no options until a hard reload. This now
+  // self-heals — it keeps retrying (~34s window) until the 8 pathogens
+  // land.
   useEffect(() => {
-    fetch(`${apiBase}/workbench/pathogens`)
-      .then((r) => r.json())
-      .then((d) => {
+    let cancelled = false;
+    async function loadPathogens(attempt = 0): Promise<void> {
+      try {
+        const r = await fetch(`${apiBase}/workbench/pathogens`);
+        if (!r.ok) throw new Error(`http ${r.status}`);
+        const d = await r.json();
         const list = (d.pathogens || []).map((p: any) => ({
           code: p.code,
           name: p.name,
@@ -1205,9 +1213,22 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
           primaryPdb: p.primary_pdb,
           targetName: p.target_name,
         }));
-        setPathogens(list);
-      })
-      .catch(() => {});
+        if (cancelled) return;
+        if (list.length > 0) {
+          setPathogens(list);
+          return;
+        }
+        throw new Error("empty pathogen list");
+      } catch {
+        if (cancelled || attempt >= 6) return;
+        // Exponential backoff capped at 8s — comfortably covers a
+        // backend restart or a slow cold start.
+        const delay = Math.min(700 * 2 ** attempt, 8000);
+        window.setTimeout(() => { void loadPathogens(attempt + 1); }, delay);
+      }
+    }
+    void loadPathogens();
+    return () => { cancelled = true; };
   }, [apiBase]);
 
   // Update header stats AND auto-load the pathogen's primary target
