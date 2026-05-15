@@ -1191,15 +1191,18 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   const [replayEvents, setReplayEvents] = useState<TraceEvent[] | null>(null);
   const [replayIdx, setReplayIdx] = useState(0);
 
-  // Load pathogens — with retry + backoff. A one-shot fetch that
-  // failed (backend restarting, cold-start race) used to strand the
-  // pathogen picker EMPTY forever: Vite HMR does not re-run a mount
-  // effect, so the user had no options until a hard reload. This now
-  // self-heals — it keeps retrying (~34s window) until the 8 pathogens
-  // land.
+  // Load pathogens — bulletproof. A one-shot fetch that failed
+  // (backend restarting, cold-start race) used to strand the picker
+  // EMPTY forever: Vite HMR does not re-run a mount effect, so the
+  // user had no options until a hard reload. This now NEVER gives up
+  // — exponential backoff for the first few tries, then a steady 15s
+  // poll until the 8 pathogens land. Any tab self-heals within 15s of
+  // the backend becoming reachable, no reload required.
   useEffect(() => {
     let cancelled = false;
+    let timer: number | undefined;
     async function loadPathogens(attempt = 0): Promise<void> {
+      if (cancelled) return;
       try {
         const r = await fetch(`${apiBase}/workbench/pathogens`);
         if (!r.ok) throw new Error(`http ${r.status}`);
@@ -1216,19 +1219,27 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
         if (cancelled) return;
         if (list.length > 0) {
           setPathogens(list);
-          return;
+          return;  // success — stop polling
         }
         throw new Error("empty pathogen list");
       } catch {
-        if (cancelled || attempt >= 6) return;
-        // Exponential backoff capped at 8s — comfortably covers a
-        // backend restart or a slow cold start.
-        const delay = Math.min(700 * 2 ** attempt, 8000);
-        window.setTimeout(() => { void loadPathogens(attempt + 1); }, delay);
+        if (cancelled) return;
+        // First 6 tries: exponential backoff (0.7s … 8s). After that:
+        // steady 15s poll — keeps trying forever so a backend restart
+        // can never permanently strand the picker.
+        const delay = attempt < 6
+          ? Math.min(700 * 2 ** attempt, 8000)
+          : 15000;
+        timer = window.setTimeout(
+          () => { void loadPathogens(attempt + 1); }, delay,
+        );
       }
     }
     void loadPathogens();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (timer) window.clearTimeout(timer);
+    };
   }, [apiBase]);
 
   // Update header stats AND auto-load the pathogen's primary target
