@@ -182,16 +182,15 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
     if (va.length === 0) {
       return `Robustness against \`${target}\` lands at **${rb.toFixed(2)}** — clean. No mutation in the curated CARD subset breaches our 0.30 escape threshold, so this candidate is structurally insensitive to known clinical β-lactam resistance pathways. _The risk left is what we don't know yet, not what's in the literature._`;
     }
-    // Tier the candidate honestly. Inline bold only on the single
-    // adjective + the number — nesting **...** inside another **...**
-    // breaks the markdown renderer (user saw "**solid — robustness
-    // **0.93** sits...**" rendered literally).
+    // Tier the candidate honestly. The tier word appears exactly once
+    // (inside the **bold**); tierLine is JUST the explanation — no
+    // leading "${tier} —" so we don't get "**borderline**. borderline —".
     const tier = rb >= 0.9 ? "solid" : rb >= 0.7 ? "borderline" : "fragile";
     const tierLine = rb >= 0.9
-      ? `${tier} — robustness ${rb.toFixed(2)} sits well above the 0.70 floor`
+      ? `robustness ${rb.toFixed(2)} sits well above the 0.70 floor`
       : rb >= 0.7
-        ? `${tier} — robustness ${rb.toFixed(2)} is in the watch zone (0.70-0.90)`
-        : `${tier} — robustness ${rb.toFixed(2)} below 0.70 means at least one common mutation breaks this binding mode`;
+        ? `robustness ${rb.toFixed(2)} is in the watch zone (0.70-0.90)`
+        : `robustness ${rb.toFixed(2)} is below 0.70 — at least one common mutation breaks this binding mode`;
     // Triage atoms: priority = clinically frequent + high escape; soft
     // = very_rare or counter-selected ("kills enzyme") mutations.
     const priority: string[] = [];
@@ -206,7 +205,7 @@ function narrateStepResult(stepDef: any, result: any, elapsedMs?: number): strin
         || (v.escape_score ?? 0) < 0.04;
       (isSoft ? soft : priority).push(tag);
     }
-    const lines: string[] = [`Reading the prediction: this candidate looks **${tier}**. ${tierLine}.`];
+    const lines: string[] = [`Reading the prediction: this candidate looks **${tier}** — ${tierLine}.`];
     if (priority.length) {
       lines.push(`Worth hardening: ${priority.join("; ")}.`);
     }
@@ -1203,17 +1202,28 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
           priority: priorityFor(p.code),
           resistanceCount: p.resistome_count,
           firstLineCount: p.first_line_count,
+          primaryPdb: p.primary_pdb,
+          targetName: p.target_name,
         }));
         setPathogens(list);
       })
       .catch(() => {});
   }, [apiBase]);
 
-  // Update header stats when pathogen changes
+  // Update header stats AND auto-load the pathogen's primary target
+  // when the pathogen changes. This is what makes all 8 diseases
+  // actually functional: picking Mtb now snaps the 3D viewer +
+  // resistance + harden onto InhA (2X22) instead of leaving every
+  // analysis pinned to MRSA's PBP2a (1VQQ). The target the backend
+  // hands us is CARD-backed, so the harden/predict chain can score it.
   useEffect(() => {
     const p = pathogens.find((x) => x.code === selectedPathogen);
     setResistanceCount((p as any)?.resistanceCount ?? 0);
     setFirstLineCount((p as any)?.firstLineCount ?? 0);
+    const primaryPdb = (p as any)?.primaryPdb;
+    if (primaryPdb) {
+      setSelectedPdbId((prev) => (prev === primaryPdb ? prev : primaryPdb));
+    }
   }, [selectedPathogen, pathogens]);
 
   // Auto-scroll on new events

@@ -808,6 +808,27 @@ async def _llm_harden_suggestion(smiles: str, pred: dict, target_atom: dict, mut
     return arr[0] if arr else None
 
 
+def _trim_at_word(text: str, limit: int) -> str:
+    """Trim to <= limit chars WITHOUT cutting a word in half. Prefers a
+    sentence boundary (so the mechanism explanation reads as a complete
+    thought), falls back to the last whitespace. Only appends an
+    ellipsis when content was actually dropped. This replaces the old
+    raw `rationale[:240]` slice that cut mid-word (the user saw
+    'mitigating the loss of the K382 ammonium group and re')."""
+    t = (text or "").strip()
+    if len(t) <= limit:
+        return t
+    head = t[:limit]
+    for p in (". ", "; ", ", "):
+        idx = head.rfind(p)
+        if idx >= limit * 0.6:
+            return head[:idx + 1].strip()
+    sp = head.rfind(" ")
+    if sp >= limit * 0.5:
+        return head[:sp].strip() + "…"
+    return head.strip() + "…"
+
+
 async def _llm_harden_suggestions_multi(
     smiles: str, pred: dict, target_atom: dict, mut: dict, n: int = 4,
 ) -> list[dict[str, Any]]:
@@ -932,7 +953,7 @@ async def _llm_harden_suggestions_multi(
             confidence = round(min(0.95, max(0.30, base)), 3)
             out.append({
                 "swap": swap[:80],
-                "rationale": rationale[:240],
+                "rationale": _trim_at_word(rationale, 320),
                 "source": "gemini",
                 "confidence": confidence,
                 "rank": i + 1,

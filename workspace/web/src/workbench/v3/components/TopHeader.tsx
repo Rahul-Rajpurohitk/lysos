@@ -9,6 +9,12 @@ export interface Pathogen {
   priority: "critical" | "high";
   resistanceCount?: number;
   firstLineCount?: number;
+  /** CARD-backed primary PDB target — auto-loaded when this pathogen
+   *  is selected so the 3D viewer + resistance + harden follow the
+   *  disease instead of staying pinned to MRSA's PBP2a. */
+  primaryPdb?: string;
+  /** Human-readable target name, e.g. "InhA (Mtb)". */
+  targetName?: string;
 }
 
 type Mode = "Design" | "Discover" | "Repair" | "Robustify";
@@ -278,9 +284,23 @@ function PathogenPicker({
                   onChange(p.code);
                   setOpen(false);
                 }}
+                title={p.targetName ? `Target: ${p.targetName} · ${p.primaryPdb ?? ""}` : p.name}
               >
                 <span className="lys-pathogen-picker__row-code">{p.code}</span>
-                <span className="lys-pathogen-picker__row-name">{p.name}</span>
+                <span className="lys-pathogen-picker__row-name">
+                  {p.name}
+                  {p.targetName && (
+                    <span style={{
+                      display: "block",
+                      fontSize: 9.5,
+                      fontFamily: "var(--lys-font-mono)",
+                      color: "var(--lys-text-faint)",
+                      marginTop: 1,
+                    }}>
+                      → {p.targetName}{p.primaryPdb ? ` · ${p.primaryPdb}` : ""}
+                    </span>
+                  )}
+                </span>
                 <span className={clsx("lys-pathogen-picker__row-tier", `lys-pathogen-picker__row-tier--${p.priority ?? "high"}`)}>
                   {p.priority ?? "—"}
                 </span>

@@ -537,37 +537,89 @@ _register(Workflow(
 
 
 def _synth_harden(state: dict) -> str:
+    """Render the harden_candidate result as a clean, scannable per-atom
+    breakdown.
+
+    Two bugs this rewrite fixes:
+      1. The mechanism rationale was sliced to 120 chars mid-word
+         (the user saw '…the K382 ammonium group and re'). No more
+         truncation — the full medchem reasoning is surfaced.
+      2. The per-atom rows used a `•` bullet, which MarkdownText does
+         NOT recognize as a list marker — so every suggestion plus the
+         lines above collapsed into one run-on paragraph. Each atom is
+         now its own block, separated by a horizontal rule, with the
+         header / meta / SMILES / mechanism on their own paragraphs.
+    """
     pred = state.get("prediction") or {}
-    rob = pred.get("robustness_score", 0)
+    rob = pred.get("robustness_score", 0) or 0
+    target = pred.get("target_name") or pred.get("pdb_id") or "the target"
     weak = state.get("weak_atoms") or []
     hardenings = state.get("hardenings") or []
+
+    def _safe(s: Any) -> str:
+        # Strip `*` so a stray asterisk in a Gemini swap label can't
+        # break the **bold** span in the markdown renderer.
+        return str(s or "").replace("*", "").strip()
+
     if not weak:
-        return f"Robustness {rob:.2f} — no vulnerable atoms above threshold; nothing to harden."
-    lines = [
-        f"Robustness against {pred.get('target_name')}: **{rob:.2f}**.",
-        f"Weak atoms: {weak}",
-        "",
-        "**Top hardening per atom**:",
+        return (
+            f"Robustness against **{_safe(target)}**: **{rob:.2f}** — "
+            f"no vulnerable atoms above the escape threshold. Nothing to "
+            f"harden; this candidate is structurally insensitive to the "
+            f"curated clinical mutations for this target."
+        )
+
+    tier = "solid" if rob >= 0.9 else "borderline" if rob >= 0.7 else "fragile"
+    n_weak = len(weak)
+    lines: list[str] = [
+        f"Robustness against **{_safe(target)}**: **{rob:.2f}** — {tier}. "
+        f"{n_weak} weak atom{'s' if n_weak != 1 else ''} flagged; here is the "
+        f"highest-confidence hardening swap per atom."
     ]
+
+    rendered = 0
     for i, h in enumerate(hardenings):
         gem = h.get("gemini_suggestions") or []
         pb = h.get("playbook_suggestions") or []
-        all_s = gem + pb
+        all_s = [*gem, *pb]
         if not all_s:
             continue
-        top = all_s[0]
-        # If the swap was applied successfully, surface the resulting
-        # SMILES in backticks so the chat renders it as a clickable
-        # apply-pill (MarkdownText turns `c1ccc(O)cc1` into a "Load
-        # in 3D" chip wired to lysos:auto-slash).
+        # Pick the genuinely highest-confidence suggestion across both
+        # the Gemini and playbook sources, not just the first one.
+        top = max(all_s, key=lambda s: s.get("confidence", 0) or 0)
+        atom_idx = h.get("atom_idx")
+        if atom_idx is None:
+            atom_idx = weak[i] if i < len(weak) else "?"
+        conf = top.get("confidence", 0) or 0
+        source = _safe(top.get("source") or "playbook")
+        swap = _safe(top.get("swap")) or "structural swap"
+        delta = top.get("predicted_robustness_delta")
         after = top.get("after_smiles")
-        suffix = f" → `{after}`" if after else ""
-        lines.append(
-            f"  • atom {weak[i]} → **{top.get('swap')}** "
-            f"(conf {top.get('confidence', 0):.2f}, "
-            f"{top.get('source')}){suffix}  — "
-            f"{top.get('rationale', '')[:120]}"
-        )
+        rationale = (top.get("rationale") or "").strip()
+
+        meta = f"conf {conf:.2f} · {source}"
+        if isinstance(delta, (int, float)) and delta:
+            meta += f" · projected Δrobustness {'+' if delta >= 0 else ''}{delta:.2f}"
+
+        # Each piece on its own paragraph (blank-line separated) so the
+        # renderer keeps them visually distinct instead of joining them.
+        lines += ["", "---", "", f"**Atom {atom_idx} → {swap}**", "", meta]
+        if after:
+            lines += ["", f"`{after}`"]
+        else:
+            lines += ["", "_No auto-applied structure — apply this swap "
+                          "manually in the 2D builder._"]
+        if rationale:
+            lines += ["", rationale]
+        rendered += 1
+
+    if rendered == 0:
+        lines += ["", "_No hardening suggestions were generated for the "
+                      "flagged atoms — try a different target or atom._"]
+    else:
+        lines += ["", "---", "", "Click any structure above to load + "
+                      "re-score it, or run `/wf compare_top_n` to A/B the "
+                      "hardened variants against the parent."]
     return "\n".join(lines)
 
 

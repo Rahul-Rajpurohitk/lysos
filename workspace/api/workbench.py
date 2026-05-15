@@ -3276,16 +3276,46 @@ async def molecule_replace(req: ReplaceRequest) -> Dict[str, Any]:
 # actual pocket instead of rendering it floating at the origin.
 # ---------------------------------------------------------------------------
 
+# Pathogen → primary PDB target. Every PDB here MUST exist in the
+# curated CARD resistance subset (data/curated/card_resistance_subset.json)
+# so that selecting a pathogen drives a target the resistance / harden /
+# predict endpoints can actually score. KpneuCRE + Paer previously
+# pointed at 6QWN / 5DPX (porin / efflux structures with NO curated
+# mutations) — picking those pathogens silently 404'd the whole
+# resistance chain. They now point at the NDM-1 / DNA-gyrase-B targets
+# that the CARD subset covers.
 PATHOGEN_TARGET_PDB: dict[str, str] = {
     "MRSA":      "1VQQ",  # PBP2a
     "Mtb":       "2X22",  # InhA
     "EColi-CRE": "5UL8",  # KPC-2
-    "KpneuCRE":  "6QWN",  # OmpK36
+    "KpneuCRE":  "3SPU",  # NDM-1
     "Abaum":     "7M4F",  # OXA-23
-    "Paer":      "5DPX",  # MexY
+    "Paer":      "5TJX",  # DNA gyrase B
     "VRE":       "1MWS",  # PBP5
-    "NGono":     "5XFT",  # PBP2
+    "NGono":     "5XFT",  # PBP2 / penA
 }
+
+
+def _card_primary_targets() -> dict[str, dict[str, str]]:
+    """Build pathogen → {pdb, target_name} from the curated CARD subset.
+
+    The CARD subset is the authoritative list of targets that have
+    curated clinical resistance mutations — so the PDB we hand the
+    frontend is guaranteed to be one the resistance/harden endpoints
+    can score. First PDB encountered per pathogen wins (insertion
+    order = primary target first). Imported lazily to avoid a circular
+    import (chem_resistance imports place_endpoint from this module)."""
+    out: dict[str, dict[str, str]] = {}
+    try:
+        from . import chem_resistance as _cr
+        by_pdb = (getattr(_cr, "_CARD", {}) or {}).get("by_pdb", {})
+        for pdb, entry in by_pdb.items():
+            pth = entry.get("_pathogen")
+            if pth and pth not in out:
+                out[pth] = {"pdb": pdb, "target_name": entry.get("_target", "")}
+    except Exception as exc:  # noqa: BLE001
+        log.warning("could not load CARD primary targets: %s", exc)
+    return out
 
 # Approximate pocket centers (Angstrom). When we can't compute these from
 # the PDB at runtime, these literature-derived coords keep the ligand inside
@@ -3318,14 +3348,28 @@ async def pathogen_pocket(code: str) -> dict:
 
 @router.get("/pathogens")
 async def list_pathogens() -> dict:
-    """Return the 8 priority pathogens with full metadata."""
+    """Return the 8 priority pathogens with full metadata.
+
+    Each pathogen now carries `primary_pdb` + `target_name` — the
+    CARD-backed structure the frontend should auto-load when this
+    pathogen is selected, so picking a disease actually drives the
+    3D viewer + resistance + harden against the right target (not
+    a hard-coded MRSA PBP2a)."""
     pathogens = ["MRSA", "Mtb", "EColi-CRE", "KpneuCRE",
                  "Abaum", "Paer", "VRE", "NGono"]
     rt = registry.get("get_pathogen_resistome")
+    card_targets = _card_primary_targets()
     out = []
     for p in pathogens:
+        # CARD-backed target first, fall back to the static map.
+        tgt = card_targets.get(p) or {}
+        primary_pdb = tgt.get("pdb") or PATHOGEN_TARGET_PDB.get(p)
+        target_name = tgt.get("target_name") or ""
         if rt is None:
-            out.append({"code": p, "name": p, "resistome_count": 0})
+            out.append({
+                "code": p, "name": p, "resistome_count": 0,
+                "primary_pdb": primary_pdb, "target_name": target_name,
+            })
             continue
         rec = rt.call({"pathogen": p})
         result = rec.get("result") or {}
@@ -3336,6 +3380,8 @@ async def list_pathogens() -> dict:
             "resistome_count": len(result.get("resistome", [])),
             "first_line_count": len(result.get("first_line_therapy", [])),
             "common_syndromes": result.get("common_syndromes", []),
+            "primary_pdb": primary_pdb,
+            "target_name": target_name,
         })
     return {"pathogens": out}
 

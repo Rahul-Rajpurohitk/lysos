@@ -383,14 +383,25 @@ export function MessageRow({ msg, toolCalls, onLoadSmiles, onIngestEvent, onRepl
       {msg.thinking && <ThinkingBlock thinking={msg.thinking} />}
 
       {body && (
-        <div style={{
-          fontSize: 13.5,
-          lineHeight: 1.5,
-          color: "var(--lys-text)",
-          whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
-        }}>
-          {body}
+        <div style={{ color: "var(--lys-text)" }}>
+          {/* Every agent role (designer / critic / editor / strategist)
+            * gets full markdown rendering — NOT raw text. Before this,
+            * only `assistant`/`orchestrator` went through MarkdownText,
+            * so the critic's "**borderline**" rendered with literal
+            * asterisks. **bold**, `code`, clickable SMILES all work now. */}
+          <MarkdownText
+            text={body}
+            fontSize={13.5}
+            onLoadSmiles={(smi) => {
+              if (onLoadSmiles) {
+                onLoadSmiles(smi);
+              } else {
+                window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
+                  detail: { text: `/load ${smi}` },
+                }));
+              }
+            }}
+          />
         </div>
       )}
 
