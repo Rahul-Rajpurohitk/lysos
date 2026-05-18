@@ -15,7 +15,10 @@ def tools():
 
 
 def test_registry_has_25_tools(tools):
-    assert len(tools) == 25
+    # The registry grew from the original 25 to 37 tools. Assert the
+    # 25-tool floor (catches catastrophic tool loss) without breaking
+    # every time a tool is legitimately added.
+    assert len(tools) >= 25
 
 
 def test_registry_has_all_amr_tools(tools):
@@ -125,7 +128,9 @@ def test_invalid_smiles_validity_zero(tools):
 def test_tool_schemas_for_anthropic(tools):
     """Anthropic-format schemas — used by Claude function-calling."""
     schemas = registry.schemas_for_anthropic()
-    assert len(schemas) == 25
+    # One schema per registered tool (registry has grown past 25).
+    assert len(schemas) == len(tools)
+    assert len(schemas) >= 25
     for s in schemas:
         assert "name" in s
         assert "description" in s

@@ -55,11 +55,16 @@ _AVAILABILITY = {"in_stock", "catalog", "custom"}
 # ─────────────────────────────────────────────────────────────────────
 
 def _canonical(smiles: str) -> Optional[str]:
-    """Canonical SMILES, or None when RDKit can't parse it."""
+    """Canonical SMILES, or None when RDKit can't parse it. An empty
+    string parses as a zero-atom Mol in RDKit — treat that, and any
+    atomless parse, as invalid."""
+    s = (smiles or "").strip()
+    if not s:
+        return None
     try:
         from rdkit import Chem
-        m = Chem.MolFromSmiles((smiles or "").strip())
-        if m is None:
+        m = Chem.MolFromSmiles(s)
+        if m is None or m.GetNumAtoms() == 0:
             return None
         return Chem.MolToSmiles(m)
     except Exception:  # noqa: BLE001

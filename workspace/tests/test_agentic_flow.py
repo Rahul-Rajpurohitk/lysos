@@ -76,7 +76,9 @@ def test_skills_endpoint_lists_25_tools():
     r = client.get("/workbench/skills")
     assert r.status_code == 200
     d = r.json()
-    assert d["total"] == 25
+    # Registry grew past the original 25 — assert the floor, not an
+    # exact count, so adding a tool doesn't break this test.
+    assert d["total"] >= 25
     assert "by_category" in d
     cats = d["by_category"]
     assert "amr" in cats
