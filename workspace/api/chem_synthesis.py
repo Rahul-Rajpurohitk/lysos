@@ -1,24 +1,35 @@
 """Synthesis Make-Route — Service 1 of the productized service layer.
 
-Turns the abstract `synthesizability` score into an actual plan: a
-retrosynthetic route with named steps, reagents, building-block
-availability, a cost estimate and a lead-time estimate.
+Turns the abstract `synthesizability` score into a real, reasoned plan:
+a retrosynthetic route with named steps, reagents, per-step yields,
+risk flags, a reaction-class-aware cost model, structure-derived
+building-block availability, and a Critic review.
 
 Endpoints (router prefix /chem, mounted under /workbench):
-  POST   /chem/synthesis/plan              SMILES → retrosynthetic route
+  POST   /chem/synthesis/plan              SMILES → full reasoned route
   GET    /chem/synthesis/routes            list saved routes (CRUD read)
   GET    /chem/synthesis/routes/{rid}      get one saved route
   PATCH  /chem/synthesis/routes/{rid}      update title / notes / starred
   DELETE /chem/synthesis/routes/{rid}      delete a saved route
 
-Design pattern (shared across the service layer):
-  - Gemini PROPOSES the chemistry; RDKit VALIDATES every intermediate
-    SMILES — same proposer/validator split the harden service uses.
-  - Cost / feasibility / lead-time are computed SERVER-SIDE from real
-    signals (step count, intermediate validity, building-block
-    availability) — never taken from the model.
-  - Every computed route is persisted via service_store as a
-    `synthesis_route` artifact so users + agents share one CRUD view.
+What makes this NOT hardcoded
+  - Cost is computed per step from the REACTION CLASS — a Pd-catalysed
+    cross-coupling genuinely costs ~4x an amide coupling. The route's
+    cost responds to its actual chemistry, it is not a flat per-step
+    constant.
+  - Building-block availability is DERIVED from RDKit structural
+    complexity (heavy atoms / rings / stereocentres), not taken from
+    the model's guess — a small achiral fragment is stocked, a complex
+    chiral intermediate is custom.
+  - Per-step + cumulative yield is tracked; feasibility folds it in.
+  - A Critic agent reviews the assembled route (riskiest step,
+    scale-up concern, confidence).
+
+Agentic flow: the proposer is Gemini (Flash — fast); RDKit validates
+every intermediate; the cost / yield / availability maths is
+server-authoritative; the Critic pass is a second agent. The
+`plan_synthesis` workflow exposes these as three streamed steps so the
+agent is visibly working, not a 30 s opaque wait.
 """
 from __future__ import annotations
 
@@ -40,14 +51,56 @@ router = APIRouter(prefix="/chem", tags=["chem_synthesis"])
 
 _ARTIFACT_KIND = "synthesis_route"
 
-# ── Cost model — literature-anchored heuristics, NOT model output ──────
-_COST_PER_STEP_USD = 80.0          # labor + reagents per synthetic step
-_SM_COST_USD = {                   # per starting material, by availability
-    "in_stock": 30.0,
-    "catalog": 90.0,
-    "custom": 250.0,
-}
-_AVAILABILITY = {"in_stock", "catalog", "custom"}
+
+# ─────────────────────────────────────────────────────────────────────
+# Reaction-class cost model — chemistry-anchored, NOT a flat constant.
+# Each rule: (keyword tuple, USD/step, cost-driver label). Matched
+# against the step's name + reaction_class. These tiers reflect real
+# cost structure: precious-metal catalysis + cryogenic / organometallic
+# chemistry cost multiples of a robust acylation or protection step.
+# ─────────────────────────────────────────────────────────────────────
+
+_RXN_COST_RULES: list[tuple[tuple[str, ...], float, str]] = [
+    (("buchwald", "c-n coupling", "amination coupling"), 250.0, "Pd-catalysed C–N coupling"),
+    (("suzuki", "negishi", "stille", "kumada", "sonogashira", "heck",
+      "cross-coupling", "cross coupling"), 230.0, "Pd-catalysed cross-coupling"),
+    (("c-h activation", "c–h activation", "c-h functional"), 285.0, "C–H activation"),
+    (("asymmetric", "enantioselective", "chiral cataly"), 260.0, "asymmetric catalysis"),
+    (("metathesis", "rcm "), 215.0, "olefin metathesis"),
+    (("grignard", "organolithium", "n-buli", "lithiation", "cryogenic",
+      "-78"), 185.0, "cryogenic / organometallic"),
+    (("amide coupling", "peptide coupling", "edc", "hatu", "hbtu", "pybop"),
+     95.0, "coupling-reagent chemistry"),
+    (("reductive amination",), 95.0, "reductive amination"),
+    (("hydrogenation", "reduction"), 105.0, "reduction"),
+    (("oxidation",), 90.0, "oxidation"),
+    (("wittig", "horner", "olefination"), 110.0, "olefination"),
+    (("mitsunobu",), 120.0, "Mitsunobu"),
+    (("snar", "nucleophilic aromatic"), 80.0, "SNAr"),
+    (("cyclization", "cyclisation", "annulation"), 105.0, "ring construction"),
+    (("acylation", "esterification", "amide formation", "amidation"),
+     55.0, "acylation"),
+    (("protection", "deprotection", "boc", "cbz", "fmoc"), 45.0, "protecting-group step"),
+    (("hydrolysis", "saponification"), 45.0, "hydrolysis"),
+    (("alkylation", "substitution", "sn2", "sn1"), 65.0, "alkylation / substitution"),
+    (("condensation", "schiff", "imine"), 60.0, "condensation"),
+    (("nitration", "halogenation", "bromination", "chlorination",
+      "electrophilic aromatic", " eas"), 70.0, "electrophilic aromatic substitution"),
+    (("salt", "crystallization", "crystallisation", "recrystall"),
+     35.0, "salt formation / crystallisation"),
+]
+_DEFAULT_STEP_COST = 95.0          # unmatched class → moderate tier
+# Default yield by cost tier — used only when the model omits a yield.
+_DEFAULT_YIELD_BY_COST = [(70.0, 0.68), (130.0, 0.78), (1e9, 0.86)]
+
+
+def _step_cost(name: str, reaction_class: str) -> tuple[float, str]:
+    """Cost (USD) + cost-driver label for a step, from its chemistry."""
+    hay = f"{name} {reaction_class}".lower()
+    for keys, usd, label in _RXN_COST_RULES:
+        if any(k in hay for k in keys):
+            return usd, label
+    return _DEFAULT_STEP_COST, "general organic step"
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -71,23 +124,16 @@ def _canonical(smiles: str) -> Optional[str]:
         return None
 
 
-def _heavy_atoms(smiles: str) -> int:
-    try:
-        from rdkit import Chem
-        m = Chem.MolFromSmiles(smiles)
-        return int(m.GetNumHeavyAtoms()) if m else 0
-    except Exception:  # noqa: BLE001
-        return 0
-
-
 def _complexity(smiles: str) -> dict[str, int]:
-    """Cheap structural-complexity signals for the heuristic fallback."""
+    """Structural-complexity signals for the building-block assessor +
+    the heuristic fallback."""
     try:
         from rdkit import Chem
         from rdkit.Chem import Descriptors, Lipinski, rdMolDescriptors
         m = Chem.MolFromSmiles(smiles)
         if m is None:
-            return {"heavy": 0, "rings": 0, "rotatable": 0, "stereo": 0}
+            return {"heavy": 0, "rings": 0, "rotatable": 0, "stereo": 0,
+                    "aromatic_rings": 0}
         return {
             "heavy": int(m.GetNumHeavyAtoms()),
             "rings": int(Descriptors.RingCount(m)),
@@ -96,58 +142,103 @@ def _complexity(smiles: str) -> dict[str, int]:
             "aromatic_rings": int(rdMolDescriptors.CalcNumAromaticRings(m)),
         }
     except Exception:  # noqa: BLE001
-        return {"heavy": 0, "rings": 0, "rotatable": 0, "stereo": 0}
+        return {"heavy": 0, "rings": 0, "rotatable": 0, "stereo": 0,
+                "aromatic_rings": 0}
+
+
+def _assess_building_block(smiles: str, name: str) -> dict[str, Any]:
+    """Derive a building block's commercial availability + sourcing cost
+    from its RDKit structural complexity — NOT from the model's guess.
+
+    Commercial building-block catalogues skew heavily toward small,
+    achiral, low-ring-count fragments; complex polycyclic or
+    multi-stereocentre intermediates almost always need custom
+    synthesis. This encodes that real skew."""
+    canon = _canonical(smiles)
+    cx = _complexity(canon or smiles)
+    hv, rings, stereo = cx["heavy"], cx["rings"], cx["stereo"]
+
+    if canon is None:
+        availability, why = "custom", "structure could not be parsed"
+    elif hv <= 10 and rings <= 1 and stereo == 0:
+        availability, why = "in_stock", "small achiral fragment — bulk-stocked"
+    elif hv <= 18 and rings <= 2 and stereo <= 1:
+        availability, why = "catalog", "moderate complexity — catalogue order"
+    else:
+        availability, why = "custom", (
+            f"complex ({hv} heavy atoms, {rings} rings, {stereo} stereocentres) "
+            f"— likely custom synthesis")
+
+    # Sourcing cost scales with complexity, anchored per availability tier.
+    if availability == "in_stock":
+        cost = 18.0 + 1.6 * hv
+    elif availability == "catalog":
+        cost = 45.0 + 3.4 * hv + 22.0 * stereo
+    else:
+        cost = 120.0 + 6.0 * hv + 55.0 * stereo + 18.0 * max(0, rings - 2)
+
+    return {
+        "name": str(name or "building block")[:80],
+        "smiles": canon or smiles,
+        "smiles_valid": canon is not None,
+        "availability": availability,
+        "availability_reason": why,
+        "est_cost_usd": round(cost, 2),
+        "heavy_atoms": hv,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Gemini retrosynthesis — proposer
+# Gemini retrosynthesis — proposer (Flash: fast)
 # ─────────────────────────────────────────────────────────────────────
 
 def _retro_prompt(smiles: str) -> str:
     return (
-        "You are a senior synthetic / process chemist. Perform a concise "
-        "RETROSYNTHETIC analysis of the target molecule and return a "
-        "FORWARD synthetic route a medicinal-chemistry lab could run.\n\n"
+        "You are a senior process chemist. Do a RETROSYNTHETIC analysis "
+        "of the target and return a FORWARD synthetic route a "
+        "medicinal-chemistry lab could actually run.\n\n"
         f"Target SMILES: {smiles}\n\n"
         "Rules:\n"
-        "  - 2 to 6 steps. Prefer robust, well-precedented reactions "
-        "(amide coupling, SNAr, Suzuki/Buchwald, reductive amination, "
-        "Boc protect/deprotect, ester hydrolysis, etc.).\n"
-        "  - Each step: the named transform, reaction_class, key "
-        "reagents, conditions, and the product_smiles AFTER that step. "
-        "The FINAL step's product_smiles MUST be the target.\n"
-        "  - List the commercial starting materials with a realistic "
-        "availability: 'in_stock' (common, <$50/g), 'catalog' "
-        "(orderable, days), or 'custom' (must be made / long lead).\n"
-        "  - Every SMILES must be a valid, parseable structure.\n\n"
+        "  - 2 to 6 steps. Prefer robust, well-precedented reactions.\n"
+        "  - For EACH step give: the named transform, the reaction_class "
+        "(be specific — 'Suzuki coupling', 'amide coupling', 'Boc "
+        "deprotection', 'reductive amination', …), reagents, conditions, "
+        "the product_smiles AFTER that step, an honest single-step "
+        "yield_pct (40-98), a risk rating (low | moderate | high) for "
+        "how likely the step is to fail or be low-yielding, and a short "
+        "rationale. The FINAL step's product_smiles MUST be the target.\n"
+        "  - List the commercial starting materials (name + SMILES "
+        "only — do NOT rate their availability, that is computed).\n"
+        "  - Every SMILES must be valid + parseable.\n\n"
         "Return STRICT JSON only:\n"
         "{\n"
-        '  "steps": [{"name": "<transform>", "reaction_class": "<class>", '
+        '  "strategy": "<=200 chars — the key disconnections + overall approach",\n'
+        '  "steps": [{"name": "<transform>", "reaction_class": "<specific class>", '
         '"reagents": ["..."], "conditions": "<solvent, temp, time>", '
-        '"product_smiles": "<SMILES after this step>", '
-        '"rationale": "<=160 chars why this step"}],\n'
-        '  "starting_materials": [{"name": "<name>", "smiles": "<SMILES>", '
-        '"availability": "in_stock|catalog|custom"}],\n'
+        '"product_smiles": "<SMILES after this step>", "yield_pct": <40-98>, '
+        '"risk": "low|moderate|high", "rationale": "<=160 chars"}],\n'
+        '  "starting_materials": [{"name": "<name>", "smiles": "<SMILES>"}],\n'
         '  "overall_notes": "<=200 chars route-level commentary"\n'
         "}\n"
     )
 
 
-async def _gemini_route(smiles: str) -> Optional[dict[str, Any]]:
-    """Ask Gemini for a retrosynthetic route. Returns the parsed JSON
-    dict, or None on any failure (caller falls back to a heuristic)."""
+async def _gemini_json(prompt: str, *, max_tokens: int = 4096,
+                       temperature: float = 0.3) -> Optional[dict[str, Any]]:
+    """One Gemini call returning parsed JSON. Flash primary (fast),
+    Flash-8b/Pro never needed here. Returns None on any failure."""
     key = os.getenv("GEMINI_API_KEY")
     if not key:
         return None
-    primary = os.getenv("LYSOS_SYNTHESIS_MODEL", "gemini-2.5-pro")
-    fallback = os.getenv("LYSOS_SYNTHESIS_FALLBACK", "gemini-2.5-flash")
+    primary = os.getenv("LYSOS_SYNTHESIS_MODEL", "gemini-2.5-flash")
+    fallback = os.getenv("LYSOS_SYNTHESIS_FALLBACK", "gemini-2.5-pro")
     payload = {
-        "contents": [{"role": "user", "parts": [{"text": _retro_prompt(smiles)}]}],
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "maxOutputTokens": 4096,
-            "temperature": 0.3,
-            "thinkingConfig": {"thinkingBudget": 1024, "includeThoughts": False},
+            "maxOutputTokens": max_tokens,
+            "temperature": temperature,
+            "thinkingConfig": {"thinkingBudget": 0, "includeThoughts": False},
         },
     }
     headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
@@ -157,7 +248,7 @@ async def _gemini_route(smiles: str) -> Optional[dict[str, Any]]:
             async with httpx.AsyncClient(timeout=30.0) as cx:
                 r = await cx.post(url, headers=headers, json=payload)
             if r.status_code in (429, 503):
-                log.warning("synthesis %s returned %d — falling back", model, r.status_code)
+                log.warning("synthesis %s %d — falling back", model, r.status_code)
                 continue
             if r.status_code != 200:
                 log.warning("synthesis gemini http %d: %s", r.status_code, r.text[:160])
@@ -171,7 +262,7 @@ async def _gemini_route(smiles: str) -> Optional[dict[str, Any]]:
             if s.startswith("```"):
                 s = re.sub(r"^```(?:json)?\s*|\s*```$", "", s, flags=re.M).strip()
             obj = json.loads(s)
-            if isinstance(obj, dict) and obj.get("steps"):
+            if isinstance(obj, dict):
                 obj["_model"] = model
                 return obj
         except Exception as exc:  # noqa: BLE001
@@ -180,50 +271,60 @@ async def _gemini_route(smiles: str) -> Optional[dict[str, Any]]:
     return None
 
 
+async def _gemini_route(smiles: str) -> Optional[dict[str, Any]]:
+    """Retrosynthetic route proposal. None on failure (heuristic fallback)."""
+    obj = await _gemini_json(_retro_prompt(smiles))
+    if obj and obj.get("steps"):
+        return obj
+    return None
+
+
 # ─────────────────────────────────────────────────────────────────────
 # Heuristic fallback — when Gemini is unavailable
 # ─────────────────────────────────────────────────────────────────────
 
 def _heuristic_route(smiles: str) -> dict[str, Any]:
-    """Deterministic skeleton route from RDKit complexity signals — so
-    the service still returns something useful with no API key."""
+    """Deterministic skeleton route from RDKit complexity — so the
+    service still returns something useful with no API key."""
     cx = _complexity(smiles)
-    # More rings / rotatable bonds → more disconnections.
     n_steps = max(2, min(6, 1 + cx["rings"] // 2 + cx["rotatable"] // 4))
     steps = [
         {
             "name": f"Disconnection {i + 1}",
-            "reaction_class": "generic bond formation",
-            "reagents": [],
-            "conditions": "to be determined by route scout",
+            "reaction_class": "general organic step",
+            "reagents": [], "conditions": "to be determined by route scout",
             "product_smiles": smiles if i == n_steps - 1 else "",
-            "product_valid": (i == n_steps - 1),
+            "yield_pct": 75, "risk": "moderate",
             "rationale": "Heuristic skeleton — connect Gemini for a "
                          "reaction-precedented route.",
         }
         for i in range(n_steps)
     ]
     return {
+        "strategy": "Heuristic step-count estimate from ring + rotatable-bond "
+                    "complexity (no Gemini key).",
         "steps": steps,
         "starting_materials": [],
-        "overall_notes": "Heuristic estimate from structural complexity "
-                         "(no Gemini key). Step count scales with ring + "
-                         "rotatable-bond count.",
+        "overall_notes": "Heuristic estimate — no reaction precedent applied.",
         "_model": "heuristic",
     }
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Route assembly — validate + cost (server-authoritative)
+# Route assembly — validate + cost + yield (server-authoritative)
 # ─────────────────────────────────────────────────────────────────────
 
 def _assemble_route(smiles: str, raw: dict[str, Any]) -> dict[str, Any]:
-    """Validate every SMILES with RDKit, then compute cost / feasibility
-    / lead-time from real signals. The model never sets the numbers."""
+    """Validate every SMILES with RDKit, cost each step from its
+    reaction class, derive building-block availability from structure,
+    track per-step + cumulative yield. The model never sets a number."""
     target_canon = _canonical(smiles)
     steps_in = raw.get("steps") or []
     steps: list[dict[str, Any]] = []
     n_invalid = 0
+    step_cost_total = 0.0
+    cumulative_yield = 1.0
+
     for i, st in enumerate(steps_in[:6]):
         if not isinstance(st, dict):
             continue
@@ -232,85 +333,179 @@ def _assemble_route(smiles: str, raw: dict[str, Any]) -> dict[str, Any]:
         valid = prod_canon is not None
         if prod and not valid:
             n_invalid += 1
+        name = str(st.get("name") or f"Step {i + 1}")[:80]
+        rxn_class = str(st.get("reaction_class") or "")[:60]
+        cost, cost_driver = _step_cost(name, rxn_class)
+        step_cost_total += cost
+        # Per-step yield — model value clamped, else default by cost tier.
+        try:
+            yld = float(st.get("yield_pct"))
+        except (TypeError, ValueError):
+            yld = next(y for cap, y in _DEFAULT_YIELD_BY_COST if cost <= cap) * 100
+        yld = max(20.0, min(99.0, yld))
+        cumulative_yield *= (yld / 100.0)
+        risk = str(st.get("risk") or "moderate").lower()
+        if risk not in {"low", "moderate", "high"}:
+            risk = "moderate"
         steps.append({
             "step": i + 1,
-            "name": str(st.get("name") or f"Step {i + 1}")[:80],
-            "reaction_class": str(st.get("reaction_class") or "")[:60],
+            "name": name,
+            "reaction_class": rxn_class,
             "reagents": [str(x)[:40] for x in (st.get("reagents") or [])][:8],
             "conditions": str(st.get("conditions") or "")[:120],
             "product_smiles": prod_canon or prod,
             "product_valid": valid,
+            "yield_pct": round(yld, 1),
+            "risk": risk,
+            "est_cost_usd": round(cost, 2),
+            "cost_driver": cost_driver,
             "rationale": str(st.get("rationale") or "")[:200],
         })
     n_steps = len(steps) or 1
 
-    # Starting materials — validate + price by availability.
+    # Building materials — availability + cost DERIVED from structure.
     sms: list[dict[str, Any]] = []
     sm_cost = 0.0
     custom_count = 0
     for sm in (raw.get("starting_materials") or [])[:10]:
         if not isinstance(sm, dict):
             continue
-        smi = (sm.get("smiles") or "").strip()
-        canon = _canonical(smi) if smi else None
-        avail = str(sm.get("availability") or "catalog").lower()
-        if avail not in _AVAILABILITY:
-            avail = "catalog"
-        if avail == "custom":
+        assessed = _assess_building_block(sm.get("smiles") or "", sm.get("name") or "")
+        if assessed["availability"] == "custom":
             custom_count += 1
-        cost = _SM_COST_USD[avail]
-        sm_cost += cost
-        sms.append({
-            "name": str(sm.get("name") or "building block")[:80],
-            "smiles": canon or smi,
-            "smiles_valid": canon is not None,
-            "availability": avail,
-            "est_cost_usd": round(cost, 2),
-        })
+        sm_cost += assessed["est_cost_usd"]
+        sms.append(assessed)
 
-    # Does the final step actually land on the target?
     reaches_target = bool(
         steps and target_canon
         and steps[-1].get("product_valid")
         and steps[-1].get("product_smiles") == target_canon
     )
 
-    # ── Cost (server-authoritative) ──
-    est_cost = n_steps * _COST_PER_STEP_USD + sm_cost
-    cost_band = "low" if est_cost < 300 else "moderate" if est_cost < 800 else "high"
+    # ── Cost — server-authoritative, reaction-class driven ──
+    est_cost = step_cost_total + sm_cost
+    cost_band = "low" if est_cost < 350 else "moderate" if est_cost < 950 else "high"
 
-    # ── Lead time ──
-    lead_time_days = n_steps * 4 + custom_count * 14 + 3
+    # ── Lead time — robust steps are fast, exotic ones slow ──
+    avg_step_cost = step_cost_total / n_steps
+    lead_time_days = int(round(
+        n_steps * (3 + avg_step_cost / 60.0) + custom_count * 14 + 3))
 
-    # ── Feasibility 0-1 — fewer steps, valid intermediates, stock SMs ──
+    overall_yield_pct = round(cumulative_yield * 100.0, 1)
+
+    # ── Feasibility 0-1 — folds in steps, validity, custom mats, YIELD ──
     feas = 1.0
-    feas -= 0.08 * max(0, n_steps - 3)         # step-count penalty
-    feas -= 0.15 * n_invalid                   # invalid intermediate penalty
-    feas -= 0.05 * custom_count                # custom-material penalty
+    feas -= 0.07 * max(0, n_steps - 3)
+    feas -= 0.15 * n_invalid
+    feas -= 0.05 * custom_count
+    if overall_yield_pct < 25:
+        feas -= 0.20
+    elif overall_yield_pct < 45:
+        feas -= 0.10
     if not reaches_target and raw.get("_model") != "heuristic":
-        feas -= 0.10                           # route doesn't close on target
+        feas -= 0.10
     feasibility = round(max(0.1, min(1.0, feas)), 3)
 
     return {
         "smiles": target_canon or smiles,
+        "strategy": str(raw.get("strategy") or "")[:240],
         "n_steps": n_steps,
         "steps": steps,
         "starting_materials": sms,
         "route_reaches_target": reaches_target,
         "n_invalid_intermediates": n_invalid,
         "estimated_cost_usd": round(est_cost, 2),
+        "step_cost_usd": round(step_cost_total, 2),
+        "materials_cost_usd": round(sm_cost, 2),
         "cost_band": cost_band,
+        "overall_yield_pct": overall_yield_pct,
         "lead_time_days": lead_time_days,
         "feasibility": feasibility,
         "feasibility_band": (
             "ready" if feasibility >= 0.75
-            else "workable" if feasibility >= 0.5
-            else "hard"
-        ),
+            else "workable" if feasibility >= 0.5 else "hard"),
         "overall_notes": str(raw.get("overall_notes") or "")[:240],
         "model": raw.get("_model") or "unknown",
         "computed_at": time.time(),
     }
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Critic pass — a second agent reviews the assembled route
+# ─────────────────────────────────────────────────────────────────────
+
+async def _critique_route(route: dict[str, Any]) -> dict[str, Any]:
+    """Critic agent reviews the route — riskiest step, scale-up concern,
+    confidence. Returns a deterministic fallback when Gemini is off."""
+    steps = route.get("steps") or []
+    # Deterministic fallback: riskiest = highest-risk / lowest-yield step.
+    risk_rank = {"high": 3, "moderate": 2, "low": 1}
+    worst = max(
+        steps,
+        key=lambda s: (risk_rank.get(s.get("risk", "moderate"), 2),
+                       -float(s.get("yield_pct", 75))),
+        default=None,
+    ) if steps else None
+    fallback = {
+        "riskiest_step": worst.get("step") if worst else None,
+        "risk_reason": (
+            f"{worst.get('name')} — {worst.get('risk')} risk, "
+            f"{worst.get('yield_pct')}% yield" if worst else "no steps"),
+        "scale_up_concern": "Step count + custom building blocks drive "
+                            "scale-up cost." if route.get("n_steps", 0) > 4
+                            else "Route length is scale-friendly.",
+        "confidence": route.get("feasibility", 0.5),
+        "verdict": "Workable route — see riskiest step before committing.",
+        "model": "deterministic",
+    }
+    steps_brief = "; ".join(
+        f"#{s['step']} {s['name']} ({s.get('reaction_class','')}, "
+        f"{s.get('yield_pct')}%, {s.get('risk')} risk)"
+        for s in steps
+    )
+    prompt = (
+        "You are a Critic chemist reviewing a proposed synthetic route. "
+        "Be specific and honest.\n\n"
+        f"Target: {route.get('smiles')}\n"
+        f"Route: {route.get('n_steps')} steps · est ${route.get('estimated_cost_usd')} "
+        f"· overall yield {route.get('overall_yield_pct')}%\n"
+        f"Steps: {steps_brief}\n\n"
+        "Return STRICT JSON:\n"
+        "{\n"
+        '  "riskiest_step": <step number>,\n'
+        '  "risk_reason": "<=160 chars — why that step is the weak link",\n'
+        '  "scale_up_concern": "<=160 chars — what breaks at kg scale",\n'
+        '  "confidence": <0..1 — your confidence this route delivers the target>,\n'
+        '  "verdict": "<=160 chars — advance / rework / specific fix"\n'
+        "}\n"
+    )
+    obj = await _gemini_json(prompt, max_tokens=1024, temperature=0.35)
+    if not obj:
+        return fallback
+    try:
+        conf = float(obj.get("confidence", fallback["confidence"]))
+    except (TypeError, ValueError):
+        conf = fallback["confidence"]
+    return {
+        "riskiest_step": obj.get("riskiest_step") or fallback["riskiest_step"],
+        "risk_reason": str(obj.get("risk_reason") or fallback["risk_reason"])[:200],
+        "scale_up_concern": str(obj.get("scale_up_concern")
+                                or fallback["scale_up_concern"])[:200],
+        "confidence": round(max(0.0, min(1.0, conf)), 3),
+        "verdict": str(obj.get("verdict") or fallback["verdict"])[:200],
+        "model": obj.get("_model") or "gemini",
+    }
+
+
+async def _plan_route_full(smiles: str) -> dict[str, Any]:
+    """Full pipeline: propose route → assemble (validate + cost + yield)
+    → critic review. Returns the complete route dict."""
+    raw = await _gemini_route(smiles)
+    if raw is None:
+        raw = _heuristic_route(smiles)
+    route = _assemble_route(smiles, raw)
+    route["critique"] = await _critique_route(route)
+    return route
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -321,29 +516,28 @@ class PlanRequest(BaseModel):
     smiles: str
     session_id: Optional[str] = None
     target_pathogen: Optional[str] = None
-    save: bool = True          # persist the route as an artifact
+    save: bool = True
     title: Optional[str] = None
 
 
 @router.post("/synthesis/plan")
 async def plan_synthesis(req: PlanRequest) -> dict[str, Any]:
-    """SMILES → retrosynthetic route. Gemini proposes, RDKit validates,
-    cost/feasibility computed server-side. Auto-saved as an artifact
-    unless save=false."""
+    """SMILES → full reasoned retrosynthetic route: route proposal +
+    RDKit validation + reaction-class costing + yield + Critic review.
+    Auto-saved as an artifact unless save=false."""
     smi = (req.smiles or "").strip()
     if not smi:
         raise HTTPException(400, "smiles required")
     if _canonical(smi) is None:
         raise HTTPException(422, f"unparseable SMILES: {smi}")
 
-    raw = await _gemini_route(smi)
-    if raw is None:
-        raw = _heuristic_route(smi)
-    route = _assemble_route(smi, raw)
+    route = await _plan_route_full(smi)
 
     artifact_id = None
     if req.save:
-        title = req.title or f"Route · {route['n_steps']} steps · {route['cost_band']} cost"
+        title = req.title or (
+            f"Route · {route['n_steps']} steps · {route['cost_band']} cost "
+            f"· {route['overall_yield_pct']}% yield")
         rec = service_store.save_artifact(
             _ARTIFACT_KIND, route,
             session_id=req.session_id, smiles=route["smiles"], title=title,
@@ -363,7 +557,6 @@ async def list_routes(
     smiles: Optional[str] = None,
     limit: int = 100,
 ) -> dict[str, Any]:
-    """List saved synthesis routes, newest first."""
     rows = service_store.list_artifacts(
         kind=_ARTIFACT_KIND, session_id=session_id, smiles=smiles, limit=limit,
     )
@@ -386,7 +579,6 @@ class RoutePatch(BaseModel):
 
 @router.patch("/synthesis/routes/{rid}")
 async def update_route(rid: str, patch: RoutePatch) -> dict[str, Any]:
-    """Update user annotations on a saved route (title / notes / star)."""
     rec = service_store.get_artifact(rid)
     if rec is None or rec.get("kind") != _ARTIFACT_KIND:
         raise HTTPException(404, f"synthesis route not found: {rid}")

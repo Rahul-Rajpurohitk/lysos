@@ -1034,28 +1034,67 @@ def _synth_optimize(state: dict) -> str:
 
 
 # ── Workflow 5b: plan_synthesis (Service 1 — retrosynthesis route) ───
-# Plans a retrosynthetic route for a candidate: named steps, reagents,
-# building-block availability, server-computed cost + lead-time.
+# Three STREAMED steps so the agent is visibly working, not a 30s
+# opaque wait: editor proposes the route → server validates + costs it
+# → critic reviews it. Each step emits its own SSE event.
 
-async def _synthesis_plan_step(state: dict) -> dict:
-    """Inline step: call the Synthesis Make-Route service."""
+async def _synth_route_step(state: dict) -> dict:
+    """Step 1 — editor agent proposes the retrosynthetic route."""
+    from .chem_synthesis import _gemini_route, _heuristic_route, _canonical
     smi = state.get("smiles") or state.get("current_smiles") or ""
-    if not smi:
-        return {"error": "no smiles to plan a route for"}
+    if not smi or _canonical(smi) is None:
+        return {"error": f"need a valid candidate SMILES (got {smi!r})"}
+    raw = await _gemini_route(smi)
+    if raw is None:
+        raw = _heuristic_route(smi)
+    state["_raw_route"] = raw
+    return {
+        "strategy": raw.get("strategy", ""),
+        "n_steps": len(raw.get("steps") or []),
+        "model": raw.get("_model"),
+    }
+
+
+def _synth_assemble_step(state: dict) -> dict:
+    """Step 2 — server validates every intermediate with RDKit and
+    costs the route from its reaction classes. No LLM, instant."""
+    from .chem_synthesis import _assemble_route
+    smi = state.get("smiles") or ""
+    raw = state.get("_raw_route") or {}
+    if not raw or not raw.get("steps"):
+        return {"error": "no proposed route to validate"}
+    return _assemble_route(smi, raw)
+
+
+async def _synth_critique_step(state: dict) -> dict:
+    """Step 3 — critic agent reviews the assembled route, then the
+    complete route is persisted as a CRUD artifact."""
+    from .chem_synthesis import _critique_route
+    from . import service_store as _ss
+    route = state.get("synthesis_route") or {}
+    if route.get("error") or not route.get("steps"):
+        return {"error": "no assembled route to critique"}
+    crit = await _critique_route(route)
+    route["critique"] = crit
     try:
-        from .chem_synthesis import PlanRequest, plan_synthesis
-        rv = await plan_synthesis(PlanRequest(
-            smiles=smi,
-            session_id=state.get("session_id") or state.get("_session_id"),
-            save=True,
-        ))
-        return rv if isinstance(rv, dict) else {"result": rv}
-    except Exception as exc:  # noqa: BLE001
-        return {"error": str(exc)}
+        sid = state.get("session_id") or state.get("_session_id")
+        rec = _ss.save_artifact(
+            "synthesis_route", route, session_id=sid,
+            smiles=route.get("smiles"),
+            title=(f"Route · {route.get('n_steps')} steps · "
+                   f"{route.get('cost_band')} cost · "
+                   f"{route.get('overall_yield_pct')}% yield"),
+        )
+        route["artifact_id"] = rec["id"]
+    except Exception:  # noqa: BLE001
+        pass
+    state["synthesis_route"] = route
+    return crit
 
 
 def _synth_plan_synthesis(state: dict) -> str:
-    """Render the route as a clean per-step markdown breakdown."""
+    """Render the reasoned route — strategy, per-step yield/risk/cost,
+    building blocks with derived availability, and the critic verdict."""
     r = state.get("synthesis_route") or {}
     if r.get("error"):
         return f"Couldn't plan a synthesis route: {r['error']}"
@@ -1064,19 +1103,24 @@ def _synth_plan_synthesis(state: dict) -> str:
     band = r.get("cost_band", "?")
     feas = r.get("feasibility_band", "?")
     lead = r.get("lead_time_days")
+    yld = r.get("overall_yield_pct")
     cost_str = f"${cost:.0f}" if isinstance(cost, (int, float)) else "?"
     lines: list[str] = [
         f"Retrosynthetic route: **{n} steps** · ~**{cost_str}** ({band} cost) "
-        f"· ~{lead} days lead time · feasibility **{feas}**.",
+        f"· **{yld}%** overall yield · ~{lead} d lead time · feasibility "
+        f"**{feas}**.",
     ]
+    if r.get("strategy"):
+        lines += ["", f"_Strategy: {r['strategy']}_"]
     if not r.get("route_reaches_target", True):
-        lines.append("_Note: the proposed final step did not cleanly close "
-                      "on the target — treat the last disconnection as "
-                      "approximate._")
+        lines.append("_Note: the final step did not cleanly close on the "
+                      "target — treat the last disconnection as approximate._")
     for s in (r.get("steps") or []):
         rc = s.get("reaction_class") or ""
+        meta = (f"yield {s.get('yield_pct')}% · {s.get('risk')} risk · "
+                f"${s.get('est_cost_usd')} ({s.get('cost_driver')})")
         lines += ["", f"**Step {s.get('step')} — {s.get('name')}**"
-                  + (f" · {rc}" if rc else "")]
+                  + (f" · {rc}" if rc else ""), meta]
         reag = ", ".join(s.get("reagents") or [])
         if reag:
             lines.append(f"- Reagents: {reag}")
@@ -1088,19 +1132,29 @@ def _synth_plan_synthesis(state: dict) -> str:
             lines.append(f"- {s['rationale']}")
     sms = r.get("starting_materials") or []
     if sms:
-        lines += ["", "**Building blocks:** " + ", ".join(
-            f"{sm.get('name')} _({sm.get('availability')})_" for sm in sms)]
-    if r.get("overall_notes"):
-        lines += ["", f"_{r['overall_notes']}_"]
+        lines += ["", "**Building blocks** (availability derived from "
+                  "structural complexity):"]
+        for sm in sms:
+            lines.append(f"- {sm.get('name')} — _{sm.get('availability')}_ "
+                         f"(${sm.get('est_cost_usd')}) · {sm.get('availability_reason')}")
+    crit = r.get("critique") or {}
+    if crit:
+        lines += ["", "---", "",
+                  f"**Critic review** — confidence "
+                  f"{crit.get('confidence')}. Riskiest: step "
+                  f"{crit.get('riskiest_step')} — {crit.get('risk_reason')}. "
+                  f"Scale-up: {crit.get('scale_up_concern')} "
+                  f"**Verdict:** {crit.get('verdict')}"]
     return "\n".join(lines).strip()
 
 
 _register(Workflow(
     name="plan_synthesis",
     label="Synthesis route",
-    description=("Plan a retrosynthetic route for a candidate — named "
-                 "steps, reagents, building-block availability, plus a "
-                 "server-computed cost + lead-time + feasibility band."),
+    description=("Plan a retrosynthetic route for a candidate — editor "
+                 "proposes named steps with yields + risk, the server "
+                 "validates every intermediate and costs each step by "
+                 "reaction class, and a critic reviews the route."),
     inputs=[
         {"name": "smiles", "type": "string", "required": True},
         {"name": "session_id", "type": "string", "required": False},
@@ -1109,10 +1163,27 @@ _register(Workflow(
     steps=[
         Step(
             id="plan_route",
-            label="Plan retrosynthetic route",
+            label="Editor proposes the retrosynthetic route",
             tool="__inline__",
-            inline_fn=_synthesis_plan_step,
+            inline_fn=_synth_route_step,
+            on_result=lambda st, r: st.__setitem__("_route_meta", r),
+            narrator_role="editor",
+        ),
+        Step(
+            id="validate_cost",
+            label="Validate intermediates + cost the route",
+            tool="__inline__",
+            inline_fn=_synth_assemble_step,
             on_result=lambda st, r: st.__setitem__("synthesis_route", r),
+        ),
+        Step(
+            id="critique",
+            label="Critic reviews the route",
+            tool="__inline__",
+            inline_fn=_synth_critique_step,
+            on_result=lambda st, r: st.__setitem__("route_critique", r),
+            narrator_role="critic",
+            optional=True,
         ),
     ],
     synthesize_fn=lambda st: _synth_plan_synthesis(st),

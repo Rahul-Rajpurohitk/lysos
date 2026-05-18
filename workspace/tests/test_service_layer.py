@@ -154,16 +154,62 @@ def test_assemble_route_flags_invalid_intermediate():
 
 
 def test_assemble_route_cost_scales_with_custom_materials():
-    base = {"steps": [{"name": "s", "product_smiles": "CCO"}],
+    base = {"steps": [{"name": "s", "reaction_class": "acylation",
+                       "product_smiles": "CCO"}],
             "starting_materials": [], "_model": "test"}
-    custom = {"steps": [{"name": "s", "product_smiles": "CCO"}],
-              "starting_materials": [
-                  {"name": "exotic", "smiles": "CCO", "availability": "custom"}],
-              "_model": "test"}
+    # A complex polycyclic multi-stereocentre SM — must be DERIVED as
+    # 'custom' from structure, NOT taken from any input field.
+    complex_smi = ("O=C(O)C1=C(Cn2nnc(C(F)(F)F)c2N)CS[C@]2([H])[C@H]"
+                   "(NC(=O)C(=NOC)c3csc(N)n3)C(=O)N12")
+    with_custom = {"steps": [{"name": "s", "reaction_class": "acylation",
+                              "product_smiles": "CCO"}],
+                   "starting_materials": [
+                       {"name": "complex intermediate", "smiles": complex_smi}],
+                   "_model": "test"}
     r_base = chem_synthesis._assemble_route("CCO", base)
-    r_custom = chem_synthesis._assemble_route("CCO", custom)
+    r_custom = chem_synthesis._assemble_route("CCO", with_custom)
+    # Availability is derived — the complex SM lands in 'custom'.
+    assert r_custom["starting_materials"][0]["availability"] == "custom"
     assert r_custom["estimated_cost_usd"] > r_base["estimated_cost_usd"]
     assert r_custom["lead_time_days"] > r_base["lead_time_days"]
+
+
+def test_cost_model_responds_to_reaction_class():
+    """A Pd cross-coupling step must cost materially more than a simple
+    acylation — the cost is NOT a flat per-step constant."""
+    suzuki_usd, _ = chem_synthesis._step_cost("Aryl coupling", "Suzuki coupling")
+    acyl_usd, _ = chem_synthesis._step_cost("Cap the amine", "acylation")
+    boc_usd, _ = chem_synthesis._step_cost("Remove protecting group", "Boc deprotection")
+    assert suzuki_usd > acyl_usd > 0
+    assert suzuki_usd >= 2 * boc_usd        # precious-metal tier vs robust tier
+
+
+def test_building_block_availability_derived_from_structure():
+    """Availability must come from RDKit structural complexity, not a
+    model claim."""
+    tiny = chem_synthesis._assess_building_block("CCO", "ethanol")
+    assert tiny["availability"] == "in_stock"
+    complex_bb = chem_synthesis._assess_building_block(
+        "O=C(O)C1=C(Cn2nnc(C(F)(F)F)c2N)CS[C@]2([H])[C@H]"
+        "(NC(=O)C(=NOC)c3csc(N)n3)C(=O)N12", "cephem core")
+    assert complex_bb["availability"] == "custom"
+    assert complex_bb["est_cost_usd"] > tiny["est_cost_usd"]
+
+
+def test_route_tracks_cumulative_yield():
+    raw = {
+        "steps": [
+            {"name": "a", "reaction_class": "acylation",
+             "product_smiles": "CCO", "yield_pct": 90},
+            {"name": "b", "reaction_class": "reduction",
+             "product_smiles": "CCO", "yield_pct": 80},
+        ],
+        "starting_materials": [], "_model": "test",
+    }
+    route = chem_synthesis._assemble_route("CCO", raw)
+    # 0.90 * 0.80 = 0.72 → 72%
+    assert abs(route["overall_yield_pct"] - 72.0) < 0.5
+    assert route["steps"][0]["yield_pct"] == 90.0
 
 
 def test_heuristic_route_is_valid_skeleton():
@@ -181,10 +227,12 @@ def test_heuristic_route_is_valid_skeleton():
 
 @pytest.fixture()
 def no_gemini(monkeypatch):
-    """Force the deterministic heuristic route — no network, fast."""
-    async def _none(_smiles):
+    """Kill ALL Gemini calls at the single _gemini_json seam — the route
+    proposer falls back to the heuristic, the critic to its
+    deterministic review. No network, deterministic, fast."""
+    async def _none(*_args, **_kwargs):
         return None
-    monkeypatch.setattr(chem_synthesis, "_gemini_route", _none)
+    monkeypatch.setattr(chem_synthesis, "_gemini_json", _none)
 
 
 def test_plan_endpoint_rejects_bad_input(no_gemini):
