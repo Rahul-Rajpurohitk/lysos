@@ -319,6 +319,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
   // Header state
   const [pathogens, setPathogens] = useState<Pathogen[]>([]);
   const [selectedPathogen, setSelectedPathogen] = useState("MRSA");
+  // Workflow registry — fetched from the backend (/api/workflows/list)
+  // so the /wf handler + picker are NEVER a hardcoded copy that drifts
+  // out of sync with what the backend actually registers.
+  const [knownWorkflows, setKnownWorkflows] = useState<
+    { name: string; label: string; description: string }[]
+  >([]);
   // Hovered atom from 2D builder — drives the AtomDetailCard inspector
   const [hoveredAtom, setHoveredAtom] = useState<number | null>(null);
   // SMARTS match highlight — atoms returned by SMARTSMatchCard, shown as
@@ -1258,6 +1264,35 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
       setSelectedPdbId((prev) => (prev === primaryPdb ? prev : primaryPdb));
     }
   }, [selectedPathogen, pathogens]);
+
+  // Load the workflow registry from the backend — the SINGLE source of
+  // truth for what /wf accepts. No hardcoded copy in the frontend to
+  // drift (which is why `/wf plan_synthesis` was rejected). Retries so
+  // a backend restart can't strand it.
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+    async function load(attempt = 0): Promise<void> {
+      if (cancelled) return;
+      try {
+        const r = await fetch(`${apiBase}/api/workflows/list`);
+        if (!r.ok) throw new Error(`http ${r.status}`);
+        const d = await r.json();
+        const list = (d.workflows || []).map((w: any) => ({
+          name: w.name, label: w.label || w.name,
+          description: w.description || "",
+        }));
+        if (!cancelled && list.length > 0) { setKnownWorkflows(list); return; }
+        throw new Error("empty workflow list");
+      } catch {
+        if (cancelled) return;
+        timer = window.setTimeout(() => { void load(attempt + 1); },
+          attempt < 6 ? Math.min(700 * 2 ** attempt, 8000) : 15000);
+      }
+    }
+    void load();
+    return () => { cancelled = true; if (timer) window.clearTimeout(timer); };
+  }, [apiBase]);
 
   // Auto-scroll on new events
   useEffect(() => {
@@ -2222,36 +2257,32 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     //   /wf harden_candidate                          ← bare, ambient context
                     // Also tolerates newlines inside the JSON body
                     // (so wrapped chat-rendered slashes still parse).
-                    const KNOWN_WORKFLOWS = new Set([
-                      "design_with_debate", "harden_candidate",
-                      "broad_spectrum_screen", "compare_top_n",
-                      "optimize_for_property", "pareto_explore",
-                      "discover_and_assess",
-                    ]);
+                    // Workflow names come from the backend registry
+                    // (knownWorkflows) — the single source of truth. A
+                    // tiny static set is the cold-start fallback only
+                    // for the first paint before the fetch lands.
+                    const KNOWN_WORKFLOWS = new Set(
+                      knownWorkflows.length > 0
+                        ? knownWorkflows.map((w) => w.name.toLowerCase())
+                        : ["design_with_debate", "harden_candidate",
+                           "broad_spectrum_screen", "compare_top_n",
+                           "optimize_for_property", "pareto_explore",
+                           "discover_and_assess", "plan_synthesis"],
+                    );
                     const wfMatch = t.trim().match(/^\/wf\s+(\S+)\s*([\s\S]*)$/i);
                     if (wfMatch) {
                       const wfName = wfMatch[1];
-                      // If the typed name isn't a real workflow, treat the
-                      // whole `/wf <natural language>` line as free text and
-                      // let the orchestrator (Gemini) pick the right
-                      // workflow. Avoids the 404 "unknown workflow: do"
-                      // when the user types `/wf do anyworkflow from the
-                      // options`.
+                      // If the typed name isn't a registered workflow,
+                      // render the LIVE catalog inline as clickable chips.
                       if (!KNOWN_WORKFLOWS.has(wfName.toLowerCase())) {
-                        // Render the workflow catalog inline as clickable
-                        // chips. No auto-routing through the orchestrator
-                        // (caused double user-message echo) and no
-                        // robotic "rerouting" text. The user sees the
-                        // 7 real workflows and picks one.
-                        const wfs = [
-                          ["design_with_debate",   "Designer ↔ Critic ↔ Editor ↔ Strategist debate to propose new candidates"],
-                          ["harden_candidate",     "Find weak atoms + propose hardening edits against PBP2a / target"],
-                          ["broad_spectrum_screen","Screen one SMILES against all priority pathogens"],
-                          ["compare_top_n",        "Side-by-side comparison of N candidates on every axis"],
-                          ["optimize_for_property","Iteratively improve a SMILES on one property (logP, MW, etc.)"],
-                          ["pareto_explore",       "Explore the Pareto frontier across multiple objectives"],
-                          ["discover_and_assess",  "Pull a candidate from the library + score it"],
-                        ] as const;
+                        const wfs: [string, string][] =
+                          knownWorkflows.length > 0
+                            ? knownWorkflows.map((w) => [w.name, w.description])
+                            : [
+                              ["design_with_debate", "Designer ↔ Critic ↔ Editor ↔ Strategist debate"],
+                              ["harden_candidate", "Find weak atoms + propose hardening edits"],
+                              ["plan_synthesis", "Plan a retrosynthetic route + cost"],
+                            ];
                         const md = [
                           `I don't recognize \`${wfName}\` as a workflow. Pick one of these (click to run):`,
                           "",
