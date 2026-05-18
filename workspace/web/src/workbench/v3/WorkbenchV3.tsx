@@ -40,6 +40,7 @@ import { TabbedView, TabbedViewTabs } from "./playground/TabbedView";
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
+import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 // WorkflowPhaseTracker removed — heuristic phase derivation was faking
 // SCOPE/VALIDATE evidence counts. Real workflow progress is now
 // visible per-step inside the WorkflowCard in the chat.
@@ -2992,6 +2993,20 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           logLabel: "[pareto · load]",
                         })}
                         onAgentMessage={(msg) => sendAgentMessage(msg)}
+                      /> },
+                    // 5) Synthesis Make-Route: retrosynthetic route + cost for
+                    //    the current candidate, with a CRUD shelf of saved routes.
+                    { id: "synthesis", title: "Synthesis route · make + cost",
+                      expandedH: 480, body:
+                      <SynthesisRouteCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        smiles={currentSmiles}
+                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: "[synthesis · load]",
+                        })}
                       /> },
                     // (2D builder lives at top of this list — see above.)
                     // Atoms / Bonds / Build / Properties / Library / SMARTS
