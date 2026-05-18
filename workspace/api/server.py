@@ -226,6 +226,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem pareto router not loaded: %s", exc)
 
+# Synthesis Make-Route — Service 1: retrosynthesis + cost
+try:
+    from .chem_synthesis import router as chem_synthesis_router
+    app.include_router(chem_synthesis_router, prefix="/workbench")
+    log.info("Chem synthesis routes loaded (/workbench/chem/synthesis/plan, /routes)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem synthesis router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

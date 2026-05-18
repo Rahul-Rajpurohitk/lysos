@@ -235,6 +235,23 @@ _TOOL_DEFS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "plan_synthesis",
+        "description": (
+            "Plan a retrosynthetic route for a SMILES — named steps, "
+            "reagents + conditions, commercial building-block "
+            "availability, a server-computed cost estimate, lead-time, "
+            "and a feasibility band. Use this whenever the user asks "
+            "'can we make this', 'how would you synthesize it', about "
+            "the synthetic route, cost-to-make, or building blocks. "
+            "Turns the abstract synthesizability score into a real plan."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"smiles": {"type": "string"}},
+            "required": ["smiles"],
+        },
+    },
+    {
         "name": "list_axes",
         "description": "List all Pareto axis options + their direction/source/unit.",
         "parameters": {"type": "object", "properties": {}, "required": []},
@@ -362,6 +379,12 @@ async def _dispatch_tool(name: str, args: dict[str, Any], api_base: str) -> dict
         elif name == "analyze_toxicity":
             r = await cx.get(f"{api_base}/workbench/molecule/toxicity",
                              params={"smiles": args["smiles"]})
+        elif name == "plan_synthesis":
+            r = await cx.post(f"{api_base}/workbench/chem/synthesis/plan", json={
+                "smiles": args["smiles"],
+                "session_id": args.get("_session_id"),
+                "save": True,
+            })
         elif name == "list_axes":
             r = await cx.get(f"{api_base}/workbench/chem/session/__init/axes")
         elif name == "session_pareto_explain":
@@ -640,11 +663,11 @@ async def _agent_loop(req: AgentRunRequest, api_base: str) -> AsyncIterator[str]
                 })
                 t0 = time.perf_counter()
                 try:
-                    # Thread session_id into propose_next_action so the
-                    # local dispatcher can write to the right session's
-                    # pending-proposal queue.
-                    if tool_name == "propose_next_action":
-                        tool_args = {**tool_args, "_session_id": req.session_id}
+                    # Thread session_id into EVERY tool call so dispatchers
+                    # can bind their output (pending proposals, saved
+                    # service artifacts, …) to the right session. Tools
+                    # that don't use it simply ignore the extra key.
+                    tool_args = {**tool_args, "_session_id": req.session_id}
                     result = await _dispatch_tool(tool_name, tool_args, api_base)
                     elapsed_ms = int((time.perf_counter() - t0) * 1000)
                     yield _sse({

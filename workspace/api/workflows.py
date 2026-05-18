@@ -1033,6 +1033,92 @@ def _synth_optimize(state: dict) -> str:
     return "\n".join(lines)
 
 
+# ── Workflow 5b: plan_synthesis (Service 1 — retrosynthesis route) ───
+# Plans a retrosynthetic route for a candidate: named steps, reagents,
+# building-block availability, server-computed cost + lead-time.
+
+async def _synthesis_plan_step(state: dict) -> dict:
+    """Inline step: call the Synthesis Make-Route service."""
+    smi = state.get("smiles") or state.get("current_smiles") or ""
+    if not smi:
+        return {"error": "no smiles to plan a route for"}
+    try:
+        from .chem_synthesis import PlanRequest, plan_synthesis
+        rv = await plan_synthesis(PlanRequest(
+            smiles=smi,
+            session_id=state.get("session_id") or state.get("_session_id"),
+            save=True,
+        ))
+        return rv if isinstance(rv, dict) else {"result": rv}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)}
+
+
+def _synth_plan_synthesis(state: dict) -> str:
+    """Render the route as a clean per-step markdown breakdown."""
+    r = state.get("synthesis_route") or {}
+    if r.get("error"):
+        return f"Couldn't plan a synthesis route: {r['error']}"
+    n = r.get("n_steps", "?")
+    cost = r.get("estimated_cost_usd")
+    band = r.get("cost_band", "?")
+    feas = r.get("feasibility_band", "?")
+    lead = r.get("lead_time_days")
+    cost_str = f"${cost:.0f}" if isinstance(cost, (int, float)) else "?"
+    lines: list[str] = [
+        f"Retrosynthetic route: **{n} steps** · ~**{cost_str}** ({band} cost) "
+        f"· ~{lead} days lead time · feasibility **{feas}**.",
+    ]
+    if not r.get("route_reaches_target", True):
+        lines.append("_Note: the proposed final step did not cleanly close "
+                      "on the target — treat the last disconnection as "
+                      "approximate._")
+    for s in (r.get("steps") or []):
+        rc = s.get("reaction_class") or ""
+        lines += ["", f"**Step {s.get('step')} — {s.get('name')}**"
+                  + (f" · {rc}" if rc else "")]
+        reag = ", ".join(s.get("reagents") or [])
+        if reag:
+            lines.append(f"- Reagents: {reag}")
+        if s.get("conditions"):
+            lines.append(f"- Conditions: {s['conditions']}")
+        if s.get("product_smiles"):
+            lines.append(f"- Product: `{s['product_smiles']}`")
+        if s.get("rationale"):
+            lines.append(f"- {s['rationale']}")
+    sms = r.get("starting_materials") or []
+    if sms:
+        lines += ["", "**Building blocks:** " + ", ".join(
+            f"{sm.get('name')} _({sm.get('availability')})_" for sm in sms)]
+    if r.get("overall_notes"):
+        lines += ["", f"_{r['overall_notes']}_"]
+    return "\n".join(lines).strip()
+
+
+_register(Workflow(
+    name="plan_synthesis",
+    label="Synthesis route",
+    description=("Plan a retrosynthetic route for a candidate — named "
+                 "steps, reagents, building-block availability, plus a "
+                 "server-computed cost + lead-time + feasibility band."),
+    inputs=[
+        {"name": "smiles", "type": "string", "required": True},
+        {"name": "session_id", "type": "string", "required": False},
+    ],
+    tags=["synthesis", "make-route"],
+    steps=[
+        Step(
+            id="plan_route",
+            label="Plan retrosynthetic route",
+            tool="__inline__",
+            inline_fn=_synthesis_plan_step,
+            on_result=lambda st, r: st.__setitem__("synthesis_route", r),
+        ),
+    ],
+    synthesize_fn=lambda st: _synth_plan_synthesis(st),
+))
+
+
 # ── Workflow 6: pareto_explore (agentic — score → frontier → critic) ─
 # Runs the full Pareto loop: kicks scoring on any unscored candidates,
 # fetches the frontier on the chosen axes, then has Gemini Pro Critic

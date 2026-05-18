@@ -107,6 +107,20 @@ _KNOWN_WORKFLOWS = [
                            "fix the", "make it better", "bad score"],
         "inputs": {"smiles": "<current>", "axis": "<canonical axis the user named>"},
     },
+    {
+        "name": "plan_synthesis",
+        "description": ("Plan a retrosynthetic route for the current "
+                        "SMILES — named steps, reagents, building-block "
+                        "availability, and a server-computed cost + "
+                        "lead-time + feasibility band. Use whenever the "
+                        "user asks 'can we make this', 'how would you "
+                        "synthesize it', about a synthesis route, "
+                        "cost-to-make, retrosynthesis, or building blocks."),
+        "intent_phrases": ["synthesize", "synthesis", "make this",
+                           "can we make", "how to make", "synthetic route",
+                           "cost to make", "building blocks", "retrosynthesis"],
+        "inputs": {"smiles": "<current>"},
+    },
 ]
 
 _KNOWN_SLASH = [
