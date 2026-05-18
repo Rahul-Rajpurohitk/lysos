@@ -1,7 +1,8 @@
 import { Play, Download, RotateCcw, ChevronDown } from "lucide-react";
 import clsx from "clsx";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 
 export interface Pathogen {
   code: string;
@@ -252,11 +253,59 @@ function PathogenPicker({
   compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
   const sel = pathogens.find((p) => p.code === selected);
+
+  // Position the menu under the button. The menu is rendered into
+  // document.body via a portal — NOT inside the header. The compact
+  // header's left cluster is `overflow: hidden` and only 26px tall, so
+  // an in-flow absolutely-positioned 320px dropdown gets clipped to
+  // nothing (this was the "dropdown shows no options" bug). A
+  // body-level portal escapes every ancestor's clip + stacking context.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const b = btnRef.current;
+      if (!b) return;
+      const r = b.getBoundingClientRect();
+      // Keep the 380px-wide menu fully on-screen.
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - 388));
+      setMenuPos({ top: Math.round(r.bottom + 4), left: Math.round(left) });
+    };
+    place();
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open]);
+
+  // Close on outside-click / Escape. The menu is portaled, so an
+  // outside click is anything not in the button AND not in the menu.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement;
+      if (btnRef.current?.contains(t)) return;
+      if (t.closest?.("[data-lys-pathogen-menu]")) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   return (
     <div className="lys-pathogen-picker"
       style={compact ? { width: "auto", flex: "0 0 auto" } : undefined}>
       <button
+        ref={btnRef}
         className={clsx("lys-pill", !compact && "lys-pill--wide")}
         style={compact ? { width: "auto", padding: "0 8px", minWidth: 0 } : undefined}
         onClick={() => setOpen((o) => !o)}
@@ -267,56 +316,61 @@ function PathogenPicker({
         )}
         <ChevronDown size={12} />
       </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="lys-pill__menu lys-pill__menu--pathogens"
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15 }}
-          >
-            {pathogens.length === 0 && (
-              <div
-                className="lys-pathogen-picker__row"
-                style={{ cursor: "default", opacity: 0.7, fontSize: 11,
-                  fontFamily: "var(--lys-font-mono)" }}>
-                <span>connecting to backend — pathogens loading…</span>
-              </div>
-            )}
-            {pathogens.map((p) => (
-              <button
-                key={p.code}
-                className={clsx("lys-pathogen-picker__row", p.code === selected && "lys-pathogen-picker__row--active")}
-                onClick={() => {
-                  onChange(p.code);
-                  setOpen(false);
-                }}
-                title={p.targetName ? `Target: ${p.targetName} · ${p.primaryPdb ?? ""}` : p.name}
-              >
-                <span className="lys-pathogen-picker__row-code">{p.code}</span>
-                <span className="lys-pathogen-picker__row-name">
-                  {p.name}
-                  {p.targetName && (
-                    <span style={{
-                      display: "block",
-                      fontSize: 9.5,
-                      fontFamily: "var(--lys-font-mono)",
-                      color: "var(--lys-text-faint)",
-                      marginTop: 1,
-                    }}>
-                      → {p.targetName}{p.primaryPdb ? ` · ${p.primaryPdb}` : ""}
-                    </span>
-                  )}
-                </span>
-                <span className={clsx("lys-pathogen-picker__row-tier", `lys-pathogen-picker__row-tier--${p.priority ?? "high"}`)}>
-                  {p.priority ?? "—"}
-                </span>
-              </button>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {open && menuPos && createPortal(
+        <div
+          data-lys-pathogen-menu=""
+          className="lys-pill__menu lys-pill__menu--pathogens"
+          style={{
+            // position:fixed + explicit coords override the CSS class's
+            // position:absolute / top / left / right — the menu now
+            // sits exactly under the button at the document level.
+            position: "fixed",
+            top: menuPos.top,
+            left: menuPos.left,
+            right: "auto",
+          }}
+        >
+          {pathogens.length === 0 && (
+            <div
+              className="lys-pathogen-picker__row"
+              style={{ cursor: "default", opacity: 0.7, fontSize: 11,
+                fontFamily: "var(--lys-font-mono)" }}>
+              <span>connecting to backend — pathogens loading…</span>
+            </div>
+          )}
+          {pathogens.map((p) => (
+            <button
+              key={p.code}
+              className={clsx("lys-pathogen-picker__row", p.code === selected && "lys-pathogen-picker__row--active")}
+              onClick={() => {
+                onChange(p.code);
+                setOpen(false);
+              }}
+              title={p.targetName ? `Target: ${p.targetName} · ${p.primaryPdb ?? ""}` : p.name}
+            >
+              <span className="lys-pathogen-picker__row-code">{p.code}</span>
+              <span className="lys-pathogen-picker__row-name">
+                {p.name}
+                {p.targetName && (
+                  <span style={{
+                    display: "block",
+                    fontSize: 9.5,
+                    fontFamily: "var(--lys-font-mono)",
+                    color: "var(--lys-text-faint)",
+                    marginTop: 1,
+                  }}>
+                    → {p.targetName}{p.primaryPdb ? ` · ${p.primaryPdb}` : ""}
+                  </span>
+                )}
+              </span>
+              <span className={clsx("lys-pathogen-picker__row-tier", `lys-pathogen-picker__row-tier--${p.priority ?? "high"}`)}>
+                {p.priority ?? "—"}
+              </span>
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
