@@ -234,6 +234,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem synthesis router not loaded: %s", exc)
 
+# Candidate Dossier — integration backbone linking every service
+try:
+    from .candidate_dossier import router as candidate_dossier_router
+    app.include_router(candidate_dossier_router, prefix="/workbench")
+    log.info("Candidate dossier routes loaded (/workbench/chem/dossier/{sid})")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Candidate dossier router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

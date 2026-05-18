@@ -544,6 +544,24 @@ async def plan_synthesis(req: PlanRequest) -> dict[str, Any]:
         )
         artifact_id = rec["id"]
     route["artifact_id"] = artifact_id
+
+    # ── Integration backbone — link this route into the candidate's
+    # dossier so the synthesis facet is visible to scoring, the agents
+    # and the developability rollup, not stranded as an island. ──
+    try:
+        from . import candidate_dossier
+        candidate_dossier.upsert_facet(
+            req.session_id, route["smiles"], "synthesis", {
+                "n_steps": route["n_steps"],
+                "cost_usd": route["estimated_cost_usd"],
+                "cost_band": route["cost_band"],
+                "feasibility": route["feasibility"],
+                "overall_yield_pct": route["overall_yield_pct"],
+                "route_artifact_id": artifact_id,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.debug("dossier feed (synthesis) failed: %s", exc)
     return route
 
 

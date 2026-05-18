@@ -224,6 +224,20 @@ def brief(session_id: str) -> str:
         lines.append("- recent workflows: " + " · ".join(
             f"{w.get('name')}({w.get('status', '?')})" for w in recent))
 
+    # Candidate dossier — the integrated per-candidate picture. Surfaces
+    # which services have characterised the current SMILES (score /
+    # resistance / synthesis / …), the developability tier, and the
+    # cross-facet flags, so the agents reason with the WHOLE candidate,
+    # not one isolated metric.
+    if last_load:
+        try:
+            from . import candidate_dossier as _dossier
+            ds = _dossier.dossier_summary(session_id, last_load)
+            if ds:
+                lines.append(f"- {ds}")
+        except Exception:  # noqa: BLE001
+            pass
+
     # Pending agent proposal — what's queued for "apply that" intent.
     # Surface this prominently so the routing LLM sees it as the
     # ground-truth target when the user says apply/do it/go ahead.

@@ -41,6 +41,7 @@ import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
+import { DossierCard } from "./playground/DossierCard";
 // WorkflowPhaseTracker removed — heuristic phase derivation was faking
 // SCOPE/VALIDATE evidence counts. Real workflow progress is now
 // visible per-step inside the WorkflowCard in the chat.
@@ -3090,6 +3091,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       /> },
                     { id: "toxicity", title: "Toxicity · ADME-Tox", body:
                       <ToxicityProfileCard apiBase={apiBase} smiles={currentSmiles} /> },
+                    // Candidate Dossier — the integration backbone: every
+                    // service's facet for the current candidate, the
+                    // developability rollup, and the session portfolio.
+                    { id: "dossier", title: "Candidate dossier · integrated picture",
+                      size: 2, expandedH: 480, body:
+                      <DossierCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        smiles={currentSmiles}
+                      /> },
                     { id: "similarity", title: "Similarity · Tanimoto vs corpus", size: 2, body:
                       <SimilarityCard
                         apiBase={apiBase}

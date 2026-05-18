@@ -359,3 +359,111 @@ def test_orchestrator_narrate_endpoint_present():
     must be mounted."""
     paths = {r.path for r in server.app.routes}
     assert "/api/orchestrator/narrate" in paths
+
+
+# ─────────────────────────────────────────────────────────────────────
+# E. Candidate Dossier — the integration backbone
+# ─────────────────────────────────────────────────────────────────────
+
+from workspace.api import candidate_dossier as dossier_mod  # noqa: E402
+
+
+def test_dossier_upsert_accumulates_facets():
+    """Each service's upsert_facet attaches onto ONE shared dossier."""
+    smi = "CC(=O)Nc1ccc(O)cc1"
+    dossier_mod.upsert_facet("dosSess1", smi, "score",
+                             {"composite": 0.55, "weakest": "novelty"})
+    dossier_mod.upsert_facet("dosSess1", smi, "resistance",
+                             {"robustness": 0.82, "n_vulnerable": 2})
+    d = dossier_mod.upsert_facet("dosSess1", smi, "synthesis",
+                                 {"n_steps": 3, "cost_band": "low", "feasibility": 0.9})
+    assert set(d["facets"]) == {"score", "resistance", "synthesis"}
+    assert d["facets"]["score"]["composite"] == 0.55
+    # All three upserts land on the SAME dossier (deterministic id).
+    fetched = dossier_mod.get_dossier("dosSess1", smi)
+    assert fetched is not None
+    assert len(fetched["facets"]) == 3
+
+
+def test_dossier_developability_rollup():
+    smi = "c1ccc(O)cc1"
+    dossier_mod.upsert_facet("dosSess2", smi, "score", {"composite": 0.7})
+    d = dossier_mod.upsert_facet("dosSess2", smi, "synthesis",
+                                 {"feasibility": 0.8, "cost_band": "low"})
+    dev = d["developability"]
+    assert dev["characterized"] == 2
+    assert dev["total_facets"] == 6
+    assert set(dev["gaps"]) == {"resistance", "fto", "admet", "regimen"}
+    assert 0.0 <= dev["readiness"] <= 1.0
+    assert dev["tier"] in {"advance", "promising", "early", "uncharacterized"}
+
+
+def test_dossier_flags_cross_facet_risks():
+    """A weak facet must raise a cross-facet flag."""
+    smi = "CCOc1ccccc1"
+    d = dossier_mod.upsert_facet("dosSess3", smi, "score", {"composite": 0.30})
+    assert any("composite" in f for f in d["developability"]["flags"])
+    d2 = dossier_mod.upsert_facet("dosSess3", smi, "resistance", {"robustness": 0.55})
+    assert any("resistance" in f for f in d2["developability"]["flags"])
+
+
+def test_dossier_harness_feed_from_state():
+    """feed_from_state — the harness hook — must auto-link facets from
+    a workflow's final state with no per-service wiring."""
+    fed = dossier_mod.feed_from_state({
+        "_session_id": "dosSess4",
+        "smiles": "CC(=O)Nc1ccc(O)cc1",
+        "winner_score": {"composite": 0.6, "weakest": "synthesizability"},
+        "prediction": {"robustness_score": 0.78, "vulnerable_atoms": [3, 7],
+                       "target_name": "PBP2a"},
+        "synthesis_route": {"n_steps": 4, "estimated_cost_usd": 400,
+                            "cost_band": "moderate", "feasibility": 0.7,
+                            "overall_yield_pct": 55},
+        "pathogen": "MRSA",
+    })
+    assert set(fed) >= {"score", "resistance", "synthesis", "target"}
+    d = dossier_mod.get_dossier("dosSess4", "CC(=O)Nc1ccc(O)cc1")
+    assert d is not None
+    assert d["facets"]["score"]["composite"] == 0.6
+    assert d["facets"]["resistance"]["robustness"] == 0.78
+    assert d["facets"]["synthesis"]["n_steps"] == 4
+
+
+def test_dossier_summary_for_agent_context():
+    smi = "CC(=O)Nc1ccc(O)cc1"
+    dossier_mod.upsert_facet("dosSess5", smi, "score", {"composite": 0.5})
+    summary = dossier_mod.dossier_summary("dosSess5", smi)
+    assert "dossier" in summary.lower()
+    assert "facets characterised" in summary
+
+
+def test_dossier_endpoints_via_testclient():
+    smi = "Cc1ccccc1"
+    dossier_mod.upsert_facet("dosHttp", smi, "score", {"composite": 0.6})
+    # Portfolio
+    lst = client.get("/workbench/chem/dossier/dosHttp").json()
+    assert lst["n"] >= 1
+    assert any(d["smiles"] for d in lst["dossiers"])
+    # Single candidate
+    one = client.get(f"/workbench/chem/dossier/dosHttp/candidate?smiles={smi}")
+    assert one.status_code == 200
+    assert "developability" in one.json()
+    # Unknown candidate → 404
+    assert client.get(
+        "/workbench/chem/dossier/dosHttp/candidate?smiles=C#N").status_code == 404
+
+
+def test_dossier_router_mounted():
+    paths = {r.path for r in server.app.routes}
+    assert "/workbench/chem/dossier/{session_id}" in paths
+    assert "/workbench/chem/dossier/{session_id}/candidate" in paths
+
+
+def test_synthesis_workflow_is_three_streamed_steps():
+    """The plan_synthesis workflow must expose 3 streamed steps so the
+    agent is visibly working (editor → validate → critic)."""
+    wf = wf_mod._REGISTRY.get("plan_synthesis")
+    assert wf is not None
+    assert len(wf.steps) == 3
+    step_ids = [s.id for s in wf.steps]
+    assert step_ids == ["plan_route", "validate_cost", "critique"]

@@ -1830,6 +1830,19 @@ async def _execute_workflow(
         except Exception as exc:  # noqa: BLE001
             log.debug("champion auto-promote failed: %s", exc)
 
+        # ── Integration backbone — harness-level dossier feed ──
+        # Auto-link this workflow's results into the candidate's
+        # dossier. ONE hook: any workflow that touched a candidate
+        # (scored / hardened / planned a route) attaches its facets,
+        # so the dossier stays integrated without per-workflow wiring.
+        try:
+            from . import candidate_dossier as _dossier
+            fed = _dossier.feed_from_state(state)
+            if fed and isinstance(truncated_state, dict):
+                truncated_state["dossier_facets_fed"] = fed
+        except Exception as exc:  # noqa: BLE001
+            log.debug("dossier feed failed: %s", exc)
+
         yield _sse({
             "event": "workflow.done", "run_id": run_id,
             "name": wf.name, "elapsed_ms": int((time.time() - started) * 1000),
