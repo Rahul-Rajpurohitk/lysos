@@ -2852,60 +2852,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                   (passed via the actions prop). In whiteboard mode it
                   floats top-left here. Defined inside the IIFE below. */}
             {(() => {
-              const viewToggle = (
-                <div style={{
-                  display: "inline-flex",
-                  background: "transparent",
-                  border: "1px solid var(--lys-border-faint, rgba(0,0,0,0.10))",
-                  borderRadius: 4,
-                  height: 22,
-                  overflow: "hidden",
-                }}>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("whiteboard")}
-                    title="Whiteboard"
-                    aria-label="Whiteboard mode"
-                    style={{
-                      width: 26, height: 22, padding: 0, border: 0, cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      background: viewMode === "whiteboard" ? "var(--lys-text, #0f172a)" : "transparent",
-                      color: viewMode === "whiteboard" ? "white" : "var(--lys-text-faint, #94a3b8)",
-                      transition: "background 120ms, color 120ms",
-                    }}
-                  >
-                    <Maximize2 size={11} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode("tabs")}
-                    title="Tabs"
-                    aria-label="Tabs mode"
-                    style={{
-                      width: 26, height: 22, padding: 0, border: 0, cursor: "pointer",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      background: viewMode === "tabs" ? "var(--lys-text, #0f172a)" : "transparent",
-                      color: viewMode === "tabs" ? "white" : "var(--lys-text-faint, #94a3b8)",
-                      transition: "background 120ms, color 120ms",
-                    }}
-                  >
-                    <LayoutGrid size={11} />
-                  </button>
-                </div>
-              );
-              // Floating-toggle wrapper for whiteboard mode (tab mode hosts
-              // it inside the strip, no floating needed).
-              const floatingToggle = (
-                <div style={{
-                  position: "absolute", top: 8, left: 12, zIndex: 1100,
-                  background: "rgba(255,255,255,0.92)",
-                  backdropFilter: "blur(6px)",
-                  borderRadius: 5,
-                  boxShadow: "0 1px 4px rgba(15,23,42,0.06)",
-                }}>
-                  {viewToggle}
-                </div>
-              );
+              // The whiteboard ↔ tabs view-mode toggle lives ONLY in the
+              // TopHeader now (`headerViewToggle`). The body-level copy
+              // that used to sit here stacked a SECOND identical toggle
+              // over the playground — that was the overlapping duplicate.
 
               // IIFE so we can declare playgroundGroups once and feed it
               // to either renderer. Cheap (re-evaluated each render), but
@@ -3331,12 +3281,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
               return viewMode === "tabs" ? (
                 <TabbedView
                   groups={playgroundGroups}
-                  actions={viewToggle}
                   controlledActiveId={playgroundActiveTabId}
                 />
               ) : (
                 <>
-                {floatingToggle}
                 <PlaygroundCanvas
                   viewport={playViewport}
                   onViewportChange={setPlayViewport}
