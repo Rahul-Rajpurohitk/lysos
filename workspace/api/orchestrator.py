@@ -121,6 +121,20 @@ _KNOWN_WORKFLOWS = [
                            "cost to make", "building blocks", "retrosynthesis"],
         "inputs": {"smiles": "<current>"},
     },
+    {
+        "name": "fto_scan",
+        "description": ("Freedom-to-operate / IP scan for the current "
+                        "SMILES — closest known antibiotic + patent "
+                        "status, closest live-patent analog, prior-art "
+                        "density, claim-overlap risk and a clear/watch/"
+                        "blocked verdict. Use whenever the user asks 'is "
+                        "this novel', 'is it patented', 'freedom to "
+                        "operate', about IP, patents, or prior art."),
+        "intent_phrases": ["freedom to operate", "fto", "patent",
+                           "patented", "is it novel", "prior art",
+                           "ip risk", "infringe", "already exists"],
+        "inputs": {"smiles": "<current>"},
+    },
 ]
 
 _KNOWN_SLASH = [

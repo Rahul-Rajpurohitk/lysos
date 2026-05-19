@@ -242,6 +242,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Candidate dossier router not loaded: %s", exc)
 
+# IP / FTO Sentinel — Service 2: freedom-to-operate
+try:
+    from .chem_ip import router as chem_ip_router
+    app.include_router(chem_ip_router, prefix="/workbench")
+    log.info("Chem IP/FTO routes loaded (/workbench/chem/ip/fto-scan, /reports)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem IP/FTO router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

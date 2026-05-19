@@ -41,6 +41,7 @@ import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
+import { IPSentinelCard } from "./playground/IPSentinelCard";
 import { DossierCard } from "./playground/DossierCard";
 // WorkflowPhaseTracker removed — heuristic phase derivation was faking
 // SCOPE/VALIDATE evidence counts. Real workflow progress is now
@@ -3039,6 +3040,15 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           parentId: null,
                           logLabel: "[synthesis · load]",
                         })}
+                      /> },
+                    // 6) IP / FTO Sentinel: freedom-to-operate scan for the
+                    //    current candidate — patent panel + prior-art corpus.
+                    { id: "ip-fto", title: "IP / FTO · freedom to operate",
+                      expandedH: 480, body:
+                      <IPSentinelCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        smiles={currentSmiles}
                       /> },
                     // (2D builder lives at top of this list — see above.)
                     // Atoms / Bonds / Build / Properties / Library / SMARTS

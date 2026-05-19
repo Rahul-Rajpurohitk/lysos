@@ -252,6 +252,24 @@ _TOOL_DEFS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "check_freedom_to_operate",
+        "description": (
+            "Freedom-to-operate (FTO) / IP scan for a SMILES. Returns "
+            "the closest known antibiotic + its patent status, the "
+            "closest LIVE-patent analog, prior-art density vs a 12k "
+            "published-structure corpus, a claim-overlap risk tier, a "
+            "freedom_score (0-1) and a verdict (clear / watch / "
+            "blocked). Use whenever the user asks 'is this novel', "
+            "'is it already patented', about IP, freedom to operate, "
+            "patents, or prior art."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"smiles": {"type": "string"}},
+            "required": ["smiles"],
+        },
+    },
+    {
         "name": "list_axes",
         "description": "List all Pareto axis options + their direction/source/unit.",
         "parameters": {"type": "object", "properties": {}, "required": []},
@@ -381,6 +399,12 @@ async def _dispatch_tool(name: str, args: dict[str, Any], api_base: str) -> dict
                              params={"smiles": args["smiles"]})
         elif name == "plan_synthesis":
             r = await cx.post(f"{api_base}/workbench/chem/synthesis/plan", json={
+                "smiles": args["smiles"],
+                "session_id": args.get("_session_id"),
+                "save": True,
+            })
+        elif name == "check_freedom_to_operate":
+            r = await cx.post(f"{api_base}/workbench/chem/ip/fto-scan", json={
                 "smiles": args["smiles"],
                 "session_id": args.get("_session_id"),
                 "save": True,

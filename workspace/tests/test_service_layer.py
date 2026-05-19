@@ -467,3 +467,104 @@ def test_synthesis_workflow_is_three_streamed_steps():
     assert len(wf.steps) == 3
     step_ids = [s.id for s in wf.steps]
     assert step_ids == ["plan_route", "validate_cost", "critique"]
+
+
+# ─────────────────────────────────────────────────────────────────────
+# F. Service 2 — IP / FTO Sentinel
+# ─────────────────────────────────────────────────────────────────────
+
+from workspace.api import chem_ip as ip_mod  # noqa: E402
+
+
+@pytest.fixture()
+def fto_offline(monkeypatch):
+    """Stub the IP-analyst narrative — the Tanimoto maths is real +
+    deterministic; only the narrative needs network."""
+    async def _stub(_report):
+        return {"assessment": "stub", "recommended_action": "stub",
+                "model": "stub"}
+    monkeypatch.setattr(ip_mod, "_ip_narrative", _stub)
+
+
+def test_fto_panel_fingerprints_load():
+    """The curated patent panel must fingerprint (invalid SMILES are
+    dropped, the rest survive)."""
+    fps = ip_mod._panel_fps()
+    assert len(fps) >= 15            # most of the ~21-entry panel parses
+    # Each surviving entry keeps its patent metadata.
+    for entry, _fp in fps:
+        assert "status" in entry and "name" in entry
+
+
+def test_fto_claim_risk_respects_patent_status():
+    """Similarity to an OFF-patent drug is low IP risk; similarity to a
+    LIVE-patent compound is the real risk."""
+    # Identical to an off-patent generic → not a claim-overlap risk.
+    risk_generic, w_generic = ip_mod._claim_risk(1.0, "marketed-generic")
+    assert risk_generic in ("low", "low-medium")
+    # Very similar to a LIVE patent → high risk.
+    risk_live, w_live = ip_mod._claim_risk(0.90, "marketed-patented")
+    assert risk_live == "high"
+    assert w_live > w_generic
+    # Distant from a live patent → low.
+    risk_far, _ = ip_mod._claim_risk(0.40, "clinical")
+    assert risk_far == "low"
+
+
+def test_fto_scan_endpoint_returns_report(fto_offline):
+    r = client.post("/workbench/chem/ip/fto-scan", json={
+        "smiles": "CC(=O)Nc1ccc(O)cc1", "session_id": "ftoHttp", "save": True,
+    })
+    assert r.status_code == 200
+    d = r.json()
+    for key in ("smiles", "freedom_score", "verdict", "claim_overlap_risk",
+                "closest_analog", "top_panel_analogs", "prior_art",
+                "artifact_id"):
+        assert key in d, f"missing key: {key}"
+    assert 0.0 <= d["freedom_score"] <= 1.0
+    assert d["artifact_id"]
+
+
+def test_fto_scan_rejects_bad_input(fto_offline):
+    assert client.post("/workbench/chem/ip/fto-scan", json={"smiles": ""}).status_code == 400
+    assert client.post("/workbench/chem/ip/fto-scan",
+                       json={"smiles": "!!!"}).status_code == 422
+
+
+def test_fto_crud_round_trip(fto_offline):
+    rep = client.post("/workbench/chem/ip/fto-scan", json={
+        "smiles": "c1ccccc1O", "session_id": "ftoCrud", "save": True,
+    }).json()
+    rid = rep["artifact_id"]
+    lst = client.get("/workbench/chem/ip/reports?session_id=ftoCrud").json()
+    assert any(x["id"] == rid for x in lst["reports"])
+    assert client.get(f"/workbench/chem/ip/reports/{rid}").status_code == 200
+    assert client.delete(f"/workbench/chem/ip/reports/{rid}").json()["deleted"] is True
+    assert client.get(f"/workbench/chem/ip/reports/{rid}").status_code == 404
+
+
+def test_fto_feeds_the_candidate_dossier(fto_offline):
+    """The FTO scan must link an `fto` facet into the candidate
+    dossier — the integration backbone in action."""
+    smi = "CCc1ccccc1"
+    client.post("/workbench/chem/ip/fto-scan", json={
+        "smiles": smi, "session_id": "ftoDossier", "save": True})
+    d = dossier_mod.get_dossier("ftoDossier", smi)
+    assert d is not None
+    assert "fto" in d["facets"]
+    assert "freedom_score" in d["facets"]["fto"]
+
+
+def test_fto_wired_across_all_layers():
+    """Service 2 spans agent tool → dispatch → workflow → orchestrator."""
+    assert "check_freedom_to_operate" in [t["name"] for t in agent_mod._TOOL_DEFS]
+    assert 'name == "check_freedom_to_operate"' in inspect.getsource(agent_mod._dispatch_tool)
+    assert "fto_scan" in wf_mod._REGISTRY
+    assert len(wf_mod._REGISTRY["fto_scan"].steps) == 2
+    assert "fto_scan" in {w["name"] for w in orch_mod._KNOWN_WORKFLOWS}
+
+
+def test_fto_router_mounted():
+    paths = {r.path for r in server.app.routes}
+    assert "/workbench/chem/ip/fto-scan" in paths
+    assert "/workbench/chem/ip/reports" in paths

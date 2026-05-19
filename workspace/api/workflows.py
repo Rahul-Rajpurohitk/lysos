@@ -1190,6 +1190,113 @@ _register(Workflow(
 ))
 
 
+# ── Workflow 5c: fto_scan (Service 2 — freedom-to-operate) ───────────
+# Two streamed steps: similarity scan vs the patent panel + prior-art
+# corpus → IP-analyst review. Agent visibly working.
+
+async def _fto_scan_step(state: dict) -> dict:
+    """Step 1 — Tanimoto scan vs the curated patent panel + the broad
+    prior-art corpus."""
+    from .chem_ip import _scan, _canonical
+    smi = state.get("smiles") or state.get("current_smiles") or ""
+    if not smi or _canonical(smi) is None:
+        return {"error": f"need a valid candidate SMILES (got {smi!r})"}
+    try:
+        report = await _scan(smi)
+        return report
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)}
+
+
+async def _fto_review_step(state: dict) -> dict:
+    """Step 2 — IP-analyst narrative, then persist + dossier feed."""
+    from .chem_ip import _ip_narrative
+    from . import service_store as _ss
+    report = state.get("fto_report") or {}
+    if report.get("error") or not report.get("freedom_score") and report.get("freedom_score") != 0:
+        return {"error": "no FTO report to review"}
+    report["narrative"] = await _ip_narrative(report)
+    sid = state.get("session_id") or state.get("_session_id")
+    try:
+        rec = _ss.save_artifact(
+            "fto_report", report, session_id=sid, smiles=report.get("smiles"),
+            title=f"FTO · {report.get('verdict')} · freedom {report.get('freedom_score')}")
+        report["artifact_id"] = rec["id"]
+    except Exception:  # noqa: BLE001
+        pass
+    state["fto_report"] = report
+    return report["narrative"]
+
+
+def _synth_fto_scan(state: dict) -> str:
+    """Render the FTO report as a freedom-to-operate brief."""
+    r = state.get("fto_report") or {}
+    if r.get("error"):
+        return f"Couldn't run the FTO scan: {r['error']}"
+    closest = r.get("closest_analog") or {}
+    live = r.get("closest_live_patent_analog")
+    pa = r.get("prior_art") or {}
+    lines = [
+        f"Freedom-to-operate: **{r.get('verdict')}** — freedom score "
+        f"**{r.get('freedom_score')}**, claim-overlap risk "
+        f"**{r.get('claim_overlap_risk')}**.",
+        "",
+        f"**Closest known antibiotic:** {closest.get('name')} "
+        f"({closest.get('similarity')} Tanimoto · {closest.get('status')} "
+        f"· {closest.get('assignee')}).",
+    ]
+    if live:
+        lines.append(f"**Closest LIVE-patent analog:** {live.get('name')} "
+                     f"({live.get('similarity')} sim · {live.get('patent')} "
+                     f"· {live.get('assignee')}) — this is the IP to clear.")
+    else:
+        lines.append("No live-patent analog within the curated panel — the "
+                     "nearest antibiotics are off-patent.")
+    lines.append(f"**Prior art:** {pa.get('similar_070', 0)} published "
+                 f"structures within 0.70 Tanimoto, "
+                 f"{pa.get('near_identical_092', 0)} near-identical "
+                 f"(corpus {pa.get('corpus_size', 0)}).")
+    nar = r.get("narrative") or {}
+    if nar:
+        lines += ["", f"**IP analyst:** {nar.get('assessment')} "
+                  f"**Action:** {nar.get('recommended_action')}"]
+    return "\n".join(lines).strip()
+
+
+_register(Workflow(
+    name="fto_scan",
+    label="Freedom-to-operate scan",
+    description=("Freedom-to-operate / IP scan for a candidate — "
+                 "Tanimoto similarity vs a curated patent panel + a "
+                 "prior-art corpus, claim-overlap risk, and an "
+                 "IP-analyst review."),
+    inputs=[
+        {"name": "smiles", "type": "string", "required": True},
+        {"name": "session_id", "type": "string", "required": False},
+    ],
+    tags=["ip", "fto", "patent"],
+    steps=[
+        Step(
+            id="similarity_scan",
+            label="Scan patent panel + prior-art corpus",
+            tool="__inline__",
+            inline_fn=_fto_scan_step,
+            on_result=lambda st, r: st.__setitem__("fto_report", r),
+        ),
+        Step(
+            id="ip_review",
+            label="IP analyst reviews freedom-to-operate",
+            tool="__inline__",
+            inline_fn=_fto_review_step,
+            on_result=lambda st, r: st.__setitem__("fto_narrative", r),
+            narrator_role="critic",
+            optional=True,
+        ),
+    ],
+    synthesize_fn=lambda st: _synth_fto_scan(st),
+))
+
+
 # ── Workflow 6: pareto_explore (agentic — score → frontier → critic) ─
 # Runs the full Pareto loop: kicks scoring on any unscored candidates,
 # fetches the frontier on the chosen axes, then has Gemini Pro Critic
