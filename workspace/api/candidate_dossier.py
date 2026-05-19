@@ -305,6 +305,19 @@ def feed_from_state(state: dict[str, Any]) -> list[str]:
         })
         fed.append("synthesis")
 
+    # ── fto facet ──
+    fto = state.get("fto_report")
+    if isinstance(fto, dict) and fto.get("novelty_score") is not None:
+        esc = fto.get("escape_variant") or {}
+        upsert_facet(sid, smi, "fto", {
+            "novelty_score": fto.get("novelty_score"),
+            "freedom_score": fto.get("novelty_score"),  # dossier-compat key
+            "verdict": fto.get("verdict"),
+            "closest_similarity": fto.get("closest_published_similarity"),
+            "escape_variant_smiles": esc.get("variant_smiles"),
+        })
+        fed.append("fto")
+
     # ── target facet (pathogen context) ──
     pathogen = state.get("pathogen")
     if pathogen:

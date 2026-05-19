@@ -1190,107 +1190,124 @@ _register(Workflow(
 ))
 
 
-# ── Workflow 5c: fto_scan (Service 2 — freedom-to-operate) ───────────
-# Two streamed steps: similarity scan vs the patent panel + prior-art
-# corpus → IP-analyst review. Agent visibly working.
+# ── Workflow 5c: fto_scan (Service 2 — agentic IP / novelty) ─────────
+# Two streamed steps: honest prior-art scan → the agent DESIGNS a
+# novelty-escaping variant and queues it. The service ACTS, it does
+# not just grade.
 
 async def _fto_scan_step(state: dict) -> dict:
-    """Step 1 — Tanimoto scan vs the curated patent panel + the broad
-    prior-art corpus."""
+    """Step 1 — honest prior-art scan vs the published corpus + the
+    curated marketed-drug panel."""
     from .chem_ip import _scan, _canonical
     smi = state.get("smiles") or state.get("current_smiles") or ""
     if not smi or _canonical(smi) is None:
         return {"error": f"need a valid candidate SMILES (got {smi!r})"}
     try:
-        report = await _scan(smi)
-        return report
+        return _scan(smi)
     except Exception as exc:  # noqa: BLE001
         return {"error": str(exc)}
 
 
-async def _fto_review_step(state: dict) -> dict:
-    """Step 2 — IP-analyst narrative, then persist + dossier feed."""
-    from .chem_ip import _ip_narrative
-    from . import service_store as _ss
+async def _fto_escape_step(state: dict) -> dict:
+    """Step 2 — THE agentic action: design a novelty-escaping variant,
+    prove the novelty gain, persist + queue it for one-tap apply."""
+    from .chem_ip import _design_escape_variant
+    from . import service_store as _ss, session_memory as _sm
     report = state.get("fto_report") or {}
-    if report.get("error") or not report.get("freedom_score") and report.get("freedom_score") != 0:
-        return {"error": "no FTO report to review"}
-    report["narrative"] = await _ip_narrative(report)
+    if report.get("error") or "novelty_score" not in report:
+        return {"error": "no prior-art report to act on"}
+    escape = await _design_escape_variant(report)
+    report["escape_variant"] = escape
     sid = state.get("session_id") or state.get("_session_id")
     try:
         rec = _ss.save_artifact(
             "fto_report", report, session_id=sid, smiles=report.get("smiles"),
-            title=f"FTO · {report.get('verdict')} · freedom {report.get('freedom_score')}")
+            title=f"Novelty · {report.get('novelty_tier')} · "
+                  f"score {report.get('novelty_score')}")
         report["artifact_id"] = rec["id"]
     except Exception:  # noqa: BLE001
         pass
+    if escape and escape.get("improved"):
+        try:
+            _sm.record_proposal(
+                sid or "", escape["variant_smiles"], source="ip-sentinel",
+                swap_label=f"novelty-escape variant ({escape['modification']})",
+                rationale=(f"Lifts novelty {escape['novelty_before']}→"
+                           f"{escape['novelty_after']}. {escape['rationale']}"))
+        except Exception:  # noqa: BLE001
+            pass
     state["fto_report"] = report
-    return report["narrative"]
+    return escape or {"note": "already structurally novel — no escape edit needed"}
 
 
 def _synth_fto_scan(state: dict) -> str:
-    """Render the FTO report as a freedom-to-operate brief."""
+    """Render the prior-art report + the agent's escape variant."""
     r = state.get("fto_report") or {}
     if r.get("error"):
-        return f"Couldn't run the FTO scan: {r['error']}"
-    closest = r.get("closest_analog") or {}
-    live = r.get("closest_live_patent_analog")
+        return f"Couldn't run the IP scan: {r['error']}"
+    cps = r.get("closest_published_similarity")
+    pub = r.get("closest_published") or {}
+    drug = r.get("closest_marketed_drug")
     pa = r.get("prior_art") or {}
     lines = [
-        f"Freedom-to-operate: **{r.get('verdict')}** — freedom score "
-        f"**{r.get('freedom_score')}**, claim-overlap risk "
-        f"**{r.get('claim_overlap_risk')}**.",
+        f"Novelty: **{r.get('verdict')}** — novelty score "
+        f"**{r.get('novelty_score')}** ({r.get('novelty_tier')}).",
         "",
-        f"**Closest known antibiotic:** {closest.get('name')} "
-        f"({closest.get('similarity')} Tanimoto · {closest.get('status')} "
-        f"· {closest.get('assignee')}).",
+        f"**Closest published structure:** {pub.get('ref','—')} at "
+        f"**{cps}** Tanimoto. {r.get('ip_note','')}",
     ]
-    if live:
-        lines.append(f"**Closest LIVE-patent analog:** {live.get('name')} "
-                     f"({live.get('similarity')} sim · {live.get('patent')} "
-                     f"· {live.get('assignee')}) — this is the IP to clear.")
+    if drug:
+        lines.append(f"**Closest marketed antibiotic:** {drug['name']} "
+                     f"({drug['similarity']} sim · {drug.get('drug_class')} · "
+                     f"{drug.get('ip_status')}).")
     else:
-        lines.append("No live-patent analog within the curated panel — the "
-                     "nearest antibiotics are off-patent.")
-    lines.append(f"**Prior art:** {pa.get('similar_070', 0)} published "
-                 f"structures within 0.70 Tanimoto, "
-                 f"{pa.get('near_identical_092', 0)} near-identical "
-                 f"(corpus {pa.get('corpus_size', 0)}).")
-    nar = r.get("narrative") or {}
-    if nar:
-        lines += ["", f"**IP analyst:** {nar.get('assessment')} "
-                  f"**Action:** {nar.get('recommended_action')}"]
+        lines.append("No structurally related marketed antibiotic — the "
+                     "candidate sits in its own region of chemical space.")
+    lines.append(f"**Prior art:** {pa.get('close',0)} close + "
+                 f"{pa.get('near_identical',0)} near-identical published "
+                 f"structures (corpus {pa.get('corpus_size',0)}).")
+    esc = r.get("escape_variant")
+    if esc and esc.get("improved"):
+        lines += ["", "---", "",
+                  f"**Agent designed a more-novel variant** via "
+                  f"_{esc['modification']}_ — novelty "
+                  f"**{esc['novelty_before']} → {esc['novelty_after']}** "
+                  f"(closest-similarity {esc['closest_similarity_before']} → "
+                  f"{esc['closest_similarity_after']}).",
+                  f"`{esc['variant_smiles']}`",
+                  f"{esc['rationale']} — say **apply** to load it."]
+    elif esc and esc.get("note"):
+        lines += ["", f"_{esc['note']}_"]
     return "\n".join(lines).strip()
 
 
 _register(Workflow(
     name="fto_scan",
-    label="Freedom-to-operate scan",
-    description=("Freedom-to-operate / IP scan for a candidate — "
-                 "Tanimoto similarity vs a curated patent panel + a "
-                 "prior-art corpus, claim-overlap risk, and an "
-                 "IP-analyst review."),
+    label="IP / novelty scan",
+    description=("Honest prior-art scan for a candidate, then the agent "
+                 "designs a novelty-escaping variant that breaks the "
+                 "overlap while keeping the antibacterial pharmacophore "
+                 "— queued for one-tap apply."),
     inputs=[
         {"name": "smiles", "type": "string", "required": True},
         {"name": "session_id", "type": "string", "required": False},
     ],
-    tags=["ip", "fto", "patent"],
+    tags=["ip", "fto", "novelty"],
     steps=[
         Step(
-            id="similarity_scan",
-            label="Scan patent panel + prior-art corpus",
+            id="prior_art_scan",
+            label="Scan published prior art + marketed-drug panel",
             tool="__inline__",
             inline_fn=_fto_scan_step,
             on_result=lambda st, r: st.__setitem__("fto_report", r),
         ),
         Step(
-            id="ip_review",
-            label="IP analyst reviews freedom-to-operate",
+            id="design_escape",
+            label="Agent designs a novelty-escaping variant",
             tool="__inline__",
-            inline_fn=_fto_review_step,
-            on_result=lambda st, r: st.__setitem__("fto_narrative", r),
-            narrator_role="critic",
-            optional=True,
+            inline_fn=_fto_escape_step,
+            on_result=lambda st, r: st.__setitem__("fto_escape", r),
+            narrator_role="editor",
         ),
     ],
     synthesize_fn=lambda st: _synth_fto_scan(st),

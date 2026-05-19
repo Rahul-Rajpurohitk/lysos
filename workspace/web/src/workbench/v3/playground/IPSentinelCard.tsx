@@ -1,69 +1,72 @@
 /**
- * IPSentinelCard — Service 2 frontend: IP / FTO Sentinel.
+ * IPSentinelCard — Service 2 frontend: IP / Novelty Sentinel (agentic).
  *
- * "Run FTO scan" dispatches the `fto_scan` workflow (similarity scan →
- * IP-analyst review) so the agent streams visibly in the chat, then
- * polls for the persisted report and opens it.
- *
- * Renders the freedom-to-operate verdict: freedom score, claim-overlap
- * risk, the closest known antibiotic + its patent status, the closest
- * LIVE-patent analog (the IP to clear), prior-art density, the panel
- * hit list and the IP-analyst narrative — plus a CRUD shelf.
+ * This card does NOT just grade a molecule. "Run IP scan" dispatches
+ * the `fto_scan` workflow — an honest prior-art scan, then the agent
+ * DESIGNS a novelty-escaping variant. The hero of the card is that
+ * variant: a more-patentable molecule, ready to apply with one tap.
  *
  * Backend: /workbench/chem/ip/* (chem_ip.py).
  */
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Scale, RefreshCw, Trash2, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Scale, RefreshCw, Trash2, Sparkles, ArrowRight } from "lucide-react";
 
-interface PanelHit {
-  name: string; smiles: string; drug_class: string; status: string;
-  patent: string; assignee: string; year: number; similarity: number;
+interface MarketedDrug {
+  name: string; smiles: string; drug_class: string;
+  first_approval: number; originator: string; ip_status: string;
+  similarity: number;
+}
+interface EscapeVariant {
+  variant_smiles: string; modification: string; rationale: string;
+  novelty_before: number; novelty_after: number; novelty_delta: number;
+  closest_similarity_before: number; closest_similarity_after: number;
+  verdict_after: string; improved: boolean;
 }
 interface FTOReport {
   smiles: string;
-  freedom_score: number;
+  novelty_score: number;
+  novelty_tier: "none" | "low" | "low-medium" | "medium" | "good" | "high";
   verdict: string;
-  claim_overlap_risk: "low" | "low-medium" | "medium" | "high";
-  closest_analog: PanelHit | null;
-  closest_live_patent_analog: PanelHit | null;
-  top_panel_analogs: PanelHit[];
-  closest_published_structure: { ref: string; similarity: number } | null;
+  ip_note: string;
+  closest_published: { ref: string; similarity: number } | null;
+  closest_published_similarity: number;
+  closest_marketed_drug: MarketedDrug | null;
+  related_marketed_drugs: MarketedDrug[];
   prior_art: {
-    corpus_size: number; near_identical_092: number;
-    similar_070: number; related_055: number;
+    corpus_size: number; exact_matches: number;
+    near_identical: number; close: number; related: number;
   };
-  narrative?: { assessment: string; recommended_action: string; model: string };
+  escape_variant: EscapeVariant | null;
   artifact_id?: string | null;
 }
 interface SavedReport {
-  id: string; smiles: string | null; title: string | null;
-  updated_at: number; payload: FTOReport;
+  id: string; title: string | null; payload: FTOReport;
 }
 
 interface Props {
   apiBase: string;
   sessionId: string | null;
   smiles: string | null;
+  onLoad?: (smiles: string) => void;
 }
 
-// Slate-blue "legal / IP" accent.
 const SLATE = {
-  bg: "rgba(71,85,105,0.06)",
-  bgStrong: "rgba(71,85,105,0.12)",
-  border: "rgba(71,85,105,0.26)",
-  fg: "#475569",
-  fgDeep: "#334155",
+  bg: "rgba(71,85,105,0.06)", bgStrong: "rgba(71,85,105,0.12)",
+  border: "rgba(71,85,105,0.26)", fg: "#475569", fgDeep: "#334155",
 } as const;
+// The agent-action hero uses an emerald accent — it is the payoff.
+const ACT = { bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.4)",
+  fg: "#059669", fgDeep: "#047857" } as const;
 
-const RISK_COLOR: Record<string, string> = {
-  low: "#16a34a", "low-medium": "#65a30d", medium: "#d97706", high: "#dc2626",
+const TIER_COLOR: Record<string, string> = {
+  none: "#dc2626", low: "#dc2626", "low-medium": "#d97706",
+  medium: "#d97706", good: "#65a30d", high: "#16a34a",
 };
 const STATUS_COLOR: Record<string, string> = {
-  "public-domain": "#16a34a", "marketed-generic": "#65a30d",
-  "marketed-patented": "#dc2626", clinical: "#d97706",
+  "off-patent": "#16a34a", "on-patent": "#dc2626", investigational: "#d97706",
 };
 
-export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
+export function IPSentinelCard({ apiBase, sessionId, smiles, onLoad }: Props) {
   const [report, setReport] = useState<FTOReport | null>(null);
   const [saved, setSaved] = useState<SavedReport[]>([]);
   const [scanning, setScanning] = useState(false);
@@ -75,8 +78,7 @@ export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
       const qs = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
       const r = await fetch(`${apiBase}/workbench/chem/ip/reports${qs}`);
       if (!r.ok) return [];
-      const d = await r.json();
-      const rows: SavedReport[] = d.reports || [];
+      const rows: SavedReport[] = (await r.json()).reports || [];
       setSaved(rows);
       return rows;
     } catch { return []; }
@@ -93,11 +95,11 @@ export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
     window.dispatchEvent(new CustomEvent("lysos:auto-slash", {
       detail: { text: `/wf fto_scan ${JSON.stringify({ smiles, session_id: sessionId })}` },
     }));
-    const deadline = Date.now() + 60000;
+    const deadline = Date.now() + 70000;
     const poll = async () => {
       if (Date.now() > deadline) {
         setScanning(false);
-        setError("FTO scan is streaming in the chat workflow — it'll appear here when the IP analyst finishes.");
+        setError("Scan is streaming in the chat workflow — it'll land here when the agent finishes.");
         return;
       }
       const rows = await refreshSaved();
@@ -109,7 +111,7 @@ export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
       }
       pollRef.current = window.setTimeout(() => { void poll(); }, 2800);
     };
-    pollRef.current = window.setTimeout(() => { void poll(); }, 3000);
+    pollRef.current = window.setTimeout(() => { void poll(); }, 3200);
   }
 
   async function deleteReport(id: string) {
@@ -120,13 +122,17 @@ export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
     } catch { /* noop */ }
   }
 
+  function applyVariant(smi: string) {
+    if (onLoad) onLoad(smi);
+    else window.dispatchEvent(new CustomEvent("lysos:auto-slash",
+      { detail: { text: `/load ${smi}` } }));
+  }
+
   return (
     <div style={{
       width: "100%", height: "100%", display: "flex", flexDirection: "column",
-      background: "transparent", overflow: "hidden",
-      fontFamily: "var(--lys-font-body)",
+      background: "transparent", overflow: "hidden", fontFamily: "var(--lys-font-body)",
     }}>
-      {/* Header */}
       <div style={{
         padding: "6px 10px", display: "flex", alignItems: "center", gap: 6,
         fontSize: 9.5, fontFamily: "var(--lys-font-mono)", letterSpacing: "0.06em",
@@ -134,13 +140,12 @@ export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
         borderBottom: `1px solid ${SLATE.border}`,
       }}>
         <Scale size={11} style={{ color: SLATE.fg }} />
-        <span>ip / fto sentinel · freedom to operate</span>
+        <span>ip / novelty sentinel</span>
         <span style={{ flex: 1 }} />
         {saved.length > 0 && (
-          <span style={{
-            padding: "1px 6px", borderRadius: 999, background: SLATE.bgStrong,
-            border: `1px solid ${SLATE.border}`, color: SLATE.fgDeep, fontSize: 9,
-          }}>{saved.length} saved</span>
+          <span style={{ padding: "1px 6px", borderRadius: 999, background: SLATE.bgStrong,
+            border: `1px solid ${SLATE.border}`, color: SLATE.fgDeep, fontSize: 9 }}>
+            {saved.length} saved</span>
         )}
         <button type="button" onClick={() => void refreshSaved()}
           style={{ border: 0, background: "transparent", cursor: "pointer",
@@ -149,7 +154,6 @@ export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
         </button>
       </div>
 
-      {/* Scan action */}
       <div style={{
         padding: "8px 10px", display: "flex", alignItems: "center", gap: 8,
         borderBottom: "1px solid rgba(0,0,0,0.05)",
@@ -160,76 +164,58 @@ export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
             padding: "5px 11px", borderRadius: 5, border: 0,
             background: !smiles ? "rgba(0,0,0,0.05)" : SLATE.fg,
             color: !smiles ? "var(--lys-text-faint)" : "white",
-            fontSize: 11, fontWeight: 600, fontFamily: "var(--lys-font-body)",
-            cursor: !smiles || scanning ? "not-allowed" : "pointer",
+            fontSize: 11, fontWeight: 600, cursor: !smiles || scanning ? "not-allowed" : "pointer",
           }}>
           <Scale size={12} />
-          {scanning ? "Agent scanning IP…" : "Run FTO scan"}
+          {scanning ? "Agent scanning + designing…" : "Run IP scan"}
         </button>
         <span style={{ fontSize: 9.5, color: "var(--lys-text-faint)",
           fontFamily: "var(--lys-font-mono)", overflow: "hidden",
           textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-          {scanning ? "similarity scan → IP-analyst review, streaming in chat"
+          {scanning ? "prior-art scan → escape-variant design, in chat"
             : smiles ? smiles : "no candidate loaded"}
         </span>
       </div>
 
-      {error && (
-        <div style={{ padding: "6px 10px", fontSize: 10, color: SLATE.fgDeep }}>{error}</div>
-      )}
+      {error && <div style={{ padding: "6px 10px", fontSize: 10, color: SLATE.fgDeep }}>{error}</div>}
 
       <div style={{ flex: 1, minHeight: 0, overflow: "auto", padding: 8 }}>
         {!report && !scanning && (
-          <div style={{
-            display: "flex", flexDirection: "column", gap: 6, alignItems: "center",
-            justifyContent: "center", padding: 20, textAlign: "center",
-            color: "var(--lys-text-faint)", fontSize: 11,
-          }}>
-            <Scale size={22} style={{ opacity: 0.4 }} />
-            <div>Run an FTO scan — Tanimoto similarity vs a curated patent
-              panel + a 12k-structure prior-art corpus tells you if the
-              candidate is free to operate or treads on a live claim.</div>
-          </div>
+          <Empty msg="Run an IP scan — the agent honestly assesses prior art, then designs a novelty-escaping variant you can apply in one tap. It hands you a more patentable molecule, not a score." />
         )}
         {scanning && !report && (
-          <div style={{
-            display: "flex", flexDirection: "column", gap: 6, alignItems: "center",
-            justifyContent: "center", padding: 20, textAlign: "center",
-            color: SLATE.fgDeep, fontSize: 11,
-          }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6,
+            alignItems: "center", justifyContent: "center", padding: 20,
+            textAlign: "center", color: SLATE.fgDeep, fontSize: 11 }}>
             <RefreshCw size={20} style={{ animation: "spin 1s linear infinite" }} />
-            <div>Agent is scanning IP — watch the similarity scan + analyst
-              review stream in the chat.</div>
+            <div>Agent is scanning prior art and designing a more-novel
+              variant — streaming in the chat.</div>
           </div>
         )}
 
-        {report && <FTOView report={report} />}
+        {report && <FTOView report={report} onApply={applyVariant} />}
 
         {saved.length > 0 && (
           <div style={{ marginTop: 12 }}>
-            <div style={{
-              fontSize: 9, fontFamily: "var(--lys-font-mono)", letterSpacing: "0.06em",
-              textTransform: "uppercase", color: "var(--lys-text-faint)",
-              padding: "0 2px 4px",
-            }}>saved FTO reports</div>
+            <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+              letterSpacing: "0.06em", textTransform: "uppercase",
+              color: "var(--lys-text-faint)", padding: "0 2px 4px" }}>saved IP scans</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
               {saved.map((rt) => (
                 <div key={rt.id} style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "5px 7px", borderRadius: 5,
+                  display: "flex", alignItems: "center", gap: 6, padding: "5px 7px",
+                  borderRadius: 5,
                   background: report?.artifact_id === rt.id ? SLATE.bgStrong : SLATE.bg,
                   border: `1px solid ${SLATE.border}`,
                 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 7, flexShrink: 0,
-                    background: RISK_COLOR[rt.payload.claim_overlap_risk] ?? "#9ca3af" }} />
+                    background: TIER_COLOR[rt.payload.novelty_tier] ?? "#9ca3af" }} />
                   <button type="button" onClick={() => setReport({ ...rt.payload, artifact_id: rt.id })}
-                    style={{
-                      flex: 1, minWidth: 0, textAlign: "left", border: 0,
+                    style={{ flex: 1, minWidth: 0, textAlign: "left", border: 0,
                       background: "transparent", cursor: "pointer", padding: 0,
                       fontSize: 10.5, fontWeight: 600, color: "var(--lys-text)",
-                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                    }}>
-                    {rt.title || "FTO report"}
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {rt.title || "IP scan"}
                   </button>
                   <button type="button" onClick={() => void deleteReport(rt.id)}
                     style={{ border: 0, background: "transparent", cursor: "pointer",
@@ -246,137 +232,137 @@ export function IPSentinelCard({ apiBase, sessionId, smiles }: Props) {
   );
 }
 
-function FTOView({ report }: { report: FTOReport }) {
+function FTOView({ report, onApply }: { report: FTOReport; onApply: (s: string) => void }) {
   const r = report;
-  const free = r.freedom_score >= 0.66;
+  const esc = r.escape_variant;
+  const tierCol = TIER_COLOR[r.novelty_tier] ?? "#9ca3af";
   const pa = r.prior_art;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* Verdict banner */}
-      <div style={{
-        border: `1px solid ${free ? "rgba(22,163,74,0.3)" : "rgba(217,119,6,0.3)"}`,
-        background: free ? "rgba(22,163,74,0.06)" : "rgba(217,119,6,0.06)",
-        borderRadius: 6, padding: "7px 9px",
-        display: "flex", alignItems: "center", gap: 8,
-      }}>
-        {free ? <ShieldCheck size={16} style={{ color: "#16a34a" }} />
-          : <AlertTriangle size={16} style={{ color: "#d97706" }} />}
+      {/* Verdict + novelty — honest, consistent */}
+      <div style={{ border: `1px solid ${SLATE.border}`, borderRadius: 6,
+        background: SLATE.bg, padding: "7px 9px",
+        display: "flex", alignItems: "center", gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--lys-text)" }}>
             {r.verdict}
           </div>
-          <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
-            color: "var(--lys-text-faint)" }}>
-            claim-overlap risk:{" "}
-            <span style={{ color: RISK_COLOR[r.claim_overlap_risk], fontWeight: 700 }}>
-              {r.claim_overlap_risk}
-            </span>
+          <div style={{ fontSize: 9, color: "var(--lys-text-faint)", marginTop: 1 }}>
+            {r.ip_note}
           </div>
         </div>
-        <div style={{ textAlign: "center" }}>
+        <div style={{ textAlign: "center", flexShrink: 0 }}>
           <div style={{ fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
-            textTransform: "uppercase", color: "var(--lys-text-faint)" }}>freedom</div>
+            textTransform: "uppercase", color: "var(--lys-text-faint)" }}>novelty</div>
           <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "var(--lys-font-mono)",
-            color: free ? "#16a34a" : "#d97706" }}>{r.freedom_score.toFixed(2)}</div>
+            color: tierCol }}>{r.novelty_score.toFixed(2)}</div>
         </div>
       </div>
 
-      {/* Closest known antibiotic */}
-      {r.closest_analog && (
-        <Block label="Closest known antibiotic">
-          <Analog hit={r.closest_analog} />
-        </Block>
+      {/* THE AGENT ACTION — the escape variant, the payoff */}
+      {esc && esc.improved && (
+        <div style={{ border: `1.5px solid ${ACT.border}`, borderRadius: 7,
+          background: ACT.bg, padding: "8px 9px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 5,
+            fontSize: 10, fontWeight: 700, color: ACT.fgDeep }}>
+            <Sparkles size={12} />
+            <span>Agent designed a more-novel variant</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8,
+            margin: "5px 0", fontFamily: "var(--lys-font-mono)", fontSize: 10 }}>
+            <span style={{ color: "var(--lys-text-faint)" }}>
+              novelty {esc.novelty_before.toFixed(2)}
+            </span>
+            <ArrowRight size={11} style={{ color: ACT.fg }} />
+            <span style={{ color: ACT.fgDeep, fontWeight: 700, fontSize: 12 }}>
+              {esc.novelty_after.toFixed(2)}
+            </span>
+            <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)" }}>
+              (closest-sim {esc.closest_similarity_before} → {esc.closest_similarity_after})
+            </span>
+          </div>
+          <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)", lineHeight: 1.4 }}>
+            <strong style={{ color: ACT.fgDeep }}>{esc.modification}</strong> — {esc.rationale}
+          </div>
+          <div style={{
+            marginTop: 5, fontFamily: "var(--lys-font-mono)", fontSize: 9,
+            background: "rgba(255,255,255,0.7)", border: `1px solid ${ACT.border}`,
+            borderRadius: 4, padding: "4px 6px", wordBreak: "break-all",
+            color: ACT.fgDeep,
+          }}>{esc.variant_smiles}</div>
+          <button type="button" onClick={() => onApply(esc.variant_smiles)}
+            style={{ marginTop: 6, width: "100%", padding: "5px 0", border: 0,
+              borderRadius: 5, background: ACT.fg, color: "white",
+              fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>
+            Apply this variant → load + re-score
+          </button>
+        </div>
+      )}
+      {esc && !esc.improved && (
+        <div style={{ fontSize: 9.5, color: "#16a34a", background: "rgba(22,163,74,0.06)",
+          border: "1px solid rgba(22,163,74,0.22)", borderRadius: 4, padding: "4px 7px" }}>
+          Already structurally novel — no escape edit needed.
+        </div>
       )}
 
-      {/* Closest LIVE-patent analog — the IP to clear */}
-      {r.closest_live_patent_analog ? (
-        <Block label="Closest live-patent analog · the IP to clear">
-          <Analog hit={r.closest_live_patent_analog} live />
+      {/* Closest published structure */}
+      <Block label="Closest published structure">
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)",
+            fontFamily: "var(--lys-font-mono)" }}>
+            {r.closest_published?.ref ?? "—"}
+          </span>
+          <span style={{ fontSize: 10, fontFamily: "var(--lys-font-mono)",
+            fontWeight: 700, color: tierCol }}>
+            {r.closest_published_similarity} Tanimoto
+          </span>
+          <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)" }}>
+            (corpus {pa.corpus_size})
+          </span>
+        </div>
+      </Block>
+
+      {/* Closest marketed antibiotic — only if meaningful */}
+      {r.closest_marketed_drug ? (
+        <Block label="Closest marketed antibiotic">
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)" }}>
+              {r.closest_marketed_drug.name}
+            </span>
+            <span style={{ fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+              color: SLATE.fgDeep }}>{r.closest_marketed_drug.similarity} sim</span>
+            <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+              padding: "1px 5px", borderRadius: 3,
+              background: (STATUS_COLOR[r.closest_marketed_drug.ip_status] ?? "#9ca3af") + "22",
+              color: STATUS_COLOR[r.closest_marketed_drug.ip_status] ?? "#9ca3af" }}>
+              {r.closest_marketed_drug.ip_status}
+            </span>
+          </div>
+          <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+            color: "var(--lys-text-faint)", marginTop: 2 }}>
+            {r.closest_marketed_drug.drug_class} · {r.closest_marketed_drug.originator}
+            {" "}· approved {r.closest_marketed_drug.first_approval}
+          </div>
         </Block>
       ) : (
-        <div style={{ fontSize: 9.5, color: "#16a34a",
-          background: "rgba(22,163,74,0.06)", borderRadius: 4,
-          border: "1px solid rgba(22,163,74,0.22)", padding: "4px 7px" }}>
-          No live-patent analog within the curated panel — the nearest
-          antibiotics are off-patent.
+        <div style={{ fontSize: 9.5, color: "var(--lys-text-faint)",
+          padding: "4px 2px" }}>
+          No structurally related marketed antibiotic — the candidate sits
+          in its own region of chemical space.
         </div>
       )}
 
       {/* Prior-art density */}
-      <Block label={`Prior-art density · ${pa.corpus_size} published structures`}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 5 }}>
-          <Stat label="≥0.92 sim" value={String(pa.near_identical_092)}
-            color={pa.near_identical_092 > 0 ? "#dc2626" : "#16a34a"} />
-          <Stat label="≥0.70 sim" value={String(pa.similar_070)}
-            color={pa.similar_070 > 8 ? "#d97706" : "#65a30d"} />
-          <Stat label="≥0.55 sim" value={String(pa.related_055)} />
+      <Block label="Prior-art landscape">
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 5 }}>
+          <Stat label="exact" value={String(pa.exact_matches)}
+            color={pa.exact_matches > 0 ? "#dc2626" : "#16a34a"} />
+          <Stat label="near-id" value={String(pa.near_identical)}
+            color={pa.near_identical > 0 ? "#d97706" : "#65a30d"} />
+          <Stat label="close" value={String(pa.close)} />
+          <Stat label="related" value={String(pa.related)} />
         </div>
-        {r.closest_published_structure && (
-          <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
-            color: "var(--lys-text-faint)", marginTop: 4 }}>
-            closest published: {r.closest_published_structure.ref} ·{" "}
-            {r.closest_published_structure.similarity} Tanimoto
-          </div>
-        )}
       </Block>
-
-      {/* IP-analyst narrative */}
-      {r.narrative && (
-        <div style={{
-          border: `1px solid ${SLATE.border}`, borderRadius: 6,
-          background: SLATE.bg, padding: "6px 8px",
-        }}>
-          <div style={{ fontSize: 10, fontWeight: 700, color: SLATE.fgDeep }}>
-            IP analyst
-          </div>
-          <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)",
-            marginTop: 3, lineHeight: 1.45 }}>{r.narrative.assessment}</div>
-          <div style={{ fontSize: 9.5, color: SLATE.fgDeep, marginTop: 3,
-            fontWeight: 600, lineHeight: 1.45 }}>
-            → {r.narrative.recommended_action}
-          </div>
-        </div>
-      )}
-
-      {/* Panel hit list */}
-      {r.top_panel_analogs.length > 0 && (
-        <Block label="Nearest panel analogs">
-          {r.top_panel_analogs.map((h, i) => (
-            <div key={i} style={{ display: "flex", alignItems: "baseline",
-              gap: 6, fontSize: 9.5, padding: "1px 0" }}>
-              <span style={{ fontWeight: 600, color: "var(--lys-text)" }}>{h.name}</span>
-              <span style={{ fontFamily: "var(--lys-font-mono)", fontSize: 9,
-                color: SLATE.fgDeep }}>{h.similarity.toFixed(2)}</span>
-              <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-                color: STATUS_COLOR[h.status] ?? "#9ca3af" }}>{h.status}</span>
-            </div>
-          ))}
-        </Block>
-      )}
-    </div>
-  );
-}
-
-function Analog({ hit, live }: { hit: PanelHit; live?: boolean }) {
-  return (
-    <div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--lys-text)" }}>
-          {hit.name}
-        </span>
-        <span style={{ fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
-          fontWeight: 700, color: live ? "#dc2626" : SLATE.fgDeep }}>
-          {hit.similarity.toFixed(2)} Tanimoto
-        </span>
-        <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-          padding: "1px 5px", borderRadius: 3,
-          background: (STATUS_COLOR[hit.status] ?? "#9ca3af") + "22",
-          color: STATUS_COLOR[hit.status] ?? "#9ca3af" }}>{hit.status}</span>
-      </div>
-      <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
-        color: "var(--lys-text-faint)", marginTop: 2 }}>
-        {hit.drug_class} · {hit.assignee} · {hit.patent} · {hit.year}
-      </div>
     </div>
   );
 }
@@ -395,13 +381,23 @@ function Block({ label, children }: { label: string; children: React.ReactNode }
 
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ background: "rgba(255,255,255,0.6)",
-      border: `1px solid ${SLATE.border}`, borderRadius: 4,
-      padding: "3px 4px", textAlign: "center" }}>
+    <div style={{ background: "rgba(255,255,255,0.6)", border: `1px solid ${SLATE.border}`,
+      borderRadius: 4, padding: "3px 4px", textAlign: "center" }}>
       <div style={{ fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
         textTransform: "uppercase", color: "var(--lys-text-faint)" }}>{label}</div>
       <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--lys-font-mono)",
         color: color ?? "var(--lys-text)" }}>{value}</div>
+    </div>
+  );
+}
+
+function Empty({ msg }: { msg: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center",
+      justifyContent: "center", padding: 20, textAlign: "center",
+      color: "var(--lys-text-faint)", fontSize: 11 }}>
+      <Scale size={22} style={{ opacity: 0.4 }} />
+      <div>{msg}</div>
     </div>
   );
 }

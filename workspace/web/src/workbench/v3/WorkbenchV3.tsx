@@ -3043,12 +3043,17 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       /> },
                     // 6) IP / FTO Sentinel: freedom-to-operate scan for the
                     //    current candidate — patent panel + prior-art corpus.
-                    { id: "ip-fto", title: "IP / FTO · freedom to operate",
+                    { id: "ip-fto", title: "IP / novelty · prior-art + escape variant",
                       expandedH: 480, body:
                       <IPSentinelCard
                         apiBase={apiBase}
                         sessionId={activeChatId}
                         smiles={currentSmiles}
+                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: "[ip · escape variant]",
+                        })}
                       /> },
                     // (2D builder lives at top of this list — see above.)
                     // Atoms / Bonds / Build / Properties / Library / SMARTS

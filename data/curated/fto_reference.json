@@ -1,0 +1,26 @@
+{
+  "_doc": "Curated reference of marketed / clinical antibiotics for the IP-FTO Sentinel. Honest public-record fields ONLY — name, structure, class, first-approval year, originator, and patent-era status (off-patent / on-patent / investigational). No fabricated patent numbers. Loaded by chem_ip.py; SMILES are RDKit-validated at load and invalid rows are dropped.",
+  "antibiotics": [
+    {"name": "Penicillin G", "smiles": "O=C(O)C1N2C(=O)C(NC(=O)Cc3ccccc3)C2SC1(C)C", "drug_class": "penicillin", "first_approval": 1945, "originator": "—", "ip_status": "off-patent"},
+    {"name": "Amoxicillin", "smiles": "O=C(O)C1N2C(=O)C(NC(=O)C(N)c3ccc(O)cc3)C2SC1(C)C", "drug_class": "penicillin", "first_approval": 1972, "originator": "Beecham", "ip_status": "off-patent"},
+    {"name": "Ampicillin", "smiles": "O=C(O)C1N2C(=O)C(NC(=O)C(N)c3ccccc3)C2SC1(C)C", "drug_class": "penicillin", "first_approval": 1961, "originator": "Beecham", "ip_status": "off-patent"},
+    {"name": "Cephalexin", "smiles": "O=C(O)C1=C(C)CSC2C(NC(=O)C(N)c3ccccc3)C(=O)N12", "drug_class": "cephalosporin", "first_approval": 1967, "originator": "Eli Lilly", "ip_status": "off-patent"},
+    {"name": "Cefadroxil", "smiles": "O=C(O)C1=C(C)CSC2C(NC(=O)C(N)c3ccc(O)cc3)C(=O)N12", "drug_class": "cephalosporin", "first_approval": 1978, "originator": "Bristol-Myers", "ip_status": "off-patent"},
+    {"name": "Cefepime", "smiles": "CON=C(c1csc(N)n1)C(=O)NC1C(=O)N2C(C(=O)O)=C(C[N+]3(C)CCCC3)CSC12", "drug_class": "cephalosporin", "first_approval": 1994, "originator": "Bristol-Myers Squibb", "ip_status": "off-patent"},
+    {"name": "Avibactam", "smiles": "NC(=O)C1C2CCN1C(=O)N2OS(=O)(=O)O", "drug_class": "β-lactamase inhibitor", "first_approval": 2015, "originator": "Allergan / Pfizer", "ip_status": "on-patent"},
+    {"name": "Clavulanic acid", "smiles": "OC(=O)C1C(=CCO)OC2CC(=O)N12", "drug_class": "β-lactamase inhibitor", "first_approval": 1985, "originator": "Beecham", "ip_status": "off-patent"},
+    {"name": "Sulbactam", "smiles": "CC1(C)C(C(=O)O)N2C(=O)CC2S1(=O)=O", "drug_class": "β-lactamase inhibitor", "first_approval": 1986, "originator": "Pfizer", "ip_status": "off-patent"},
+    {"name": "Ciprofloxacin", "smiles": "O=C(O)C1=CN(C2CC2)c2cc(N3CCNCC3)c(F)cc2C1=O", "drug_class": "fluoroquinolone", "first_approval": 1987, "originator": "Bayer", "ip_status": "off-patent"},
+    {"name": "Levofloxacin", "smiles": "CC1COc2c(N3CCN(C)CC3)c(F)cc3c(=O)c(C(=O)O)cn1c23", "drug_class": "fluoroquinolone", "first_approval": 1996, "originator": "Daiichi Sankyo", "ip_status": "off-patent"},
+    {"name": "Norfloxacin", "smiles": "O=C(O)C1=CN(CC)c2cc(N3CCNCC3)c(F)cc2C1=O", "drug_class": "fluoroquinolone", "first_approval": 1986, "originator": "Kyorin", "ip_status": "off-patent"},
+    {"name": "Moxifloxacin", "smiles": "COc1c(N2CC3CCCNC3C2)c(F)cc2c(=O)c(C(=O)O)cn(C3CC3)c12", "drug_class": "fluoroquinolone", "first_approval": 1999, "originator": "Bayer", "ip_status": "off-patent"},
+    {"name": "Linezolid", "smiles": "CC(=O)NCC1CN(c2ccc(N3CCOCC3)c(F)c2)C(=O)O1", "drug_class": "oxazolidinone", "first_approval": 2000, "originator": "Pharmacia / Pfizer", "ip_status": "off-patent"},
+    {"name": "Trimethoprim", "smiles": "COc1cc(Cc2cnc(N)nc2N)cc(OC)c1OC", "drug_class": "DHFR inhibitor", "first_approval": 1968, "originator": "Burroughs Wellcome", "ip_status": "off-patent"},
+    {"name": "Sulfamethoxazole", "smiles": "Cc1cc(NS(=O)(=O)c2ccc(N)cc2)no1", "drug_class": "sulfonamide", "first_approval": 1961, "originator": "—", "ip_status": "off-patent"},
+    {"name": "Metronidazole", "smiles": "Cc1ncc([N+](=O)[O-])n1CCO", "drug_class": "nitroimidazole", "first_approval": 1960, "originator": "Rhône-Poulenc", "ip_status": "off-patent"},
+    {"name": "Chloramphenicol", "smiles": "OCC(NC(=O)C(Cl)Cl)C(O)c1ccc([N+](=O)[O-])cc1", "drug_class": "amphenicol", "first_approval": 1949, "originator": "—", "ip_status": "off-patent"},
+    {"name": "Nitrofurantoin", "smiles": "O=C1CN(N=Cc2ccc([N+](=O)[O-])o2)C(=O)N1", "drug_class": "nitrofuran", "first_approval": 1953, "originator": "—", "ip_status": "off-patent"},
+    {"name": "Isoniazid", "smiles": "NNC(=O)c1ccncc1", "drug_class": "antitubercular", "first_approval": 1952, "originator": "—", "ip_status": "off-patent"},
+    {"name": "Fosfomycin", "smiles": "CC1OC1P(=O)(O)O", "drug_class": "phosphonate", "first_approval": 1969, "originator": "—", "ip_status": "off-patent"}
+  ]
+}

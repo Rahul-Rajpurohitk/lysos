@@ -478,51 +478,64 @@ from workspace.api import chem_ip as ip_mod  # noqa: E402
 
 @pytest.fixture()
 def fto_offline(monkeypatch):
-    """Stub the IP-analyst narrative — the Tanimoto maths is real +
-    deterministic; only the narrative needs network."""
-    async def _stub(_report):
-        return {"assessment": "stub", "recommended_action": "stub",
-                "model": "stub"}
-    monkeypatch.setattr(ip_mod, "_ip_narrative", _stub)
+    """Skip the escape-variant design (Gemini) — the prior-art scan is
+    real RDKit maths + deterministic; the variant design needs network."""
+    async def _none(_scan):
+        return None
+    monkeypatch.setattr(ip_mod, "_design_escape_variant", _none)
 
 
-def test_fto_panel_fingerprints_load():
-    """The curated patent panel must fingerprint (invalid SMILES are
-    dropped, the rest survive)."""
-    fps = ip_mod._panel_fps()
-    assert len(fps) >= 15            # most of the ~21-entry panel parses
-    # Each surviving entry keeps its patent metadata.
+def test_fto_reference_panel_loads_from_data_file():
+    """The reference panel must load from the JSON data file (NOT a
+    hardcoded inline list) and fingerprint, dropping bad SMILES."""
+    fps = ip_mod._reference_fps()
+    assert len(fps) >= 12
     for entry, _fp in fps:
-        assert "status" in entry and "name" in entry
+        # Honest public-record fields only — no fabricated patent number.
+        assert "name" in entry and "ip_status" in entry
+        assert "patent" not in entry        # the fabricated field is gone
 
 
-def test_fto_claim_risk_respects_patent_status():
-    """Similarity to an OFF-patent drug is low IP risk; similarity to a
-    LIVE-patent compound is the real risk."""
-    # Identical to an off-patent generic → not a claim-overlap risk.
-    risk_generic, w_generic = ip_mod._claim_risk(1.0, "marketed-generic")
-    assert risk_generic in ("low", "low-medium")
-    # Very similar to a LIVE patent → high risk.
-    risk_live, w_live = ip_mod._claim_risk(0.90, "marketed-patented")
-    assert risk_live == "high"
-    assert w_live > w_generic
-    # Distant from a live patent → low.
-    risk_far, _ = ip_mod._claim_risk(0.40, "clinical")
-    assert risk_far == "low"
+def test_fto_verdict_ladder_is_internally_consistent():
+    """The verdict must agree with the similarity it is derived from —
+    it can no longer say 'analogous IP nearby' when nothing is near."""
+    # Exact published match → not novel.
+    v_exact, tier_exact, _ = ip_mod._verdict(1.0, None)
+    assert "not novel" in v_exact and tier_exact == "none"
+    # Nothing similar → structurally novel (NOT 'watch').
+    v_far, tier_far, _ = ip_mod._verdict(0.20, None)
+    assert "novel" in v_far and tier_far == "high"
+    assert "nearby" not in v_far.lower()
+    # Close prior art → a real 'review' verdict.
+    v_close, _, _ = ip_mod._verdict(0.78, None)
+    assert "novel" in v_close or "review" in v_close
 
 
-def test_fto_scan_endpoint_returns_report(fto_offline):
+def test_fto_scan_endpoint_returns_honest_report(fto_offline):
     r = client.post("/workbench/chem/ip/fto-scan", json={
-        "smiles": "CC(=O)Nc1ccc(O)cc1", "session_id": "ftoHttp", "save": True,
+        "smiles": "CC(=O)Nc1ccc(O)cc1", "session_id": "ftoHttp",
+        "save": True, "design_variant": False,
     })
     assert r.status_code == 200
     d = r.json()
-    for key in ("smiles", "freedom_score", "verdict", "claim_overlap_risk",
-                "closest_analog", "top_panel_analogs", "prior_art",
-                "artifact_id"):
+    for key in ("smiles", "novelty_score", "novelty_tier", "verdict",
+                "closest_published", "closest_published_similarity",
+                "prior_art", "artifact_id"):
         assert key in d, f"missing key: {key}"
-    assert 0.0 <= d["freedom_score"] <= 1.0
-    assert d["artifact_id"]
+    assert 0.0 <= d["novelty_score"] <= 1.0
+    # novelty_score must be consistent with closest similarity.
+    assert abs(d["novelty_score"] - (1.0 - d["closest_published_similarity"])) < 0.01
+
+
+def test_fto_does_not_surface_noise_as_a_threat(fto_offline):
+    """A molecule far from every reference antibiotic must NOT get a
+    fake 'closest analog' — closest_marketed_drug should be None."""
+    # Caffeine — nothing like the antibiotic panel.
+    d = client.post("/workbench/chem/ip/fto-scan", json={
+        "smiles": "Cn1cnc2c1c(=O)n(C)c(=O)n2C", "session_id": "ftoNoise",
+        "save": True, "design_variant": False,
+    }).json()
+    assert d["closest_marketed_drug"] is None    # no noise-level threat
 
 
 def test_fto_scan_rejects_bad_input(fto_offline):
@@ -533,7 +546,8 @@ def test_fto_scan_rejects_bad_input(fto_offline):
 
 def test_fto_crud_round_trip(fto_offline):
     rep = client.post("/workbench/chem/ip/fto-scan", json={
-        "smiles": "c1ccccc1O", "session_id": "ftoCrud", "save": True,
+        "smiles": "c1ccccc1O", "session_id": "ftoCrud",
+        "save": True, "design_variant": False,
     }).json()
     rid = rep["artifact_id"]
     lst = client.get("/workbench/chem/ip/reports?session_id=ftoCrud").json()
@@ -544,15 +558,23 @@ def test_fto_crud_round_trip(fto_offline):
 
 
 def test_fto_feeds_the_candidate_dossier(fto_offline):
-    """The FTO scan must link an `fto` facet into the candidate
-    dossier — the integration backbone in action."""
+    """The IP scan must link an `fto` facet into the candidate dossier."""
     smi = "CCc1ccccc1"
     client.post("/workbench/chem/ip/fto-scan", json={
-        "smiles": smi, "session_id": "ftoDossier", "save": True})
+        "smiles": smi, "session_id": "ftoDossier",
+        "save": True, "design_variant": False})
     d = dossier_mod.get_dossier("ftoDossier", smi)
     assert d is not None
     assert "fto" in d["facets"]
-    assert "freedom_score" in d["facets"]["fto"]
+    assert "novelty_score" in d["facets"]["fto"]
+
+
+def test_fto_escape_variant_skipped_when_already_novel():
+    """When prior art is distant, no escape edit is manufactured."""
+    import asyncio
+    novel_scan = {"closest_published_similarity": 0.2, "smiles": "CCO",
+                  "novelty_score": 0.8}
+    assert asyncio.run(ip_mod._design_escape_variant(novel_scan)) is None
 
 
 def test_fto_wired_across_all_layers():
