@@ -509,6 +509,85 @@ async def _plan_route_full(smiles: str) -> dict[str, Any]:
 
 
 # ─────────────────────────────────────────────────────────────────────
+# Agentic action — design an easier-to-make analog
+# ─────────────────────────────────────────────────────────────────────
+
+def _route_is_hard(route: dict[str, Any]) -> bool:
+    """A route worth a simpler-analog attempt — anything that is NOT
+    already cheap, practical, short and high-yielding. The `improved`
+    gate on the result keeps the output honest: the agent only SHOWS
+    an analog that genuinely beats the original."""
+    return (route.get("feasibility_band") in ("workable", "hard")
+            or route.get("cost_band") in ("moderate", "high")
+            or (route.get("overall_yield_pct") or 100) < 55
+            or (route.get("n_steps") or 0) >= 5)
+
+
+async def _design_simpler_analog(route: dict[str, Any]) -> Optional[dict[str, Any]]:
+    """THE agentic payoff. When the route is hard/expensive, ask the
+    agent for ONE structural simplification that is easier to
+    synthesize while keeping the antibacterial pharmacophore — then
+    RE-PLAN the analog's route to PROVE it is genuinely easier. None
+    when the route is already practical or the design fails."""
+    if not _route_is_hard(route):
+        return None
+    if not os.getenv("GEMINI_API_KEY"):
+        return None
+    steps_brief = "; ".join(
+        f"#{s['step']} {s['name']} ({s.get('reaction_class','')}, "
+        f"{s.get('cost_driver','')})" for s in (route.get("steps") or []))
+    prompt = (
+        "You are a process chemist. This antibiotic candidate has a "
+        "synthesis route that is hard / expensive / low-yielding. "
+        "Propose ONE structural SIMPLIFICATION that makes the molecule "
+        "easier to synthesize — fewer steps, cheaper reaction classes, "
+        "higher yield — while PRESERVING the antibacterial pharmacophore "
+        "(keep the β-lactam warhead / core mechanism; simplify the "
+        "periphery — drop a hard-to-install group, swap an exotic "
+        "coupling for a robust one, remove a stereocentre).\n\n"
+        f"Candidate SMILES: {route['smiles']}\n"
+        f"Current route: {route['n_steps']} steps · "
+        f"${route['estimated_cost_usd']} ({route['cost_band']}) · "
+        f"{route['overall_yield_pct']}% yield · feasibility "
+        f"{route['feasibility']}\n"
+        f"Steps: {steps_brief}\n\n"
+        "Return STRICT JSON:\n"
+        '{"analog_smiles": "<valid SMILES of the simplified analog>", '
+        '"simplification": "<=60 chars — the change>", '
+        '"rationale": "<=180 chars — why it is easier yet keeps activity>"}\n'
+    )
+    obj = await _gemini_json(prompt, max_tokens=900, temperature=0.4)
+    if not obj:
+        return None
+    analog = _canonical(obj.get("analog_smiles", ""))
+    if analog is None or analog == route["smiles"]:
+        return None
+    # Re-plan the analog (plan + assemble; skip the critic for speed) —
+    # PROVE it is genuinely easier.
+    raw = await _gemini_route(analog)
+    if raw is None:
+        return None
+    analog_route = _assemble_route(analog, raw)
+    improved = (
+        analog_route["feasibility"] > route["feasibility"] + 0.02
+        or analog_route["estimated_cost_usd"] < route["estimated_cost_usd"] * 0.85
+        or analog_route["n_steps"] < route["n_steps"])
+    return {
+        "analog_smiles": analog,
+        "simplification": str(obj.get("simplification") or "structural simplification")[:80],
+        "rationale": str(obj.get("rationale") or "")[:200],
+        "steps_before": route["n_steps"], "steps_after": analog_route["n_steps"],
+        "cost_before": route["estimated_cost_usd"],
+        "cost_after": analog_route["estimated_cost_usd"],
+        "feasibility_before": route["feasibility"],
+        "feasibility_after": analog_route["feasibility"],
+        "yield_before": route["overall_yield_pct"],
+        "yield_after": analog_route["overall_yield_pct"],
+        "improved": bool(improved),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────
 # API — compute
 # ─────────────────────────────────────────────────────────────────────
 
@@ -518,6 +597,7 @@ class PlanRequest(BaseModel):
     target_pathogen: Optional[str] = None
     save: bool = True
     title: Optional[str] = None
+    design_analog: bool = True      # design an easier-to-make analog if hard
 
 
 @router.post("/synthesis/plan")
@@ -533,6 +613,13 @@ async def plan_synthesis(req: PlanRequest) -> dict[str, Any]:
 
     route = await _plan_route_full(smi)
 
+    # ── Agentic action — when the route is hard, the agent designs an
+    # easier-to-make analog and proves it is easier. ──
+    if req.design_analog:
+        route["easier_analog"] = await _design_simpler_analog(route)
+    else:
+        route["easier_analog"] = None
+
     artifact_id = None
     if req.save:
         title = req.title or (
@@ -544,6 +631,23 @@ async def plan_synthesis(req: PlanRequest) -> dict[str, Any]:
         )
         artifact_id = rec["id"]
     route["artifact_id"] = artifact_id
+
+    # ── Agentic close-the-loop — queue the easier analog so the user
+    # accepts it with one word. The service handed over a better
+    # molecule, not just a route readout. ──
+    ea = route.get("easier_analog")
+    if ea and ea.get("improved"):
+        try:
+            from . import session_memory
+            session_memory.record_proposal(
+                req.session_id or "", ea["analog_smiles"],
+                source="synthesis",
+                swap_label=f"easier-to-make analog ({ea['simplification']})",
+                rationale=(f"Route {ea['steps_before']}→{ea['steps_after']} steps, "
+                           f"${ea['cost_before']:.0f}→${ea['cost_after']:.0f}. "
+                           f"{ea['rationale']}"))
+        except Exception as exc:  # noqa: BLE001
+            log.debug("easier-analog queue failed: %s", exc)
 
     # ── Integration backbone — link this route into the candidate's
     # dossier so the synthesis facet is visible to scoring, the agents

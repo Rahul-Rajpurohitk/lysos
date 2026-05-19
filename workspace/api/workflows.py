@@ -1092,6 +1092,40 @@ async def _synth_critique_step(state: dict) -> dict:
     return crit
 
 
+async def _synth_easier_analog_step(state: dict) -> dict:
+    """Step 4 — THE agentic action: when the route is hard, the agent
+    designs an easier-to-make analog, proves it, and queues it."""
+    from .chem_synthesis import _design_simpler_analog
+    from . import service_store as _ss, session_memory as _sm
+    route = state.get("synthesis_route") or {}
+    if route.get("error") or not route.get("steps"):
+        return {"error": "no route to simplify"}
+    analog = await _design_simpler_analog(route)
+    route["easier_analog"] = analog
+    sid = state.get("session_id") or state.get("_session_id")
+    try:
+        rec = _ss.save_artifact(
+            "synthesis_route", route, session_id=sid, smiles=route.get("smiles"),
+            title=(f"Route · {route.get('n_steps')} steps · "
+                   f"{route.get('cost_band')} cost · "
+                   f"{route.get('overall_yield_pct')}% yield"))
+        route["artifact_id"] = rec["id"]
+    except Exception:  # noqa: BLE001
+        pass
+    if analog and analog.get("improved"):
+        try:
+            _sm.record_proposal(
+                sid or "", analog["analog_smiles"], source="synthesis",
+                swap_label=f"easier-to-make analog ({analog['simplification']})",
+                rationale=(f"Route {analog['steps_before']}→{analog['steps_after']} "
+                           f"steps. {analog['rationale']}"))
+        except Exception:  # noqa: BLE001
+            pass
+    state["synthesis_route"] = route
+    return analog or {"note": "route is already practical — no simpler "
+                              "analog needed"}
+
+
 def _synth_plan_synthesis(state: dict) -> str:
     """Render the reasoned route — strategy, per-step yield/risk/cost,
     building blocks with derived availability, and the critic verdict."""
@@ -1145,6 +1179,18 @@ def _synth_plan_synthesis(state: dict) -> str:
                   f"{crit.get('riskiest_step')} — {crit.get('risk_reason')}. "
                   f"Scale-up: {crit.get('scale_up_concern')} "
                   f"**Verdict:** {crit.get('verdict')}"]
+    ea = r.get("easier_analog")
+    if ea and ea.get("improved"):
+        lines += ["", "---", "",
+                  f"**Agent designed an easier-to-make analog** via "
+                  f"_{ea['simplification']}_ — route "
+                  f"**{ea['steps_before']}→{ea['steps_after']} steps**, "
+                  f"${ea['cost_before']:.0f}→${ea['cost_after']:.0f}, "
+                  f"feasibility {ea['feasibility_before']}→{ea['feasibility_after']}.",
+                  f"`{ea['analog_smiles']}`",
+                  f"{ea['rationale']} — say **apply** to load it."]
+    elif ea and ea.get("note"):
+        lines += ["", f"_{ea['note']}_"]
     return "\n".join(lines).strip()
 
 
@@ -1183,6 +1229,15 @@ _register(Workflow(
             inline_fn=_synth_critique_step,
             on_result=lambda st, r: st.__setitem__("route_critique", r),
             narrator_role="critic",
+            optional=True,
+        ),
+        Step(
+            id="design_easier",
+            label="Agent designs an easier-to-make analog",
+            tool="__inline__",
+            inline_fn=_synth_easier_analog_step,
+            on_result=lambda st, r: st.__setitem__("easier_analog", r),
+            narrator_role="editor",
             optional=True,
         ),
     ],

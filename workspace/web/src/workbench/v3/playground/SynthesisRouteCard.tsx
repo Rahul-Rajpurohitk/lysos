@@ -48,6 +48,16 @@ interface Critique {
   verdict: string;
   model: string;
 }
+interface EasierAnalog {
+  analog_smiles: string;
+  simplification: string;
+  rationale: string;
+  steps_before: number; steps_after: number;
+  cost_before: number; cost_after: number;
+  feasibility_before: number; feasibility_after: number;
+  yield_before: number; yield_after: number;
+  improved: boolean;
+}
 interface SynthRoute {
   smiles: string;
   strategy: string;
@@ -67,6 +77,7 @@ interface SynthRoute {
   overall_notes: string;
   model: string;
   critique?: Critique;
+  easier_analog?: EasierAnalog | null;
   artifact_id?: string | null;
   starred?: boolean;
 }
@@ -355,6 +366,11 @@ function RouteView({ route, onLoad }: { route: SynthRoute; onLoad?: (s: string) 
         </div>
       )}
 
+      {/* THE AGENT ACTION — an easier-to-make analog, the payoff */}
+      {route.easier_analog && route.easier_analog.improved && (
+        <EasierAnalogBlock analog={route.easier_analog} onLoad={onLoad} />
+      )}
+
       {!route.route_reaches_target && (
         <div style={{
           fontSize: 9.5, color: "#92400e", background: "rgba(217,119,6,0.10)",
@@ -509,6 +525,69 @@ function RouteView({ route, onLoad }: { route: SynthRoute; onLoad?: (s: string) 
         fontFamily: "var(--lys-font-mono)", textAlign: "right" }}>
         editor: {route.model} · critic: {route.critique?.model ?? "—"}
       </div>
+    </div>
+  );
+}
+
+/** The agentic payoff — the agent's easier-to-make analog, with a
+ *  one-tap Apply. Emerald accent: this is an action, not a readout. */
+function EasierAnalogBlock({ analog, onLoad }: {
+  analog: EasierAnalog; onLoad?: (s: string) => void;
+}) {
+  const ACT = { bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.4)",
+    fg: "#059669", fgDeep: "#047857" };
+  const Delta = ({ label, before, after, better }: {
+    label: string; before: string | number; after: string | number; better: boolean;
+  }) => (
+    <div style={{ textAlign: "center", flex: 1 }}>
+      <div style={{ fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
+        textTransform: "uppercase", color: "var(--lys-text-faint)" }}>{label}</div>
+      <div style={{ fontSize: 9.5, fontFamily: "var(--lys-font-mono)" }}>
+        <span style={{ color: "var(--lys-text-faint)" }}>{before}</span>
+        <span style={{ color: ACT.fg, margin: "0 2px" }}>→</span>
+        <span style={{ color: better ? ACT.fgDeep : "#d97706", fontWeight: 700 }}>{after}</span>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{ border: `1.5px solid ${ACT.border}`, borderRadius: 7,
+      background: ACT.bg, padding: "8px 9px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5,
+        fontSize: 10, fontWeight: 700, color: ACT.fgDeep }}>
+        <Beaker size={12} />
+        <span>Agent designed an easier-to-make analog</span>
+      </div>
+      <div style={{ display: "flex", gap: 4, margin: "6px 0" }}>
+        <Delta label="steps" before={analog.steps_before} after={analog.steps_after}
+          better={analog.steps_after <= analog.steps_before} />
+        <Delta label="cost" before={`$${Math.round(analog.cost_before)}`}
+          after={`$${Math.round(analog.cost_after)}`}
+          better={analog.cost_after <= analog.cost_before} />
+        <Delta label="feasibility" before={analog.feasibility_before.toFixed(2)}
+          after={analog.feasibility_after.toFixed(2)}
+          better={analog.feasibility_after >= analog.feasibility_before} />
+        <Delta label="yield" before={`${analog.yield_before}%`}
+          after={`${analog.yield_after}%`}
+          better={analog.yield_after >= analog.yield_before} />
+      </div>
+      <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)", lineHeight: 1.4 }}>
+        <strong style={{ color: ACT.fgDeep }}>{analog.simplification}</strong> — {analog.rationale}
+      </div>
+      <div style={{ marginTop: 5, fontFamily: "var(--lys-font-mono)", fontSize: 9,
+        background: "rgba(255,255,255,0.7)", border: `1px solid ${ACT.border}`,
+        borderRadius: 4, padding: "4px 6px", wordBreak: "break-all",
+        color: ACT.fgDeep }}>{analog.analog_smiles}</div>
+      <button type="button"
+        onClick={() => {
+          if (onLoad) onLoad(analog.analog_smiles);
+          else window.dispatchEvent(new CustomEvent("lysos:auto-slash",
+            { detail: { text: `/load ${analog.analog_smiles}` } }));
+        }}
+        style={{ marginTop: 6, width: "100%", padding: "5px 0", border: 0,
+          borderRadius: 5, background: ACT.fg, color: "white",
+          fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>
+        Apply this analog → load + re-score
+      </button>
     </div>
   );
 }

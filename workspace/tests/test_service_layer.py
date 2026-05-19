@@ -459,14 +459,28 @@ def test_dossier_router_mounted():
     assert "/workbench/chem/dossier/{session_id}/candidate" in paths
 
 
-def test_synthesis_workflow_is_three_streamed_steps():
-    """The plan_synthesis workflow must expose 3 streamed steps so the
-    agent is visibly working (editor → validate → critic)."""
+def test_synthesis_workflow_is_streamed_and_agentic():
+    """plan_synthesis streams 4 steps — plan → validate → critic →
+    the agent designs an easier-to-make analog (the agentic action)."""
     wf = wf_mod._REGISTRY.get("plan_synthesis")
     assert wf is not None
-    assert len(wf.steps) == 3
     step_ids = [s.id for s in wf.steps]
-    assert step_ids == ["plan_route", "validate_cost", "critique"]
+    assert step_ids == ["plan_route", "validate_cost", "critique", "design_easier"]
+
+
+def test_synthesis_route_is_hard_classifier():
+    """_route_is_hard flags routes worth a simpler-analog attempt —
+    anything not already cheap + practical + short + high-yield."""
+    assert chem_synthesis._route_is_hard(
+        {"feasibility_band": "hard", "cost_band": "low",
+         "overall_yield_pct": 80, "n_steps": 3}) is True
+    assert chem_synthesis._route_is_hard(
+        {"feasibility_band": "ready", "cost_band": "moderate",
+         "overall_yield_pct": 80, "n_steps": 3}) is True
+    # Already cheap + practical + short + high-yield → no attempt.
+    assert chem_synthesis._route_is_hard(
+        {"feasibility_band": "ready", "cost_band": "low",
+         "overall_yield_pct": 80, "n_steps": 3}) is False
 
 
 # ─────────────────────────────────────────────────────────────────────
