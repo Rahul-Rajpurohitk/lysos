@@ -538,6 +538,27 @@ def _route_is_hard(route: dict[str, Any]) -> bool:
             or (route.get("n_steps") or 0) >= 5)
 
 
+def _non_drug_like_reason(smiles: str) -> Optional[str]:
+    """Return a reason if the input is a commodity reagent / fragment,
+    not a drug candidate. Mirrors the FTO gate — synthesizing a
+    one-atom-shy reagent like acetic anhydride is pointless."""
+    try:
+        from rdkit import Chem
+        m = Chem.MolFromSmiles((smiles or "").strip())
+        if m is None:
+            return None
+        n_heavy = m.GetNumHeavyAtoms()
+        n_rings = m.GetRingInfo().NumRings()
+        if n_heavy < 10:
+            return (f"only {n_heavy} heavy atoms — this is a reagent or "
+                    "fragment, not a drug candidate")
+        if n_rings == 0:
+            return "acyclic molecule — no ring system, not a drug-like scaffold"
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _analog_is_drug_like(parent_smiles: str, analog_smiles: str) -> bool:
     """Reject "easier analogs" that have degenerated to a building
     block (e.g. stripping the defining acetyl from acetaminophen and
@@ -666,8 +687,45 @@ async def plan_synthesis(req: PlanRequest) -> dict[str, Any]:
     smi = (req.smiles or "").strip()
     if not smi:
         raise HTTPException(400, "smiles required")
-    if _canonical(smi) is None:
+    canon = _canonical(smi)
+    if canon is None:
         raise HTTPException(422, f"unparseable SMILES: {smi}")
+
+    # Commodity-chem / non-drug gate: don't waste an LLM call planning
+    # a synthesis for acetic anhydride (it's $29/L from Sigma).
+    nd = _non_drug_like_reason(canon)
+    if nd:
+        empty = {
+            "smiles": canon,
+            "strategy": "Not applicable — commercial reagent.",
+            "n_steps": 0,
+            "steps": [],
+            "starting_materials": [],
+            "estimated_cost_usd": 0.0,
+            "step_cost_usd": 0.0,
+            "materials_cost_usd": 0.0,
+            "cost_band": "low",
+            "overall_yield_pct": 0,
+            "lead_time_days": 0,
+            "feasibility": 1.0,
+            "feasibility_band": "ready",
+            "route_reaches_target": True,
+            "n_invalid_intermediates": 0,
+            "overall_notes": (f"{nd}. This molecule is commercially "
+                              "available — no retrosynthesis is needed."),
+            "model": "gate",
+            "critique": None,
+            "easier_analog": None,
+            "non_drug_reason": nd,
+        }
+        artifact_id = None
+        if req.save:
+            rec = service_store.save_artifact(_ARTIFACT_KIND, empty,
+                session_id=req.session_id, smiles=canon,
+                title=f"Not applicable · {nd[:40]}")
+            artifact_id = rec["id"]
+        empty["artifact_id"] = artifact_id
+        return empty
 
     route = await _plan_route_full(smi)
 

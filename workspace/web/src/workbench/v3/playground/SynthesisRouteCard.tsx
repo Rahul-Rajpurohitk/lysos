@@ -77,8 +77,9 @@ interface SynthRoute {
   feasibility_band: "ready" | "workable" | "hard";
   overall_notes: string;
   model: string;
-  critique?: Critique;
+  critique?: Critique | null;
   easier_analog?: EasierAnalog | null;
+  non_drug_reason?: string | null;
   artifact_id?: string | null;
   starred?: boolean;
 }
@@ -348,6 +349,34 @@ export function SynthesisRouteCard({ apiBase, sessionId, smiles, onLoad }: Props
 function RouteView({ apiBase, route, onLoad }: {
   apiBase: string; route: SynthRoute; onLoad?: (s: string) => void;
 }) {
+  // Non-applicable empty state — the candidate is a commodity reagent
+  // or fragment, so retrosynthesis is meaningless. Show a clean "n/a"
+  // panel instead of a half-rendered route.
+  if (route.non_drug_reason || route.n_steps === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10,
+        padding: 12, alignItems: "center", textAlign: "center",
+        background: AMBER.bg, border: `1px solid ${AMBER.border}`,
+        borderRadius: 7 }}>
+        <Mol2DThumb apiBase={apiBase} smiles={route.smiles}
+          w={160} h={120} caption="candidate" accent={AMBER.fg} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: AMBER.fgDeep,
+          lineHeight: 1.3 }}>
+          Retrosynthesis not applicable
+        </div>
+        <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)",
+          lineHeight: 1.45, maxWidth: 360 }}>
+          {route.non_drug_reason ?? route.overall_notes ??
+            "This molecule is commercially available — no synthesis required."}
+        </div>
+        <div style={{ fontSize: 9, color: "var(--lys-text-faint)",
+          fontFamily: "var(--lys-font-mono)" }}>
+          Load a drug-like candidate (≥10 heavy atoms, ≥1 ring) to plan a route.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {/* Stats strip */}

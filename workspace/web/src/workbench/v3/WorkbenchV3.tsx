@@ -3013,22 +3013,10 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
-                    // 4) Pareto lab: compare this candidate against the rest
-                    //    of the session's frontier on the chosen objectives.
-                    { id: "pareto-lab", title: "Pareto lab · multi-candidate frontier",
-                      expandedH: 480, body:
-                      <ParetoLabCard
-                        apiBase={apiBase}
-                        sessionId={activeChatId}
-                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
-                          createdBy: "user",
-                          parentId: null,
-                          logLabel: "[pareto · load]",
-                        })}
-                        onAgentMessage={(msg) => sendAgentMessage(msg)}
-                      /> },
-                    // 5) Synthesis Make-Route: retrosynthetic route + cost for
+                    // 4) Synthesis Make-Route: retrosynthetic route + cost for
                     //    the current candidate, with a CRUD shelf of saved routes.
+                    //    Pareto Lab moved to Scoring group — it's a session-portfolio
+                    //    comparison tool, not a per-candidate chemistry service.
                     { id: "synthesis", title: "Synthesis route · make + cost",
                       expandedH: 480, body:
                       <SynthesisRouteCard
@@ -3115,6 +3103,21 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         apiBase={apiBase}
                         sessionId={activeChatId}
                         smiles={currentSmiles}
+                      /> },
+                    // Pareto Lab — multi-candidate frontier. Lives in Scoring
+                    // because it is a portfolio-level comparison view, NOT a
+                    // per-candidate chemistry service.
+                    { id: "pareto-lab", title: "Pareto lab · multi-candidate frontier",
+                      size: 2, expandedH: 480, body:
+                      <ParetoLabCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: "[pareto · load]",
+                        })}
+                        onAgentMessage={(msg) => sendAgentMessage(msg)}
                       /> },
                     { id: "similarity", title: "Similarity · Tanimoto vs corpus", size: 2, body:
                       <SimilarityCard
