@@ -1160,10 +1160,12 @@ async def chem_atom_context(smiles_b64: str, atom_idx: int,
 
 
 @router.get("/molecule/2d/{smiles_b64}")
-async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340) -> dict:
-    """Render a 2D structure as SVG with atom indices. Frontend uses this
-    in the 2D Builder window; on click, the SVG already knows which atom
-    index was hit (RDKit emits class="atom-N" on each atom)."""
+async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340,
+                          indices: int = 1) -> dict:
+    """Render a 2D structure as SVG. With `indices=1` (default) the SVG
+    carries atom-N classes the 2D builder uses for hit-testing.
+    Thumbnails should pass `indices=0` to get a clean structure
+    without number labels."""
     try:
         smiles = _decode_smiles_b64(smiles_b64)
     except Exception as exc:  # noqa: BLE001
@@ -1180,7 +1182,7 @@ async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340) -> dict:
 
     drawer = rdMolDraw2D.MolDraw2DSVG(w, h)
     opts = drawer.drawOptions()
-    opts.addAtomIndices = True
+    opts.addAtomIndices = bool(indices)
     opts.bondLineWidth = 2
     opts.baseFontSize = 0.6
     drawer.DrawMolecule(mol)

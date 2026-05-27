@@ -10,6 +10,7 @@
  */
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Scale, RefreshCw, Trash2, Sparkles, ArrowRight } from "lucide-react";
+import { Mol2DThumb } from "./Mol2DThumb";
 
 interface MarketedDrug {
   name: string; smiles: string; drug_class: string;
@@ -193,7 +194,7 @@ export function IPSentinelCard({ apiBase, sessionId, smiles, onLoad }: Props) {
           </div>
         )}
 
-        {report && <FTOView report={report} onApply={applyVariant} />}
+        {report && <FTOView apiBase={apiBase} report={report} onApply={applyVariant} />}
 
         {saved.length > 0 && (
           <div style={{ marginTop: 12 }}>
@@ -232,66 +233,76 @@ export function IPSentinelCard({ apiBase, sessionId, smiles, onLoad }: Props) {
   );
 }
 
-function FTOView({ report, onApply }: { report: FTOReport; onApply: (s: string) => void }) {
+function FTOView({ apiBase, report, onApply }: {
+  apiBase: string; report: FTOReport; onApply: (s: string) => void;
+}) {
   const r = report;
   const esc = r.escape_variant;
   const tierCol = TIER_COLOR[r.novelty_tier] ?? "#9ca3af";
   const pa = r.prior_art;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* Verdict + novelty — honest, consistent */}
-      <div style={{ border: `1px solid ${SLATE.border}`, borderRadius: 6,
-        background: SLATE.bg, padding: "7px 9px",
-        display: "flex", alignItems: "center", gap: 8 }}>
+      {/* Structure-forward header — candidate molecule + tight verdict */}
+      <div style={{ border: `1px solid ${SLATE.border}`, borderRadius: 7,
+        background: SLATE.bg, padding: 8,
+        display: "flex", alignItems: "center", gap: 10 }}>
+        <Mol2DThumb apiBase={apiBase} smiles={r.smiles} w={120} h={90}
+          caption="candidate" accent={tierCol} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--lys-text)" }}>
-            {r.verdict}
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--lys-text)",
+            lineHeight: 1.3 }}>{r.verdict}</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 6,
+            marginTop: 4, fontFamily: "var(--lys-font-mono)" }}>
+            <span style={{ fontSize: 18, fontWeight: 700, color: tierCol,
+              lineHeight: 1 }}>{r.novelty_score.toFixed(2)}</span>
+            <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
+              textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              novelty · {r.novelty_tier}
+            </span>
           </div>
-          <div style={{ fontSize: 9, color: "var(--lys-text-faint)", marginTop: 1 }}>
-            {r.ip_note}
+          <div style={{ fontSize: 9, color: "var(--lys-text-faint)", marginTop: 3,
+            fontFamily: "var(--lys-font-mono)" }}>
+            closest: <span style={{ color: tierCol, fontWeight: 700 }}>
+              {r.closest_published_similarity} Tanimoto
+            </span>
+            {r.closest_published?.ref && ` · ${r.closest_published.ref}`}
           </div>
-        </div>
-        <div style={{ textAlign: "center", flexShrink: 0 }}>
-          <div style={{ fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
-            textTransform: "uppercase", color: "var(--lys-text-faint)" }}>novelty</div>
-          <div style={{ fontSize: 17, fontWeight: 700, fontFamily: "var(--lys-font-mono)",
-            color: tierCol }}>{r.novelty_score.toFixed(2)}</div>
         </div>
       </div>
 
-      {/* THE AGENT ACTION — the escape variant, the payoff */}
+      {/* THE AGENT ACTION — original ←→ variant structures, the payoff */}
       {esc && esc.improved && (
         <div style={{ border: `1.5px solid ${ACT.border}`, borderRadius: 7,
           background: ACT.bg, padding: "8px 9px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5,
-            fontSize: 10, fontWeight: 700, color: ACT.fgDeep }}>
+            fontSize: 10, fontWeight: 700, color: ACT.fgDeep,
+            marginBottom: 6 }}>
             <Sparkles size={12} />
             <span>Agent designed a more-novel variant</span>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8,
-            margin: "5px 0", fontFamily: "var(--lys-font-mono)", fontSize: 10 }}>
-            <span style={{ color: "var(--lys-text-faint)" }}>
-              novelty {esc.novelty_before.toFixed(2)}
-            </span>
-            <ArrowRight size={11} style={{ color: ACT.fg }} />
-            <span style={{ color: ACT.fgDeep, fontWeight: 700, fontSize: 12 }}>
-              {esc.novelty_after.toFixed(2)}
-            </span>
-            <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)" }}>
-              (closest-sim {esc.closest_similarity_before} → {esc.closest_similarity_after})
-            </span>
+          {/* Side-by-side structures — the visual story */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+            gap: 6, padding: "2px 0 6px" }}>
+            <Mol2DThumb apiBase={apiBase} smiles={r.smiles} w={130} h={100}
+              caption="original" accent="rgba(71,85,105,0.35)" />
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
+              gap: 2 }}>
+              <ArrowRight size={18} style={{ color: ACT.fg }} />
+              <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+                color: ACT.fg, fontWeight: 700 }}>
+                {esc.novelty_before.toFixed(2)}→{esc.novelty_after.toFixed(2)}
+              </span>
+            </div>
+            <Mol2DThumb apiBase={apiBase} smiles={esc.variant_smiles} w={130} h={100}
+              caption="variant" accent={ACT.fg} />
           </div>
-          <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)", lineHeight: 1.4 }}>
-            <strong style={{ color: ACT.fgDeep }}>{esc.modification}</strong> — {esc.rationale}
+          {/* One-line rationale */}
+          <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)", lineHeight: 1.4,
+            textAlign: "center" }}>
+            <strong style={{ color: ACT.fgDeep }}>{esc.modification}</strong>
           </div>
-          <div style={{
-            marginTop: 5, fontFamily: "var(--lys-font-mono)", fontSize: 9,
-            background: "rgba(255,255,255,0.7)", border: `1px solid ${ACT.border}`,
-            borderRadius: 4, padding: "4px 6px", wordBreak: "break-all",
-            color: ACT.fgDeep,
-          }}>{esc.variant_smiles}</div>
           <button type="button" onClick={() => onApply(esc.variant_smiles)}
-            style={{ marginTop: 6, width: "100%", padding: "5px 0", border: 0,
+            style={{ marginTop: 6, width: "100%", padding: "6px 0", border: 0,
               borderRadius: 5, background: ACT.fg, color: "white",
               fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>
             Apply this variant → load + re-score
@@ -305,76 +316,46 @@ function FTOView({ report, onApply }: { report: FTOReport; onApply: (s: string) 
         </div>
       )}
 
-      {/* Closest published structure */}
-      <Block label="Closest published structure">
-        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)",
-            fontFamily: "var(--lys-font-mono)" }}>
-            {r.closest_published?.ref ?? "—"}
-          </span>
-          <span style={{ fontSize: 10, fontFamily: "var(--lys-font-mono)",
-            fontWeight: 700, color: tierCol }}>
-            {r.closest_published_similarity} Tanimoto
-          </span>
-          <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)" }}>
-            (corpus {pa.corpus_size})
-          </span>
-        </div>
-      </Block>
-
-      {/* Closest marketed antibiotic — only if meaningful */}
+      {/* Closest marketed antibiotic — with structure thumbnail */}
       {r.closest_marketed_drug ? (
-        <Block label="Closest marketed antibiotic">
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: "var(--lys-text)" }}>
+        <div style={{ border: `1px solid ${SLATE.border}`, borderRadius: 6,
+          background: SLATE.bg, padding: 7,
+          display: "flex", alignItems: "center", gap: 8 }}>
+          <Mol2DThumb apiBase={apiBase} smiles={r.closest_marketed_drug.smiles}
+            w={100} h={75} caption={r.closest_marketed_drug.name.toLowerCase()}
+            accent={STATUS_COLOR[r.closest_marketed_drug.ip_status]} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: "var(--lys-text)" }}>
               {r.closest_marketed_drug.name}
-            </span>
-            <span style={{ fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
-              color: SLATE.fgDeep }}>{r.closest_marketed_drug.similarity} sim</span>
-            <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+              <span style={{ marginLeft: 6, fontFamily: "var(--lys-font-mono)",
+                fontSize: 9, color: SLATE.fgDeep }}>
+                {r.closest_marketed_drug.similarity} sim
+              </span>
+            </div>
+            <div style={{ fontSize: 9, color: "var(--lys-text-faint)",
+              fontFamily: "var(--lys-font-mono)", marginTop: 2 }}>
+              {r.closest_marketed_drug.drug_class}
+            </div>
+            <div style={{ marginTop: 3, display: "inline-block",
+              fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
               padding: "1px 5px", borderRadius: 3,
               background: (STATUS_COLOR[r.closest_marketed_drug.ip_status] ?? "#9ca3af") + "22",
               color: STATUS_COLOR[r.closest_marketed_drug.ip_status] ?? "#9ca3af" }}>
               {r.closest_marketed_drug.ip_status}
-            </span>
+            </div>
           </div>
-          <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
-            color: "var(--lys-text-faint)", marginTop: 2 }}>
-            {r.closest_marketed_drug.drug_class} · {r.closest_marketed_drug.originator}
-            {" "}· approved {r.closest_marketed_drug.first_approval}
-          </div>
-        </Block>
-      ) : (
-        <div style={{ fontSize: 9.5, color: "var(--lys-text-faint)",
-          padding: "4px 2px" }}>
-          No structurally related marketed antibiotic — the candidate sits
-          in its own region of chemical space.
         </div>
-      )}
+      ) : null}
 
-      {/* Prior-art density */}
-      <Block label="Prior-art landscape">
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 5 }}>
-          <Stat label="exact" value={String(pa.exact_matches)}
-            color={pa.exact_matches > 0 ? "#dc2626" : "#16a34a"} />
-          <Stat label="near-id" value={String(pa.near_identical)}
-            color={pa.near_identical > 0 ? "#d97706" : "#65a30d"} />
-          <Stat label="close" value={String(pa.close)} />
-          <Stat label="related" value={String(pa.related)} />
-        </div>
-      </Block>
-    </div>
-  );
-}
-
-function Block({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ border: `1px solid ${SLATE.border}`, borderRadius: 6,
-      background: SLATE.bg, padding: "6px 8px" }}>
-      <div style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-        letterSpacing: "0.05em", textTransform: "uppercase",
-        color: "var(--lys-text-faint)", marginBottom: 4 }}>{label}</div>
-      {children}
+      {/* Prior-art density — compact row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 5 }}>
+        <Stat label="exact" value={String(pa.exact_matches)}
+          color={pa.exact_matches > 0 ? "#dc2626" : "#16a34a"} />
+        <Stat label="near-id" value={String(pa.near_identical)}
+          color={pa.near_identical > 0 ? "#d97706" : "#65a30d"} />
+        <Stat label="close" value={String(pa.close)} />
+        <Stat label="related" value={String(pa.related)} />
+      </div>
     </div>
   );
 }

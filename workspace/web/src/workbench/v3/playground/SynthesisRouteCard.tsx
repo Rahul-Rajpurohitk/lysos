@@ -15,7 +15,8 @@
  * Backend: /workbench/chem/synthesis/* (chem_synthesis.py).
  */
 import { useEffect, useState, useCallback, useRef } from "react";
-import { FlaskConical, RefreshCw, Star, Trash2, Beaker, ChevronRight, AlertTriangle } from "lucide-react";
+import { FlaskConical, RefreshCw, Star, Trash2, Beaker, ChevronRight, AlertTriangle, ArrowRight } from "lucide-react";
+import { Mol2DThumb } from "./Mol2DThumb";
 
 interface RouteStep {
   step: number;
@@ -284,7 +285,7 @@ export function SynthesisRouteCard({ apiBase, sessionId, smiles, onLoad }: Props
           </div>
         )}
 
-        {route && <RouteView route={route} onLoad={onLoad} />}
+        {route && <RouteView apiBase={apiBase} route={route} onLoad={onLoad} />}
 
         {/* Saved routes shelf (CRUD) */}
         {saved.length > 0 && (
@@ -341,9 +342,12 @@ export function SynthesisRouteCard({ apiBase, sessionId, smiles, onLoad }: Props
   );
 }
 
-/** Route detail — stats strip, strategy, per-step blocks, building
- *  blocks with derived availability, and the critic review. */
-function RouteView({ route, onLoad }: { route: SynthRoute; onLoad?: (s: string) => void }) {
+/** Route detail — stats strip, structure-flow strip (SMs → step products
+ *  → target), compact per-step ribbon, building-block availability,
+ *  critic verdict. Structures replace text walls. */
+function RouteView({ apiBase, route, onLoad }: {
+  apiBase: string; route: SynthRoute; onLoad?: (s: string) => void;
+}) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
       {/* Stats strip */}
@@ -366,9 +370,10 @@ function RouteView({ route, onLoad }: { route: SynthRoute; onLoad?: (s: string) 
         </div>
       )}
 
-      {/* THE AGENT ACTION — an easier-to-make analog, the payoff */}
+      {/* THE AGENT ACTION — original ↔ analog structures, the payoff */}
       {route.easier_analog && route.easier_analog.improved && (
-        <EasierAnalogBlock analog={route.easier_analog} onLoad={onLoad} />
+        <EasierAnalogBlock apiBase={apiBase} candidateSmiles={route.smiles}
+          analog={route.easier_analog} onLoad={onLoad} />
       )}
 
       {!route.route_reaches_target && (
@@ -382,135 +387,111 @@ function RouteView({ route, onLoad }: { route: SynthRoute; onLoad?: (s: string) 
         </div>
       )}
 
-      {/* Per-step blocks */}
-      {route.steps.map((s) => (
-        <div key={s.step} style={{
-          border: `1px solid ${AMBER.border}`, borderRadius: 6,
-          background: AMBER.bg, padding: "6px 8px",
-        }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+      {/* ROUTE FLOW — horizontal strip: SMs → step products → target */}
+      <RouteFlowStrip apiBase={apiBase} route={route} onLoad={onLoad} />
+
+      {/* Compact per-step ribbon (1 row per step, no text walls) */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {route.steps.map((s) => (
+          <div key={s.step}
+            title={[
+              s.reagents.length ? `reagents: ${s.reagents.join(", ")}` : "",
+              s.conditions ? `conditions: ${s.conditions}` : "",
+              s.rationale ? s.rationale : "",
+            ].filter(Boolean).join("\n")}
+            style={{
+              display: "flex", alignItems: "center", gap: 7,
+              padding: "4px 7px", borderRadius: 5,
+              background: AMBER.bg, border: `1px solid ${AMBER.border}`,
+              fontSize: 10,
+            }}>
             <span style={{
               width: 16, height: 16, borderRadius: 4, background: AMBER.fg,
-              color: "white", fontSize: 9.5, fontWeight: 700,
+              color: "white", fontSize: 9, fontWeight: 700,
               display: "inline-flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0, fontFamily: "var(--lys-font-mono)",
             }}>{s.step}</span>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--lys-text)" }}>
-              {s.name}
-            </span>
+            <span style={{ fontWeight: 600, color: "var(--lys-text)",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              maxWidth: 160 }}>{s.name}</span>
             {s.reaction_class && (
-              <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+              <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
                 color: AMBER.fgDeep, background: AMBER.bgStrong,
-                padding: "1px 5px", borderRadius: 3 }}>
+                padding: "1px 5px", borderRadius: 3, flexShrink: 0 }}>
                 {s.reaction_class}
               </span>
             )}
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+              color: s.yield_pct >= 70 ? "#16a34a" : "#d97706" }}>{s.yield_pct}%</span>
+            <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+              color: RISK_COLOR[s.risk] }}>{s.risk}</span>
+            <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+              color: AMBER.fgDeep }}>${s.est_cost_usd}</span>
           </div>
-          {/* Per-step metrics row — yield · risk · cost (real, computed) */}
-          <div style={{ display: "flex", gap: 8, marginTop: 3, flexWrap: "wrap",
-            fontSize: 9, fontFamily: "var(--lys-font-mono)" }}>
-            <span style={{ color: s.yield_pct >= 70 ? "#16a34a" : "#d97706" }}>
-              yield {s.yield_pct}%
-            </span>
-            <span style={{ color: RISK_COLOR[s.risk] }}>{s.risk} risk</span>
-            <span style={{ color: AMBER.fgDeep }} title={s.cost_driver}>
-              ${s.est_cost_usd} · {s.cost_driver}
-            </span>
-          </div>
-          {s.reagents.length > 0 && <Line label="reagents" value={s.reagents.join(", ")} />}
-          {s.conditions && <Line label="conditions" value={s.conditions} />}
-          {s.product_smiles && (
-            <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 4 }}>
-              <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-                color: "var(--lys-text-faint)" }}>→</span>
-              <button type="button"
-                onClick={() => { if (onLoad) onLoad(s.product_smiles); }}
-                title="Load this intermediate into the canvas"
-                disabled={!s.product_valid}
-                style={{
-                  fontFamily: "var(--lys-font-mono)", fontSize: 9.5,
-                  padding: "1px 5px", borderRadius: 3,
-                  border: `1px solid ${s.product_valid ? AMBER.border : "rgba(220,38,38,0.3)"}`,
-                  background: s.product_valid ? "rgba(255,255,255,0.6)" : "rgba(220,38,38,0.06)",
-                  color: s.product_valid ? AMBER.fgDeep : "#dc2626",
-                  cursor: s.product_valid ? "pointer" : "not-allowed",
-                  wordBreak: "break-all", textAlign: "left", lineHeight: 1.3,
-                }}>
-                {s.product_smiles}
-              </button>
-            </div>
-          )}
-          {s.rationale && (
-            <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)",
-              marginTop: 3, lineHeight: 1.4 }}>{s.rationale}</div>
-          )}
-        </div>
-      ))}
+        ))}
+      </div>
 
-      {/* Building blocks — availability derived from structure */}
+      {/* Building blocks — tight row with availability dot */}
       {route.starting_materials.length > 0 && (
         <div>
           <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
             letterSpacing: "0.06em", textTransform: "uppercase",
             color: "var(--lys-text-faint)", padding: "2px 2px 4px" }}>
-            building blocks · availability derived from structure
+            building blocks
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
             {route.starting_materials.map((sm, i) => (
               <div key={i}
-                title={sm.smiles}
+                title={`${sm.smiles}\n${sm.availability_reason}`}
                 style={{
-                  display: "flex", alignItems: "baseline", gap: 6,
+                  display: "flex", alignItems: "center", gap: 6,
                   padding: "3px 7px", borderRadius: 4,
                   background: "rgba(255,255,255,0.6)",
                   border: `1px solid ${AMBER.border}`, fontSize: 9.5,
                 }}>
                 <span style={{ width: 6, height: 6, borderRadius: 6, flexShrink: 0,
                   background: AVAIL_COLOR[sm.availability] }} />
-                <span style={{ fontWeight: 600, color: "var(--lys-text)" }}>{sm.name}</span>
-                <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-                  color: AVAIL_COLOR[sm.availability] }}>{sm.availability}</span>
-                <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-                  color: "var(--lys-text-faint)" }}>${sm.est_cost_usd}</span>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
+                <span style={{ fontWeight: 600, color: "var(--lys-text)",
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                  maxWidth: "55%" }}>{sm.availability_reason}</span>
+                  flex: 1 }}>{sm.name}</span>
+                <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+                  color: AVAIL_COLOR[sm.availability], flexShrink: 0 }}>{sm.availability}</span>
+                <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+                  color: "var(--lys-text-faint)", flexShrink: 0 }}>${sm.est_cost_usd}</span>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Critic review */}
+      {/* Critic verdict — compact */}
       {route.critique && (
         <div style={{
           border: `1px solid rgba(220,38,38,0.28)`, borderRadius: 6,
-          background: "rgba(220,38,38,0.05)", padding: "6px 8px",
+          background: "rgba(220,38,38,0.05)", padding: "5px 8px",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5,
             fontSize: 10, fontWeight: 700, color: "#b91c1c" }}>
             <AlertTriangle size={11} />
-            <span>Critic review</span>
+            <span>Critic</span>
             <span style={{ flex: 1 }} />
             <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
               color: route.critique.confidence >= 0.6 ? "#16a34a" : "#d97706" }}>
-              confidence {route.critique.confidence}
+              conf {route.critique.confidence}
             </span>
           </div>
-          <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)",
-            marginTop: 3, lineHeight: 1.45 }}>
-            <strong>Riskiest:</strong> step {route.critique.riskiest_step ?? "—"} —{" "}
-            {route.critique.risk_reason}
-          </div>
-          <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)",
-            marginTop: 2, lineHeight: 1.45 }}>
-            <strong>Scale-up:</strong> {route.critique.scale_up_concern}
-          </div>
           <div style={{ fontSize: 9.5, color: "#b91c1c", marginTop: 2,
-            lineHeight: 1.45, fontWeight: 600 }}>
-            Verdict: {route.critique.verdict}
-          </div>
+            lineHeight: 1.4, fontWeight: 600 }}>{route.critique.verdict}</div>
+          {(route.critique.risk_reason || route.critique.scale_up_concern) && (
+            <div style={{ fontSize: 9, color: "var(--lys-text-dim)",
+              marginTop: 2, lineHeight: 1.4 }}>
+              step {route.critique.riskiest_step ?? "—"}: {route.critique.risk_reason}
+              {route.critique.scale_up_concern && (
+                <> · scale-up: {route.critique.scale_up_concern}</>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -521,18 +502,92 @@ function RouteView({ route, onLoad }: { route: SynthRoute; onLoad?: (s: string) 
           <span>{route.overall_notes}</span>
         </div>
       )}
-      <div style={{ fontSize: 8.5, color: "var(--lys-text-faint)",
-        fontFamily: "var(--lys-font-mono)", textAlign: "right" }}>
-        editor: {route.model} · critic: {route.critique?.model ?? "—"}
+    </div>
+  );
+}
+
+/** Horizontal route-flow strip: building blocks → step product
+ *  thumbnails → target. Each thumb is clickable to load the
+ *  intermediate into the canvas. The visual story of the route. */
+function RouteFlowStrip({ apiBase, route, onLoad }: {
+  apiBase: string; route: SynthRoute; onLoad?: (s: string) => void;
+}) {
+  const sms = route.starting_materials;
+  const steps = route.steps;
+  if (!sms.length && !steps.length) return null;
+  // Show up to 3 SMs in a stacked column on the left, then each step
+  // product as a thumb with a reaction-class label on the connecting arrow.
+  const smShown = sms.slice(0, 3);
+  return (
+    <div style={{
+      border: `1px solid ${AMBER.border}`, borderRadius: 7,
+      background: "rgba(255,255,255,0.5)", padding: 7,
+    }}>
+      <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+        letterSpacing: "0.06em", textTransform: "uppercase",
+        color: AMBER.fgDeep, marginBottom: 5 }}>route flow</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6,
+        overflowX: "auto", paddingBottom: 2 }}>
+        {/* Starting materials column */}
+        {smShown.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3,
+            flexShrink: 0 }}>
+            {smShown.map((sm, i) => (
+              <Mol2DThumb key={i} apiBase={apiBase} smiles={sm.smiles}
+                w={70} h={55} caption={sm.name.slice(0, 14)}
+                accent={AVAIL_COLOR[sm.availability]}
+                onClick={onLoad ? () => onLoad(sm.smiles) : undefined}
+                title={`${sm.name} (${sm.availability}, $${sm.est_cost_usd})`} />
+            ))}
+            {sms.length > smShown.length && (
+              <div style={{ fontSize: 8, textAlign: "center",
+                color: "var(--lys-text-faint)",
+                fontFamily: "var(--lys-font-mono)" }}>
+                +{sms.length - smShown.length} more
+              </div>
+            )}
+          </div>
+        )}
+        {/* Step product chain */}
+        {steps.map((s, idx) => {
+          const isTarget = idx === steps.length - 1;
+          return (
+            <div key={s.step} style={{ display: "flex", alignItems: "center",
+              gap: 4, flexShrink: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column",
+                alignItems: "center", gap: 2 }}>
+                <ArrowRight size={14} style={{ color: AMBER.fg }} />
+                {s.reaction_class && (
+                  <span style={{ fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
+                    color: AMBER.fgDeep, fontWeight: 700,
+                    maxWidth: 60, textAlign: "center", lineHeight: 1.1 }}>
+                    {s.reaction_class.replace(/_/g, " ")}
+                  </span>
+                )}
+              </div>
+              <Mol2DThumb apiBase={apiBase} smiles={s.product_smiles}
+                w={isTarget ? 95 : 80} h={isTarget ? 72 : 60}
+                caption={isTarget ? "target" : `step ${s.step}`}
+                accent={isTarget ? "#16a34a" : (s.product_valid ? AMBER.fg : "#dc2626")}
+                onClick={onLoad && s.product_valid
+                  ? () => onLoad(s.product_smiles) : undefined}
+                title={s.product_smiles} />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-/** The agentic payoff — the agent's easier-to-make analog, with a
- *  one-tap Apply. Emerald accent: this is an action, not a readout. */
-function EasierAnalogBlock({ analog, onLoad }: {
-  analog: EasierAnalog; onLoad?: (s: string) => void;
+/** The agentic payoff — the agent's easier-to-make analog with
+ *  side-by-side ORIGINAL ↔ ANALOG structures. Emerald accent: action,
+ *  not readout. */
+function EasierAnalogBlock({ apiBase, candidateSmiles, analog, onLoad }: {
+  apiBase: string;
+  candidateSmiles: string;
+  analog: EasierAnalog;
+  onLoad?: (s: string) => void;
 }) {
   const ACT = { bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.4)",
     fg: "#059669", fgDeep: "#047857" };
@@ -553,11 +608,28 @@ function EasierAnalogBlock({ analog, onLoad }: {
     <div style={{ border: `1.5px solid ${ACT.border}`, borderRadius: 7,
       background: ACT.bg, padding: "8px 9px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 5,
-        fontSize: 10, fontWeight: 700, color: ACT.fgDeep }}>
+        fontSize: 10, fontWeight: 700, color: ACT.fgDeep, marginBottom: 6 }}>
         <Beaker size={12} />
         <span>Agent designed an easier-to-make analog</span>
       </div>
-      <div style={{ display: "flex", gap: 4, margin: "6px 0" }}>
+      {/* Side-by-side structures — the visual story */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center",
+        gap: 6, padding: "2px 0 6px" }}>
+        <Mol2DThumb apiBase={apiBase} smiles={candidateSmiles} w={130} h={100}
+          caption="original" accent="rgba(180,83,9,0.55)" />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
+          gap: 2 }}>
+          <ArrowRight size={18} style={{ color: ACT.fg }} />
+          <span style={{ fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+            color: ACT.fg, fontWeight: 700 }}>
+            {analog.steps_before}→{analog.steps_after}st
+          </span>
+        </div>
+        <Mol2DThumb apiBase={apiBase} smiles={analog.analog_smiles} w={130} h={100}
+          caption="analog" accent={ACT.fg} />
+      </div>
+      {/* 4-up delta strip */}
+      <div style={{ display: "flex", gap: 4, margin: "4px 0 6px" }}>
         <Delta label="steps" before={analog.steps_before} after={analog.steps_after}
           better={analog.steps_after <= analog.steps_before} />
         <Delta label="cost" before={`$${Math.round(analog.cost_before)}`}
@@ -570,20 +642,18 @@ function EasierAnalogBlock({ analog, onLoad }: {
           after={`${analog.yield_after}%`}
           better={analog.yield_after >= analog.yield_before} />
       </div>
-      <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)", lineHeight: 1.4 }}>
-        <strong style={{ color: ACT.fgDeep }}>{analog.simplification}</strong> — {analog.rationale}
+      {/* One-line simplification */}
+      <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)", lineHeight: 1.4,
+        textAlign: "center" }}>
+        <strong style={{ color: ACT.fgDeep }}>{analog.simplification}</strong>
       </div>
-      <div style={{ marginTop: 5, fontFamily: "var(--lys-font-mono)", fontSize: 9,
-        background: "rgba(255,255,255,0.7)", border: `1px solid ${ACT.border}`,
-        borderRadius: 4, padding: "4px 6px", wordBreak: "break-all",
-        color: ACT.fgDeep }}>{analog.analog_smiles}</div>
       <button type="button"
         onClick={() => {
           if (onLoad) onLoad(analog.analog_smiles);
           else window.dispatchEvent(new CustomEvent("lysos:auto-slash",
             { detail: { text: `/load ${analog.analog_smiles}` } }));
         }}
-        style={{ marginTop: 6, width: "100%", padding: "5px 0", border: 0,
+        style={{ marginTop: 6, width: "100%", padding: "6px 0", border: 0,
           borderRadius: 5, background: ACT.fg, color: "white",
           fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}>
         Apply this analog → load + re-score
@@ -613,13 +683,3 @@ function Stat({ label, value, color, sub }: {
   );
 }
 
-function Line({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", gap: 5, marginTop: 2, fontSize: 9.5 }}>
-      <span style={{ fontFamily: "var(--lys-font-mono)", fontSize: 8.5,
-        color: "var(--lys-text-faint)", textTransform: "uppercase",
-        flexShrink: 0, width: 56 }}>{label}</span>
-      <span style={{ color: "var(--lys-text-dim)", lineHeight: 1.4 }}>{value}</span>
-    </div>
-  );
-}

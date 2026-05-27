@@ -1,0 +1,130 @@
+/**
+ * Mol2DThumb — clean 2D structure thumbnail for a SMILES.
+ *
+ * Replaces text-heavy descriptions in service cards with the actual
+ * chemistry. SVG is parsed via DOMParser and inserted as a real DOM
+ * subtree (no dangerouslySetInnerHTML — any inline scripts are
+ * stripped on the way through).
+ *
+ * Module-level SVG cache so the same SMILES never refetches.
+ */
+import { useEffect, useRef, useState } from "react";
+
+const _SVG_CACHE = new Map<string, string>();
+
+interface Props {
+  apiBase: string;
+  smiles: string | null;
+  w?: number;
+  h?: number;
+  caption?: string;
+  /** Accent the border + caption (before/after comparisons). */
+  accent?: string;
+  onClick?: () => void;
+  title?: string;
+}
+
+function smilesToB64(s: string): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return window.btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  } catch {
+    return "";
+  }
+}
+
+/** Inject SVG markup safely via DOMParser. Strips <script> and any
+ *  on* event attributes; forces width/height to 100% so the structure
+ *  scales to the host container. */
+function injectSvg(host: HTMLDivElement | null, svgText: string): void {
+  if (!host) return;
+  host.replaceChildren();
+  try {
+    const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+    const svg = doc.documentElement;
+    if (!(svg instanceof SVGElement)) return;
+    svg.querySelectorAll("script").forEach((n) => n.remove());
+    svg.querySelectorAll<SVGElement>("*").forEach((el) => {
+      for (const attr of Array.from(el.attributes)) {
+        if (attr.name.toLowerCase().startsWith("on")) el.removeAttribute(attr.name);
+      }
+    });
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    host.appendChild(svg);
+  } catch {
+    /* ignore — host stays empty, caller shows fallback */
+  }
+}
+
+export function Mol2DThumb({
+  apiBase, smiles, w = 180, h = 140, caption, accent, onClick, title,
+}: Props) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "ok" | "err">("idle");
+
+  useEffect(() => {
+    if (!smiles) {
+      if (hostRef.current) hostRef.current.replaceChildren();
+      setState("idle");
+      return;
+    }
+    const key = `${smiles}|${w}x${h}`;
+    const cached = _SVG_CACHE.get(key);
+    if (cached) { injectSvg(hostRef.current, cached); setState("ok"); return; }
+    setState("loading");
+    let cancelled = false;
+    const b64 = smilesToB64(smiles);
+    if (!b64) { setState("err"); return; }
+    fetch(`${apiBase}/workbench/molecule/2d/${b64}?w=${w}&h=${h}&indices=0`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d) => {
+        if (cancelled) return;
+        const s = String(d.svg || "");
+        _SVG_CACHE.set(key, s);
+        injectSvg(hostRef.current, s);
+        setState("ok");
+      })
+      .catch(() => { if (!cancelled) setState("err"); });
+    return () => { cancelled = true; };
+  }, [apiBase, smiles, w, h]);
+
+  const accentCol = accent || "rgba(15,23,42,0.12)";
+  const interactive = !!onClick;
+  return (
+    <div
+      onClick={onClick}
+      title={title || smiles || undefined}
+      style={{
+        display: "inline-flex", flexDirection: "column", alignItems: "center",
+        gap: 3, padding: 4, borderRadius: 6,
+        background: "white", border: `1px solid ${accentCol}`,
+        cursor: interactive ? "pointer" : "default",
+        transition: "box-shadow 0.12s",
+      }}
+      onMouseEnter={(e) => {
+        if (interactive) {
+          (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px rgba(15,23,42,0.10)";
+        }
+      }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = ""; }}>
+      <div
+        ref={hostRef}
+        style={{ width: w, height: h, display: "flex",
+          alignItems: "center", justifyContent: "center",
+          color: "var(--lys-text-faint)", fontSize: 10,
+          fontFamily: "var(--lys-font-mono)" }}
+      >
+        {state !== "ok" && (state === "err" ? "× unparseable" : smiles ? "rendering…" : "—")}
+      </div>
+      {caption && (
+        <div style={{
+          fontSize: 9, fontWeight: 700, fontFamily: "var(--lys-font-mono)",
+          letterSpacing: "0.04em", textTransform: "uppercase",
+          color: accent ?? "var(--lys-text-faint)",
+        }}>{caption}</div>
+      )}
+    </div>
+  );
+}
