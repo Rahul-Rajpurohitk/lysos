@@ -318,6 +318,22 @@ def feed_from_state(state: dict[str, Any]) -> list[str]:
         })
         fed.append("fto")
 
+    # ── admet facet ──
+    admet = state.get("admet_panel")
+    if isinstance(admet, dict) and admet.get("composite") is not None \
+            and not admet.get("error"):
+        worst = admet.get("worst") or {}
+        fix = admet.get("fix") or {}
+        upsert_facet(sid, smi, "admet", {
+            "composite": admet.get("composite"),
+            "tier": admet.get("tier"),
+            "weakest_axis": worst.get("axis"),
+            "weakest_score": worst.get("score"),
+            "fix_smiles": fix.get("variant_smiles") if fix.get("improved") else None,
+            "panel_artifact_id": admet.get("artifact_id"),
+        })
+        fed.append("admet")
+
     # ── target facet (pathogen context) ──
     pathogen = state.get("pathogen")
     if pathogen:

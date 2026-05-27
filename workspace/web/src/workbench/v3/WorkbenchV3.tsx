@@ -67,6 +67,7 @@ import { PropertiesCard } from "./playground/PropertiesCard";
 import { PathogenIntelCard } from "./playground/PathogenIntelCard";
 import { AntibioticReferenceCard } from "./playground/AntibioticReferenceCard";
 import { ToxicityProfileCard } from "./playground/ToxicityProfileCard";
+import { ADMETObservatoryCard } from "./playground/ADMETObservatoryCard";
 import { SimilarityCard } from "./playground/SimilarityCard";
 import { ScoreBreakdownCard } from "./playground/ScoreBreakdownCard";
 import { AgentRosterCard } from "./playground/AgentRosterCard";
@@ -3094,6 +3095,20 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       /> },
                     { id: "toxicity", title: "Toxicity · ADME-Tox", body:
                       <ToxicityProfileCard apiBase={apiBase} smiles={currentSmiles} /> },
+                    // ADMET Observatory — Service 3: full 5-axis PK panel
+                    // with agentic fix-design for the weakest axis.
+                    { id: "admet", title: "ADMET observatory · 5-axis PK",
+                      size: 2, expandedH: 520, body:
+                      <ADMETObservatoryCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        smiles={currentSmiles}
+                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: "[admet · fix]",
+                        })}
+                      /> },
                     // Candidate Dossier — the integration backbone: every
                     // service's facet for the current candidate, the
                     // developability rollup, and the session portfolio.

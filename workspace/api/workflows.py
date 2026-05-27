@@ -1369,6 +1369,143 @@ _register(Workflow(
 ))
 
 
+# ── Workflow 5d: admet_panel (Service 3 — agentic 5-axis ADMET) ──────
+# Two streamed steps: physchem + 5-axis predictions, then the agent
+# DESIGNS a structural fix for the worst-scoring axis and queues it.
+
+async def _admet_panel_step(state: dict) -> dict:
+    """Step 1 — compute the full 5-axis ADMET envelope (A/D/M/E/T) from
+    RDKit physchem + reuses the SMARTS toxicity scan."""
+    from .chem_admet import _build_panel, _canonical, _non_drug_like_reason
+    smi = state.get("smiles") or state.get("current_smiles") or ""
+    canon = _canonical(smi)
+    if canon is None:
+        return {"error": f"need a valid candidate SMILES (got {smi!r})"}
+    nd = _non_drug_like_reason(canon)
+    if nd:
+        return {"smiles": canon, "non_drug_reason": nd,
+                "composite": 0.0, "tier": "n/a",
+                "axes": {}, "worst": {"axis": None, "score": 0.0}}
+    try:
+        return await _build_panel(canon)
+    except Exception as exc:  # noqa: BLE001
+        return {"error": str(exc)}
+
+
+async def _admet_fix_step(state: dict) -> dict:
+    """Step 2 — agent designs a structural fix for the worst axis,
+    re-panels the analog to PROVE improvement, queues it."""
+    from .chem_admet import _gemini_admet_fix, _ARTIFACT_KIND
+    from . import service_store as _ss, session_memory as _sm
+    panel = state.get("admet_panel") or {}
+    if panel.get("error") or panel.get("non_drug_reason"):
+        return {"note": panel.get("non_drug_reason") or "no panel to act on"}
+    fix = await _gemini_admet_fix(panel)
+    panel["fix"] = fix
+    sid = state.get("session_id") or state.get("_session_id")
+    try:
+        rec = _ss.save_artifact(
+            _ARTIFACT_KIND, panel, session_id=sid, smiles=panel.get("smiles"),
+            title=(f"ADMET · {panel.get('tier')} · "
+                   f"composite {panel.get('composite')} · "
+                   f"weakest {panel.get('worst',{}).get('axis')}"))
+        panel["artifact_id"] = rec["id"]
+    except Exception:  # noqa: BLE001
+        pass
+    if fix and fix.get("improved"):
+        try:
+            _sm.record_proposal(
+                sid or "", fix["variant_smiles"], source="admet-observatory",
+                swap_label=f"ADMET fix ({fix['modification']})",
+                rationale=(f"Lifts {fix['axis_label']} "
+                           f"{fix['score_before']}→{fix['score_after']}. "
+                           f"{fix['rationale']}"))
+        except Exception:  # noqa: BLE001
+            pass
+    state["admet_panel"] = panel
+    return fix or {"note": "no fix needed — worst axis is already healthy "
+                   "or no improvement could be proven"}
+
+
+def _synth_admet_panel(state: dict) -> str:
+    p = state.get("admet_panel") or {}
+    if p.get("error"):
+        return f"Couldn't compute the ADMET panel: {p['error']}"
+    if p.get("non_drug_reason"):
+        return (f"Not applicable — {p['non_drug_reason']}. Load a drug-like "
+                "candidate (≥10 heavy atoms, ≥1 ring) for a PK panel.")
+    axes = p.get("axes") or {}
+    worst = p.get("worst") or {}
+    lines = [
+        f"ADMET panel — composite **{p.get('composite')}** · "
+        f"tier **{p.get('tier')}** · weakest axis **{worst.get('axis')}** "
+        f"({worst.get('band')}).",
+        "",
+        "Per-axis scores (0-1, higher = better):",
+        f"- **A** (absorption): {axes.get('A',{}).get('score','—')} · F% "
+        f"{axes.get('A',{}).get('f_percent','—')} · HIA "
+        f"{axes.get('A',{}).get('hia_percent','—')}",
+        f"- **D** (distribution): {axes.get('D',{}).get('score','—')} · PPB "
+        f"{axes.get('D',{}).get('ppb_percent','—')}% · BBB "
+        f"{axes.get('D',{}).get('bbb_class','—')}",
+        f"- **M** (metabolism): {axes.get('M',{}).get('score','—')} · HLM "
+        f"{axes.get('M',{}).get('hlm_band','—')} · CYP3A4 inhib "
+        f"{axes.get('M',{}).get('cyp3a4_inhib_risk','—')}",
+        f"- **E** (excretion): {axes.get('E',{}).get('score','—')} · t½ "
+        f"{axes.get('E',{}).get('t_half_hours','—')}h · "
+        f"{axes.get('E',{}).get('dose_interval','—')}",
+        f"- **T** (toxicity): {axes.get('T',{}).get('score','—')} · hERG "
+        f"{axes.get('T',{}).get('herg_risk','—')} · hepatotox "
+        f"{axes.get('T',{}).get('hepatotox_risk','—')}",
+    ]
+    fix = p.get("fix")
+    if fix and fix.get("improved"):
+        lines += ["", "---", "",
+                  f"**Agent designed an ADMET-fix analog** via "
+                  f"_{fix['modification']}_ — lifts {fix['axis_label']} "
+                  f"**{fix['score_before']} → {fix['score_after']}** "
+                  f"(composite {fix['composite_before']} → "
+                  f"{fix['composite_after']}).",
+                  f"`{fix['variant_smiles']}`",
+                  f"{fix['rationale']} — say **apply** to load it."]
+    elif fix and fix.get("note"):
+        lines += ["", f"_{fix['note']}_"]
+    return "\n".join(lines).strip()
+
+
+_register(Workflow(
+    name="admet_panel",
+    label="ADMET panel · 5-axis PK",
+    description=("Five-axis ADMET prediction (Absorption / Distribution / "
+                 "Metabolism / Excretion / Toxicity) for a candidate, "
+                 "then the agent designs a structural fix for the worst "
+                 "axis — queued for one-tap apply."),
+    inputs=[
+        {"name": "smiles", "type": "string", "required": True},
+        {"name": "session_id", "type": "string", "required": False},
+    ],
+    tags=["admet", "pk", "absorption", "metabolism", "toxicity"],
+    steps=[
+        Step(
+            id="compute_panel",
+            label="Compute 5-axis ADMET panel",
+            tool="__inline__",
+            inline_fn=_admet_panel_step,
+            on_result=lambda st, r: st.__setitem__("admet_panel", r),
+        ),
+        Step(
+            id="design_fix",
+            label="Agent designs a fix for the worst axis",
+            tool="__inline__",
+            inline_fn=_admet_fix_step,
+            on_result=lambda st, r: st.__setitem__("admet_fix", r),
+            narrator_role="editor",
+        ),
+    ],
+    synthesize_fn=lambda st: _synth_admet_panel(st),
+))
+
+
 # ── Workflow 6: pareto_explore (agentic — score → frontier → critic) ─
 # Runs the full Pareto loop: kicks scoring on any unscored candidates,
 # fetches the frontier on the chosen axes, then has Gemini Pro Critic

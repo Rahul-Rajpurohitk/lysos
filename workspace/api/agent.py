@@ -270,6 +270,27 @@ _TOOL_DEFS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "predict_admet",
+        "description": (
+            "Five-axis ADMET prediction (Absorption / Distribution / "
+            "Metabolism / Excretion / Toxicity) for a SMILES. Each axis "
+            "returns a 0-1 score + band (good/moderate/poor) + the "
+            "underlying values: F%, HIA, Caco-2 Papp, PPB%, BBB class, "
+            "Vd, CYP3A4/2D6/2C9 inhibition risk, HLM stability, "
+            "clearance, dose interval, hERG / hepatotox / AMES risks. "
+            "Use whenever the user asks about PK, ADME, pharmacokinetics, "
+            "bioavailability, half-life, dose interval, CYP "
+            "interactions, BBB penetration, or wants the full safety + "
+            "PK panel together. The agent also designs a structural "
+            "fix for the worst axis when asked."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"smiles": {"type": "string"}},
+            "required": ["smiles"],
+        },
+    },
+    {
         "name": "list_axes",
         "description": "List all Pareto axis options + their direction/source/unit.",
         "parameters": {"type": "object", "properties": {}, "required": []},
@@ -405,6 +426,12 @@ async def _dispatch_tool(name: str, args: dict[str, Any], api_base: str) -> dict
             })
         elif name == "check_freedom_to_operate":
             r = await cx.post(f"{api_base}/workbench/chem/ip/fto-scan", json={
+                "smiles": args["smiles"],
+                "session_id": args.get("_session_id"),
+                "save": True,
+            })
+        elif name == "predict_admet":
+            r = await cx.post(f"{api_base}/workbench/chem/admet/panel", json={
                 "smiles": args["smiles"],
                 "session_id": args.get("_session_id"),
                 "save": True,

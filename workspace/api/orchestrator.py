@@ -135,6 +135,23 @@ _KNOWN_WORKFLOWS = [
                            "ip risk", "infringe", "already exists"],
         "inputs": {"smiles": "<current>"},
     },
+    {
+        "name": "admet_panel",
+        "description": ("Five-axis ADMET panel (Absorption / Distribution / "
+                        "Metabolism / Excretion / Toxicity) for the current "
+                        "SMILES — F%, HIA, Caco-2, PPB, BBB, Vd, CYP "
+                        "inhibition, HLM stability, clearance, dose "
+                        "interval, hERG / hepatotox / AMES. The agent "
+                        "designs a structural fix for the worst axis. "
+                        "Use whenever the user asks about ADMET, PK, "
+                        "pharmacokinetics, half-life, bioavailability, "
+                        "dose interval, CYP, hERG, BBB, oral absorption."),
+        "intent_phrases": ["admet", "adme", "pk", "pharmacokinetic",
+                           "bioavailability", "half-life", "half life",
+                           "dose interval", "cyp", "herg", "bbb",
+                           "absorption", "metabolism", "clearance"],
+        "inputs": {"smiles": "<current>"},
+    },
 ]
 
 _KNOWN_SLASH = [

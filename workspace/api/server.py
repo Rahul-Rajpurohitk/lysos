@@ -250,6 +250,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem IP/FTO router not loaded: %s", exc)
 
+# ADMET Observatory — Service 3: 5-axis PK panel + agentic fix-design
+try:
+    from .chem_admet import router as chem_admet_router
+    app.include_router(chem_admet_router, prefix="/workbench")
+    log.info("Chem ADMET routes loaded (/workbench/chem/admet/panel, /panels)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem ADMET router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
