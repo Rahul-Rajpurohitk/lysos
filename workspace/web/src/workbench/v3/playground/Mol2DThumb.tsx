@@ -36,13 +36,18 @@ function smilesToB64(s: string): string {
 /** Inject SVG markup safely via DOMParser. Strips <script> and any
  *  on* event attributes; forces width/height to 100% so the structure
  *  scales to the host container. */
-function injectSvg(host: HTMLDivElement | null, svgText: string): void {
-  if (!host) return;
+function injectSvg(host: HTMLDivElement | null, svgText: string): boolean {
+  if (!host) return false;
   host.replaceChildren();
   try {
     const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
     const svg = doc.documentElement;
-    if (!(svg instanceof SVGElement)) return;
+    // The parser uses tagName "svg" for SVG roots; instanceof SVGElement
+    // is unreliable across iframes/edge browsers, tagName is the
+    // canonical check.
+    if (!svg || svg.tagName.toLowerCase() !== "svg") return false;
+    // Bail if the parser inserted an error element (malformed XML).
+    if (doc.getElementsByTagName("parsererror").length) return false;
     svg.querySelectorAll("script").forEach((n) => n.remove());
     svg.querySelectorAll<SVGElement>("*").forEach((el) => {
       for (const attr of Array.from(el.attributes)) {
@@ -52,9 +57,11 @@ function injectSvg(host: HTMLDivElement | null, svgText: string): void {
     svg.setAttribute("width", "100%");
     svg.setAttribute("height", "100%");
     svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    (svg as unknown as HTMLElement).style.display = "block";
     host.appendChild(svg);
+    return true;
   } catch {
-    /* ignore — host stays empty, caller shows fallback */
+    return false;
   }
 }
 
@@ -72,7 +79,11 @@ export function Mol2DThumb({
     }
     const key = `${smiles}|${w}x${h}`;
     const cached = _SVG_CACHE.get(key);
-    if (cached) { injectSvg(hostRef.current, cached); setState("ok"); return; }
+    if (cached) {
+      const ok = injectSvg(hostRef.current, cached);
+      setState(ok ? "ok" : "err");
+      return;
+    }
     setState("loading");
     let cancelled = false;
     const b64 = smilesToB64(smiles);
@@ -82,9 +93,9 @@ export function Mol2DThumb({
       .then((d) => {
         if (cancelled) return;
         const s = String(d.svg || "");
-        _SVG_CACHE.set(key, s);
-        injectSvg(hostRef.current, s);
-        setState("ok");
+        const ok = injectSvg(hostRef.current, s);
+        if (ok) _SVG_CACHE.set(key, s);  // only cache valid SVGs
+        setState(ok ? "ok" : "err");
       })
       .catch(() => { if (!cancelled) setState("err"); });
     return () => { cancelled = true; };
@@ -109,14 +120,26 @@ export function Mol2DThumb({
         }
       }}
       onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.boxShadow = ""; }}>
-      <div
-        ref={hostRef}
-        style={{ width: w, height: h, display: "flex",
-          alignItems: "center", justifyContent: "center",
-          color: "var(--lys-text-faint)", fontSize: 10,
-          fontFamily: "var(--lys-font-mono)" }}
-      >
-        {state !== "ok" && (state === "err" ? "× unparseable" : smiles ? "rendering…" : "—")}
+      {/* The ref'd host MUST have no React children. If JSX puts text
+       *  here, React's reconciliation will wipe our imperatively-injected
+       *  SVG on the next render — the structure goes blank but the
+       *  caption stays. Keep the placeholder as a sibling overlay. */}
+      <div style={{ position: "relative", width: w, height: h }}>
+        <div
+          ref={hostRef}
+          style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}
+        />
+        {state !== "ok" && (
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "var(--lys-text-faint)", fontSize: 10,
+            fontFamily: "var(--lys-font-mono)", pointerEvents: "none",
+            textAlign: "center", padding: 4,
+          }}>
+            {state === "err" ? "× unparseable" : smiles ? "rendering…" : "—"}
+          </div>
+        )}
       </div>
       {caption && (
         <div style={{

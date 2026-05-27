@@ -508,33 +508,45 @@ function RouteView({ apiBase, route, onLoad }: {
 
 /** Horizontal route-flow strip: building blocks → step product
  *  thumbnails → target. Each thumb is clickable to load the
- *  intermediate into the canvas. The visual story of the route. */
+ *  intermediate into the canvas. Compact sizing so 3-step routes
+ *  fit in a 420px card without horizontal scrolling. */
 function RouteFlowStrip({ apiBase, route, onLoad }: {
   apiBase: string; route: SynthRoute; onLoad?: (s: string) => void;
 }) {
   const sms = route.starting_materials;
   const steps = route.steps;
   if (!sms.length && !steps.length) return null;
-  // Show up to 3 SMs in a stacked column on the left, then each step
-  // product as a thumb with a reaction-class label on the connecting arrow.
-  const smShown = sms.slice(0, 3);
+  const smShown = sms.slice(0, 2);
+  // Adaptive sizing — narrower thumbs for longer routes so the strip
+  // doesn't clip the target.
+  const n = steps.length;
+  const stepW = n >= 4 ? 56 : n >= 3 ? 64 : 78;
+  const stepH = Math.round(stepW * 0.78);
   return (
     <div style={{
       border: `1px solid ${AMBER.border}`, borderRadius: 7,
-      background: "rgba(255,255,255,0.5)", padding: 7,
+      background: "rgba(255,255,255,0.5)", padding: 7, minWidth: 0,
     }}>
-      <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
-        letterSpacing: "0.06em", textTransform: "uppercase",
-        color: AMBER.fgDeep, marginBottom: 5 }}>route flow</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 6,
-        overflowX: "auto", paddingBottom: 2 }}>
+      <div style={{ display: "flex", alignItems: "baseline",
+        justifyContent: "space-between", marginBottom: 5 }}>
+        <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+          letterSpacing: "0.06em", textTransform: "uppercase",
+          color: AMBER.fgDeep }}>route flow</div>
+        <div style={{ fontSize: 8, fontFamily: "var(--lys-font-mono)",
+          color: "var(--lys-text-faint)" }}>
+          scroll →
+        </div>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 4,
+        overflowX: "auto", paddingBottom: 4 }}>
         {/* Starting materials column */}
         {smShown.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 3,
             flexShrink: 0 }}>
             {smShown.map((sm, i) => (
               <Mol2DThumb key={i} apiBase={apiBase} smiles={sm.smiles}
-                w={70} h={55} caption={sm.name.slice(0, 14)}
+                w={stepW} h={Math.round(stepH * 0.85)}
+                caption={sm.name.length > 12 ? sm.name.slice(0, 11) + "…" : sm.name}
                 accent={AVAIL_COLOR[sm.availability]}
                 onClick={onLoad ? () => onLoad(sm.smiles) : undefined}
                 title={`${sm.name} (${sm.availability}, $${sm.est_cost_usd})`} />
@@ -543,7 +555,7 @@ function RouteFlowStrip({ apiBase, route, onLoad }: {
               <div style={{ fontSize: 8, textAlign: "center",
                 color: "var(--lys-text-faint)",
                 fontFamily: "var(--lys-font-mono)" }}>
-                +{sms.length - smShown.length} more
+                +{sms.length - smShown.length}
               </div>
             )}
           </div>
@@ -553,20 +565,21 @@ function RouteFlowStrip({ apiBase, route, onLoad }: {
           const isTarget = idx === steps.length - 1;
           return (
             <div key={s.step} style={{ display: "flex", alignItems: "center",
-              gap: 4, flexShrink: 0 }}>
+              gap: 2, flexShrink: 0 }}>
               <div style={{ display: "flex", flexDirection: "column",
-                alignItems: "center", gap: 2 }}>
-                <ArrowRight size={14} style={{ color: AMBER.fg }} />
+                alignItems: "center", gap: 1, minWidth: 40 }}>
+                <ArrowRight size={12} style={{ color: AMBER.fg }} />
                 {s.reaction_class && (
-                  <span style={{ fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
+                  <span style={{ fontSize: 7, fontFamily: "var(--lys-font-mono)",
                     color: AMBER.fgDeep, fontWeight: 700,
-                    maxWidth: 60, textAlign: "center", lineHeight: 1.1 }}>
+                    maxWidth: 50, textAlign: "center", lineHeight: 1.1 }}>
                     {s.reaction_class.replace(/_/g, " ")}
                   </span>
                 )}
               </div>
               <Mol2DThumb apiBase={apiBase} smiles={s.product_smiles}
-                w={isTarget ? 95 : 80} h={isTarget ? 72 : 60}
+                w={isTarget ? Math.round(stepW * 1.1) : stepW}
+                h={isTarget ? Math.round(stepH * 1.1) : stepH}
                 caption={isTarget ? "target" : `step ${s.step}`}
                 accent={isTarget ? "#16a34a" : (s.product_valid ? AMBER.fg : "#dc2626")}
                 onClick={onLoad && s.product_valid
