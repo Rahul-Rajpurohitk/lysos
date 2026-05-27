@@ -26,7 +26,7 @@ interface EscapeVariant {
 interface FTOReport {
   smiles: string;
   novelty_score: number;
-  novelty_tier: "none" | "low" | "low-medium" | "medium" | "good" | "high";
+  novelty_tier: "n/a" | "none" | "low" | "low-medium" | "medium" | "good" | "high";
   verdict: string;
   ip_note: string;
   closest_published: { ref: string; similarity: number } | null;
@@ -38,6 +38,7 @@ interface FTOReport {
     near_identical: number; close: number; related: number;
   };
   escape_variant: EscapeVariant | null;
+  non_drug_reason?: string | null;
   artifact_id?: string | null;
 }
 interface SavedReport {
@@ -60,6 +61,7 @@ const ACT = { bg: "rgba(16,185,129,0.08)", border: "rgba(16,185,129,0.4)",
   fg: "#059669", fgDeep: "#047857" } as const;
 
 const TIER_COLOR: Record<string, string> = {
+  "n/a": "#94a3b8",  // gray — not applicable
   none: "#dc2626", low: "#dc2626", "low-medium": "#d97706",
   medium: "#d97706", good: "#65a30d", high: "#16a34a",
 };

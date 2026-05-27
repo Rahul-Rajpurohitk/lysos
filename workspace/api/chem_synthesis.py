@@ -199,11 +199,26 @@ def _retro_prompt(smiles: str) -> str:
         "medicinal-chemistry lab could actually run.\n\n"
         f"Target SMILES: {smiles}\n\n"
         "Rules:\n"
-        "  - 2 to 6 steps. Prefer robust, well-precedented reactions.\n"
+        "  - 1 to 6 steps. Use the FEWEST STEPS that genuinely work — "
+        "do NOT invent extra disconnections for show. If the target is "
+        "one functional-group transformation from a commercial material "
+        "(e.g. an acylation of an aryl amine with Ac2O, a single amide "
+        "coupling, an ester hydrolysis, an N-alkylation), propose a "
+        "ONE-STEP route from commercial starting materials.\n"
+        "  - AVOID Pd-catalysed couplings (Suzuki, Buchwald, Negishi, "
+        "Stille, Sonogashira) UNLESS the target genuinely has a "
+        "C–C / C–N biaryl bond formed at that bond. Do NOT add an "
+        "unnecessary biaryl coupling just to use an aryl boronic acid "
+        "or aryl halide as a starting material when the target has no "
+        "biaryl. Cost matters: Pd cross-couplings are ~$230/step, "
+        "amide couplings ~$95/step.\n"
+        "  - Every product_smiles MUST be a syntactically valid SMILES "
+        "with balanced parentheses and ring closures. A single invalid "
+        "intermediate invalidates the whole route — re-check each one.\n"
         "  - For EACH step give: the named transform, the reaction_class "
-        "(be specific — 'Suzuki coupling', 'amide coupling', 'Boc "
-        "deprotection', 'reductive amination', …), reagents, conditions, "
-        "the product_smiles AFTER that step, an honest single-step "
+        "(be specific — 'amide coupling', 'Boc deprotection', "
+        "'reductive amination', …), reagents, conditions, the "
+        "product_smiles AFTER that step, an honest single-step "
         "yield_pct (40-98), a risk rating (low | moderate | high) for "
         "how likely the step is to fail or be low-yielding, and a short "
         "rationale. The FINAL step's product_smiles MUST be the target.\n"
@@ -523,6 +538,32 @@ def _route_is_hard(route: dict[str, Any]) -> bool:
             or (route.get("n_steps") or 0) >= 5)
 
 
+def _analog_is_drug_like(parent_smiles: str, analog_smiles: str) -> bool:
+    """Reject "easier analogs" that have degenerated to a building
+    block (e.g. stripping the defining acetyl from acetaminophen and
+    returning 4-aminobenzoic acid). The analog must keep at least one
+    ring, be roughly the same size as the parent, and not be a
+    well-known commodity reagent."""
+    try:
+        from rdkit import Chem
+        pa = Chem.MolFromSmiles(parent_smiles or "")
+        an = Chem.MolFromSmiles(analog_smiles or "")
+        if pa is None or an is None:
+            return False
+        if an.GetNumHeavyAtoms() < 10:
+            return False
+        if an.GetRingInfo().NumRings() < 1:
+            return False
+        # The analog must keep most of the parent's mass — if it drops
+        # below 60% it's likely a fragment / starting material, not a
+        # real drug variant.
+        if an.GetNumHeavyAtoms() < pa.GetNumHeavyAtoms() * 0.6:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 async def _design_simpler_analog(route: dict[str, Any]) -> Optional[dict[str, Any]]:
     """THE agentic payoff. When the route is hard/expensive, ask the
     agent for ONE structural simplification that is easier to
@@ -545,6 +586,18 @@ async def _design_simpler_analog(route: dict[str, Any]) -> Optional[dict[str, An
         "(keep the β-lactam warhead / core mechanism; simplify the "
         "periphery — drop a hard-to-install group, swap an exotic "
         "coupling for a robust one, remove a stereocentre).\n\n"
+        "HARD CONSTRAINTS — the analog MUST:\n"
+        "  - keep at least one ring system (no stripping down to a "
+        "linear fragment)\n"
+        "  - keep at least 60% of the parent's heavy-atom count "
+        "(no degenerating to a starting material — the analog must "
+        "still LOOK like a drug, not a building block)\n"
+        "  - keep the parent's key functional groups responsible for "
+        "binding (e.g. don't drop the amide on an amide-bearing "
+        "antibiotic, don't drop the β-lactam on a β-lactam)\n"
+        "  - be a meaningful chemistry edit (substituent swap, "
+        "stereocentre removal, ring isostere) — not a wholesale "
+        "deletion\n\n"
         f"Candidate SMILES: {route['smiles']}\n"
         f"Current route: {route['n_steps']} steps · "
         f"${route['estimated_cost_usd']} ({route['cost_band']}) · "
@@ -561,6 +614,11 @@ async def _design_simpler_analog(route: dict[str, Any]) -> Optional[dict[str, An
         return None
     analog = _canonical(obj.get("analog_smiles", ""))
     if analog is None or analog == route["smiles"]:
+        return None
+    # The analog must still LOOK like a drug — not a stripped-down
+    # starting material. Guards against "remove the acetyl → end up
+    # with 4-aminobenzoic acid" degeneration.
+    if not _analog_is_drug_like(route["smiles"], analog):
         return None
     # Re-plan the analog (plan + assemble; skip the critic for speed) —
     # PROVE it is genuinely easier.

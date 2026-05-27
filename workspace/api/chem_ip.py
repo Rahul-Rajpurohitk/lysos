@@ -88,6 +88,30 @@ def _morgan(smiles: str):
         return None
 
 
+def _non_drug_like_reason(smiles: str) -> Optional[str]:
+    """Return a one-line reason why the input is NOT a drug-like
+    candidate (so an IP / novelty analysis is meaningless), else None.
+    Catches commodity chemicals (acetic anhydride, DMSO, …) and
+    fragments that just happen to be absent from the antibiotic
+    corpus."""
+    try:
+        from rdkit import Chem
+        m = Chem.MolFromSmiles((smiles or "").strip())
+        if m is None:
+            return None  # let the caller flag the parse error
+        n_heavy = m.GetNumHeavyAtoms()
+        n_rings = m.GetRingInfo().NumRings()
+        if n_heavy < 10:
+            return (f"only {n_heavy} heavy atoms — likely a reagent or "
+                    "fragment, not a drug candidate")
+        if n_rings == 0:
+            return ("acyclic molecule — no ring system, so it isn't a "
+                    "drug-like scaffold to clear IP on")
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 _REFERENCE: Optional[list[dict[str, Any]]] = None
 _REFERENCE_FP: Optional[list[tuple[dict[str, Any], Any]]] = None
 _CORPUS_FP: Optional[list[tuple[str, Any]]] = None
@@ -171,6 +195,31 @@ def _scan(smiles: str) -> dict[str, Any]:
     canon = _canonical(smiles)
     if canon is None:
         raise HTTPException(422, f"unparseable SMILES: {smiles}")
+    # Commodity-chem / non-drug gate. Acetic anhydride is absent from
+    # the antibiotic corpus and would otherwise read as "novelty
+    # high" — which is meaningless. Surface the truth instead.
+    nd = _non_drug_like_reason(canon)
+    if nd:
+        return {
+            "smiles": canon,
+            "novelty_score": 0.0,
+            "novelty_tier": "n/a",
+            "verdict": f"Not a drug candidate — {nd}",
+            "ip_note": ("IP / novelty analysis isn't meaningful for non-"
+                        "drug inputs. Load an antibiotic candidate "
+                        "(≥10 heavy atoms, at least one ring)."),
+            "closest_published": None,
+            "closest_published_similarity": 0.0,
+            "closest_marketed_drug": None,
+            "related_marketed_drugs": [],
+            "prior_art": {
+                "corpus_size": len(_corpus_fps()),
+                "exact_matches": 0, "near_identical": 0,
+                "close": 0, "related": 0,
+            },
+            "non_drug_reason": nd,
+            "computed_at": time.time(),
+        }
     fp = _morgan(canon)
     if fp is None:
         raise HTTPException(422, f"could not fingerprint: {smiles}")
@@ -245,6 +294,9 @@ async def _design_escape_variant(scan: dict[str, Any]) -> Optional[dict[str, Any
     antibacterial pharmacophore — then RDKit-validate it and RE-SCAN
     to prove the novelty actually improved. None when no edit is
     needed (already novel) or the design fails."""
+    # Non-drug inputs can't have an escape variant.
+    if scan.get("non_drug_reason"):
+        return None
     cps = scan.get("closest_published_similarity", 0.0)
     if cps < _T_ESCAPE_TRIGGER:
         return None  # already structurally novel — no escape edit needed
