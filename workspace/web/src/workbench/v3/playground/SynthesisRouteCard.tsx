@@ -17,6 +17,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { FlaskConical, RefreshCw, Star, Trash2, Beaker, ChevronRight, AlertTriangle, ArrowRight } from "lucide-react";
 import { Mol2DThumb } from "./Mol2DThumb";
+import { isLikelyNonDrug } from "./chemUtils";
 
 interface RouteStep {
   step: number;
@@ -297,13 +298,17 @@ export function SynthesisRouteCard({ apiBase, sessionId, smiles, onLoad }: Props
               padding: "0 2px 4px",
             }}>saved routes</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {saved.map((rt) => (
+              {saved.map((rt) => {
+                const nd = rt.payload.non_drug_reason ?? isLikelyNonDrug(rt.payload.smiles);
+                const isStale = !!nd;
+                return (
                 <div key={rt.id}
                   style={{
                     display: "flex", alignItems: "center", gap: 6,
                     padding: "5px 7px", borderRadius: 5,
                     background: route?.artifact_id === rt.id ? AMBER.bgStrong : AMBER.bg,
                     border: `1px solid ${AMBER.border}`,
+                    opacity: isStale ? 0.55 : 1,
                   }}>
                   <button type="button" onClick={() => void toggleStar(rt)}
                     title={rt.payload.starred ? "Unstar" : "Star"}
@@ -317,6 +322,14 @@ export function SynthesisRouteCard({ apiBase, sessionId, smiles, onLoad }: Props
                       background: "transparent", cursor: "pointer", padding: 0,
                       display: "flex", alignItems: "baseline", gap: 6,
                     }}>
+                    {isStale && (
+                      <span title={nd ?? ""} style={{
+                        fontSize: 8, fontFamily: "var(--lys-font-mono)",
+                        padding: "1px 5px", borderRadius: 3, flexShrink: 0,
+                        background: "rgba(148,163,184,0.20)",
+                        color: "#64748b", fontWeight: 700,
+                      }}>n/a</span>
+                    )}
                     <span style={{ fontSize: 10.5, fontWeight: 600,
                       color: "var(--lys-text)", whiteSpace: "nowrap",
                       overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -334,7 +347,8 @@ export function SynthesisRouteCard({ apiBase, sessionId, smiles, onLoad }: Props
                     <Trash2 size={11} />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -350,9 +364,11 @@ function RouteView({ apiBase, route, onLoad }: {
   apiBase: string; route: SynthRoute; onLoad?: (s: string) => void;
 }) {
   // Non-applicable empty state — the candidate is a commodity reagent
-  // or fragment, so retrosynthesis is meaningless. Show a clean "n/a"
-  // panel instead of a half-rendered route.
-  if (route.non_drug_reason || route.n_steps === 0) {
+  // or fragment, so retrosynthesis is meaningless. The client-side
+  // heuristic catches STALE saved artifacts that pre-date the
+  // backend gate (no migration needed).
+  const nonDrugReason = route.non_drug_reason ?? isLikelyNonDrug(route.smiles);
+  if (nonDrugReason || route.n_steps === 0) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10,
         padding: 12, alignItems: "center", textAlign: "center",
@@ -366,7 +382,7 @@ function RouteView({ apiBase, route, onLoad }: {
         </div>
         <div style={{ fontSize: 9.5, color: "var(--lys-text-dim)",
           lineHeight: 1.45, maxWidth: 360 }}>
-          {route.non_drug_reason ?? route.overall_notes ??
+          {nonDrugReason ?? route.overall_notes ??
             "This molecule is commercially available — no synthesis required."}
         </div>
         <div style={{ fontSize: 9, color: "var(--lys-text-faint)",

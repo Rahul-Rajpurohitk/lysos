@@ -11,6 +11,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Scale, RefreshCw, Trash2, Sparkles, ArrowRight } from "lucide-react";
 import { Mol2DThumb } from "./Mol2DThumb";
+import { isLikelyNonDrug } from "./chemUtils";
 
 interface MarketedDrug {
   name: string; smiles: string; drug_class: string;
@@ -204,21 +205,37 @@ export function IPSentinelCard({ apiBase, sessionId, smiles, onLoad }: Props) {
               letterSpacing: "0.06em", textTransform: "uppercase",
               color: "var(--lys-text-faint)", padding: "0 2px 4px" }}>saved IP scans</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              {saved.map((rt) => (
+              {saved.map((rt) => {
+                const nd = rt.payload.non_drug_reason ?? isLikelyNonDrug(rt.payload.smiles);
+                const isStale = !!nd;
+                const dotCol = isStale ? "#94a3b8"
+                  : (TIER_COLOR[rt.payload.novelty_tier] ?? "#9ca3af");
+                return (
                 <div key={rt.id} style={{
                   display: "flex", alignItems: "center", gap: 6, padding: "5px 7px",
                   borderRadius: 5,
                   background: report?.artifact_id === rt.id ? SLATE.bgStrong : SLATE.bg,
                   border: `1px solid ${SLATE.border}`,
+                  opacity: isStale ? 0.55 : 1,
                 }}>
                   <span style={{ width: 7, height: 7, borderRadius: 7, flexShrink: 0,
-                    background: TIER_COLOR[rt.payload.novelty_tier] ?? "#9ca3af" }} />
+                    background: dotCol }} />
                   <button type="button" onClick={() => setReport({ ...rt.payload, artifact_id: rt.id })}
                     style={{ flex: 1, minWidth: 0, textAlign: "left", border: 0,
                       background: "transparent", cursor: "pointer", padding: 0,
-                      fontSize: 10.5, fontWeight: 600, color: "var(--lys-text)",
+                      display: "flex", alignItems: "baseline", gap: 6 }}>
+                    {isStale && (
+                      <span title={nd ?? ""} style={{
+                        fontSize: 8, fontFamily: "var(--lys-font-mono)",
+                        padding: "1px 5px", borderRadius: 3, flexShrink: 0,
+                        background: "rgba(148,163,184,0.20)",
+                        color: "#64748b", fontWeight: 700,
+                      }}>n/a</span>
+                    )}
+                    <span style={{ fontSize: 10.5, fontWeight: 600, color: "var(--lys-text)",
                       whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {rt.title || "IP scan"}
+                      {rt.title || "IP scan"}
+                    </span>
                   </button>
                   <button type="button" onClick={() => void deleteReport(rt.id)}
                     style={{ border: 0, background: "transparent", cursor: "pointer",
@@ -226,7 +243,8 @@ export function IPSentinelCard({ apiBase, sessionId, smiles, onLoad }: Props) {
                     <Trash2 size={11} />
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -238,7 +256,23 @@ export function IPSentinelCard({ apiBase, sessionId, smiles, onLoad }: Props) {
 function FTOView({ apiBase, report, onApply }: {
   apiBase: string; report: FTOReport; onApply: (s: string) => void;
 }) {
-  const r = report;
+  // Client-side non-drug gate — catches STALE saved scans that
+  // pre-date the backend gate (e.g. an old "Novelty · high · 0.682"
+  // entry for acetic anhydride). Overrides the verdict so the
+  // card never shows nonsense.
+  const heuristicNonDrug = report.non_drug_reason ?? isLikelyNonDrug(report.smiles);
+  const r: FTOReport = heuristicNonDrug && !report.non_drug_reason ? {
+    ...report,
+    novelty_score: 0,
+    novelty_tier: "n/a",
+    verdict: `Not a drug candidate — ${heuristicNonDrug}`,
+    ip_note: ("IP / novelty analysis isn't meaningful for non-drug "
+              + "inputs. Load an antibiotic candidate (≥10 heavy atoms, "
+              + "at least one ring)."),
+    closest_marketed_drug: null,
+    escape_variant: null,
+    non_drug_reason: heuristicNonDrug,
+  } : report;
   const esc = r.escape_variant;
   const tierCol = TIER_COLOR[r.novelty_tier] ?? "#9ca3af";
   const pa = r.prior_art;
