@@ -1,21 +1,26 @@
 {
-  "_runtime": 29158.364793517,
-  "_step": 1500,
-  "_timestamp": 1778057056.7379408,
+  "_runtime": 32243,
+  "_step": 1654,
+  "_timestamp": 1778060070.5883536,
   "_wandb": {
-    "runtime": 29158
+    "runtime": 32243
   },
-  "cost/budget_pct_used": 8.93104700320544,
-  "cost/hours_elapsed": 8.099498491419686,
+  "cost/budget_pct_used": 8.933362954523828,
+  "cost/hours_elapsed": 8.933362954523828,
   "cost/per_hour": 3,
-  "cost/projected_total_usd": 26.79314100961632,
-  "cost/spent_usd": 24.298495474259056,
-  "train/entropy": 0.2326710744202137,
-  "train/epoch": 1.8145234493192133,
-  "train/global_step": 1500,
-  "train/grad_norm": 0.37553414702415466,
-  "train/learning_rate": 1.14321098262129e-06,
-  "train/loss": 0.23214065551757812,
-  "train/mean_token_accuracy": 0.9242386177182198,
-  "train/num_tokens": 24019383
+  "cost/projected_total_usd": 26.80008886357148,
+  "cost/spent_usd": 26.80008886357148,
+  "total_flos": 4901554737192892000,
+  "train/entropy": 0.23022960355648628,
+  "train/epoch": 2,
+  "train/global_step": 1654,
+  "train/grad_norm": 0.3707713782787323,
+  "train/learning_rate": 1.1987746991654056e-09,
+  "train/loss": 0.23240699768066408,
+  "train/mean_token_accuracy": 0.9260945916175842,
+  "train/num_tokens": 26486384,
+  "train_loss": 0.3602830802947463,
+  "train_runtime": 32173.1284,
+  "train_samples_per_second": 0.411,
+  "train_steps_per_second": 0.051
 }

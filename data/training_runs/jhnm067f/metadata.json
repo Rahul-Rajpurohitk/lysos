@@ -1,0 +1,17 @@
+{
+  "id": "jhnm067f",
+  "name": "stage2-amr-sft-lysos-base",
+  "state": "killed",
+  "created_at": "2026-05-06T10:12:07Z",
+  "tags": [
+    "amd-mi300x",
+    "amr",
+    "gemma-4",
+    "lablab-2026",
+    "sft",
+    "stage2"
+  ],
+  "url": "https://wandb.ai/rahulrajpurohit005-lysos/lysos/runs/jhnm067f",
+  "project": "lysos",
+  "entity": "rahulrajpurohit005-lysos"
+}

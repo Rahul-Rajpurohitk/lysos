@@ -1,0 +1,18 @@
+{
+  "id": "1nitovn5",
+  "name": "stage2_5-dpo-lysos-base-dpo",
+  "state": "finished",
+  "created_at": "2026-05-06T22:41:48Z",
+  "tags": [
+    "amd-mi300x",
+    "amr",
+    "dpo",
+    "gemma-4",
+    "hard-negatives",
+    "lablab-2026",
+    "stage2.5"
+  ],
+  "url": "https://wandb.ai/rahulrajpurohit005-lysos/lysos/runs/1nitovn5",
+  "project": "lysos",
+  "entity": "rahulrajpurohit005-lysos"
+}

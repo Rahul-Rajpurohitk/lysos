@@ -1,7 +1,7 @@
 {
   "id": "zynunpjr",
   "name": "stage1-txgemma4-gemma4-31b",
-  "state": "running",
+  "state": "finished",
   "created_at": "2026-05-06T00:38:18Z",
   "tags": [
     "amd-mi300x",
