@@ -42,6 +42,7 @@ import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
+import { GeneratorCard } from "./playground/GeneratorCard";
 import { DossierCard } from "./playground/DossierCard";
 // WorkflowPhaseTracker removed — heuristic phase derivation was faking
 // SCOPE/VALIDATE evidence counts. Real workflow progress is now
@@ -3013,6 +3014,22 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                             logLabel: label ?? "[harden · apply]",
                           });
                         }}
+                      /> },
+                    // Generator (Service 4): real de-novo + lead-opt molecular
+                    //    generation (BRICS now, GenMol on MI300X). First step of
+                    //    the discovery flow — generate, then make-route.
+                    { id: "generator", title: "Generator · de-novo + lead-opt",
+                      size: 2, expandedH: 480, body:
+                      <GeneratorCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: null,
+                          logLabel: "[generator · apply]",
+                        })}
                       /> },
                     // 4) Synthesis Make-Route: retrosynthetic route + cost for
                     //    the current candidate, with a CRUD shelf of saved routes.
