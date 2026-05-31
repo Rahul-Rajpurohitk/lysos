@@ -43,6 +43,7 @@ import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
 import { GeneratorCard } from "./playground/GeneratorCard";
+import { PeptideLabCard } from "./playground/PeptideLabCard";
 import { DossierCard } from "./playground/DossierCard";
 // WorkflowPhaseTracker removed — heuristic phase derivation was faking
 // SCOPE/VALIDATE evidence counts. Real workflow progress is now
@@ -3030,6 +3031,15 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           parentId: null,
                           logLabel: "[generator · apply]",
                         })}
+                      /> },
+                    // Peptide Lab (AMP modality): the second pipeline — analyze
+                    //    or design antimicrobial peptides with the helical-wheel
+                    //    amphipathicity view. Sequence-based, not SMILES.
+                    { id: "peptide", title: "Peptide lab · AMP modality",
+                      size: 2, expandedH: 520, body:
+                      <PeptideLabCard
+                        apiBase={apiBase}
+                        sessionId={activeChatId}
                       /> },
                     // 4) Synthesis Make-Route: retrosynthetic route + cost for
                     //    the current candidate, with a CRUD shelf of saved routes.
