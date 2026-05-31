@@ -258,6 +258,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem ADMET router not loaded: %s", exc)
 
+# Campaign — the productization backbone (Act II)
+try:
+    from .campaign import router as campaign_router
+    app.include_router(campaign_router, prefix="/workbench")
+    log.info("Campaign routes loaded (/workbench/chem/campaign/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Campaign router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
