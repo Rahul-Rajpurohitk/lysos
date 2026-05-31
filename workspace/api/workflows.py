@@ -1436,10 +1436,14 @@ def _synth_admet_panel(state: dict) -> str:
                 "candidate (≥10 heavy atoms, ≥1 ring) for a PK panel.")
     axes = p.get("axes") or {}
     worst = p.get("worst") or {}
+    src = p.get("source", "heuristic")
+    src_label = ("real model (ADMET-AI · Chemprop-RDKit, 41 TDC endpoints)"
+                 if src == "admet-ai" else "physchem heuristics (real model offline)")
     lines = [
         f"ADMET panel — composite **{p.get('composite')}** · "
         f"tier **{p.get('tier')}** · weakest axis **{worst.get('axis')}** "
         f"({worst.get('band')}).",
+        f"_Source: {src_label}._",
         "",
         "Per-axis scores (0-1, higher = better):",
         f"- **A** (absorption): {axes.get('A',{}).get('score','—')} · F% "

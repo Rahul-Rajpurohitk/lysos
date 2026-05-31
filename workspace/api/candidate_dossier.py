@@ -331,6 +331,7 @@ def feed_from_state(state: dict[str, Any]) -> list[str]:
             "weakest_score": worst.get("score"),
             "fix_smiles": fix.get("variant_smiles") if fix.get("improved") else None,
             "panel_artifact_id": admet.get("artifact_id"),
+            "source": admet.get("source", "heuristic"),
         })
         fed.append("admet")
 
