@@ -11,7 +11,7 @@
  * generation. Backend: /workbench/chem/peptide/* (chem_peptide.py).
  */
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Dna, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { Dna, Sparkles } from "lucide-react";
 
 interface WheelResidue {
   idx: number; aa: string; angle: number; kd: number;
