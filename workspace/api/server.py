@@ -266,6 +266,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Campaign router not loaded: %s", exc)
 
+# Generation — Service 4: de-novo + lead-opt (BRICS now, GenMol on MI300X)
+try:
+    from .chem_generate import router as chem_generate_router
+    app.include_router(chem_generate_router, prefix="/workbench")
+    log.info("Chem generate routes loaded (/workbench/chem/generate)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem generate router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
