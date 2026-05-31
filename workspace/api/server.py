@@ -274,6 +274,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem generate router not loaded: %s", exc)
 
+# Peptide (AMP) modality — the second pipeline (Act II dual modality)
+try:
+    from .chem_peptide import router as chem_peptide_router
+    app.include_router(chem_peptide_router, prefix="/workbench")
+    log.info("Chem peptide routes loaded (/workbench/chem/peptide/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem peptide router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
