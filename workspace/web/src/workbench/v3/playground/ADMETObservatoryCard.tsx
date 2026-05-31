@@ -28,7 +28,8 @@ interface AxisDetail {
   free_fraction_percent?: number;
   bbb_class?: "permeable" | "limited";
   bbb_permeable?: boolean;
-  vd_lpkg?: number;
+  vd_lpkg?: number;          // heuristic
+  vd_percentile?: number;    // real model (vs approved drugs)
   // M
   cyp3a4_inhib_risk?: number;
   cyp2d6_inhib_risk?: number;
@@ -36,9 +37,11 @@ interface AxisDetail {
   hlm_stability?: number;
   hlm_band?: "stable" | "moderate" | "labile";
   // E
-  clearance_mlminkg?: number;
+  clearance_mlminkg?: number;       // heuristic
+  clearance_percentile?: number;    // real model
   renal_fraction?: number;
-  t_half_hours?: number;
+  t_half_hours?: number;            // heuristic
+  t_half_percentile?: number;       // real model (vs approved drugs)
   dose_interval?: string;
   // T
   herg_risk?: string; hepatotox_risk?: string; ames_risk?: string;
@@ -413,7 +416,9 @@ function AxisRow({ axis, detail, isWorst }: {
   if (axis === "A") headline = `F% ${detail.f_percent ?? "—"} · HIA ${detail.hia_percent ?? "—"}`;
   else if (axis === "D") headline = `PPB ${detail.ppb_percent ?? "—"}% · BBB ${detail.bbb_class ?? "—"}`;
   else if (axis === "M") headline = `HLM ${detail.hlm_band ?? "—"} · CYP3A4 ${(detail.cyp3a4_inhib_risk ?? 0).toFixed(2)}`;
-  else if (axis === "E") headline = `t½ ${detail.t_half_hours ?? "—"}h · ${detail.dose_interval ?? "—"}`;
+  else if (axis === "E") headline = detail.t_half_hours != null
+    ? `t½ ${detail.t_half_hours}h · ${detail.dose_interval ?? "—"}`
+    : `t½ ${detail.t_half_percentile ?? "—"}ᵖᶜ · ${detail.dose_interval ?? "—"}`;
   else if (axis === "T") headline = `hERG ${detail.herg_risk ?? "—"} · hepato ${detail.hepatotox_risk ?? "—"}`;
   return (
     <div title={(detail.notes ?? []).join(" · ") || undefined}

@@ -170,28 +170,36 @@ def _pctile(raw: dict[str, Any], *needles: str) -> Optional[float]:
 
 def _axes_from_admet_ai(raw: dict[str, Any], pc: dict[str, Any]) -> dict[str, Any]:
     """Map ADMET-AI's real TDC endpoints onto our A/D/M/E/T axis schema.
-    Same shape the heuristic axes produce, so the frontend is unchanged —
-    just real numbers + source='admet-ai'."""
+
+    Scoring policy (correct + honest):
+    - Classification endpoints (HIA, Bioavailability, BBB, CYP*, hERG,
+      AMES, DILI, ...) are probabilities in [0,1] — used directly, with the
+      right polarity (for tox, lower prob = safer → score = 1-p).
+    - Regression endpoints (Half_Life, Clearance, Caco2, Solubility, PPBR,
+      VDss) come on log/transformed scales that are NOT human units, so we
+      score from each endpoint's `_drugbank_approved_percentile` (0-100 =
+      how approved-drug-like the value is). We only DISPLAY a raw number
+      when its unit is trustworthy (PPBR %, Caco2 log cm/s, Solubility
+      log mol/L); ambiguous-unit endpoints (half-life, clearance, Vd) are
+      shown as a percentile-vs-approved instead of a fabricated unit.
+    """
     def clamp(x: Optional[float], lo=0.0, hi=1.0) -> Optional[float]:
-        if x is None:
-            return None
-        return max(lo, min(hi, x))
+        return None if x is None else max(lo, min(hi, x))
 
     def mean(xs: list[Optional[float]]) -> float:
         vals = [x for x in xs if x is not None]
         return sum(vals) / len(vals) if vals else 0.5
 
-    # ── A — Absorption (probabilities already 0-1; higher = better) ──
-    hia = _find(raw, "HIA_Hou", "HIA")
+    # ── A — Absorption ──
+    hia = _find(raw, "HIA_Hou", "HIA")                 # prob high absorption
     bioav = _find(raw, "Bioavailability_Ma", "Bioavailability")
-    caco2 = _find(raw, "Caco2_Wang", "Caco2")     # log cm/s (~ -7..-4)
-    sol = _find(raw, "Solubility_AqSolDB", "Solubility")  # log mol/L
-    caco2_n = clamp((caco2 + 6.0) / 2.0) if caco2 is not None else None
-    sol_n = clamp((sol + 6.0) / 6.0) if sol is not None else None
-    a_score = mean([hia, bioav, caco2_n, sol_n])
+    caco2 = _find(raw, "Caco2_Wang", "Caco2")          # log cm/s (real unit)
+    sol = _find(raw, "Solubility_AqSolDB", "Solubility")  # log mol/L (real)
+    caco2_pct = _pctile(raw, "Caco2")
+    sol_pct = _pctile(raw, "Solubility")
+    a_score = mean([hia, bioav, caco2_pct, sol_pct])
     A = {
-        "score": round(a_score, 3),
-        "band": _band(a_score, 0.7, 0.45),
+        "score": round(a_score, 3), "band": _band(a_score, 0.7, 0.45),
         "f_percent": round((bioav if bioav is not None else a_score) * 100, 1),
         "hia_percent": round((hia if hia is not None else a_score) * 100, 1),
         "caco2_logcm_s": round(caco2, 2) if caco2 is not None else None,
@@ -200,27 +208,27 @@ def _axes_from_admet_ai(raw: dict[str, Any], pc: dict[str, Any]) -> dict[str, An
     }
 
     # ── D — Distribution ──
-    ppb = _find(raw, "PPBR_AZ", "PPBR", "plasma protein")   # % bound
-    vd = _find(raw, "VDss_Lombardo", "VDss")
-    bbb = _find(raw, "BBB_Martins", "BBB")                  # prob permeable
+    ppb = _find(raw, "PPBR_AZ", "PPBR")                 # % bound (real unit)
+    vd_pct = _pctile(raw, "VDss")
+    bbb = _find(raw, "BBB_Martins", "BBB")             # prob permeable
     ppb_pct = ppb if (ppb is not None and ppb > 1) else (ppb * 100 if ppb is not None else None)
-    ppb_score = clamp(1.0 - abs((ppb_pct or 70.0) - 70.0) / 60.0)
-    vd_score = clamp(1.0 - abs((vd or 1.5) - 1.5) / 3.0)
-    d_score = mean([ppb_score, vd_score])
+    # Approved antibiotics span a wide PPB range; score "drug-likeness" of
+    # the PPB via its approved-percentile, not a hand-tuned peak.
+    ppb_drug_pct = _pctile(raw, "PPBR")
+    d_score = mean([ppb_drug_pct, vd_pct])
     D = {
-        "score": round(d_score, 3),
-        "band": _band(d_score, 0.7, 0.45),
+        "score": round(d_score, 3), "band": _band(d_score, 0.7, 0.45),
         "ppb_percent": round(ppb_pct, 1) if ppb_pct is not None else None,
         "free_fraction_percent": round(100 - ppb_pct, 1) if ppb_pct is not None else None,
         "bbb_class": ("permeable" if (bbb or 0) >= 0.5 else "limited"),
-        "vd_lpkg": round(vd, 2) if vd is not None else None,
+        "vd_percentile": round(vd_pct * 100, 0) if vd_pct is not None else None,
         "notes": [],
     }
 
     # ── M — Metabolism (CYP inhibition probs; lower = better) ──
-    cyp3a4 = _find(raw, "CYP3A4_Veith", "CYP3A4_inhib", "CYP3A4")
-    cyp2d6 = _find(raw, "CYP2D6_Veith", "CYP2D6_inhib", "CYP2D6")
-    cyp2c9 = _find(raw, "CYP2C9_Veith", "CYP2C9_inhib", "CYP2C9")
+    cyp3a4 = _find(raw, "CYP3A4_Veith", "CYP3A4")
+    cyp2d6 = _find(raw, "CYP2D6_Veith", "CYP2D6")
+    cyp2c9 = _find(raw, "CYP2C9_Veith", "CYP2C9")
     hlm = clamp(1.0 - mean([cyp3a4, cyp2d6, cyp2c9]))
     m_score = round(hlm, 3)
     M = {
@@ -233,19 +241,20 @@ def _axes_from_admet_ai(raw: dict[str, Any], pc: dict[str, Any]) -> dict[str, An
         "notes": [],
     }
 
-    # ── E — Excretion (real half-life in hours) ──
-    thalf = _find(raw, "Half_Life_Obach", "Half_Life", "half life")
-    cl_hep = _find(raw, "Clearance_Hepatocyte_AZ", "Clearance_Hepatocyte", "Clearance")
-    t_half_h = thalf if thalf is not None else 6.0
-    if t_half_h >= 12: dose = "q24h (once daily)"
-    elif t_half_h >= 6: dose = "q12h (twice daily)"
-    elif t_half_h >= 3: dose = "q8h (three times daily)"
-    else: dose = "q6h or shorter (frequent dosing)"
-    e_score = round(clamp(min(t_half_h / 12.0, 1.0)), 3)
+    # ── E — Excretion (score from approved-percentile, not raw log units) ──
+    thalf_pct = _pctile(raw, "Half_Life")
+    cl_pct = _pctile(raw, "Clearance_Hepatocyte", "Clearance")
+    e_score = round(mean([thalf_pct, cl_pct]), 3)
+    # Dosing band from the half-life percentile (higher pct = longer t½ =
+    # less frequent dosing) — honest framing without a fabricated hour value.
+    tp = thalf_pct if thalf_pct is not None else 0.5
+    if tp >= 0.66: dose = "infrequent dosing likely (long t½)"
+    elif tp >= 0.33: dose = "standard dosing interval"
+    else: dose = "frequent dosing likely (short t½)"
     E = {
         "score": e_score, "band": _band(e_score, 0.7, 0.4),
-        "t_half_hours": round(t_half_h, 1),
-        "clearance_mlminkg": round(cl_hep, 2) if cl_hep is not None else None,
+        "t_half_percentile": round(tp * 100, 0),
+        "clearance_percentile": round(cl_pct * 100, 0) if cl_pct is not None else None,
         "dose_interval": dose,
         "notes": [],
     }

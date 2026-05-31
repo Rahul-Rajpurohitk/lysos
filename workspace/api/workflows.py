@@ -1455,9 +1455,12 @@ def _synth_admet_panel(state: dict) -> str:
         f"- **M** (metabolism): {axes.get('M',{}).get('score','—')} · HLM "
         f"{axes.get('M',{}).get('hlm_band','—')} · CYP3A4 inhib "
         f"{axes.get('M',{}).get('cyp3a4_inhib_risk','—')}",
-        f"- **E** (excretion): {axes.get('E',{}).get('score','—')} · t½ "
-        f"{axes.get('E',{}).get('t_half_hours','—')}h · "
-        f"{axes.get('E',{}).get('dose_interval','—')}",
+        (f"- **E** (excretion): {axes.get('E',{}).get('score','—')} · t½ "
+         f"{axes['E']['t_half_hours']}h · {axes.get('E',{}).get('dose_interval','—')}"
+         if axes.get('E',{}).get('t_half_hours') is not None else
+         f"- **E** (excretion): {axes.get('E',{}).get('score','—')} · t½ "
+         f"{axes.get('E',{}).get('t_half_percentile','—')}ᵖᶜ vs approved · "
+         f"{axes.get('E',{}).get('dose_interval','—')}"),
         f"- **T** (toxicity): {axes.get('T',{}).get('score','—')} · hERG "
         f"{axes.get('T',{}).get('herg_risk','—')} · hepatotox "
         f"{axes.get('T',{}).get('hepatotox_risk','—')}",
