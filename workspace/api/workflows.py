@@ -2340,3 +2340,15 @@ async def suggest_next(
 
     suggestions.sort(key=lambda s: -s["priority"])
     return {"suggestions": suggestions}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Autonomous campaign harness (Act II) — registered last so all the
+# building-block service functions it composes are already defined.
+# ─────────────────────────────────────────────────────────────────────
+try:
+    import sys as _sys
+    from . import campaign_harness as _camp_harness
+    _camp_harness.register(_sys.modules[__name__])
+except Exception as _exc:  # noqa: BLE001
+    log.warning("campaign_run not registered: %s", _exc)
