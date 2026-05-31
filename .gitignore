@@ -132,3 +132,6 @@ artifacts/reports/
 artifacts/manifest.json
 !artifacts/MANIFEST.md
 !artifacts/.gitkeep
+
+# Act II model-service venv (heavy, local only)
+.venv-models/

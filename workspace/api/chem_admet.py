@@ -106,8 +106,178 @@ def _physchem(smiles: str) -> Optional[dict[str, Any]]:
 
 
 # ─────────────────────────────────────────────────────────────────────
+# REAL MODEL BRIDGE — ADMET-AI (Chemprop-RDKit, 41 TDC endpoints)
+#
+# Calls the isolated model service (workspace/model_services/admet_service.py),
+# which on AMD MI300X is the "Lysos Inference Service". When the service is
+# up we use REAL model predictions; otherwise we fall back to the physchem
+# heuristics below. Every panel carries a `source` so the UI + honesty layer
+# can show provenance.
+# ─────────────────────────────────────────────────────────────────────
+
+_ADMET_SERVICE_URL = os.getenv("LYSOS_ADMET_SERVICE_URL", "http://127.0.0.1:7920")
+
+
+async def _real_admet(smiles: str) -> Optional[dict[str, Any]]:
+    """POST the SMILES to the ADMET-AI service. Returns the raw
+    {endpoint: value} dict, or None if the service is down / errored."""
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cx:
+            r = await cx.post(f"{_ADMET_SERVICE_URL}/predict",
+                              json={"smiles": [smiles]})
+        if r.status_code != 200:
+            return None
+        body = r.json()
+        if not body.get("ok"):
+            return None
+        preds = (body.get("predictions") or {}).get(smiles)
+        if not isinstance(preds, dict) or "_error" in preds:
+            return None
+        return preds
+    except Exception:  # noqa: BLE001 — service down is expected; fall back
+        return None
+
+
+def _find(raw: dict[str, Any], *needles: str) -> Optional[float]:
+    """First endpoint whose name contains any needle (case-insensitive),
+    skipping the `_drugbank_approved_percentile` variants."""
+    low = {k.lower(): v for k, v in raw.items()}
+    for n in needles:
+        n = n.lower()
+        for k, v in low.items():
+            if n in k and "percentile" not in k:
+                try:
+                    return float(v)
+                except (TypeError, ValueError):
+                    continue
+    return None
+
+
+def _pctile(raw: dict[str, Any], *needles: str) -> Optional[float]:
+    """The `<endpoint>_drugbank_approved_percentile` (0-100) for an
+    endpoint — a clean normalized 'how approved-drug-like' signal."""
+    low = {k.lower(): v for k, v in raw.items()}
+    for n in needles:
+        n = n.lower()
+        for k, v in low.items():
+            if n in k and "percentile" in k:
+                try:
+                    return float(v) / 100.0
+                except (TypeError, ValueError):
+                    continue
+    return None
+
+
+def _axes_from_admet_ai(raw: dict[str, Any], pc: dict[str, Any]) -> dict[str, Any]:
+    """Map ADMET-AI's real TDC endpoints onto our A/D/M/E/T axis schema.
+    Same shape the heuristic axes produce, so the frontend is unchanged —
+    just real numbers + source='admet-ai'."""
+    def clamp(x: Optional[float], lo=0.0, hi=1.0) -> Optional[float]:
+        if x is None:
+            return None
+        return max(lo, min(hi, x))
+
+    def mean(xs: list[Optional[float]]) -> float:
+        vals = [x for x in xs if x is not None]
+        return sum(vals) / len(vals) if vals else 0.5
+
+    # ── A — Absorption (probabilities already 0-1; higher = better) ──
+    hia = _find(raw, "HIA_Hou", "HIA")
+    bioav = _find(raw, "Bioavailability_Ma", "Bioavailability")
+    caco2 = _find(raw, "Caco2_Wang", "Caco2")     # log cm/s (~ -7..-4)
+    sol = _find(raw, "Solubility_AqSolDB", "Solubility")  # log mol/L
+    caco2_n = clamp((caco2 + 6.0) / 2.0) if caco2 is not None else None
+    sol_n = clamp((sol + 6.0) / 6.0) if sol is not None else None
+    a_score = mean([hia, bioav, caco2_n, sol_n])
+    A = {
+        "score": round(a_score, 3),
+        "band": _band(a_score, 0.7, 0.45),
+        "f_percent": round((bioav if bioav is not None else a_score) * 100, 1),
+        "hia_percent": round((hia if hia is not None else a_score) * 100, 1),
+        "caco2_logcm_s": round(caco2, 2) if caco2 is not None else None,
+        "solubility_logmol_l": round(sol, 2) if sol is not None else None,
+        "notes": [],
+    }
+
+    # ── D — Distribution ──
+    ppb = _find(raw, "PPBR_AZ", "PPBR", "plasma protein")   # % bound
+    vd = _find(raw, "VDss_Lombardo", "VDss")
+    bbb = _find(raw, "BBB_Martins", "BBB")                  # prob permeable
+    ppb_pct = ppb if (ppb is not None and ppb > 1) else (ppb * 100 if ppb is not None else None)
+    ppb_score = clamp(1.0 - abs((ppb_pct or 70.0) - 70.0) / 60.0)
+    vd_score = clamp(1.0 - abs((vd or 1.5) - 1.5) / 3.0)
+    d_score = mean([ppb_score, vd_score])
+    D = {
+        "score": round(d_score, 3),
+        "band": _band(d_score, 0.7, 0.45),
+        "ppb_percent": round(ppb_pct, 1) if ppb_pct is not None else None,
+        "free_fraction_percent": round(100 - ppb_pct, 1) if ppb_pct is not None else None,
+        "bbb_class": ("permeable" if (bbb or 0) >= 0.5 else "limited"),
+        "vd_lpkg": round(vd, 2) if vd is not None else None,
+        "notes": [],
+    }
+
+    # ── M — Metabolism (CYP inhibition probs; lower = better) ──
+    cyp3a4 = _find(raw, "CYP3A4_Veith", "CYP3A4_inhib", "CYP3A4")
+    cyp2d6 = _find(raw, "CYP2D6_Veith", "CYP2D6_inhib", "CYP2D6")
+    cyp2c9 = _find(raw, "CYP2C9_Veith", "CYP2C9_inhib", "CYP2C9")
+    hlm = clamp(1.0 - mean([cyp3a4, cyp2d6, cyp2c9]))
+    m_score = round(hlm, 3)
+    M = {
+        "score": m_score, "band": _band(m_score, 0.65, 0.4),
+        "cyp3a4_inhib_risk": round(cyp3a4, 3) if cyp3a4 is not None else None,
+        "cyp2d6_inhib_risk": round(cyp2d6, 3) if cyp2d6 is not None else None,
+        "cyp2c9_inhib_risk": round(cyp2c9, 3) if cyp2c9 is not None else None,
+        "hlm_stability": round(hlm, 3),
+        "hlm_band": ("stable" if hlm >= 0.65 else "moderate" if hlm >= 0.4 else "labile"),
+        "notes": [],
+    }
+
+    # ── E — Excretion (real half-life in hours) ──
+    thalf = _find(raw, "Half_Life_Obach", "Half_Life", "half life")
+    cl_hep = _find(raw, "Clearance_Hepatocyte_AZ", "Clearance_Hepatocyte", "Clearance")
+    t_half_h = thalf if thalf is not None else 6.0
+    if t_half_h >= 12: dose = "q24h (once daily)"
+    elif t_half_h >= 6: dose = "q12h (twice daily)"
+    elif t_half_h >= 3: dose = "q8h (three times daily)"
+    else: dose = "q6h or shorter (frequent dosing)"
+    e_score = round(clamp(min(t_half_h / 12.0, 1.0)), 3)
+    E = {
+        "score": e_score, "band": _band(e_score, 0.7, 0.4),
+        "t_half_hours": round(t_half_h, 1),
+        "clearance_mlminkg": round(cl_hep, 2) if cl_hep is not None else None,
+        "dose_interval": dose,
+        "notes": [],
+    }
+
+    # ── T — Toxicity (probabilities; lower = better) ──
+    herg = _find(raw, "hERG")
+    ames = _find(raw, "AMES")
+    dili = _find(raw, "DILI")
+    carc = _find(raw, "Carcinogens_Lagunin", "Carcinogen")
+    clintox = _find(raw, "ClinTox")
+    t_safety = clamp(1.0 - mean([herg, ames, dili, carc, clintox]))
+    t_score = round(t_safety, 3)
+    def risk(p): return "high" if (p or 0) >= 0.6 else "medium" if (p or 0) >= 0.3 else "low"
+    T = {
+        "score": t_score, "band": _band(t_score, 0.7, 0.4),
+        "herg_risk": risk(herg), "herg_score": round(herg, 3) if herg is not None else None,
+        "hepatotox_risk": risk(dili), "hepatotox_score": round(dili, 3) if dili is not None else None,
+        "ames_risk": risk(ames), "ames_score": round(ames, 3) if ames is not None else None,
+        "carcinogen_risk": risk(carc),
+        "notes": [],
+    }
+    return {"A": A, "D": D, "M": M, "E": E, "T": T}
+
+
+def _band(score: float, good_at: float, mod_at: float) -> str:
+    return "good" if score >= good_at else "moderate" if score >= mod_at else "poor"
+
+
+# ─────────────────────────────────────────────────────────────────────
 # Five-axis predictions — each returns a normalized score 0-1
 # (higher = better for the drug program) + a per-axis detail dict.
+# HEURISTIC FALLBACK — used when the real ADMET-AI service is unavailable.
 # ─────────────────────────────────────────────────────────────────────
 
 def _clamp01(x: float) -> float:
@@ -296,12 +466,19 @@ async def _build_panel(smiles: str) -> dict[str, Any]:
     pc = _physchem(smiles)
     if pc is None:
         raise HTTPException(422, f"could not compute descriptors for {smiles}")
-    A = _predict_absorption(pc)
-    D = _predict_distribution(pc)
-    M = _predict_metabolism(pc)
-    E = _predict_excretion(pc, M)
-    T = await _predict_toxicity(smiles)
-    axes = {"A": A, "D": D, "M": M, "E": E, "T": T}
+    # REAL MODEL FIRST — ADMET-AI service. Heuristics only if it's down.
+    source = "heuristic"
+    raw = await _real_admet(smiles)
+    if raw:
+        axes = _axes_from_admet_ai(raw, pc)
+        source = "admet-ai"
+    else:
+        A = _predict_absorption(pc)
+        D = _predict_distribution(pc)
+        M = _predict_metabolism(pc)
+        E = _predict_excretion(pc, M)
+        T = await _predict_toxicity(smiles)
+        axes = {"A": A, "D": D, "M": M, "E": E, "T": T}
     composite = round(sum(a["score"] for a in axes.values()) / 5.0, 3)
     worst_key = min(axes, key=lambda k: axes[k]["score"])
     worst = {"axis": worst_key, "score": axes[worst_key]["score"],
@@ -311,7 +488,7 @@ async def _build_panel(smiles: str) -> dict[str, Any]:
             else "early" if composite >= 0.40
             else "weak")
     return {
-        "smiles": smiles, "physchem": pc, "axes": axes,
+        "smiles": smiles, "physchem": pc, "axes": axes, "source": source,
         "composite": composite, "tier": tier, "worst": worst,
         "computed_at": time.time(),
     }

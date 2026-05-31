@@ -64,6 +64,7 @@ interface ADMETPanel {
   worst: { axis: string | null; score: number; band: string };
   fix?: ADMETFix | null;
   non_drug_reason?: string | null;
+  source?: "admet-ai" | "heuristic";
   artifact_id?: string | null;
 }
 interface SavedPanel {

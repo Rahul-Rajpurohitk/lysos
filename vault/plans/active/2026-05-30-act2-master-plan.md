@@ -47,11 +47,14 @@ All MIT/Apache or compatible — verify license per repo before merging.
 | **CARD** (expand) | card.mcmaster.ca | Resistance panel — grow beyond current subset | n/a |
 | *(optional)* **ApexAmphion / Amphorium / LLAMP** | GIST-CSBL/LLAMP | Antimicrobial-PEPTIDE modality + 2.1M open library | Yes (pLM+RL) |
 
-**Decision — small-molecule first.** Adopt Chemprop+ADMET-AI (prediction),
-GenMol (generation), SyntheMol (synthesizability) as core. **Peptides
-(ApexAmphion/LLAMP) = stretch goal / second track** — only if Phase 1–3 land
-early. Reason: peptides are a separate pipeline (no overlap with our β-lactam
-small-molecule stack); doing both risks half-finishing both.
+**Decision — DUAL MODALITY (confirmed).** Two parallel pipelines:
+- **Small-molecule**: Chemprop+ADMET-AI (prediction), GenMol (generation),
+  SyntheMol (synthesizability) — the β-lactam / small-molecule stack.
+- **Peptide (AMP)**: ApexAmphion/LLAMP + the 2.1M open Amphorium library —
+  antimicrobial-peptide design with a species-aware pLM + MIC head.
+The workbench gets a modality switch; services adapt per modality (e.g.
+"synthesis" → solid-phase peptide synthesis cost for AMPs; ADMET → peptide
+stability/hemolysis instead of CYP). Shared spine: Campaign, agents, dossier.
 
 **Decision — orchestration stays hybrid.** Keep Gemini Pro/Flash for the
 agent *reasoning* (cheap, fast, reliable), but the *scientific compute*
@@ -118,16 +121,20 @@ discovery campaign." Same services, but composed and autonomous.
 
 ---
 
-## 5. Phased timeline (~5 wks) + 3-person split
+## 5. Phased timeline (~5 wks)
 
-**Roles** (confirm/override):
-- **M1 — ML/GPU (MI300X)**: inference service, model integration, vLLM-ROCm
-  serving, benchmark, retrospective validation. Owns most of the $300.
-- **M2 — Backend/agents**: planner-executor-verifier harness, Campaign
+**Build model: full-stack, single builder, all tracks.** The 3 registered
+members unlock the $300 MI300X credit pool; the build is done by us
+end-to-end (ML/GPU + backend/agents + frontend/product). Tracks below are
+workstreams, not people — run them interleaved, heavy on all.
+
+- **GPU track**: inference service, model integration, vLLM-ROCm serving,
+  benchmark, retrospective validation. Owns most of the $300.
+- **Backend/agents track**: planner-executor-verifier harness, Campaign
   object, service↔model wiring, dossier, reporting/export, data layer.
-- **M3 — Frontend/design/product**: design-system pass, global card states,
+- **Frontend/product track**: design-system pass, global card states,
   Campaign board, validation dashboard, onboarding, demo polish.
-- **Shared**: demo storyline, pitch deck, video (last week).
+- **Last week**: demo storyline, pitch deck, video.
 
 ### Phase 0 — Foundations (Wk 1: May 30 – Jun 6)
 - M1: stand up AMD Dev Cloud box; ROCm PyTorch; get Chemprop + ADMET-AI
@@ -189,8 +196,13 @@ discovery campaign." Same services, but composed and autonomous.
 - **$300 burn** → batch + scheduled spin-up; track spend.
 - **Over-claiming** → validation + honest labels are non-negotiable.
 
-## 8. Open decisions (recommend → confirm)
-1. Small-molecule first, peptides as stretch — **recommend YES**.
-2. Hybrid orchestration (Gemini reason + MI300X compute), DPO-on-MI300X as
-   stretch — **recommend YES**.
-3. Team skill split (who is M1/M2/M3) — **needs your input**.
+## 8. Decisions (RESOLVED 2026-05-30)
+1. **Dual modality — CONFIRMED.** Small-molecule (GenMol/Chemprop/SyntheMol)
+   AND antimicrobial-peptide (ApexAmphion/LLAMP + 2.1M AMP library) are both
+   first-class. Peptide pipeline runs parallel to the β-lactam stack.
+2. **Hybrid orchestration — CONFIRMED.** Gemini API for agent reasoning now;
+   scientific compute (predict/generate/peptide) on MI300X. Lysos-DPO on
+   vLLM-ROCm as the "fully on AMD" stretch.
+3. **Build — solo full-stack, all tracks, heavy.** No team split.
+4. **Build order — all tracks in parallel, starting with the ADMET-AI real-
+   model swap** (template for every other model integration).
