@@ -52,14 +52,35 @@ const TIER_COLOR: Record<string, string> = {
   uncharacterized: "#9ca3af",
 };
 
-// The 6 developability facets + how to render each one's headline.
-const FACETS: { key: string; label: string; headline: (d: Record<string, any>) => string }[] = [
-  { key: "score", label: "Score", headline: (d) => `composite ${num(d.composite)}` },
-  { key: "resistance", label: "Resistance", headline: (d) => `robustness ${num(d.robustness)}` },
-  { key: "synthesis", label: "Synthesis", headline: (d) => `${d.cost_band ?? "?"} cost · feas ${num(d.feasibility)}` },
-  { key: "fto", label: "IP / FTO", headline: (d) => `freedom ${num(d.freedom_score)}` },
-  { key: "admet", label: "ADMET", headline: (d) => `safety ${num(d.overall_safety_score)}` },
-  { key: "regimen", label: "Regimen", headline: (d) => `synergy ${num(d.best_synergy)}` },
+// Developability facets in the order a chemist reads a candidate, each with
+// a headline metric + a sublabel naming the real engine behind it (the
+// trust signal). Docking + synthesizability are the new simulation facets.
+const FACETS: {
+  key: string; label: string; icon: string;
+  headline: (d: Record<string, any>) => string;
+  engine?: (d: Record<string, any>) => string | null;
+}[] = [
+  { key: "score", label: "Composite", icon: "◆",
+    headline: (d) => `${num(d.composite)} composite` },
+  { key: "docking", label: "Binding (dock)", icon: "⚓",
+    headline: (d) => d.affinity_kcal_mol != null
+      ? `${d.affinity_kcal_mol} kcal/mol · ${d.band ?? "?"}` : "—",
+    engine: (d) => d.target ? `vs ${d.target}` : null },
+  { key: "admet", label: "ADMET / PK", icon: "✚",
+    headline: (d) => d.composite != null
+      ? `${num(d.composite)} · ${d.tier ?? "?"} · weak axis ${d.weakest_axis ?? "?"}`
+      : `safety ${num(d.overall_safety_score)}`,
+    engine: (d) => d.source === "admet-ai" ? "ADMET-AI model" : (d.source ? "heuristic" : null) },
+  { key: "synthesis", label: "Synthesis", icon: "⚗",
+    headline: (d) => d.sa_score != null
+      ? `SA ${d.sa_score} (${d.synth_band ?? "?"})${d.cost_band ? ` · ${d.cost_band} cost` : ""}`
+      : `${d.cost_band ?? "?"} cost · feas ${num(d.feasibility)}` },
+  { key: "fto", label: "IP / novelty", icon: "§",
+    headline: (d) => `novelty ${num(d.novelty_score ?? d.freedom_score)}` },
+  { key: "resistance", label: "Resistance", icon: "⛨",
+    headline: (d) => `robustness ${num(d.robustness)}${d.n_vulnerable ? ` · ${d.n_vulnerable} weak` : ""}` },
+  { key: "regimen", label: "Regimen", icon: "⊕",
+    headline: (d) => `synergy ${num(d.best_synergy)}` },
 ];
 
 function num(v: any): string {
@@ -189,18 +210,29 @@ export function DossierCard({ apiBase, sessionId, smiles }: Props) {
                     opacity: filled ? 1 : 0.6,
                   }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                      {filled
-                        ? <Check size={11} style={{ color: "#16a34a" }} />
-                        : <CircleDashed size={11} style={{ color: "var(--lys-text-faint)" }} />}
+                      <span style={{ fontSize: 11, width: 13, textAlign: "center",
+                        color: filled ? IND.fg : "var(--lys-text-faint)" }}>{f.icon}</span>
                       <span style={{ fontSize: 10, fontWeight: 700,
                         color: filled ? "var(--lys-text)" : "var(--lys-text-faint)" }}>
                         {f.label}
                       </span>
+                      <span style={{ flex: 1 }} />
+                      {filled
+                        ? <Check size={10} style={{ color: "#16a34a" }} />
+                        : <CircleDashed size={10} style={{ color: "var(--lys-text-faint)" }} />}
                     </div>
-                    <div style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
-                      color: filled ? IND.fgDeep : "var(--lys-text-faint)", marginTop: 2 }}>
+                    <div style={{ fontSize: 9.5, fontFamily: "var(--lys-font-mono)",
+                      fontWeight: 700,
+                      color: filled ? IND.fgDeep : "var(--lys-text-faint)", marginTop: 3 }}>
                       {filled ? f.headline(data) : "not run yet"}
                     </div>
+                    {filled && f.engine && f.engine(data) && (
+                      <div style={{ fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
+                        color: "var(--lys-text-faint)", marginTop: 1,
+                        textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                        {f.engine(data)}
+                      </div>
+                    )}
                   </div>
                 );
               })}
