@@ -270,6 +270,25 @@ _TOOL_DEFS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "predict_activity",
+        "description": (
+            "Predicted antibacterial-activity prior for a SMILES, from a "
+            "REAL trained classifier (gradient-boosted, Morgan fingerprints, "
+            "learned from ChEMBL antibiotic actives vs property-matched "
+            "decoys + marketed-drug hard-negatives, test ROC-AUC ~0.98). "
+            "Returns a 0-1 probability that the molecule structurally "
+            "resembles known antibacterials. Use when the user asks 'is "
+            "this likely active', 'will it work as an antibiotic', about "
+            "predicted activity or potency prior. It is a structural-"
+            "similarity prior, NOT a guaranteed MIC."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"smiles": {"type": "string"}},
+            "required": ["smiles"],
+        },
+    },
+    {
         "name": "predict_admet",
         "description": (
             "Five-axis ADMET prediction (Absorption / Distribution / "
@@ -436,6 +455,9 @@ async def _dispatch_tool(name: str, args: dict[str, Any], api_base: str) -> dict
                 "session_id": args.get("_session_id"),
                 "save": True,
             })
+        elif name == "predict_activity":
+            r = await cx.get(f"{api_base}/workbench/chem/activity",
+                             params={"smiles": args["smiles"]})
         elif name == "list_axes":
             r = await cx.get(f"{api_base}/workbench/chem/session/__init/axes")
         elif name == "session_pareto_explain":

@@ -701,3 +701,43 @@ async def list_panels(session_id: Optional[str] = None) -> dict[str, Any]:
 async def delete_panel(rid: str) -> dict[str, Any]:
     n = service_store.delete_artifact(_ARTIFACT_KIND, rid)
     return {"deleted": n}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Antibacterial-activity prior — calls the trained classifier on the
+# model service (/predict_activity). A structural-similarity prior to
+# known antibacterials, NOT a guaranteed MIC.
+# ─────────────────────────────────────────────────────────────────────
+
+@router.get("/activity")
+async def predict_activity(smiles: str) -> dict[str, Any]:
+    canon = _canonical(smiles)
+    if canon is None:
+        raise HTTPException(422, f"unparseable SMILES: {smiles}")
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as cx:
+            r = await cx.post(f"{_ADMET_SERVICE_URL}/predict_activity",
+                              json={"smiles": [canon]})
+        if r.status_code == 200:
+            body = r.json()
+            if body.get("ok"):
+                preds = (body.get("predictions") or {}).get(canon) or {}
+                prob = preds.get("activity_probability")
+                if prob is not None:
+                    band = ("likely active" if prob >= 0.7
+                            else "borderline" if prob >= 0.4 else "unlikely")
+                    return {
+                        "smiles": canon,
+                        "activity_probability": prob,
+                        "band": band,
+                        "model": body.get("model"),
+                        "model_auc": body.get("model_auc"),
+                        "source": "trained-classifier",
+                        "note": ("structural-similarity prior to known "
+                                 "antibacterials — not a guaranteed MIC"),
+                    }
+    except Exception:  # noqa: BLE001
+        pass
+    return {"smiles": canon, "activity_probability": None,
+            "band": "unavailable", "source": "offline",
+            "note": "activity model service is offline"}
