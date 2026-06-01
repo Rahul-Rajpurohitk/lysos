@@ -392,8 +392,13 @@ def test_dossier_developability_rollup():
                                  {"feasibility": 0.8, "cost_band": "low"})
     dev = d["developability"]
     assert dev["characterized"] == 2
-    assert dev["total_facets"] == 6
-    assert set(dev["gaps"]) == {"resistance", "fto", "admet", "regimen"}
+    # total_facets tracks the canonical facet list (grows as services are
+    # added — docking joined score/resistance/synthesis/fto/admet/regimen).
+    assert dev["total_facets"] == len(dossier_mod._DEV_FACETS)
+    assert dev["total_facets"] >= 6
+    # The two characterized facets are not gaps; everything else is.
+    assert "score" not in dev["gaps"] and "synthesis" not in dev["gaps"]
+    assert "admet" in dev["gaps"] and "docking" in dev["gaps"]
     assert 0.0 <= dev["readiness"] <= 1.0
     assert dev["tier"] in {"advance", "promising", "early", "uncharacterized"}
 
