@@ -116,3 +116,86 @@ async def predict(req: PredictRequest) -> dict[str, Any]:
         "elapsed_s": round(time.time() - t0, 3),
         "model": "admet-ai/chemprop-rdkit",
     }
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Antibacterial-activity head — our own trained classifier (HistGBT +
+# Morgan), learned from antibiotic actives vs property-matched decoys.
+# Separate model from ADMET-AI; same service so the backend has one URL.
+# ─────────────────────────────────────────────────────────────────────
+
+from pathlib import Path  # noqa: E402
+
+_ACT_MODEL: Optional[Any] = None
+_ACT_ERROR: Optional[str] = None
+_ACT_META: dict[str, Any] = {}
+_ACT_PATH = Path(__file__).resolve().parents[2] / "data" / "models" / "activity_clf.joblib"
+_ACT_META_PATH = Path(__file__).resolve().parents[2] / "data" / "models" / "activity_clf_metrics.json"
+
+
+def _get_activity_model():
+    global _ACT_MODEL, _ACT_ERROR, _ACT_META
+    if _ACT_MODEL is not None or _ACT_ERROR is not None:
+        return _ACT_MODEL
+    try:
+        import joblib
+        _ACT_MODEL = joblib.load(_ACT_PATH)
+        if _ACT_META_PATH.exists():
+            import json as _json
+            _ACT_META = _json.loads(_ACT_META_PATH.read_text())
+        log.info("activity classifier loaded (AUC %s)", _ACT_META.get("roc_auc"))
+    except Exception as exc:  # noqa: BLE001
+        _ACT_ERROR = str(exc)
+        log.warning("activity classifier load failed: %s", exc)
+    return _ACT_MODEL
+
+
+def _activity_fp(smiles: str):
+    import numpy as np
+    from rdkit import Chem
+    from rdkit.Chem import AllChem
+    from rdkit.DataStructs import ConvertToNumpyArray
+    mol = Chem.MolFromSmiles((smiles or "").strip())
+    if mol is None:
+        return None
+    bv = AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=2048)
+    arr = np.zeros((2048,), dtype=np.float32)
+    ConvertToNumpyArray(bv, arr)
+    return arr.reshape(1, -1)
+
+
+@app.post("/predict_activity")
+async def predict_activity(req: PredictRequest) -> dict[str, Any]:
+    """Predicted antibacterial-activity probability per SMILES from the
+    trained classifier."""
+    m = _get_activity_model()
+    if m is None:
+        return {"ok": False, "error": _ACT_ERROR or "activity model not trained",
+                "predictions": {}}
+    import numpy as np
+    t0 = time.time()
+    preds: dict[str, dict[str, float]] = {}
+    for smi in req.smiles[:64]:
+        fp = _activity_fp(smi)
+        if fp is None:
+            preds[smi] = {"_error": 1.0}
+            continue
+        try:
+            prob = float(m.predict_proba(fp)[0, 1])
+            preds[smi] = {"activity_probability": round(prob, 4)}
+        except Exception as exc:  # noqa: BLE001
+            preds[smi] = {"_error": 1.0}
+            log.warning("activity predict failed for %s: %s", smi[:40], exc)
+    return {
+        "ok": True, "predictions": preds, "n_smiles": len(preds),
+        "elapsed_s": round(time.time() - t0, 3),
+        "model": _ACT_META.get("model", "activity-clf"),
+        "model_auc": _ACT_META.get("roc_auc"),
+    }
+
+
+@app.get("/activity_health")
+async def activity_health() -> dict[str, Any]:
+    m = _get_activity_model()
+    return {"ok": m is not None, "load_error": _ACT_ERROR,
+            "metrics": _ACT_META}
