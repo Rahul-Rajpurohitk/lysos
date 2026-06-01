@@ -270,6 +270,24 @@ _TOOL_DEFS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "assess_synthesizability",
+        "description": (
+            "How hard is a SMILES to MAKE? Returns the SAScore (Ertl & "
+            "Schuffenhauer 2009 synthetic-accessibility, 1=easy→10=hard), an "
+            "ease band, the explainable complexity drivers (stereocentres, "
+            "rings, spiro, macrocycle, MW), and real AiZynthFinder route "
+            "stats when the molecule is in our retrosynthesis cache. Use when "
+            "the user asks 'is this makeable', 'how hard to synthesize', "
+            "'synthetic accessibility', or about make-difficulty — distinct "
+            "from plan_synthesis (which plans the actual route)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"smiles": {"type": "string"}},
+            "required": ["smiles"],
+        },
+    },
+    {
         "name": "dock_to_target",
         "description": (
             "DOCK a candidate SMILES into a target protein's active site → "
@@ -479,6 +497,9 @@ async def _dispatch_tool(name: str, args: dict[str, Any], api_base: str) -> dict
             })
         elif name == "predict_activity":
             r = await cx.get(f"{api_base}/workbench/chem/activity",
+                             params={"smiles": args["smiles"]})
+        elif name == "assess_synthesizability":
+            r = await cx.get(f"{api_base}/workbench/chem/synthesizability",
                              params={"smiles": args["smiles"]})
         elif name == "dock_to_target":
             r = await cx.post(f"{api_base}/workbench/chem/dock", json={

@@ -305,6 +305,19 @@ def feed_from_state(state: dict[str, Any]) -> list[str]:
         })
         fed.append("synthesis")
 
+    # ── synthesizability (SAScore) — merges into the synthesis facet so the
+    # dossier carries both the planned route AND the make-difficulty score ──
+    synth_access = state.get("synthesizability")
+    if isinstance(synth_access, dict) and synth_access.get("sa_score") is not None:
+        upsert_facet(sid, smi, "synthesis", {
+            "sa_score": synth_access.get("sa_score"),
+            "synth_ease": synth_access.get("synth_ease"),
+            "synth_band": synth_access.get("band"),
+            "difficulty_drivers": synth_access.get("difficulty_drivers"),
+        })
+        if "synthesis" not in fed:
+            fed.append("synthesis")
+
     # ── fto facet ──
     fto = state.get("fto_report")
     if isinstance(fto, dict) and fto.get("novelty_score") is not None:
