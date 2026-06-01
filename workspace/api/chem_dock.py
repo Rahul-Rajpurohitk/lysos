@@ -418,6 +418,22 @@ async def dock(req: DockRequest) -> dict[str, Any]:
                    f"{result['affinity_kcal_mol']} kcal/mol ({result['affinity_band']})"))
         artifact_id = rec["id"]
     result["artifact_id"] = artifact_id
+
+    # Direct dossier feed — a chemist running dock straight from the 3D
+    # theater (not via a workflow) still sees binding ΔG land in the
+    # candidate's developability picture immediately.
+    if req.session_id:
+        try:
+            from . import candidate_dossier as _dossier
+            _dossier.upsert_facet(req.session_id, result["smiles"], "docking", {
+                "affinity_kcal_mol": result["affinity_kcal_mol"],
+                "band": result["affinity_band"],
+                "target": result["target_name"],
+                "n_interactions": result["n_interactions"],
+                "engine": result["engine"],
+            })
+        except Exception:  # noqa: BLE001
+            pass
     return result
 
 

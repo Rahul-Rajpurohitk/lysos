@@ -688,6 +688,21 @@ async def admet_panel(req: ADMETRequest) -> dict[str, Any]:
             session_id=req.session_id, smiles=canon, title=title)
         artifact_id = rec["id"]
     panel["artifact_id"] = artifact_id
+
+    # Direct dossier feed so an ADMET panel run straight from the card
+    # (not via a workflow) lands in the candidate's developability picture.
+    if req.session_id and not panel.get("non_drug_reason"):
+        try:
+            from . import candidate_dossier as _dossier
+            worst = panel.get("worst") or {}
+            _dossier.upsert_facet(req.session_id, canon, "admet", {
+                "composite": panel.get("composite"),
+                "tier": panel.get("tier"),
+                "weakest_axis": worst.get("axis"),
+                "source": panel.get("source", "heuristic"),
+            })
+        except Exception:  # noqa: BLE001
+            pass
     return panel
 
 

@@ -196,4 +196,15 @@ async def synthesizability_post(req: SynthAccessRequest) -> dict[str, Any]:
             smiles=result["smiles"],
             title=f"Synthesizability · SA {result['sa_score']} ({result['band']})")
         result["artifact_id"] = rec["id"]
+    if req.session_id:
+        try:
+            from . import candidate_dossier as _dossier
+            _dossier.upsert_facet(req.session_id, result["smiles"], "synthesis", {
+                "sa_score": result["sa_score"],
+                "synth_ease": result["synth_ease"],
+                "synth_band": result["band"],
+                "difficulty_drivers": result["difficulty_drivers"],
+            })
+        except Exception:  # noqa: BLE001
+            pass
     return result
