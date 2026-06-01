@@ -298,6 +298,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem dock router not loaded: %s", exc)
 
+# Synthesizability — real SAScore + AiZynth route stats
+try:
+    from .chem_synth_access import router as chem_synth_access_router
+    app.include_router(chem_synth_access_router, prefix="/workbench")
+    log.info("Chem synthesizability routes loaded (/workbench/chem/synthesizability)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem synthesizability router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
