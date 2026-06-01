@@ -270,6 +270,28 @@ _TOOL_DEFS: list[dict[str, Any]] = [
         },
     },
     {
+        "name": "dock_to_target",
+        "description": (
+            "DOCK a candidate SMILES into a target protein's active site → "
+            "predicted binding affinity (kcal/mol, AutoDock Vina scoring "
+            "function) + the docked pose + per-residue interactions (H-bonds "
+            "vs van-der-Waals contacts). More negative = stronger predicted "
+            "binding. Use when the user asks 'does it bind', 'dock this', "
+            "'binding affinity', 'will it hit the target', or about the "
+            "pose / binding mode. Needs a pdb_id (use list_targets for the "
+            "pathogen if unknown). It RANKS candidates against one target; "
+            "predicted, not experimental."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "smiles": {"type": "string"},
+                "pdb_id": {"type": "string"},
+            },
+            "required": ["smiles", "pdb_id"],
+        },
+    },
+    {
         "name": "predict_activity",
         "description": (
             "Predicted antibacterial-activity prior for a SMILES, from a "
@@ -458,6 +480,11 @@ async def _dispatch_tool(name: str, args: dict[str, Any], api_base: str) -> dict
         elif name == "predict_activity":
             r = await cx.get(f"{api_base}/workbench/chem/activity",
                              params={"smiles": args["smiles"]})
+        elif name == "dock_to_target":
+            r = await cx.post(f"{api_base}/workbench/chem/dock", json={
+                "smiles": args["smiles"], "pdb_id": args["pdb_id"],
+                "session_id": args.get("_session_id"), "save": True,
+            })
         elif name == "list_axes":
             r = await cx.get(f"{api_base}/workbench/chem/session/__init/axes")
         elif name == "session_pareto_explain":

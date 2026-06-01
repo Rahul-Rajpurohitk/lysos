@@ -50,7 +50,7 @@ _ARTIFACT_KIND = "candidate_dossier"
 # The six per-candidate developability facets. `target` is pathogen
 # context, not a developability axis, so it is tracked but excluded
 # from the characterised-fraction maths.
-_DEV_FACETS = ["score", "resistance", "synthesis", "fto", "admet", "regimen"]
+_DEV_FACETS = ["score", "docking", "resistance", "synthesis", "fto", "admet", "regimen"]
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -317,6 +317,18 @@ def feed_from_state(state: dict[str, Any]) -> list[str]:
             "escape_variant_smiles": esc.get("variant_smiles"),
         })
         fed.append("fto")
+
+    # ── docking facet ──
+    dock = state.get("dock_result") or state.get("docking")
+    if isinstance(dock, dict) and dock.get("affinity_kcal_mol") is not None:
+        upsert_facet(sid, smi, "docking", {
+            "affinity_kcal_mol": dock.get("affinity_kcal_mol"),
+            "band": dock.get("affinity_band"),
+            "target": dock.get("target_name") or dock.get("pdb_id"),
+            "n_interactions": dock.get("n_interactions"),
+            "engine": dock.get("engine"),
+        })
+        fed.append("docking")
 
     # ── admet facet ──
     admet = state.get("admet_panel")
