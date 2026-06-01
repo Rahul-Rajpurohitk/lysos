@@ -1,0 +1,13 @@
+{
+  "roc_auc": 0.9845,
+  "avg_precision": 0.9918,
+  "accuracy": 0.932,
+  "n_train": 5471,
+  "n_test": 1368,
+  "n_actives": 4506,
+  "n_decoys": 2333,
+  "model": "HistGradientBoosting + Morgan(2,2048)",
+  "predicts": "structural similarity to known antibiotic actives",
+  "caveat": "trained on ChEMBL antibiotic actives vs property-matched ZINC decoys + marketed-drug hard-negatives; a high score means 'resembles known antibacterials', not a guaranteed MIC \u2014 use as a prior, not an oracle",
+  "trained_at": 1780339727.586634
+}
