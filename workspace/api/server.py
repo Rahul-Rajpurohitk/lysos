@@ -290,6 +290,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Validation router not loaded: %s", exc)
 
+# Docking — real binding-affinity prediction (AutoDock Vina scoring fn)
+try:
+    from .chem_dock import router as chem_dock_router
+    app.include_router(chem_dock_router, prefix="/workbench")
+    log.info("Chem dock routes loaded (/workbench/chem/dock)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem dock router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
