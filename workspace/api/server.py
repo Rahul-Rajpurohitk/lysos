@@ -282,6 +282,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem peptide router not loaded: %s", exc)
 
+# Retrospective validation — the trust centerpiece (Act II)
+try:
+    from .validation import router as validation_router
+    app.include_router(validation_router, prefix="/workbench")
+    log.info("Validation routes loaded (/workbench/chem/validation/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Validation router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
