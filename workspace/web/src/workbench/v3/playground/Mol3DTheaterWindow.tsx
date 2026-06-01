@@ -66,6 +66,28 @@ interface PoseResult {
   key_contacts: KeyContact[];
 }
 
+interface DockInteraction {
+  chain: string; resid: number; resname: string;
+  ligand_atom_idx: number; ligand_element: string;
+  distance_a: number; type: string;
+}
+interface DockResult {
+  smiles: string;
+  pdb_id: string;
+  target_name: string;
+  engine: string;
+  engine_label: string;
+  affinity_kcal_mol: number;
+  affinity_band: "strong" | "good" | "moderate" | "weak";
+  n_rotatable_bonds: number;
+  n_conformers: number;
+  term_breakdown: Record<string, number>;
+  interactions: DockInteraction[];
+  n_interactions: number;
+  elapsed_s: number;
+  note: string;
+}
+
 interface Props {
   apiBase: string;
   smiles: string | null;
@@ -233,6 +255,35 @@ export function Mol3DTheaterWindow(p: Props) {
     return () => { cancelled = true; clearTimeout(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.smiles, selectedTargetId, p.apiBase]);
+
+  // ─── Real docking: AutoDock Vina scoring fn → binding affinity ──────
+  // The place-in-pocket pose above is a fast geometric placement (drives
+  // the 2D halos). Docking is the heavier, real binding-affinity run the
+  // user triggers explicitly. It produces the ΔG hero metric.
+  const [dock, setDock] = useState<DockResult | null>(null);
+  const [docking, setDocking] = useState(false);
+  const [dockError, setDockError] = useState<string>("");
+
+  async function runDock() {
+    if (!p.smiles || !selectedTargetId) return;
+    setDocking(true);
+    setDockError("");
+    try {
+      const r = await fetch(`${p.apiBase}/workbench/chem/dock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ smiles: p.smiles, pdb_id: selectedTargetId, save: true }),
+      });
+      if (!r.ok) { setDockError((await r.text()).slice(0, 100)); setDock(null); return; }
+      setDock(await r.json());
+    } catch (e: any) {
+      setDockError(String(e?.message ?? e).slice(0, 100));
+    } finally {
+      setDocking(false);
+    }
+  }
+  // Clear stale dock when the molecule or target changes.
+  useEffect(() => { setDock(null); setDockError(""); }, [p.smiles, selectedTargetId]);
 
   // ─── Closest-known overlay (kept from prior version) ───────────────
   const [match, setMatch] = useState<MatchResult | null>(null);
@@ -515,6 +566,75 @@ export function Mol3DTheaterWindow(p: Props) {
           </div>
         );
       })()}
+
+      {/* ─── DOCK action + binding-affinity ΔG hero (top-left) ───────
+          The real AutoDock Vina scoring-function dock. The user clicks
+          "Dock" to run it; the ΔG is the headline binding metric. */}
+      {p.smiles && selectedTargetId && (
+        <div style={{
+          position: "absolute", top: 44, left: 8, zIndex: 61,
+          display: "flex", flexDirection: "column", gap: 5, alignItems: "flex-start",
+        }}>
+          {!dock && (
+            <button type="button" onClick={runDock} disabled={docking}
+              title="Dock the candidate into this target's active site — real AutoDock Vina scoring function → predicted binding affinity (kcal/mol) + pose + per-residue interactions."
+              style={{
+                padding: "5px 11px", borderRadius: 6, border: 0,
+                background: docking ? "rgba(13,148,136,0.5)" : "#0d9488",
+                color: "white", fontSize: 10.5, fontWeight: 700,
+                fontFamily: "var(--lys-font-mono)", letterSpacing: "0.03em",
+                cursor: docking ? "wait" : "pointer", backdropFilter: "blur(8px)",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+              }}>
+              {docking ? "⊚ docking…" : "⚓ Dock to target"}
+            </button>
+          )}
+          {dock && (() => {
+            const DB = {
+              strong: { fg: "#10b981", bg: "rgba(16,185,129,0.14)", border: "rgba(16,185,129,0.45)" },
+              good:   { fg: "#65a30d", bg: "rgba(101,163,13,0.14)", border: "rgba(101,163,13,0.45)" },
+              moderate: { fg: "#ca8a04", bg: "rgba(202,138,4,0.14)", border: "rgba(202,138,4,0.45)" },
+              weak:   { fg: "#dc2626", bg: "rgba(220,38,38,0.14)", border: "rgba(220,38,38,0.45)" },
+            }[dock.affinity_band];
+            return (
+              <div title={dock.note + "  ·  " + dock.engine_label}
+                style={{
+                  padding: "6px 10px", borderRadius: 7,
+                  background: DB.bg, border: `1px solid ${DB.border}`,
+                  backdropFilter: "blur(8px)", boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+                  fontFamily: "var(--lys-font-mono)",
+                }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: DB.fg, lineHeight: 1 }}>
+                    {dock.affinity_kcal_mol}
+                  </span>
+                  <span style={{ fontSize: 8, color: DB.fg, opacity: 0.8 }}>kcal/mol</span>
+                  <span style={{ fontSize: 8.5, color: DB.fg, fontWeight: 700,
+                    textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    {dock.affinity_band}
+                  </span>
+                </div>
+                <div style={{ fontSize: 7.5, color: "var(--lys-text-faint)", marginTop: 2 }}>
+                  Vina dock · {dock.n_interactions} contacts · {dock.elapsed_s}s
+                </div>
+                <button type="button" onClick={runDock} disabled={docking}
+                  style={{ marginTop: 3, padding: "1px 6px", borderRadius: 4,
+                    border: `1px solid ${DB.border}`, background: "transparent",
+                    color: DB.fg, fontSize: 8, cursor: "pointer",
+                    fontFamily: "var(--lys-font-mono)" }}>
+                  {docking ? "…" : "re-dock"}
+                </button>
+              </div>
+            );
+          })()}
+          {dockError && (
+            <div style={{ padding: "3px 8px", borderRadius: 5,
+              background: "rgba(220,38,38,0.12)", border: "1px solid rgba(220,38,38,0.4)",
+              color: "#dc2626", fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+              maxWidth: 200 }}>dock: {dockError}</div>
+          )}
+        </div>
+      )}
 
       {/* ─── BELOW-TOOLBAR-RIGHT: Pose score + contacts/clashes ─────
           Sits underneath the Mol3D toolbar's right edge instead of
