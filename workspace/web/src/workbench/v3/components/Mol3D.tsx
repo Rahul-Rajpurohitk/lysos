@@ -78,7 +78,11 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
   // false; if a future feature wants them back, restore the toggles
   // and re-introduce the setters.
   const wireframe = false;
-  const [pocketOnly, setPocketOnly] = useState(true);
+  // Default to the FULL-PROTEIN view so the target renders immediately on
+  // load (what a chemist expects to see first). Pocket mode zooms to the
+  // ligand — only useful once a candidate has been docked/placed; defaulting
+  // to it left the canvas looking empty before a ligand was present.
+  const [pocketOnly, setPocketOnly] = useState(false);
   const spin = false;
   const [error, setError] = useState<string | null>(null);
   const [pdb, setPdb] = useState<string>(PATHOGEN_PDB[pathogen] ?? "5DPX");
