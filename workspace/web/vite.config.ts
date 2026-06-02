@@ -5,6 +5,12 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Lysos owns port 5173. strictPort makes vite FAIL loudly if it's taken
+    // (by another project) rather than silently drifting to 5174/5175 — which
+    // is how the wrong app ("PhD Journey", "JobAutoPilot") kept showing up at
+    // localhost:5173. Free 5173 for Lysos rather than letting it drift.
+    port: 5173,
+    strictPort: true,
     proxy: {
       "/api": {
         target: "http://localhost:7860",

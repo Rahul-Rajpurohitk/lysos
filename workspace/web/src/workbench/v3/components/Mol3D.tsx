@@ -273,29 +273,44 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
       proteinComp.current = null;
     }
     setError(null);
-    stage.loadFile(`https://files.rcsb.org/download/${pdb}.pdb`)
-      .then((comp: any) => {
-        proteinComp.current = comp;
-        applyRepresentation(comp, representation, wireframe);
-        // Use STAGE-level autoView so the camera fits all loaded
-        // components (protein + any ligand). With an animated duration
-        // — autoView(0) sometimes no-ops; an animated transition forces
-        // the renderer to recompute the camera. The double-call (now
-        // + 250ms) handles the case where the canvas was 0-sized at
-        // init: by 250ms the Allotment pane has resized and the
-        // ResizeObserver has fired, so handleResize+autoView lands on
-        // a real canvas.
-        stage.handleResize?.();
-        stage.autoView?.(400);
-        setTimeout(() => {
-          try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
-        }, 250);
-        setTimeout(() => {
-          try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/}
-        }, 800);
-      })
-      .catch((e: any) => setError(`PDB ${pdb} load failed: ${e.message}`));
-  }, [pdb]);
+    let cancelled = false;
+    // Load the protein through the BACKEND PDB cache (data/pdb_cache) rather
+    // than fetching files.rcsb.org directly from the browser — the direct
+    // fetch fails behind firewalls/CORS and leaves an empty stage. The
+    // backend already mirrors RCSB to disk, so this is fast + reliable.
+    // Falls back to the direct RCSB URL only if the backend is unreachable.
+    const onLoaded = (comp: any) => {
+      if (cancelled) return;
+      proteinComp.current = comp;
+      applyRepresentation(comp, representation, wireframe);
+      stage.handleResize?.();
+      stage.autoView?.(400);
+      setTimeout(() => { try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/} }, 250);
+      setTimeout(() => { try { stage.handleResize?.(); stage.autoView?.(400); } catch {/*noop*/} }, 800);
+    };
+    (async () => {
+      try {
+        const r = await fetch(`${apiBase}/workbench/chem/target/${pdb}/raw`);
+        if (!r.ok) throw new Error(`backend ${r.status}`);
+        const { pdb_text } = await r.json();
+        if (!pdb_text || cancelled) throw new Error("empty PDB text");
+        const blob = new Blob([pdb_text], { type: "text/plain" });
+        const comp = await stage.loadFile(blob, { ext: "pdb", name: pdb });
+        onLoaded(comp);
+      } catch (backendErr: any) {
+        if (cancelled) return;
+        // Last-resort: try the direct RCSB URL (works when the browser CAN
+        // reach the internet and the backend is down).
+        try {
+          const comp = await stage.loadFile(`https://files.rcsb.org/download/${pdb}.pdb`);
+          onLoaded(comp);
+        } catch (e: any) {
+          if (!cancelled) setError(`PDB ${pdb} load failed: ${backendErr.message}`);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [pdb, apiBase]);
 
   // Update representation when toggles change
   useEffect(() => {
