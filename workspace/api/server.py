@@ -306,6 +306,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem synthesizability router not loaded: %s", exc)
 
+# Resistome — AMR genome/population resistance-landscape layer
+try:
+    from .chem_resistome import router as chem_resistome_router
+    app.include_router(chem_resistome_router, prefix="/workbench")
+    log.info("Chem resistome routes loaded (/workbench/chem/resistome/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem resistome router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
