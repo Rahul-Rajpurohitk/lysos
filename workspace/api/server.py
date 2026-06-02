@@ -354,6 +354,22 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem property-space router not loaded: %s", exc)
 
+# 3D Shape & Flexibility Explorer — PMI conformer ensemble
+try:
+    from .chem_shape import router as chem_shape_router
+    app.include_router(chem_shape_router, prefix="/workbench")
+    log.info("Chem shape routes loaded (/workbench/chem/shape/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem shape router not loaded: %s", exc)
+
+# Metabolic Soft-Spot Scanner — rule-based site-of-metabolism
+try:
+    from .chem_metabolism import router as chem_metabolism_router
+    app.include_router(chem_metabolism_router, prefix="/workbench")
+    log.info("Chem metabolism routes loaded (/workbench/chem/metabolism/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem metabolism router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

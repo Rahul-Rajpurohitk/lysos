@@ -46,6 +46,8 @@ import { PKPDSimulatorCard } from "./playground/PKPDSimulatorCard";
 import { ChemicalSpaceCard } from "./playground/ChemicalSpaceCard";
 import { CombinationLabCard } from "./playground/CombinationLabCard";
 import { PropertySpaceCard } from "./playground/PropertySpaceCard";
+import { ShapeExplorerCard } from "./playground/ShapeExplorerCard";
+import { MetabolismCard } from "./playground/MetabolismCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -3208,6 +3210,17 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         smiles={currentSmiles}
                         sessionId={activeChatId}
                       /> },
+                    // Metabolic soft-spot scanner — rule-based site-of-metabolism
+                    //    + the medchem fix for each labile site (pairs with bioisostere).
+                    { id: "metabolism", title: "Metabolic soft-spots · site of metabolism",
+                      size: 2, expandedH: 460, body:
+                      <MetabolismCard apiBase={apiBase} smiles={currentSmiles}
+                        sessionId={activeChatId} /> },
+                    // 3D shape & flexibility — PMI conformer-ensemble triangle.
+                    { id: "shape", title: "3D shape & flexibility · PMI",
+                      size: 2, expandedH: 440, body:
+                      <ShapeExplorerCard apiBase={apiBase} smiles={currentSmiles}
+                        sessionId={activeChatId} /> },
                     { id: "toxicity", title: "Toxicity · ADME-Tox", body:
                       <ToxicityProfileCard apiBase={apiBase} smiles={currentSmiles} /> },
                     // ADMET Observatory — Service 3: full 5-axis PK panel
