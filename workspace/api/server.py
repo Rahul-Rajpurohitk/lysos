@@ -378,6 +378,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem spectrum router not loaded: %s", exc)
 
+# Gram-Negative Entry Predictor — eNTRy rules (Hergenrother 2017)
+try:
+    from .chem_entry import router as chem_entry_router
+    app.include_router(chem_entry_router, prefix="/workbench")
+    log.info("Chem entry routes loaded (/workbench/chem/entry/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem entry router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

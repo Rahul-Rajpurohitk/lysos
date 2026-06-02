@@ -49,6 +49,7 @@ import { PropertySpaceCard } from "./playground/PropertySpaceCard";
 import { ShapeExplorerCard } from "./playground/ShapeExplorerCard";
 import { MetabolismCard } from "./playground/MetabolismCard";
 import { SpectrumMatrixCard } from "./playground/SpectrumMatrixCard";
+import { GramEntryCard } from "./playground/GramEntryCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -3221,6 +3222,12 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     { id: "shape", title: "3D shape & flexibility · PMI",
                       size: 2, expandedH: 440, body:
                       <ShapeExplorerCard apiBase={apiBase} smiles={currentSmiles}
+                        sessionId={activeChatId} /> },
+                    // Gram-negative entry — eNTRy rules (amine·flat·rigid).
+                    //    The #1 filter for Gram-negative antibiotic discovery.
+                    { id: "gram-entry", title: "Gram-negative entry · eNTRy rules",
+                      size: 2, expandedH: 420, body:
+                      <GramEntryCard apiBase={apiBase} smiles={currentSmiles}
                         sessionId={activeChatId} /> },
                     { id: "toxicity", title: "Toxicity · ADME-Tox", body:
                       <ToxicityProfileCard apiBase={apiBase} smiles={currentSmiles} /> },
