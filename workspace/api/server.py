@@ -330,6 +330,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem PK/PD router not loaded: %s", exc)
 
+# Chemical-Space Navigator — Morgan-FP PCA map + Tanimoto novelty
+try:
+    from .chem_space import router as chem_space_router
+    app.include_router(chem_space_router, prefix="/workbench")
+    log.info("Chem-space routes loaded (/workbench/chem/space/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem-space router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

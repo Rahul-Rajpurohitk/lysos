@@ -43,6 +43,7 @@ import { ResistomeCard } from "./playground/ResistomeCard";
 import { CandidateCockpit } from "./playground/CandidateCockpit";
 import { BioisostereStudioCard } from "./playground/BioisostereStudioCard";
 import { PKPDSimulatorCard } from "./playground/PKPDSimulatorCard";
+import { ChemicalSpaceCard } from "./playground/ChemicalSpaceCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -3120,6 +3121,18 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           parentId: null,
                           logLabel: "[ip · escape variant]",
                         })}
+                      /> },
+                    // Chemical-Space Navigator: project the candidate into the
+                    //    space of marketed antibiotics — interactive scatter,
+                    //    nearest known neighbours, novelty score. Pairs with
+                    //    IP/FTO (is this a fresh chemotype or a me-too?).
+                    { id: "chem-space", title: "Chemical-space navigator · novelty",
+                      size: 2, expandedH: 460, body:
+                      <ChemicalSpaceCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        sessionId={activeChatId}
                       /> },
                     // (2D builder lives at top of this list — see above.)
                     // Atoms / Bonds / Build / Properties / Library / SMARTS
