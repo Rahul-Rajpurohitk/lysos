@@ -79,12 +79,85 @@ const FACETS: {
     headline: (d) => `novelty ${num(d.novelty_score ?? d.freedom_score)}` },
   { key: "resistance", label: "Resistance", icon: "⛨",
     headline: (d) => `robustness ${num(d.robustness)}${d.n_vulnerable ? ` · ${d.n_vulnerable} weak` : ""}` },
-  { key: "regimen", label: "Regimen", icon: "⊕",
-    headline: (d) => `synergy ${num(d.best_synergy)}` },
+  { key: "regimen", label: "PK/PD regimen", icon: "⊕",
+    headline: (d) => d.index_at_mic != null
+      ? `${d.index ?? "index"} ${d.index_at_mic}${d.attained_cidal ? " · cidal" : ""}`
+      : `synergy ${num(d.best_synergy)}`,
+    engine: (d) => d.regimen ?? null },
+  { key: "space", label: "Chem-space", icon: "✦",
+    headline: (d) => `novelty ${num(d.novelty)} · ${d.band ?? "?"}`,
+    engine: (d) => d.nearest ? `≈ ${d.nearest}` : null },
+  { key: "propspace", label: "Property space", icon: "▥",
+    headline: (d) => `${num(d.typicality)} typicality · ${d.band ?? "?"}`,
+    engine: (d) => d.in_band != null ? `${d.in_band}/${d.n_props} in band` : null },
+  { key: "combination", label: "Combination", icon: "⊞",
+    headline: (d) => `${d.top_adjuvant ?? "—"}${d.interaction ? ` · ${d.interaction}` : ""}`,
+    engine: (d) => d.precedent ?? null },
 ];
 
 function num(v: any): string {
   return typeof v === "number" ? v.toFixed(2) : "—";
+}
+function n0(v: any): number | null { return typeof v === "number" ? v : null; }
+
+const DOCK_BAND: Record<string, number> = {
+  strong: 0.9, good: 0.7, moderate: 0.5, weak: 0.3, "very weak": 0.2 };
+
+// Client mirror of the backend per-facet goodness (0-1) — drives the radar.
+function facetGoodness(key: string, d?: Record<string, any>): number | null {
+  if (!d) return null;
+  switch (key) {
+    case "score": return n0(d.composite);
+    case "docking": return DOCK_BAND[(d.band ?? "").toLowerCase()] ?? null;
+    case "resistance": return n0(d.robustness);
+    case "synthesis": return n0(d.feasibility) ??
+      (d.sa_score != null ? Math.max(0, 1 - (d.sa_score - 1) / 9) : null);
+    case "fto": return n0(d.novelty_score ?? d.freedom_score);
+    case "admet": return n0(d.overall_safety_score ?? d.composite);
+    case "regimen": return d.attained_cidal != null
+      ? (d.attained_cidal ? 1 : (d.index_at_mic != null ? 0.5 : 0.2))
+      : n0(d.best_synergy);
+    case "space": return n0(d.novelty);
+    case "propspace": return n0(d.typicality);
+    case "combination":
+      return ({ strong: 0.9, moderate: 0.6 } as Record<string, number>)[
+        (d.interaction ?? d.band ?? "").toLowerCase()] ?? (d.top_adjuvant ? 0.3 : null);
+  }
+  return null;
+}
+
+// Developability radar — one spoke per facet; vertex radius = goodness,
+// empty facets sit at centre. Shows completeness AND quality at a glance.
+function DevRadar({ facets, tierColor }: {
+  facets: FacetMap; tierColor: string;
+}) {
+  const N = FACETS.length, W = 168, C = W / 2, R = C - 22;
+  const ang = (i: number) => (-90 + (i * 360) / N) * (Math.PI / 180);
+  const pt = (i: number, r: number) => [C + r * Math.cos(ang(i)), C + r * Math.sin(ang(i))];
+  const goods = FACETS.map((f) => facetGoodness(f.key, facets[f.key]));
+  const poly = goods.map((g, i) => {
+    const [x, y] = pt(i, R * (g ?? 0)); return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${W}`} style={{ width: "100%", height: "auto",
+      maxWidth: 180, display: "block" }}>
+      {[0.33, 0.66, 1].map((g) => (
+        <polygon key={g} points={FACETS.map((_, i) => {
+          const [x, y] = pt(i, R * g); return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(" ")} fill="none" stroke="rgba(0,0,0,0.07)" strokeWidth={0.6} />
+      ))}
+      {FACETS.map((_, i) => { const [x, y] = pt(i, R);
+        return <line key={i} x1={C} y1={C} x2={x} y2={y} stroke="rgba(0,0,0,0.06)" strokeWidth={0.5} />; })}
+      <polygon points={poly} fill={tierColor + "33"} stroke={tierColor} strokeWidth={1.4} />
+      {goods.map((g, i) => { const [x, y] = pt(i, R * (g ?? 0));
+        return g == null ? null : <circle key={i} cx={x} cy={y} r={2} fill={tierColor} />; })}
+      {FACETS.map((f, i) => { const [x, y] = pt(i, R + 11);
+        const filled = facets[f.key] != null;
+        return <text key={i} x={x} y={y + 3} textAnchor="middle" fontSize={9}
+          fill={filled ? IND.fgDeep : "var(--lys-text-faint)"}
+          style={{ fontWeight: filled ? 700 : 400 }}>{f.icon}</text>; })}
+    </svg>
+  );
 }
 
 export function DossierCard({ apiBase, sessionId, smiles }: Props) {
@@ -165,35 +238,50 @@ export function DossierCard({ apiBase, sessionId, smiles }: Props) {
 
         {dossier && dev && (
           <>
-            {/* Developability rollup */}
-            <div style={{
-              border: `1px solid ${IND.border}`, borderRadius: 6,
-              background: IND.bg, padding: "7px 9px", marginBottom: 8,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700,
-                  fontFamily: "var(--lys-font-mono)", textTransform: "uppercase",
-                  background: TIER_COLOR[dev.tier], color: "white",
-                }}>{dev.tier}</span>
-                <span style={{ fontSize: 10.5, color: "var(--lys-text-dim)" }}>
-                  {dev.characterized}/{dev.total_facets} facets characterised
-                </span>
-                <span style={{ flex: 1 }} />
-                <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
-                  color: "var(--lys-text-faint)" }}>
-                  readiness
-                </span>
-                <span style={{ fontSize: 15, fontWeight: 700,
-                  fontFamily: "var(--lys-font-mono)", color: TIER_COLOR[dev.tier] }}>
-                  {dev.readiness.toFixed(2)}
-                </span>
+            {/* Developability rollup — radar + verdict side by side */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "stretch" }}>
+              <div style={{ flexShrink: 0, border: `1px solid ${IND.border}`,
+                borderRadius: 6, background: IND.bg, padding: "4px 6px",
+                display: "flex", alignItems: "center", width: 180 }}>
+                <DevRadar facets={dossier.facets} tierColor={TIER_COLOR[dev.tier]} />
               </div>
-              {/* Readiness bar */}
-              <div style={{ marginTop: 5, height: 5, borderRadius: 3,
-                background: "rgba(0,0,0,0.06)", overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${dev.readiness * 100}%`,
-                  background: TIER_COLOR[dev.tier], borderRadius: 3 }} />
+              <div style={{ flex: 1, minWidth: 0, border: `1px solid ${IND.border}`,
+                borderRadius: 6, background: IND.bg, padding: "7px 9px",
+                display: "flex", flexDirection: "column", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700,
+                    fontFamily: "var(--lys-font-mono)", textTransform: "uppercase",
+                    background: TIER_COLOR[dev.tier], color: "white",
+                  }}>{dev.tier}</span>
+                  <span style={{ fontSize: 10.5, color: "var(--lys-text-dim)" }}>
+                    {dev.characterized}/{dev.total_facets} facets
+                  </span>
+                  <span style={{ flex: 1 }} />
+                  <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+                    color: "var(--lys-text-faint)" }}>readiness</span>
+                  <span style={{ fontSize: 18, fontWeight: 800,
+                    fontFamily: "var(--lys-font-mono)", color: TIER_COLOR[dev.tier] }}>
+                    {dev.readiness.toFixed(2)}
+                  </span>
+                </div>
+                {/* Readiness bar */}
+                <div style={{ marginTop: 6, height: 6, borderRadius: 3,
+                  background: "rgba(0,0,0,0.06)", overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${dev.readiness * 100}%`,
+                    background: TIER_COLOR[dev.tier], borderRadius: 3 }} />
+                </div>
+                {/* Characterisation bar */}
+                <div style={{ display: "flex", justifyContent: "space-between",
+                  fontSize: 8, fontFamily: "var(--lys-font-mono)",
+                  color: "var(--lys-text-faint)", marginTop: 6, marginBottom: 2 }}>
+                  <span>characterised</span><span>{Math.round(dev.characterized_pct * 100)}%</span>
+                </div>
+                <div style={{ height: 5, borderRadius: 3, background: "rgba(0,0,0,0.06)",
+                  overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${dev.characterized_pct * 100}%`,
+                    background: IND.fg, borderRadius: 3 }} />
+                </div>
               </div>
             </div>
 

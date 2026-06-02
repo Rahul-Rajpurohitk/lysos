@@ -47,10 +47,12 @@ router = APIRouter(prefix="/chem", tags=["candidate_dossier"])
 
 _ARTIFACT_KIND = "candidate_dossier"
 
-# The six per-candidate developability facets. `target` is pathogen
-# context, not a developability axis, so it is tracked but excluded
-# from the characterised-fraction maths.
-_DEV_FACETS = ["score", "docking", "resistance", "synthesis", "fto", "admet", "regimen"]
+# The per-candidate developability facets. `target` is pathogen context,
+# not a developability axis, so it is tracked but excluded from the
+# characterised-fraction maths. Extended with the simulation/analysis
+# services: space (novelty), propspace (drug-likeness), combination (synergy).
+_DEV_FACETS = ["score", "docking", "resistance", "synthesis", "fto", "admet",
+               "regimen", "space", "propspace", "combination"]
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -101,8 +103,22 @@ def _facet_goodness(facet: str, data: dict[str, Any]) -> Optional[float]:
             v = data.get("overall_safety_score")
             return float(v) if v is not None else None
         if facet == "regimen":
+            # PK/PD simulator: cidal target attained is the strongest signal;
+            # falls back to legacy combination-synergy payloads.
+            if "attained_cidal" in data:
+                return 1.0 if data.get("attained_cidal") else (
+                    0.5 if data.get("index_at_mic") is not None else 0.2)
             v = data.get("best_synergy")
             return float(v) if v is not None else None
+        if facet == "space":
+            v = data.get("novelty")          # 1 - max Tanimoto; higher = fresher
+            return float(v) if v is not None else None
+        if facet == "propspace":
+            v = data.get("typicality")       # fraction of props in drug-like band
+            return float(v) if v is not None else None
+        if facet == "combination":
+            band = (data.get("interaction") or data.get("band") or "").lower()
+            return {"strong": 0.9, "moderate": 0.6}.get(band, 0.3)
     except (TypeError, ValueError):
         return None
     return None
