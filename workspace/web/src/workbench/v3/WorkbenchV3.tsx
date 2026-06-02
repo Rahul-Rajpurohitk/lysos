@@ -40,6 +40,7 @@ import { TabbedView, TabbedViewTabs } from "./playground/TabbedView";
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ResistomeCard } from "./playground/ResistomeCard";
+import { CandidateCockpit } from "./playground/CandidateCockpit";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -2918,6 +2919,14 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
+                    // Candidate Cockpit — the dense vitals hero. Live fast-
+                    //    engine readouts (activity / synthesizability / score)
+                    //    + structure, so the top of the column is information,
+                    //    not empty space.
+                    { id: "cockpit", title: "Candidate cockpit · live vitals",
+                      size: 2, body:
+                      <CandidateCockpit apiBase={apiBase} smiles={currentSmiles}
+                        pathogen={selectedPathogen} /> },
                     // Order = medchem workflow: build → dock → resist-test → compare.
                     // 1) 2D builder is the primary canvas: design / edit the
                     //    molecule, with atoms/bonds/library/SMARTS embedded.
