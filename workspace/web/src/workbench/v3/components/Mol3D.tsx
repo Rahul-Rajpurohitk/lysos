@@ -25,6 +25,11 @@ interface Mol3DProps {
    *  qualifier — without this we'd match the residue numbers across
    *  every chain. */
   pocketChain?: string;
+  /** Posed-ligand molblock from /chem/dock — the docked coordinates IN the
+   *  receptor frame. When set, the ligand is rendered at the binding pose
+   *  inside the pocket (not its origin-centred conformer), so you SEE the
+   *  binding. Cleared → falls back to the origin conformer from /molecule/3d. */
+  poseSdf?: string | null;
   /** Slot rendered at the LEFT of the toolbar — used by Mol3DTheaterWindow
    *  to inject the target picker into the toolbar row instead of as a
    *  floating overlay on the canvas. */
@@ -60,7 +65,7 @@ const PATHOGEN_PDB: Record<string, string> = {
   NGono: "3FIH",
 };
 
-export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, pocketResidues, pocketChain, leftToolbarSlot, hoverResidue }: Mol3DProps) {
+export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, pocketResidues, pocketChain, leftToolbarSlot, hoverResidue, poseSdf }: Mol3DProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const stageObj = useRef<any>(null);
   const proteinComp = useRef<any>(null);
@@ -401,26 +406,39 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
         ligandComp.current = null;
       }
       try {
-        const r = await fetch(`${apiBase}/workbench/molecule/3d`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ smiles, optimize: true, add_hydrogens: false }),
-        });
-        if (!r.ok) {
-          setError(`SDF fetch failed: ${r.status}`);
-          return;
+        // Prefer the DOCKED POSE (ligand coordinates in the receptor frame) so
+        // the ligand renders INSIDE the pocket. Only fall back to the origin
+        // conformer from /molecule/3d when no pose has been computed yet.
+        let sdf: string | null = poseSdf || null;
+        const posed = !!sdf;
+        if (!sdf) {
+          const r = await fetch(`${apiBase}/workbench/molecule/3d`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ smiles, optimize: true, add_hydrogens: false }),
+          });
+          if (!r.ok) { setError(`SDF fetch failed: ${r.status}`); return; }
+          const d = await r.json();
+          if (!d?.sdf) { setError("no SDF returned"); return; }
+          sdf = d.sdf;
         }
-        const d = await r.json();
-        if (!d?.sdf) {
-          setError("no SDF returned");
-          return;
-        }
-        if (cancelled) return;
-        const blob = new Blob([d.sdf], { type: "text/plain" });
+        if (cancelled || !sdf) return;
+        const blob = new Blob([sdf], { type: "text/plain" });
         const comp = await stage.loadFile(blob, { ext: "sdf" });
         if (cancelled) return;
         ligandComp.current = comp;
-        comp.addRepresentation("ball+stick", { multipleBond: true });
+        // Posed ligand: thicker sticks + element colours so it pops against
+        // the protein cartoon; origin conformer: standard ball-and-stick.
+        comp.addRepresentation("ball+stick", {
+          multipleBond: true,
+          aspectRatio: posed ? 1.6 : 1.3,
+          radiusScale: posed ? 1.3 : 1.0,
+        });
+        // When the ligand is posed in the pocket, focus the camera there so
+        // you SEE the binding (protein + ligand together, zoomed to the site).
+        if (posed) {
+          setTimeout(() => { try { comp.autoView?.(500); } catch {/*noop*/} }, 120);
+        }
         // Stage-level autoView fits BOTH protein + ligand together.
         // Per-component autoView() on just the ligand would zoom to
         // the tiny ligand and lose the protein context.
@@ -436,7 +454,7 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
     };
     tryLoad();
     return () => { cancelled = true; };
-  }, [smiles, apiBase]);
+  }, [smiles, apiBase, poseSdf]);
 
   function applyRepresentation(comp: any, rep: Representation, wire: boolean) {
     comp.removeAllRepresentations();

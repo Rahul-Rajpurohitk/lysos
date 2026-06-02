@@ -319,6 +319,21 @@ def _dock(smiles: str, pdb_id: str, exhaustive: bool) -> dict[str, Any]:
 
     # Per-residue interactions from the best pose (≤4Å heavy-atom contacts).
     interactions = _pose_interactions(best["xyz"], lig, rec)
+
+    # Posed ligand molblock — the docked coordinates in the RECEPTOR frame,
+    # so the frontend can render the ligand sitting IN the pocket (not at the
+    # origin). This is what makes the 3D theater show the actual binding pose.
+    pose_sdf = None
+    try:
+        posed = Chem.Mol(mol_heavy)
+        pconf = posed.GetConformer()
+        pxyz = best["xyz"]
+        for i in range(posed.GetNumAtoms()):
+            pconf.SetAtomPosition(
+                i, (float(pxyz[i][0]), float(pxyz[i][1]), float(pxyz[i][2])))
+        pose_sdf = Chem.MolToMolBlock(posed)
+    except Exception:  # noqa: BLE001
+        pose_sdf = None
     affinity = round(best["energy"], 2)
     # Band thresholds calibrated to THIS engine (rigid-body Vina-function
     # dock). The rigid NumPy port reproduces Vina's functional form +
@@ -348,6 +363,7 @@ def _dock(smiles: str, pdb_id: str, exhaustive: bool) -> dict[str, Any]:
                           "z": float(center[2])},
         "ligand_xyz": best["xyz"].round(3).tolist() if best["xyz"] is not None else [],
         "ligand_elements": lig["elements"],
+        "pose_sdf": pose_sdf,
         "interactions": interactions,
         "n_interactions": len(interactions),
         "elapsed_s": round(elapsed, 2),

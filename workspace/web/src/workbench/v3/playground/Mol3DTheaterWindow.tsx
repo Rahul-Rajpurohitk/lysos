@@ -82,6 +82,7 @@ interface DockResult {
   n_rotatable_bonds: number;
   n_conformers: number;
   term_breakdown: Record<string, number>;
+  pose_sdf?: string | null;
   interactions: DockInteraction[];
   n_interactions: number;
   elapsed_s: number;
@@ -437,6 +438,7 @@ export function Mol3DTheaterWindow(p: Props) {
         pocketChain={selectedTarget?.active_site_chain ?? "A"}
         leftToolbarSlot={targetPickerSlot}
         hoverResidue={activeContact}
+        poseSdf={dock?.pose_sdf ?? null}
       />
 
       {/* ─── (legacy floating target picker — now in the toolbar) ─── */}
