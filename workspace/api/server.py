@@ -346,6 +346,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem combo router not loaded: %s", exc)
 
+# Property-Space Dashboard — candidate vs known-antibiotic distributions
+try:
+    from .chem_propspace import router as chem_propspace_router
+    app.include_router(chem_propspace_router, prefix="/workbench")
+    log.info("Chem property-space routes loaded (/workbench/chem/propspace/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem property-space router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

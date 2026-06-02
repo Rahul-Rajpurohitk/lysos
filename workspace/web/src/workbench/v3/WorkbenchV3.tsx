@@ -45,6 +45,7 @@ import { BioisostereStudioCard } from "./playground/BioisostereStudioCard";
 import { PKPDSimulatorCard } from "./playground/PKPDSimulatorCard";
 import { ChemicalSpaceCard } from "./playground/ChemicalSpaceCard";
 import { CombinationLabCard } from "./playground/CombinationLabCard";
+import { PropertySpaceCard } from "./playground/PropertySpaceCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -3196,6 +3197,16 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         apiBase={apiBase}
                         smiles={currentSmiles}
                         pathogen={selectedPathogen}
+                      /> },
+                    // Property-Space Dashboard: candidate physchem descriptors
+                    // positioned on the distributions of 30k+ known antibiotics
+                    // — 8 small-multiple histograms + percentiles + typicality.
+                    { id: "propspace", title: "Property space · vs known antibiotics",
+                      size: 2, expandedH: 480, body:
+                      <PropertySpaceCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        sessionId={activeChatId}
                       /> },
                     { id: "toxicity", title: "Toxicity · ADME-Tox", body:
                       <ToxicityProfileCard apiBase={apiBase} smiles={currentSmiles} /> },
