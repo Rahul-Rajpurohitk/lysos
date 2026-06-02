@@ -1580,62 +1580,74 @@ function CompareMode({
 
       {compareResult && (
         <>
-          <SectionLabel text={`Results · ${compareResult.n_valid}/${compareResult.n} valid`} mt={4} />
-          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {compareResult.rows.map((r, i) => {
-              if (!r.valid) return (
-                <div key={i} style={{
-                  padding: "4px 8px", fontSize: 9.5, color: RED.fg,
-                  background: RED.bg, border: `1px solid ${RED.border}`,
-                  borderRadius: 4,
-                }}>{r.label}: {r.error || "invalid"}</div>
-              );
-              const isBest = compareResult.best_idx === i;
-              const robTier = (r.robustness_score! >= 0.7 ? GREEN : r.robustness_score! >= 0.4 ? AMBER : RED);
-              return (
-                <div key={i} style={{
-                  padding: "5px 9px",
-                  background: isBest ? GREEN.bg : LAV.bg,
-                  border: `1px solid ${isBest ? GREEN.border : LAV.border}`,
-                  borderLeft: `3px solid ${isBest ? GREEN.fg : LAV.fg}`,
-                  borderRadius: 4,
-                  display: "grid", gridTemplateColumns: "1fr auto auto auto",
-                  gap: 8, alignItems: "center", fontSize: 9.5,
-                  backdropFilter: "blur(10px)",
-                }}>
-                  <span style={{ fontWeight: 600 }}>
-                    {r.label}{isBest && <span style={{ marginLeft: 4, color: GREEN.fg, fontFamily: "var(--lys-font-mono)" }}>★ best</span>}
-                  </span>
-                  <Pill {...robTier} text={`R ${r.robustness_score!.toFixed(2)}`} bold />
-                  <Pill {...((r.n_escape_vectors || 0) > 0 ? RED : GREEN)}
-                        text={`${r.n_escape_vectors || 0} esc`} />
-                  <Pill bg={LAV.bg} border={LAV.border} fg={LAV.fgDeep}
-                        text={`${r.n_residues_with_contacts || 0} contacts`} />
-                </div>
-              );
-            })}
+          <SectionLabel text={`Robustness ranking · ${compareResult.n_valid}/${compareResult.n} valid`} mt={4} />
+          {/* Visual ranking — a horizontal robustness bar per candidate,
+              sorted best-first, tier-coloured, with escape-vector count.
+              Replaces the text-pill table. */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {compareResult.rows
+              .map((r, i) => ({ r, i }))
+              .sort((a, b) => (b.r.robustness_score ?? -1) - (a.r.robustness_score ?? -1))
+              .map(({ r, i }) => {
+                if (!r.valid) return (
+                  <div key={i} style={{ padding: "4px 8px", fontSize: 9.5, color: RED.fg,
+                    background: RED.bg, border: `1px solid ${RED.border}`, borderRadius: 4 }}>
+                    {r.label}: {r.error || "invalid"}</div>
+                );
+                const rob = r.robustness_score ?? 0;
+                const tier = rob >= 0.7 ? GREEN : rob >= 0.4 ? AMBER : RED;
+                const isBest = compareResult.best_idx === i;
+                return (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ width: 96, flexShrink: 0, fontSize: 9.5,
+                      fontWeight: isBest ? 800 : 600,
+                      color: isBest ? GREEN.fg : "var(--lys-text)",
+                      whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {isBest ? "★ " : ""}{r.label}</span>
+                    <div style={{ flex: 1, minWidth: 0, height: 16, borderRadius: 4,
+                      background: "rgba(0,0,0,0.05)", overflow: "hidden", position: "relative" }}>
+                      <div style={{ width: `${Math.round(rob * 100)}%`, height: "100%",
+                        background: tier.fg, borderRadius: 4, transition: "width 0.4s" }} />
+                      <span style={{ position: "absolute", right: 6, top: 1, fontSize: 9,
+                        fontWeight: 800, fontFamily: "var(--lys-font-mono)",
+                        color: rob > 0.5 ? "#fff" : "var(--lys-text)" }}>
+                        {rob.toFixed(2)}</span>
+                    </div>
+                    <span style={{ width: 44, flexShrink: 0, textAlign: "right", fontSize: 8.5,
+                      fontFamily: "var(--lys-font-mono)",
+                      color: (r.n_escape_vectors || 0) > 0 ? RED.fg : GREEN.fg }}>
+                      {r.n_escape_vectors || 0} esc</span>
+                  </div>
+                );
+              })}
           </div>
 
           {compareResult.common_weak_residues.length > 0 && (
             <>
-              <SectionLabel text="Common weak residues · ≥50% of candidates affected" mt={10} />
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                {compareResult.common_weak_residues.slice(0, 8).map((r) => (
-                  <button
-                    key={r.position}
-                    onClick={() => onResidueFocus?.(r.position)}
-                    style={{
-                      padding: "2px 8px", height: 22,
-                      fontSize: 9.5, fontWeight: 500,
-                      borderRadius: 4, cursor: "pointer",
-                      background: AMBER.bg, border: `1px solid ${AMBER.border}`,
-                      color: AMBER.fg,
-                      fontFamily: "var(--lys-font-body)",
-                    }}>
-                    <span style={{ fontFamily: "var(--lys-font-mono)", fontWeight: 700 }}>res {r.position}</span>
-                    {" "}<span style={{ opacity: 0.7 }}>{r.n_candidates}/{compareResult.n_valid}</span>
-                  </button>
-                ))}
+              <SectionLabel text="Shared weakness · residues that defeat most candidates" mt={10} />
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                {compareResult.common_weak_residues.slice(0, 10).map((r) => {
+                  // colour by how many candidates this residue defeats —
+                  // a residue weakening ALL candidates is the real liability.
+                  const frac = r.n_candidates / Math.max(1, compareResult.n_valid);
+                  const col = frac >= 0.99 ? RED : frac >= 0.66 ? AMBER : LAV;
+                  return (
+                    <button key={r.position} onClick={() => onResidueFocus?.(r.position)}
+                      title={`Residue ${r.position} weakens ${r.n_candidates}/${compareResult.n_valid} candidates — click to focus in 3D`}
+                      style={{ display: "inline-flex", alignItems: "center", gap: 5,
+                        padding: "3px 9px", borderRadius: 999, cursor: "pointer",
+                        background: col.bg, border: `1px solid ${col.border}`, color: col.fg,
+                        fontFamily: "var(--lys-font-mono)", fontSize: 9.5, fontWeight: 700 }}>
+                      res {r.position}
+                      <span style={{ display: "inline-flex", gap: 1.5 }}>
+                        {Array.from({ length: compareResult.n_valid }).map((_, k) => (
+                          <span key={k} style={{ width: 4, height: 8, borderRadius: 1,
+                            background: k < r.n_candidates ? col.fg : `${col.fg}33` }} />
+                        ))}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </>
           )}
