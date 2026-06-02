@@ -168,17 +168,16 @@ function injectSvgSafely(host: HTMLElement, svgText: string): SVGSVGElement | nu
       svgEl.setAttribute("viewBox", `0 0 ${wn} ${hn}`);
     }
   }
-  // Expand viewBox by 20% on each side. RDKit emits at native size and
-  // when the host is taller than the molecule's aspect ratio, "meet"
-  // would scale up to fill width and clip vertically. The padded viewBox
-  // forces the SVG to letterbox (centered, smaller) instead — the
-  // molecule never touches the host edges.
+  // Tight 6% breathing room so atoms don't kiss the host edges, but the
+  // molecule FILLS the canvas instead of being letterboxed into a tiny
+  // island. (Was 20% each side = 40% shrink — the "molecule stranded in
+  // white space" look. "meet" keeps aspect ratio so nothing distorts.)
   const vb = svgEl.getAttribute("viewBox");
   if (vb) {
     const [x, y, w, h] = vb.split(/\s+/).map((n) => parseFloat(n));
     if ([x, y, w, h].every((n) => !isNaN(n))) {
-      const padX = w * 0.20;
-      const padY = h * 0.20;
+      const padX = w * 0.06;
+      const padY = h * 0.06;
       svgEl.setAttribute("viewBox", `${x - padX} ${y - padY} ${w + 2 * padX} ${h + 2 * padY}`);
     }
   }

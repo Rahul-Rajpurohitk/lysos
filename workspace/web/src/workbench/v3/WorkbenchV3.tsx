@@ -2930,7 +2930,7 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     // Order = medchem workflow: build → dock → resist-test → compare.
                     // 1) 2D builder is the primary canvas: design / edit the
                     //    molecule, with atoms/bonds/library/SMARTS embedded.
-                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", size: 2, expandedH: 540, body:
+                    { id: "2d", title: "2D molecule builder · atoms · bonds · properties", size: 2, expandedH: 420, body:
                       <Mol2DBuilderWindow
                         apiBase={apiBase}
                         smiles={currentSmiles}
