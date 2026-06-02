@@ -1087,34 +1087,57 @@ function MapMode({
         </>
       )}
 
-      {/* ── HEATMAP — collapsed by default. Detail / specialist view. ── */}
+      {/* ── ESCAPE HEATMAP — the centerpiece. Always visible (was hidden in a
+          collapsed <details>, so the best visual went unseen). Every residue ×
+          every substitution, coloured by escape score; clinical mutations
+          ringed red; click a cell/residue → focus it in the 3D theater. ── */}
       {data.n_residues_with_contacts > 0 && (
-        <details style={{ marginBottom: 8 }}>
-          <summary style={{
-            fontSize: 9, fontFamily: "var(--lys-font-mono)",
-            color: "var(--lys-text-faint)",
-            letterSpacing: "0.06em", textTransform: "uppercase",
-            fontWeight: 700, cursor: "pointer", userSelect: "none",
-            padding: "4px 0",
-          }}>
-            ▶ Full heatmap · 20 amino-acids × {positions.length} residues
-          </summary>
-          <div style={{ marginTop: 6 }}>
-            <FullHeatmap
-              data={data}
-              positions={positions}
-              aas={aas}
-              hoverCell={hoverCell}
-              setHoverCell={setHoverCell}
-              pinnedCell={pinnedCell}
-              clinicalCells={clinicalCells}
-              scoreColor={scoreColor}
-              contactStrength={contactStrength}
-              onCellClick={onCellClick}
-              onResidueFocus={onResidueFocus}
-            />
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8,
+            marginBottom: 6 }}>
+            <span style={{ fontSize: 9, fontFamily: "var(--lys-font-mono)",
+              color: LAV.fgDeep, letterSpacing: "0.06em",
+              textTransform: "uppercase", fontWeight: 700 }}>
+              escape heatmap · 20 substitutions × {positions.length} residues
+            </span>
+            <span style={{ flex: 1 }} />
+            {/* colour-scale legend */}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 4,
+              fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
+              color: "var(--lys-text-faint)" }}>
+              <span>low</span>
+              <span style={{ display: "inline-flex", borderRadius: 2, overflow: "hidden",
+                border: "1px solid rgba(0,0,0,0.08)" }}>
+                {[0.05, 0.2, 0.35, 0.5, 0.7, 0.9].map((s) => (
+                  <span key={s} style={{ width: 12, height: 8, background: scoreColor(s) }} />
+                ))}
+              </span>
+              <span>high escape</span>
+              <span style={{ width: 9, height: 9, borderRadius: 2, marginLeft: 6,
+                border: `1.5px solid ${RED.fg}` }} />
+              <span>clinical</span>
+            </span>
           </div>
-        </details>
+          <FullHeatmap
+            data={data}
+            positions={positions}
+            aas={aas}
+            hoverCell={hoverCell}
+            setHoverCell={setHoverCell}
+            pinnedCell={pinnedCell}
+            clinicalCells={clinicalCells}
+            scoreColor={scoreColor}
+            contactStrength={contactStrength}
+            onCellClick={onCellClick}
+            onResidueFocus={onResidueFocus}
+          />
+          <div style={{ fontSize: 7.5, fontFamily: "var(--lys-font-mono)",
+            color: "var(--lys-text-faint)", marginTop: 4 }}>
+            rows = the 20 amino-acid substitutions · columns = pocket-contact
+            residues (with distance) · hover a cell for the escape-score
+            breakdown, click to focus the residue in 3D
+          </div>
+        </div>
       )}
 
       {/* ── Vulnerable atoms ── */}
