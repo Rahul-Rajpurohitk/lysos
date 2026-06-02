@@ -18,7 +18,7 @@
  *   onResidueFocus(pos | null) — flash residue in 3D theater
  *   onVulnerableChange(idx[])  — orange halos on 2D for ALL vuln atoms
  */
-import { useEffect, useState, Fragment, useMemo } from "react";
+import { useEffect, useState, Fragment, useMemo, useRef } from "react";
 import type React from "react";
 import { Shield, RefreshCw, AlertTriangle, Wrench, Layers, Map as MapIcon, Sparkles, ChevronDown } from "lucide-react";
 import { Mol2DThumb } from "./Mol2DThumb";
@@ -265,6 +265,11 @@ export function ResistanceEscapeMapCard({
   const [compareResult, setCompareResult] = useState<CompareResult | null>(null);
   const [compareLoading, setCompareLoading] = useState(false);
 
+  // Robustness trajectory — record each distinct candidate's robustness so the
+  // hardening loop is VISIBLE (apply a hardened analog → robustness Δ shown).
+  const robHistRef = useRef<{ smiles: string; rob: number }[]>([]);
+  const [robDelta, setRobDelta] = useState<number | null>(null);
+
   // ── Fetch resistance prediction
   useEffect(() => {
     if (!smiles || !pdbId) {
@@ -295,6 +300,16 @@ export function ResistanceEscapeMapCard({
         if (cancelled) return;
         setData(d);
         onVulnerableChange?.(d.vulnerable_atoms.map((v) => v.atom_idx));
+        // Trajectory: Δ vs the PREVIOUS distinct candidate (the one you just
+        // hardened away from). Makes "apply hardened analog → robustness up"
+        // visible in the header.
+        const hist = robHistRef.current;
+        const prev = hist.length ? hist[hist.length - 1] : null;
+        if (!prev || prev.smiles !== smiles) {
+          setRobDelta(prev ? Math.round((d.robustness_score - prev.rob) * 1000) / 1000 : null);
+          hist.push({ smiles: smiles!, rob: d.robustness_score });
+          if (hist.length > 12) hist.shift();
+        }
       } catch (e: any) {
         if (!cancelled) {
           setError(String(e?.message ?? e));
@@ -465,6 +480,13 @@ export function ResistanceEscapeMapCard({
         {data && (
           <>
             <Pill {...rc} text={`${rsTier} · ${rs.toFixed(2)}`} bold />
+            {/* Robustness trajectory — Δ vs the previous candidate. After a
+                harden+apply you see "▲ +0.08" so the optimization loop is
+                visible, not invisible. */}
+            {robDelta !== null && Math.abs(robDelta) >= 0.005 && (
+              <Pill {...(robDelta > 0 ? GREEN : RED)} bold
+                text={`${robDelta > 0 ? "▲" : "▼"} ${robDelta > 0 ? "+" : ""}${robDelta.toFixed(2)} vs prev`} />
+            )}
             {data.n_escape_vectors > 0 && (
               <Pill {...RED} text={`${data.n_escape_vectors} escape`} bold />
             )}
