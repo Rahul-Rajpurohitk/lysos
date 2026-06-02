@@ -364,13 +364,27 @@ export function ResistanceEscapeMapCard({
   // ── Heatmap data
   const positions = data ? Object.keys(data.all_residue_scores).map(Number).sort((a, b) => a - b) : [];
 
+  // Sequential YlOrRd escape scale (ColorBrewer) — vivid + perceptually
+  // ordered, full opacity, so even low-but-real escape reads clearly and
+  // high escape is unmistakably hot. Replaces the old faint low-alpha amber
+  // that made the heatmap look empty.
   const scoreColor = (s: number): string => {
-    if (s <= 0) return "rgba(0,0,0,0)";
-    const intensity = Math.min(1, s);
-    const r = 254;
-    const g = Math.round(220 - 100 * intensity);
-    const b = Math.round(180 - 180 * intensity);
-    return `rgba(${r},${g},${b},${0.25 + 0.75 * intensity})`;
+    if (s <= 0) return "transparent";
+    const stops: [number, [number, number, number]][] = [
+      [0.0, [255, 247, 188]], [0.2, [254, 217, 118]], [0.4, [254, 178, 76]],
+      [0.6, [253, 141, 60]], [0.8, [240, 59, 32]], [1.0, [189, 0, 38]],
+    ];
+    const t = Math.max(0, Math.min(1, s));
+    let lo = stops[0], hi = stops[stops.length - 1];
+    for (let i = 0; i < stops.length - 1; i++) {
+      if (t >= stops[i][0] && t <= stops[i + 1][0]) { lo = stops[i]; hi = stops[i + 1]; break; }
+    }
+    const span = hi[0] - lo[0] || 1;
+    const f = (t - lo[0]) / span;
+    const r = Math.round(lo[1][0] + f * (hi[1][0] - lo[1][0]));
+    const g = Math.round(lo[1][1] + f * (hi[1][1] - lo[1][1]));
+    const b = Math.round(lo[1][2] + f * (hi[1][2] - lo[1][2]));
+    return `rgb(${r},${g},${b})`;
   };
 
   const clinicalCells = useMemo(
@@ -2000,40 +2014,46 @@ function FullHeatmap({
   return (
     <div style={{
       display: "grid",
-      gridTemplateColumns: `30px repeat(${positions.length}, minmax(20px, 1fr))`,
-      gap: 1, fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
-      alignItems: "center",
+      gridTemplateColumns: `34px repeat(${positions.length}, minmax(30px, 1fr))`,
+      gap: 2, fontSize: 8.5, fontFamily: "var(--lys-font-mono)",
+      alignItems: "stretch",
     }}>
       <div></div>
       {positions.map((p) => {
         const cd = data.contact_residue_details?.find((c) => c.position === p);
         const distLabel = cd ? `${cd.distance_a}Å` : "";
         const isPinned = pinnedCell?.pos === p;
+        const colHot = hoverCell?.pos === p;
         return (
           <div key={`hdr-${p}`}
             onClick={() => onResidueFocus?.(p)}
-            title={`Residue ${data.all_residue_scores[p].wt}${p}${distLabel ? ` · ${distLabel}` : ""}`}
+            title={`Residue ${data.all_residue_scores[p].wt}${p}${distLabel ? ` · contact ${distLabel}` : ""} — click to focus in 3D`}
             style={{
-              textAlign: "center", padding: "1px 0",
-              fontSize: 8, color: isPinned ? LAV.fgDeep : "var(--lys-text-faint)",
-              fontWeight: 700, cursor: "pointer",
-              lineHeight: 1.0,
+              textAlign: "center", padding: "2px 0",
+              fontSize: 8.5, color: (isPinned || colHot) ? LAV.fgDeep : "var(--lys-text-dim)",
+              fontWeight: 800, cursor: "pointer", lineHeight: 1.05,
+              borderRadius: 3,
+              background: colHot ? "rgba(124,99,216,0.12)" : "transparent",
             }}>
             <div>{data.all_residue_scores[p].wt}{p}</div>
             {distLabel && (
-              <div style={{ fontSize: 6.5, opacity: 0.65, fontWeight: 500 }}>
+              <div style={{ fontSize: 6.5, opacity: 0.7, fontWeight: 600,
+                color: cd && cd.distance_a <= 3 ? RED.fg : "var(--lys-text-faint)" }}>
                 {distLabel}
               </div>
             )}
           </div>
         );
       })}
-      {aas.map((aa) => (
+      {aas.map((aa) => {
+        const rowHot = hoverCell?.aa === aa;
+        return (
         <Fragment key={`aa-${aa}`}>
           <div style={{
-            textAlign: "right", padding: "0 4px",
-            fontSize: 8, color: "var(--lys-text-faint)",
-            fontWeight: 700,
+            textAlign: "right", padding: "0 5px",
+            fontSize: 9, color: rowHot ? LAV.fgDeep : "var(--lys-text-faint)",
+            fontWeight: 800, display: "flex", alignItems: "center",
+            justifyContent: "flex-end",
           }}>{aa}</div>
           {positions.map((p) => {
             const score = data.all_residue_scores[p].mutations[aa] ?? 0;
@@ -2041,37 +2061,53 @@ function FullHeatmap({
             const isWt = data.all_residue_scores[p].wt === aa;
             const isPinned = pinnedCell?.pos === p;
             const cs = contactStrength[p] ?? 0;
+            // crosshair: cells sharing the hovered row OR column stay lit
+            const cross = !!hoverCell && (hoverCell.pos === p || hoverCell.aa === aa);
+            const exact = hoverCell?.pos === p && hoverCell?.aa === aa;
             let bg: string;
-            if (isWt) bg = "rgba(124,99,216,0.18)";
+            if (isWt) bg = "rgba(100,116,139,0.16)";
             else if (score > 0) bg = scoreColor(score);
-            else if (cs > 0) bg = `rgba(124,99,216,${0.04 + cs * 0.08})`;
-            else bg = "transparent";
+            else if (cs > 0) bg = `rgba(124,99,216,${0.05 + cs * 0.07})`;
+            else bg = "var(--lys-surface)";
+            const showVal = !isWt && score >= 0.2;
+            const valColor = score >= 0.55 ? "#ffffff" : "#7a2e0e";
             return (
               <div
                 key={`cell-${p}-${aa}`}
-                title={isWt ? `${aa}${p} (wild-type)`
-                  : `${data.all_residue_scores[p].wt}${p}${aa} · escape ${score.toFixed(2)}${isClinical ? " · CLINICAL" : ""}${cs > 0 ? ` · contact ${cs.toFixed(2)}` : ""}`}
+                title={isWt ? `${aa}${p} · wild-type`
+                  : `${data.all_residue_scores[p].wt}${p}${aa} · escape ${score.toFixed(2)}${isClinical ? " · CLINICAL mutation" : ""}${cs > 0 ? ` · contact ${cs.toFixed(2)}` : ""}`}
                 onMouseEnter={() => setHoverCell({ pos: p, aa, score })}
                 onMouseLeave={() => setHoverCell(null)}
                 onClick={() => onCellClick(p, score, isClinical)}
                 style={{
-                  height: 14,
+                  height: 17, display: "flex", alignItems: "center",
+                  justifyContent: "center",
                   background: bg,
                   border: isClinical
-                    ? `1.5px solid ${RED.fg}`
-                    : isPinned
-                      ? `1.5px solid ${LAV.fgDeep}`
-                      : "1px solid rgba(124,99,216,0.10)",
-                  borderRadius: 2,
+                    ? `2px solid ${RED.fg}`
+                    : exact
+                      ? `2px solid ${LAV.fgDeep}`
+                      : isPinned
+                        ? `1.5px solid ${LAV.fgDeep}`
+                        : "1px solid rgba(0,0,0,0.06)",
+                  borderRadius: 3,
                   cursor: score > 0 || isClinical ? "pointer" : "default",
-                  opacity: hoverCell && (hoverCell.pos !== p || hoverCell.aa !== aa) ? 0.55 : 1,
-                  transition: "opacity 100ms",
-                }}
-              />
+                  opacity: hoverCell && !cross ? 0.38 : 1,
+                  boxShadow: exact ? `0 0 0 2px ${LAV.bg}` : "none",
+                  transition: "opacity 90ms",
+                  fontSize: 7, fontWeight: 800, color: valColor,
+                  position: "relative",
+                }}>
+                {isWt ? (
+                  <span style={{ width: 3, height: 3, borderRadius: 3,
+                    background: "rgba(100,116,139,0.5)" }} />
+                ) : showVal ? score.toFixed(2).replace(/^0/, "") : null}
+              </div>
             );
           })}
         </Fragment>
-      ))}
+        );
+      })}
     </div>
   );
 }
