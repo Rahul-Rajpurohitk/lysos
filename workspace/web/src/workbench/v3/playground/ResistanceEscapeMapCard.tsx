@@ -21,6 +21,7 @@
 import { useEffect, useState, Fragment, useMemo } from "react";
 import type React from "react";
 import { Shield, RefreshCw, AlertTriangle, Wrench, Layers, Map as MapIcon, Sparkles, ChevronDown } from "lucide-react";
+import { Mol2DThumb } from "./Mol2DThumb";
 
 interface TopMutation {
   position: number;
@@ -500,6 +501,8 @@ export function ResistanceEscapeMapCard({
             {data && mode === "map" && (
               <MapMode
                 data={data}
+                apiBase={apiBase}
+                smiles={smiles}
                 positions={positions}
                 aas={AA_ROW_ORDER}
                 hoverCell={hoverCell}
@@ -581,9 +584,11 @@ function classColor(cls: string): string {
 function MapMode({
   data, positions, aas, hoverCell, setHoverCell, pinnedCell,
   clinicalCells, scoreColor, onCellClick, onVulnRowClick, onHardenAtom,
-  onAtomFocus, onResidueFocus,
+  onAtomFocus, onResidueFocus, apiBase, smiles,
 }: {
   data: ResistanceResult;
+  apiBase: string;
+  smiles: string | null;
   positions: number[];
   aas: string[];
   hoverCell: { pos: number; aa: string; score: number } | null;
@@ -1144,6 +1149,27 @@ function MapMode({
       {data.vulnerable_atoms.length > 0 && (
         <>
           <SectionLabel text={`Vulnerable atoms · top ${data.vulnerable_atoms.length}`} mt={4} />
+          {/* The candidate structure with its escape-vulnerable atoms ringed
+              red — "which bonds of MY molecule resistance will attack first."
+              Click the molecule to focus the top vulnerable atom in 2D/3D. */}
+          {smiles && (
+            <div style={{ display: "flex", gap: 10, alignItems: "center",
+              marginBottom: 5, padding: "6px 8px", borderRadius: 6,
+              background: RED.bg, border: `1px solid ${RED.border}` }}>
+              <Mol2DThumb apiBase={apiBase} smiles={smiles} w={132} h={96}
+                accent={RED.fg} caption="escape-vulnerable sites"
+                highlight={data.vulnerable_atoms.map((v) => v.atom_idx)}
+                onClick={() => onVulnRowClick(data.vulnerable_atoms[0])}
+                title="Red-ringed atoms = most resistance-vulnerable. Click to focus." />
+              <div style={{ flex: 1, minWidth: 0, fontSize: 9.5,
+                color: "var(--lys-text-dim)", lineHeight: 1.5 }}>
+                The <b style={{ color: RED.fg }}>red-ringed atoms</b> are where a
+                single clinical mutation most weakens this candidate's binding —
+                the positions to harden first. Each maps to a known escape
+                mutation below.
+              </div>
+            </div>
+          )}
           <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {data.vulnerable_atoms.slice(0, 6).map((v) => {
               const m = v.top_mutation;

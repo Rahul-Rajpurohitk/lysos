@@ -22,6 +22,8 @@ interface Props {
   accent?: string;
   onClick?: () => void;
   title?: string;
+  /** Atom indices to ring (red by default) — e.g. resistance-vulnerable atoms. */
+  highlight?: number[];
 }
 
 function smilesToB64(s: string): string {
@@ -66,18 +68,19 @@ function injectSvg(host: HTMLDivElement | null, svgText: string): boolean {
 }
 
 export function Mol2DThumb({
-  apiBase, smiles, w = 180, h = 140, caption, accent, onClick, title,
+  apiBase, smiles, w = 180, h = 140, caption, accent, onClick, title, highlight,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "ok" | "err">("idle");
 
+  const hlKey = highlight && highlight.length ? highlight.join(",") : "";
   useEffect(() => {
     if (!smiles) {
       if (hostRef.current) hostRef.current.replaceChildren();
       setState("idle");
       return;
     }
-    const key = `${smiles}|${w}x${h}`;
+    const key = `${smiles}|${w}x${h}|${hlKey}`;
     const cached = _SVG_CACHE.get(key);
     if (cached) {
       const ok = injectSvg(hostRef.current, cached);
@@ -88,7 +91,8 @@ export function Mol2DThumb({
     let cancelled = false;
     const b64 = smilesToB64(smiles);
     if (!b64) { setState("err"); return; }
-    fetch(`${apiBase}/workbench/molecule/2d/${b64}?w=${w}&h=${h}&indices=0`)
+    const hlParam = hlKey ? `&highlight=${encodeURIComponent(hlKey)}` : "";
+    fetch(`${apiBase}/workbench/molecule/2d/${b64}?w=${w}&h=${h}&indices=0${hlParam}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((d) => {
         if (cancelled) return;
@@ -99,7 +103,7 @@ export function Mol2DThumb({
       })
       .catch(() => { if (!cancelled) setState("err"); });
     return () => { cancelled = true; };
-  }, [apiBase, smiles, w, h]);
+  }, [apiBase, smiles, w, h, hlKey]);
 
   const accentCol = accent || "rgba(15,23,42,0.12)";
   const interactive = !!onClick;

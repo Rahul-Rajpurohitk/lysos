@@ -1161,11 +1161,14 @@ async def chem_atom_context(smiles_b64: str, atom_idx: int,
 
 @router.get("/molecule/2d/{smiles_b64}")
 async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340,
-                          indices: int = 1) -> dict:
+                          indices: int = 1, highlight: str = "",
+                          highlight_color: str = "") -> dict:
     """Render a 2D structure as SVG. With `indices=1` (default) the SVG
     carries atom-N classes the 2D builder uses for hit-testing.
     Thumbnails should pass `indices=0` to get a clean structure
-    without number labels."""
+    without number labels. `highlight` is a comma-separated list of atom
+    indices to ring (e.g. resistance-vulnerable atoms) — drawn in red by
+    default, or `highlight_color` as an r,g,b triple in 0-1."""
     try:
         smiles = _decode_smiles_b64(smiles_b64)
     except Exception as exc:  # noqa: BLE001
@@ -1185,7 +1188,29 @@ async def molecule_2d_svg(smiles_b64: str, w: int = 480, h: int = 340,
     opts.addAtomIndices = bool(indices)
     opts.bondLineWidth = 2
     opts.baseFontSize = 0.6
-    drawer.DrawMolecule(mol)
+    # Optional atom highlighting (e.g. resistance-vulnerable atoms in red).
+    hl_atoms: list[int] = []
+    if highlight:
+        for tok in highlight.split(","):
+            tok = tok.strip()
+            if tok.isdigit():
+                ai = int(tok)
+                if 0 <= ai < mol.GetNumAtoms():
+                    hl_atoms.append(ai)
+    if hl_atoms:
+        rgb = (0.94, 0.27, 0.27)  # red default
+        if highlight_color:
+            try:
+                parts = [float(x) for x in highlight_color.split(",")]
+                if len(parts) == 3:
+                    rgb = (parts[0], parts[1], parts[2])
+            except ValueError:
+                pass
+        colors = {a: rgb for a in hl_atoms}
+        drawer.DrawMolecule(mol, highlightAtoms=hl_atoms,
+                            highlightAtomColors=colors)
+    else:
+        drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()
 
