@@ -39,6 +39,7 @@ import { PlaygroundCanvas, type WindowLayout, type Viewport } from "./playground
 import { TabbedView, TabbedViewTabs } from "./playground/TabbedView";
 import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
+import { ResistomeCard } from "./playground/ResistomeCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -3016,6 +3017,13 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           });
                         }}
                       /> },
+                    // Resistome: the population-level AMR landscape for this
+                    //    pathogen — which drug classes are resistance-saturated
+                    //    vs have headroom (real CARD data). Pairs with the
+                    //    per-molecule resistance-escape map above.
+                    { id: "resistome", title: "Resistome · AMR landscape",
+                      size: 2, expandedH: 480, body:
+                      <ResistomeCard apiBase={apiBase} pathogen={selectedPathogen} /> },
                     // Generator (Service 4): real de-novo + lead-opt molecular
                     //    generation (BRICS now, GenMol on MI300X). First step of
                     //    the discovery flow — generate, then make-route.
