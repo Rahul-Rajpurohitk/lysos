@@ -756,3 +756,32 @@ async def predict_activity(smiles: str) -> dict[str, Any]:
     return {"smiles": canon, "activity_probability": None,
             "band": "unavailable", "source": "offline",
             "note": "activity model service is offline"}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# ChemBERTa similarity — real molecular-transformer cosine similarity.
+# Proxies the model service /similarity. Chemistry-aware, beyond Morgan FP.
+# ─────────────────────────────────────────────────────────────────────
+
+@router.get("/embedding-similarity")
+async def embedding_similarity(smiles_a: str, smiles_b: str) -> dict[str, Any]:
+    if _canonical(smiles_a) is None or _canonical(smiles_b) is None:
+        raise HTTPException(422, "both SMILES must be valid")
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as cx:
+            r = await cx.post(f"{_ADMET_SERVICE_URL}/similarity",
+                              json={"smiles_a": smiles_a, "smiles_b": smiles_b})
+        if r.status_code == 200:
+            body = r.json()
+            if body.get("ok"):
+                return {"smiles_a": smiles_a, "smiles_b": smiles_b,
+                        "cosine_similarity": body.get("cosine_similarity"),
+                        "model": body.get("model"), "source": "chemberta",
+                        "note": ("ChemBERTa (RoBERTa, 77M PubChem SMILES) "
+                                 "mean-pooled cosine — chemistry-aware "
+                                 "similarity beyond Morgan-FP bit overlap")}
+    except Exception:  # noqa: BLE001
+        pass
+    return {"smiles_a": smiles_a, "smiles_b": smiles_b,
+            "cosine_similarity": None, "source": "offline",
+            "note": "embedding service offline"}

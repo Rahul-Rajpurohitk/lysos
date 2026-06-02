@@ -22,6 +22,7 @@ License note: ADMET-AI is MIT. Cite Swanson et al. in the model card.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Optional
 
@@ -199,3 +200,84 @@ async def activity_health() -> dict[str, Any]:
     m = _get_activity_model()
     return {"ok": m is not None, "load_error": _ACT_ERROR,
             "metrics": _ACT_META}
+
+
+# ─────────────────────────────────────────────────────────────────────
+# ChemBERTa embeddings — real molecular-transformer representations.
+# DeepChem/ChemBERTa-77M-MLM (RoBERTa pretrained on 77M PubChem SMILES).
+# Mean-pooled 384-dim vectors → cosine similarity that captures chemistry
+# beyond Morgan-FP bit overlap. Lazy-loaded; CPU here, MI300X in Act II.
+# ─────────────────────────────────────────────────────────────────────
+
+_EMB_MODEL: Optional[Any] = None
+_EMB_TOK: Optional[Any] = None
+_EMB_ERROR: Optional[str] = None
+_EMB_ID = os.environ.get("LYSOS_CHEMBERTA_ID", "DeepChem/ChemBERTa-77M-MLM")
+
+
+def _get_embedder():
+    global _EMB_MODEL, _EMB_TOK, _EMB_ERROR
+    if _EMB_MODEL is not None or _EMB_ERROR is not None:
+        return _EMB_MODEL
+    try:
+        from transformers import AutoTokenizer, AutoModel
+        t0 = time.time()
+        _EMB_TOK = AutoTokenizer.from_pretrained(_EMB_ID)
+        m = AutoModel.from_pretrained(_EMB_ID)
+        m.eval()  # PyTorch inference mode (NOT python eval)
+        _EMB_MODEL = m
+        log.info("ChemBERTa %s loaded in %.1fs", _EMB_ID, time.time() - t0)
+    except Exception as exc:  # noqa: BLE001
+        _EMB_ERROR = str(exc)
+        log.warning("ChemBERTa load failed: %s", exc)
+    return _EMB_MODEL
+
+
+def _embed(smiles_list):
+    import torch
+    mdl = _get_embedder()
+    if mdl is None:
+        return None
+    out = []
+    with torch.no_grad():
+        for smi in smiles_list[:64]:
+            x = _EMB_TOK(smi, return_tensors="pt", truncation=True, max_length=128)
+            vec = mdl(**x).last_hidden_state.mean(dim=1)[0]
+            out.append(vec.tolist())
+    return out
+
+
+class EmbedRequest(BaseModel):
+    smiles: list
+
+
+class SimRequest(BaseModel):
+    smiles_a: str
+    smiles_b: str
+
+
+@app.post("/embed")
+async def embed(req: EmbedRequest) -> dict:
+    vecs = _embed(req.smiles)
+    if vecs is None:
+        return {"ok": False, "error": _EMB_ERROR or "embedder unavailable",
+                "embeddings": []}
+    return {"ok": True, "model": _EMB_ID, "dim": len(vecs[0]) if vecs else 0,
+            "embeddings": vecs, "n": len(vecs)}
+
+
+@app.post("/similarity")
+async def similarity(req: SimRequest) -> dict:
+    import torch
+    vecs = _embed([req.smiles_a, req.smiles_b])
+    if vecs is None or len(vecs) < 2:
+        return {"ok": False, "error": _EMB_ERROR or "embedder unavailable"}
+    a = torch.tensor(vecs[0]); b = torch.tensor(vecs[1])
+    cos = float(torch.nn.functional.cosine_similarity(a, b, dim=0))
+    return {"ok": True, "model": _EMB_ID, "cosine_similarity": round(cos, 4)}
+
+
+@app.get("/embed_health")
+async def embed_health() -> dict:
+    m = _get_embedder()
+    return {"ok": m is not None, "model": _EMB_ID, "load_error": _EMB_ERROR}
