@@ -41,6 +41,7 @@ import { Mol3DTheaterWindow } from "./playground/Mol3DTheaterWindow";
 import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ResistomeCard } from "./playground/ResistomeCard";
 import { CandidateCockpit } from "./playground/CandidateCockpit";
+import { BioisostereStudioCard } from "./playground/BioisostereStudioCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -3057,6 +3058,22 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                       <PeptideLabCard
                         apiBase={apiBase}
                         sessionId={activeChatId}
+                      /> },
+                    // Bioisostere Studio: matched-molecular-pair lead
+                    //    optimization — real RDKit bioisosteric swaps, each
+                    //    scored live, with one-tap apply. The interactive
+                    //    daily med-chem move.
+                    { id: "bioisostere", title: "Bioisostere studio · matched pairs",
+                      size: 2, expandedH: 520, body:
+                      <BioisostereStudioCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        onLoad={(smi) => loadSmilesIntoCanvas(smi, {
+                          createdBy: "user",
+                          parentId: currentMoleculeId,
+                          logLabel: "[bioisostere · apply]",
+                        })}
                       /> },
                     // 4) Synthesis Make-Route: retrosynthetic route + cost for
                     //    the current candidate, with a CRUD shelf of saved routes.

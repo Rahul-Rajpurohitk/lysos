@@ -314,6 +314,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem resistome router not loaded: %s", exc)
 
+# Bioisostere Studio — matched-molecular-pair lead optimization
+try:
+    from .chem_bioisostere import router as chem_bioisostere_router
+    app.include_router(chem_bioisostere_router, prefix="/workbench")
+    log.info("Chem bioisostere routes loaded (/workbench/chem/bioisostere/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem bioisostere router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router
