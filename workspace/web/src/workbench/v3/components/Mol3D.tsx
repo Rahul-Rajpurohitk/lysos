@@ -471,30 +471,36 @@ export function Mol3D({ apiBase, smiles, pathogen, onMoleculeEdit, pdbOverride, 
     if (!pocketOnly) {
       const sel = "polymer";
       if (rep === "Cartoon") {
+        // Secondary-structure colouring (helix / sheet / coil) — the
+        // structural-biology standard. 'chainid' painted a single-chain
+        // target one flat colour (meaningless). sstruc reads the fold.
         comp.addRepresentation("cartoon", {
-          sele: sel, colorScheme: "chainid", quality: "medium",
+          sele: sel, colorScheme: "sstruc", quality: "high", aspectRatio: 5,
         });
       } else if (rep === "Surface") {
         comp.addRepresentation("surface", {
           sele: sel, opacity: 0.55, colorScheme: "electrostatic",
         });
       } else if (rep === "Sticks") {
-        // CPK / element colouring — carbon grey, oxygen red, nitrogen
-        // blue, sulfur yellow. Was 'chainid' which painted the entire
-        // single-chain protein uniform red — chemically meaningless
-        // and visually overwhelming.
         comp.addRepresentation("licorice", {
           sele: sel, colorScheme: "element",
         });
       } else {
-        // Same CPK reasoning for spacefill view.
         comp.addRepresentation("spacefill", {
           sele: sel, colorScheme: "element",
         });
       }
+      // Binding-site detail: pocket sidechains as CPK-coloured sticks (real
+      // chemistry — C grey, N blue, O red, S yellow) + a faint translucent
+      // pocket surface so the cavity shape is visible. This is what a
+      // structural chemist looks at, not a flat green blob.
       if (pocketResidues && pocketResidues.length) {
         comp.addRepresentation("licorice", {
-          sele: pocketSel, color: "#10b981", opacity: 0.95,
+          sele: pocketSel, colorScheme: "element", radiusScale: 0.85, opacity: 1,
+        });
+        comp.addRepresentation("surface", {
+          sele: pocketSel, color: "#10b981", opacity: 0.12,
+          useWorker: false, side: "front",
         });
       }
     } else {
