@@ -73,6 +73,15 @@ async def _post(path: str, payload: dict, timeout: float = 60.0) -> Optional[dic
         return None
 
 
+async def _get(path: str, timeout: float = 30.0) -> Optional[dict]:
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as cx:
+            r = await cx.get(f"{_SELF}{path}")
+        return r.json() if r.status_code == 200 else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
 async def gate_step(state: dict) -> dict:
     rank = state.get("rank") or {}
     lead = rank.get("lead") or {}
@@ -80,6 +89,17 @@ async def gate_step(state: dict) -> dict:
     if not smi:
         return {"error": "no lead candidate to gate"}
     sid = state.get("session_id")
+    pathogen = state.get("pathogen") or "MRSA"
+
+    # Resolve the lead's primary target PDB for the docking gate.
+    pdb_id = state.get("pdb_id")
+    if not pdb_id:
+        tgt = await _get(f"/workbench/chem/targets/{pathogen}")
+        targets = (tgt or {}).get("targets") or []
+        if targets:
+            pref = next((t for t in targets if t.get("preferred_default")), targets[0])
+            pdb_id = pref.get("pdb_id")
+
     admet = await _post("/workbench/chem/admet/panel",
                         {"smiles": smi, "session_id": sid, "save": True,
                          "design_fix": False})
@@ -89,7 +109,20 @@ async def gate_step(state: dict) -> dict:
     ip = await _post("/workbench/chem/ip/fto-scan",
                      {"smiles": smi, "session_id": sid, "save": True,
                       "design_variant": False})
+    dock = None
+    if pdb_id:
+        dock = await _post("/workbench/chem/dock",
+                           {"smiles": smi, "pdb_id": pdb_id,
+                            "session_id": sid, "save": True}, timeout=120.0)
     gates = {
+        "binding": {
+            "affinity_kcal_mol": (dock or {}).get("affinity_kcal_mol"),
+            "band": (dock or {}).get("affinity_band"),
+            "target": (dock or {}).get("target_name") or pdb_id,
+            "engine": (dock or {}).get("engine"),
+            # Pass if the candidate docks at least 'good' on this engine's
+            # calibrated scale (real Vina scoring function).
+            "pass": (dock or {}).get("affinity_band") in ("strong", "good")},
         "admet": {
             "composite": (admet or {}).get("composite"),
             "tier": (admet or {}).get("tier"),
@@ -107,7 +140,8 @@ async def gate_step(state: dict) -> dict:
             "pass": ((ip or {}).get("novelty_score") or 0) >= 0.30},
     }
     n_pass = sum(1 for g in gates.values() if g.get("pass"))
-    return {"smiles": smi, "gates": gates, "n_pass": n_pass, "n_gates": 3}
+    return {"smiles": smi, "gates": gates, "n_pass": n_pass,
+            "n_gates": len(gates)}
 
 
 # Phase 4 - DECIDE
@@ -116,14 +150,15 @@ async def decide_step(state: dict) -> dict:
     smi = gate.get("smiles")
     n_pass = gate.get("n_pass", 0)
     cid = state.get("campaign_id")
+    n_gates = gate.get("n_gates", 4)
     if not smi:
         return {"error": "nothing to decide on"}
-    if n_pass >= 3:
-        kind, verdict = "champion", "Clears all three gates - advance as champion."
-    elif n_pass == 2:
-        kind, verdict = "advance", "Clears two of three gates - advance with a watch item."
+    if n_pass >= n_gates:
+        kind, verdict = "champion", f"Clears all {n_gates} gates - advance as champion."
+    elif n_pass >= n_gates - 1:
+        kind, verdict = "advance", f"Clears {n_pass}/{n_gates} gates - advance with a watch item."
     else:
-        kind, verdict = "hold", "Fails the developability gate - hold and redesign."
+        kind, verdict = "hold", f"Only {n_pass}/{n_gates} gates - hold and redesign."
     if cid:
         await _post(f"/workbench/chem/campaign/{cid}/decision",
                     {"kind": kind, "smiles": smi, "rationale": verdict,
@@ -141,7 +176,8 @@ def synth_campaign(state: dict) -> str:
         return f"Campaign couldn't generate candidates: {gen['error']}"
     lead = rank.get("lead") or {}
     gates = gate.get("gates") or {}
-    a = gates.get("admet", {}); s = gates.get("synthesis", {}); ip = gates.get("ip", {})
+    b = gates.get("binding", {}); a = gates.get("admet", {})
+    s = gates.get("synthesis", {}); ip = gates.get("ip", {})
     lines = [
         f"**Autonomous campaign complete** - target {state.get('pathogen','MRSA')}.",
         "",
@@ -150,6 +186,9 @@ def synth_campaign(state: dict) -> str:
         f"**Lead:** `{lead.get('smiles','-')}` (composite {lead.get('composite','-')}).",
         "",
         "**Developability gate:**",
+        f"- Binding (dock): {'PASS' if b.get('pass') else 'FLAG'} "
+        f"{b.get('affinity_kcal_mol','-')} kcal/mol ({b.get('band','-')}) "
+        f"vs {b.get('target','-')}",
         f"- ADMET: {'PASS' if a.get('pass') else 'FLAG'} composite "
         f"{a.get('composite','-')} ({a.get('tier','-')}, weakest {a.get('weakest','-')}, "
         f"{a.get('source','-')})",
@@ -159,7 +198,7 @@ def synth_campaign(state: dict) -> str:
         f"{ip.get('novelty_score','-')} ({ip.get('verdict','-')})",
         "",
         f"**Strategist decision:** {decide.get('kind','-').upper()} - {decide.get('verdict','-')}",
-        f"_{gate.get('n_pass','?')}/3 gates cleared._",
+        f"_{gate.get('n_pass','?')}/{gate.get('n_gates',4)} gates cleared._",
     ]
     return "\n".join(lines).strip()
 
@@ -190,7 +229,7 @@ def register(workflows_mod) -> None:
             Step(id="rank", label="Score + rank the candidates",
                  tool="__inline__", inline_fn=rank_step,
                  on_result=lambda st, r: st.__setitem__("rank", r)),
-            Step(id="gate", label="Developability gate (ADMET + synthesis + IP)",
+            Step(id="gate", label="Developability gate (binding + ADMET + synthesis + IP)",
                  tool="__inline__", inline_fn=gate_step,
                  on_result=lambda st, r: st.__setitem__("gate", r),
                  narrator_role="critic"),
