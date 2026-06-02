@@ -370,6 +370,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem metabolism router not loaded: %s", exc)
 
+# Spectrum Coverage Matrix — per-pathogen docking → narrow/broad
+try:
+    from .chem_spectrum import router as chem_spectrum_router
+    app.include_router(chem_spectrum_router, prefix="/workbench")
+    log.info("Chem spectrum routes loaded (/workbench/chem/spectrum/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem spectrum router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

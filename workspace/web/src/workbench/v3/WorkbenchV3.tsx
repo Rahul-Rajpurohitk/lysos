@@ -48,6 +48,7 @@ import { CombinationLabCard } from "./playground/CombinationLabCard";
 import { PropertySpaceCard } from "./playground/PropertySpaceCard";
 import { ShapeExplorerCard } from "./playground/ShapeExplorerCard";
 import { MetabolismCard } from "./playground/MetabolismCard";
+import { SpectrumMatrixCard } from "./playground/SpectrumMatrixCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -3247,6 +3248,13 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                         sessionId={activeChatId}
                         smiles={currentSmiles}
                       /> },
+                    // Spectrum Coverage Matrix — docks the candidate into all
+                    //    8 priority-pathogen targets → narrow/broad spectrum.
+                    //    The one signal the molecule-intrinsic score can't give.
+                    { id: "spectrum", title: "Spectrum coverage · 8 pathogens",
+                      size: 2, expandedH: 520, body:
+                      <SpectrumMatrixCard apiBase={apiBase} smiles={currentSmiles}
+                        sessionId={activeChatId} /> },
                     // Pareto Lab — multi-candidate frontier. Lives in Scoring
                     // because it is a portfolio-level comparison view, NOT a
                     // per-candidate chemistry service.
