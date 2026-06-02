@@ -322,6 +322,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem bioisostere router not loaded: %s", exc)
 
+# PK/PD Target-Attainment Simulator — popPK + Monte-Carlo PTA
+try:
+    from .chem_pkpd import router as chem_pkpd_router
+    app.include_router(chem_pkpd_router, prefix="/workbench")
+    log.info("Chem PK/PD routes loaded (/workbench/chem/pkpd/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem PK/PD router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

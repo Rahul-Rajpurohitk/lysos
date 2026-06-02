@@ -42,6 +42,7 @@ import { ResistanceEscapeMapCard } from "./playground/ResistanceEscapeMapCard";
 import { ResistomeCard } from "./playground/ResistomeCard";
 import { CandidateCockpit } from "./playground/CandidateCockpit";
 import { BioisostereStudioCard } from "./playground/BioisostereStudioCard";
+import { PKPDSimulatorCard } from "./playground/PKPDSimulatorCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -539,15 +540,17 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
     setPlaygroundViewports((m) => ({ ...m, [activeChatId]: v }));
   }
 
-  // View mode — "whiteboard" (PlaygroundCanvas, all containers floating) vs
-  // "tabs" (TabbedView, one container at a time, Claude-style). Stored in
-  // localStorage so user's pick persists across reloads. Both modes render
+  // View mode — "tabs" (TabbedView, one container at a time, Claude-style,
+  // DEFAULT) vs "whiteboard" (PlaygroundCanvas, all containers floating). Tabs
+  // is the clean, chemist-grade default; whiteboard is opt-in (it floats every
+  // card at once, which reads as cluttered until the user arranges it). Stored
+  // in localStorage so an explicit whiteboard pick persists. Both modes render
   // the same WindowGroup[] config — just different layouts.
   const [viewMode, _setViewMode] = useState<"whiteboard" | "tabs">(() => {
     try {
       const v = localStorage.getItem("lys-viewmode");
-      return v === "tabs" ? "tabs" : "whiteboard";
-    } catch { return "whiteboard"; }
+      return v === "whiteboard" ? "whiteboard" : "tabs";
+    } catch { return "tabs"; }
   });
   // Active tab ID — lifted out of TabbedView so the merged TopHeader can
   // render the tab strip inline with the rest of the nav (eliminating the
@@ -3074,6 +3077,19 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                           parentId: currentMoleculeId,
                           logLabel: "[bioisostere · apply]",
                         })}
+                      /> },
+                    // PK/PD Target-Attainment Simulator: turn the candidate +
+                    //    a dosing regimen into the pharmacodynamic answer —
+                    //    steady-state exposure vs MIC, the class's governing
+                    //    PK/PD index, and Monte-Carlo PTA → breakpoint. The
+                    //    layer that says whether the dose actually cures it.
+                    { id: "pkpd", title: "PK/PD simulator · target attainment",
+                      size: 2, expandedH: 560, body:
+                      <PKPDSimulatorCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        sessionId={activeChatId}
                       /> },
                     // 4) Synthesis Make-Route: retrosynthetic route + cost for
                     //    the current candidate, with a CRUD shelf of saved routes.
