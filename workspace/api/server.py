@@ -338,6 +338,14 @@ try:
 except Exception as exc:  # noqa: BLE001
     log.warning("Chem-space router not loaded: %s", exc)
 
+# Combination & Adjuvant Lab — mechanism-matched combination therapy
+try:
+    from .chem_combo import router as chem_combo_router
+    app.include_router(chem_combo_router, prefix="/workbench")
+    log.info("Chem combo routes loaded (/workbench/chem/combo/*)")
+except Exception as exc:  # noqa: BLE001
+    log.warning("Chem combo router not loaded: %s", exc)
+
 # Report container — snapshot + preview + export
 try:
     from .report import router as report_router

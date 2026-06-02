@@ -44,6 +44,7 @@ import { CandidateCockpit } from "./playground/CandidateCockpit";
 import { BioisostereStudioCard } from "./playground/BioisostereStudioCard";
 import { PKPDSimulatorCard } from "./playground/PKPDSimulatorCard";
 import { ChemicalSpaceCard } from "./playground/ChemicalSpaceCard";
+import { CombinationLabCard } from "./playground/CombinationLabCard";
 import { ParetoLabCard } from "./playground/ParetoLabCard";
 import { SynthesisRouteCard } from "./playground/SynthesisRouteCard";
 import { IPSentinelCard } from "./playground/IPSentinelCard";
@@ -3129,6 +3130,19 @@ export function WorkbenchV3({ apiBase }: WorkbenchV3Props) {
                     { id: "chem-space", title: "Chemical-space navigator · novelty",
                       size: 2, expandedH: 460, body:
                       <ChemicalSpaceCard
+                        apiBase={apiBase}
+                        smiles={currentSmiles}
+                        pathogen={selectedPathogen}
+                        sessionId={activeChatId}
+                      /> },
+                    // Combination & Adjuvant Lab: against a resistant pathogen,
+                    //    recommend the adjuvant (β-lactamase inhibitor, efflux
+                    //    inhibitor, OM permeabiliser) that disarms its resistance
+                    //    — mechanism-matched to the CARD landscape, with the
+                    //    marketed combination precedent. The AMR-era strategy.
+                    { id: "combo", title: "Combination & adjuvant lab · synergy",
+                      size: 2, expandedH: 500, body:
+                      <CombinationLabCard
                         apiBase={apiBase}
                         smiles={currentSmiles}
                         pathogen={selectedPathogen}
