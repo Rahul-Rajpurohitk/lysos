@@ -24,6 +24,7 @@ orchestrator · frontend BioisostereStudioCard + dossier.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import time
@@ -67,12 +68,12 @@ _RULES: list[dict[str, str]] = [
      "Acid surrogate resistant to glucuronidation — slows phase-II clearance."},
     # — phenol surrogates —
     {"id": "phenol_to_F", "label": "phenol OH → F",
-     "smarts": "[OX2H][cX3]", "repl": "F",
+     "smarts": "[OX2H;$([OX2H][cX3])]", "repl": "F",
      "axis": "metabolism", "rationale":
      "Removes a glucuronidation/sulfation soft spot; F blocks the position "
      "and adds modest lipophilicity."},
     {"id": "phenol_to_methoxy", "label": "phenol OH → OMe",
-     "smarts": "[OX2H][cX3]", "repl": "OC",
+     "smarts": "[OX2H;$([OX2H][cX3])]", "repl": "OC",
      "axis": "metabolism", "rationale":
      "Caps the metabolically-labile phenol while keeping the H-bond acceptor."},
     # — amide / carbonyl —
@@ -109,7 +110,7 @@ _RULES: list[dict[str, str]] = [
      "Blocks oxidative metabolism at the methyl while raising lipophilicity "
      "and metabolic stability — a workhorse swap."},
     {"id": "cl_to_cf3", "label": "Cl → CF3",
-     "smarts": "[Cl][c]", "repl": "C(F)(F)F",
+     "smarts": "[Cl;$([Cl][c])]", "repl": "C(F)(F)F",
      "axis": "potency/PK", "rationale":
      "Similar steric/electron-withdrawing profile, often better metabolic "
      "stability and a distinct IP position."},
@@ -129,6 +130,38 @@ _RULES: list[dict[str, str]] = [
      "axis": "metabolism", "rationale":
      "Pre-oxidizing the thioether to the sulfone removes a metabolic liability "
      "and changes the polarity/H-bonding profile."},
+    # — nitrile acid surrogate —
+    {"id": "nitrile_to_tetrazole", "label": "nitrile → tetrazole",
+     "smarts": "[CX2]#[NX1]", "repl": "c1n[nH]nn1",
+     "axis": "potency/IP", "rationale":
+     "Nitrile-to-tetrazole installs an acidic anion bioisostere for a fresh "
+     "salt-bridge contact and a new IP position."},
+    # — ring-N / ring-heteroatom walks —
+    {"id": "pyridine_to_pyrimidine", "label": "pyridine → pyrimidine",
+     "smarts": "c1ccncc1", "repl": "c1ccncn1",
+     "axis": "solubility/PK", "rationale":
+     "A second ring-N lowers logP and adds an H-bond acceptor — a classic "
+     "potency/solubility ring-walk."},
+    {"id": "thiophene_to_furan", "label": "thiophene → furan",
+     "smarts": "c1ccsc1", "repl": "c1ccoc1",
+     "axis": "metabolism", "rationale":
+     "Furan for thiophene removes the S-oxidation activation liability while "
+     "keeping a small lipophilic 5-ring."},
+    # — halogen walks —
+    {"id": "aryl_cl_to_f", "label": "aryl Cl → F",
+     "smarts": "[Cl;$([Cl][c])]", "repl": "F",
+     "axis": "metabolism", "rationale":
+     "Smaller halogen — trims MW and lipophilicity while still blocking the "
+     "position from oxidation."},
+    {"id": "aryl_br_to_cl", "label": "aryl Br → Cl",
+     "smarts": "[Br;$([Br][c])]", "repl": "Cl",
+     "axis": "PK/IP", "rationale":
+     "Halogen walk down the group — lighter, less lipophilic, distinct IP."},
+    {"id": "aryl_i_to_br", "label": "aryl I → Br",
+     "smarts": "[I;$([I][c])]", "repl": "Br",
+     "axis": "PK", "rationale":
+     "Drops the heaviest halogen for bromine — lower MW, less polarizable, "
+     "often cleaner PK."},
 ]
 
 
@@ -145,6 +178,118 @@ def _canon(smiles: str) -> Optional[str]:
         return Chem.MolToSmiles(m)
     except Exception:  # noqa: BLE001
         return None
+
+
+# The physicochemical profile a med-chemist watches on every swap. All real
+# RDKit descriptors (local, no model, no network) so the full property
+# movement is computed for the parent and every analog — which is the whole
+# point of a matched-molecular-pair: see how EVERY property moves, not just
+# the composite. Integer-valued keys render without decimals on the frontend.
+_DESC_KEYS = ["mw", "clogp", "tpsa", "hbd", "hba", "rotb", "qed",
+              "fsp3", "aromatic_rings", "heavy"]
+_DESC_INT = {"hbd", "hba", "rotb", "aromatic_rings", "heavy"}
+# Which direction is "better" for ranking the property strip. None = neutral
+# (context-dependent — shown but not coloured good/bad).
+_DESC_GOOD_DOWN = {"mw", "tpsa", "hbd", "hba", "rotb"}  # lower usually better
+_DESC_GOOD_UP = {"qed", "fsp3"}                          # higher usually better
+_DESC_LABEL = {"mw": "MW", "clogp": "cLogP", "tpsa": "TPSA", "hbd": "HBD",
+               "hba": "HBA", "rotb": "RotB", "qed": "QED", "fsp3": "Fsp³",
+               "aromatic_rings": "ArR", "heavy": "Heavy"}
+
+
+@lru_cache(maxsize=4096)
+def _descriptors(smiles: str) -> dict[str, float]:
+    """Full physchem vector for one molecule — real RDKit, cached."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import Crippen, Descriptors, QED, rdMolDescriptors
+        m = Chem.MolFromSmiles(smiles)
+        if m is None:
+            return {}
+        return {
+            "mw": round(Descriptors.MolWt(m), 1),
+            "clogp": round(Crippen.MolLogP(m), 2),
+            "tpsa": round(rdMolDescriptors.CalcTPSA(m), 1),
+            "hbd": rdMolDescriptors.CalcNumHBD(m),
+            "hba": rdMolDescriptors.CalcNumHBA(m),
+            "rotb": rdMolDescriptors.CalcNumRotatableBonds(m),
+            "qed": round(QED.qed(m), 3),
+            "fsp3": round(rdMolDescriptors.CalcFractionCSP3(m), 2),
+            "aromatic_rings": rdMolDescriptors.CalcNumAromaticRings(m),
+            "heavy": m.GetNumHeavyAtoms(),
+        }
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _swap_atoms(parent_smiles: str, analog_smiles: str) -> dict[str, list[int]]:
+    """Atom indices that DIFFER between parent and analog — the matched-pair
+    variable part — found via maximum common substructure. Indices are in the
+    atom order RDKit assigns when parsing each (canonical) SMILES, which is the
+    same order the 2D renderer uses, so they map 1:1 onto Mol2DThumb
+    highlights. This is what lets the chemist SEE where the swap happened."""
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import rdFMCS
+        pm = Chem.MolFromSmiles(parent_smiles)
+        am = Chem.MolFromSmiles(analog_smiles)
+        if pm is None or am is None:
+            return {"parent": [], "analog": []}
+        res = rdFMCS.FindMCS(
+            [pm, am], timeout=3,
+            atomCompare=rdFMCS.AtomCompare.CompareElements,
+            bondCompare=rdFMCS.BondCompare.CompareOrder,
+            ringMatchesRingOnly=True, completeRingsOnly=False,
+            matchValences=False)
+        if res.canceled or res.numAtoms == 0:
+            return {"parent": [], "analog": []}
+        core = Chem.MolFromSmarts(res.smartsString)
+        if core is None:
+            return {"parent": [], "analog": []}
+        pmatch = set(pm.GetSubstructMatch(core))
+        amatch = set(am.GetSubstructMatch(core))
+        return {
+            "parent": [i for i in range(pm.GetNumAtoms()) if i not in pmatch],
+            "analog": [i for i in range(am.GetNumAtoms()) if i not in amatch],
+        }
+    except Exception:  # noqa: BLE001
+        return {"parent": [], "analog": []}
+
+
+# Structural-alert SMARTS — common liabilities a swap might inadvertently
+# introduce. We flag only alerts the analog has that the PARENT did not, i.e.
+# liabilities the transformation ADDED. Curated subset of Brenk/PAINS-style
+# alerts relevant to antibacterial lead-opt.
+_LIABILITIES: list[tuple[str, str, str]] = [
+    ("nitro", "[NX3](=O)=O", "nitro — mutagenicity / nitroreductase risk"),
+    ("aldehyde", "[CX3H1]=O", "aldehyde — reactive carbonyl"),
+    ("michael_acceptor", "[CX3]=[CX3]C=O", "Michael acceptor — covalent reactivity"),
+    ("epoxide", "[OX2r3]1[#6r3][#6r3]1", "epoxide — alkylating liability"),
+    ("thiol", "[SX2H]", "free thiol — oxidation / promiscuity"),
+    ("hydrazine", "[NX3][NX3H,NX3H2]", "hydrazine — tox liability"),
+    ("aniline", "[NX3H2][cX3]", "aniline — metabolic activation risk"),
+    ("alkyl_halide", "[CX4][Cl,Br,I]", "alkyl halide — alkylating liability"),
+    ("thiophene", "c1ccsc1", "thiophene — CYP metabolic activation (watch)"),
+]
+_LIAB_DESC = {name: desc for name, _smarts, desc in _LIABILITIES}
+
+
+@lru_cache(maxsize=4096)
+def _alerts(smiles: str) -> tuple[str, ...]:
+    """Structural-alert names present in a molecule."""
+    try:
+        from rdkit import Chem
+        m = Chem.MolFromSmiles(smiles)
+        if m is None:
+            return ()
+        hits = []
+        for name, smarts, _desc in _LIABILITIES:
+            patt = Chem.MolFromSmarts(smarts)
+            if patt is not None and m.HasSubstructMatch(patt):
+                hits.append(name)
+        return tuple(hits)
+    except Exception:  # noqa: BLE001
+        return ()
 
 
 @lru_cache(maxsize=512)
@@ -232,50 +377,78 @@ async def _run_studio(parent: str, pathogen: str, max_analogs: int) -> dict[str,
     if parent_canon is None:
         raise HTTPException(422, f"unparseable SMILES: {parent}")
     analogs = _apply_rules(parent_canon)[:max_analogs]
+    parent_desc = _descriptors(parent_canon)
+    parent_alerts = set(_alerts(parent_canon))
 
     async with httpx.AsyncClient(timeout=45.0) as cx:
-        parent_score = await _score(cx, parent_canon, pathogen)
-        for a in analogs:
-            s = await _score(cx, a["smiles"], pathogen)
-            a["scores"] = s
-            # Deltas vs parent (None-safe).
-            a["delta_composite"] = (
-                round(s["composite"] - parent_score["composite"], 3)
-                if s["composite"] is not None and parent_score["composite"] is not None
-                else None)
-            a["delta_sa"] = (
-                round(s["sa_score"] - parent_score["sa_score"], 2)
-                if s["sa_score"] is not None and parent_score["sa_score"] is not None
-                else None)
-            a["delta_activity"] = (
-                round((s["activity"] or 0) - (parent_score["activity"] or 0), 3)
-                if s["activity"] is not None and parent_score["activity"] is not None
-                else None)
-            # An analog "improves" if composite up meaningfully without
-            # synthesis getting much harder.
-            a["improved"] = bool(
-                a["delta_composite"] is not None and a["delta_composite"] > 0.02
-                and (a["delta_sa"] is None or a["delta_sa"] < 1.0))
+        # Score the parent + every analog CONCURRENTLY — turns ~36 serial
+        # round-trips into one bounded fan-out, so the studio stays snappy.
+        parent_score, *scored = await asyncio.gather(
+            _score(cx, parent_canon, pathogen),
+            *[_score(cx, a["smiles"], pathogen) for a in analogs])
+
+    for a, s in zip(analogs, scored):
+        a["scores"] = s
+        # Deltas vs parent (None-safe).
+        a["delta_composite"] = (
+            round(s["composite"] - parent_score["composite"], 3)
+            if s["composite"] is not None and parent_score["composite"] is not None
+            else None)
+        a["delta_sa"] = (
+            round(s["sa_score"] - parent_score["sa_score"], 2)
+            if s["sa_score"] is not None and parent_score["sa_score"] is not None
+            else None)
+        a["delta_activity"] = (
+            round((s["activity"] or 0) - (parent_score["activity"] or 0), 3)
+            if s["activity"] is not None and parent_score["activity"] is not None
+            else None)
+        # Full physchem profile + per-property delta vector (the MMP payload).
+        desc = _descriptors(a["smiles"])
+        a["descriptors"] = desc
+        a["delta_props"] = {
+            k: round(desc[k] - parent_desc[k], 3)
+            for k in _DESC_KEYS if k in desc and k in parent_desc}
+        # Where the swap happened — atoms to highlight in parent + analog.
+        a["swap_atoms"] = _swap_atoms(parent_canon, a["smiles"])
+        # Liabilities the transformation ADDED (not already in the parent).
+        added = [n for n in _alerts(a["smiles"]) if n not in parent_alerts]
+        a["new_alerts"] = [{"name": n, "note": _LIAB_DESC.get(n, n)} for n in added]
+        # An analog "improves" if composite up meaningfully without synthesis
+        # getting much harder; "clean" means it added no new liability.
+        a["clean"] = not added
+        a["improved"] = bool(
+            a["delta_composite"] is not None and a["delta_composite"] > 0.02
+            and (a["delta_sa"] is None or a["delta_sa"] < 1.0))
 
     # Rank: improved first, then by composite delta.
     analogs.sort(key=lambda a: (a.get("improved", False),
                                 a.get("delta_composite") or -9), reverse=True)
     n_improved = sum(1 for a in analogs if a.get("improved"))
+    n_clean = sum(1 for a in analogs if a.get("clean"))
     best = analogs[0] if analogs else None
     return {
         "parent": parent_canon,
         "pathogen": pathogen,
         "parent_scores": parent_score,
+        "parent_descriptors": parent_desc,
+        "parent_alerts": sorted(parent_alerts),
+        "desc_keys": _DESC_KEYS,
+        "desc_meta": {k: {"label": _DESC_LABEL[k], "is_int": k in _DESC_INT,
+                          "good": ("down" if k in _DESC_GOOD_DOWN
+                                   else "up" if k in _DESC_GOOD_UP else "neutral")}
+                      for k in _DESC_KEYS},
         "n_analogs": len(analogs),
         "n_improved": n_improved,
+        "n_clean": n_clean,
         "analogs": analogs,
         "best_improvement": best if (best and best.get("improved")) else None,
         "elapsed_s": round(time.time() - t0, 2),
         "n_rules": len(_RULES),
         "computed_at": time.time(),
         "note": ("Matched molecular pairs from real RDKit bioisosteric "
-                 "transformations, each scored through the live engine stack. "
-                 "Deltas are vs the parent — predicted, for ranking."),
+                 "transformations, each scored through the live engine stack "
+                 "and profiled across 10 physicochemical descriptors. Deltas "
+                 "are vs the parent — predicted, for ranking."),
     }
 
 
