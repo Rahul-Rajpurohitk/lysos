@@ -134,6 +134,20 @@ def _hydrophobic_moment(seq: str, angle_deg: float = 100.0) -> float:
     return math.sqrt(sx * sx + sy * sy) / len(seq)
 
 
+def _moment_vector(seq: str, angle_deg: float = 100.0) -> dict[str, Any]:
+    """Direction + magnitude of the Eisenberg hydrophobic moment — the
+    amphipathic AXIS. The vector points toward the hydrophobic face of the
+    helical wheel; the frontend draws it as an arrow so the chemist SEES
+    which side membranes insert against."""
+    d = angle_deg * math.pi / 180.0
+    sx = sum(_EIS[a] * math.cos(i * d) for i, a in enumerate(seq))
+    sy = sum(_EIS[a] * math.sin(i * d) for i, a in enumerate(seq))
+    n = len(seq) or 1
+    mag = math.sqrt(sx * sx + sy * sy) / n
+    ang = math.degrees(math.atan2(sy, sx)) % 360.0
+    return {"angle_deg": round(ang, 1), "magnitude": round(mag, 3)}
+
+
 def _aliphatic_index(seq: str) -> float:
     """Ikai aliphatic index — relative volume of aliphatic side chains
     (A, V, I, L). Higher = more thermostable."""
@@ -231,8 +245,29 @@ def _helical_wheel(seq: str, angle_deg: float = 100.0) -> list[dict[str, Any]]:
         ang = (i * angle_deg) % 360.0
         out.append({
             "idx": i, "aa": a, "angle": round(ang, 1),
-            "kd": _KD[a], "hydrophobic": a in "AILMFWVC",
+            "kd": _KD[a], "eis": round(_EIS[a], 2),
+            "hydrophobic": a in "AILMFWVC",
             "cationic": a in "KR", "anionic": a in "DE",
+        })
+    return out
+
+
+def _per_residue(seq: str) -> list[dict[str, Any]]:
+    """Per-position track for the sequence ribbon — Kyte-Doolittle
+    hydrophobicity (drives the colour), charge, and which helical FACE
+    (hydrophobic vs polar) the residue sits on relative to the moment axis."""
+    mv = _moment_vector(seq)
+    face_ang = mv["angle_deg"]
+    out = []
+    for i, a in enumerate(seq):
+        wheel_ang = (i * 100.0) % 360.0
+        # angular distance to the hydrophobic-face direction
+        delta = abs(((wheel_ang - face_ang + 180.0) % 360.0) - 180.0)
+        charge = (1 if a in "KR" else 0) - (1 if a in "DE" else 0)
+        out.append({
+            "idx": i, "aa": a, "kd": _KD[a],
+            "charge": charge,
+            "face": "hydrophobic" if delta <= 90.0 else "polar",
         })
     return out
 
@@ -256,6 +291,8 @@ def _build_panel(seq: str) -> dict[str, Any]:
         "hemolysis": hem,
         "therapeutic_index": ti,
         "helical_wheel": _helical_wheel(seq),
+        "moment_vector": _moment_vector(seq),
+        "per_residue": _per_residue(seq),
         "composite": composite,
         "tier": tier,
         "modality": "peptide",

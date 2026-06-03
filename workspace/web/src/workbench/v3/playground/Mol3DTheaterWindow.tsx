@@ -31,6 +31,7 @@
 import { useEffect, useState, useRef, useMemo } from "react";
 import { Target, RefreshCw } from "lucide-react";
 import { Mol3D } from "../components/Mol3D";
+import { Mol2DThumb } from "./Mol2DThumb";
 
 interface CuratedTarget {
   pdb_id: string;
@@ -440,6 +441,24 @@ export function Mol3DTheaterWindow(p: Props) {
         hoverResidue={activeContact}
         poseSdf={dock?.pose_sdf ?? null}
       />
+
+      {/* ─── 2D formula inset — the flat structure folded into the 3D view,
+          reserving a small bottom-left corner so you read the 2D formula and
+          the 3D pose together (no separate big 2D card needed). ─── */}
+      {p.smiles && (
+        <div style={{
+          position: "absolute", left: 8, bottom: 8, zIndex: 4,
+          width: 132, height: 104, borderRadius: 8, overflow: "hidden",
+          background: "rgba(255,255,255,0.96)",
+          border: "1px solid rgba(13,148,136,0.35)",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.12)", backdropFilter: "blur(6px)",
+        }}>
+          <div style={{ position: "absolute", top: 3, left: 6, zIndex: 1,
+            fontSize: 7.5, fontWeight: 800, fontFamily: "var(--lys-font-mono)",
+            letterSpacing: "0.08em", color: "#0d9488" }}>2D FORMULA</div>
+          <Mol2DThumb apiBase={p.apiBase} smiles={p.smiles} w={132} h={104} />
+        </div>
+      )}
 
       {/* ─── (legacy floating target picker — now in the toolbar) ─── */}
       <div style={{

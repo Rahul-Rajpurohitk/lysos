@@ -29,6 +29,8 @@ interface PeptidePanel {
   hemolysis: { hemolysis_risk: number; band: string };
   therapeutic_index: { therapeutic_index: number; band: string };
   helical_wheel: WheelResidue[];
+  moment_vector?: { angle_deg: number; magnitude: number };
+  per_residue?: { idx: number; aa: string; kd: number; charge: number; face: string }[];
   composite: number;
   tier: string;
   artifact_id?: string | null;
@@ -207,9 +209,9 @@ function PanelView({ panel, onLoad }: {
         </div>
       </div>
 
-      {/* helical wheel + activity bars side by side */}
+      {/* helical wheel (with µH moment vector) + activity bars side by side */}
       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-        <HelicalWheel residues={panel.helical_wheel} />
+        <HelicalWheel residues={panel.helical_wheel} moment={panel.moment_vector} />
         <div style={{ flex: 1, minWidth: 0, display: "flex",
           flexDirection: "column", gap: 5 }}>
           <Bar label="AMP activity" value={panel.activity.amp_probability}
@@ -218,8 +220,20 @@ function PanelView({ panel, onLoad }: {
             band={panel.hemolysis.band} invert />
           <Bar label="therapeutic idx" value={panel.therapeutic_index.therapeutic_index}
             band={panel.therapeutic_index.band} />
+          {panel.moment_vector && (
+            <div style={{ fontSize: 8, fontFamily: "var(--lys-font-mono)",
+              color: "var(--lys-text-faint)", marginTop: 1 }}>
+              ▸ µH axis {panel.moment_vector.angle_deg.toFixed(0)}° · the arrow
+              points to the hydrophobic face (membrane-insertion side)
+            </div>
+          )}
         </div>
       </div>
+
+      {/* per-residue sequence track — hydrophobicity (KD) + charge + face */}
+      {panel.per_residue && panel.per_residue.length > 0 && (
+        <PerResidueTrack residues={panel.per_residue} />
+      )}
 
       {/* descriptor tiles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 5 }}>
@@ -250,13 +264,32 @@ function PanelView({ panel, onLoad }: {
 
 /** The signature visual — residues around a circle at 100°/residue.
  *  Hydrophobic residues clustering on one arc = amphipathic = membrane-active. */
-function HelicalWheel({ residues }: { residues: WheelResidue[] }) {
-  const size = 150;
+function HelicalWheel({ residues, moment }:
+  { residues: WheelResidue[]; moment?: { angle_deg: number; magnitude: number } }) {
+  const size = 170;
   const cx = size / 2, cy = size / 2;
-  const R = size / 2 - 18;
+  const R = size / 2 - 20;
+  // moment axis in the same frame as residues (angle-90 → 0° at top)
+  const mAng = moment ? (moment.angle_deg - 90) * Math.PI / 180 : 0;
+  const mLen = moment ? R * Math.min(1, moment.magnitude / 0.45) : 0;
+  const mx = cx + mLen * Math.cos(mAng), my = cy + mLen * Math.sin(mAng);
+  // hydrophobic-face wedge: ±70° sector around the moment direction
+  const wedge = (() => {
+    if (!moment) return null;
+    const a0 = mAng - 70 * Math.PI / 180, a1 = mAng + 70 * Math.PI / 180;
+    const rr = R + 9;
+    return `M ${cx} ${cy} L ${cx + rr * Math.cos(a0)} ${cy + rr * Math.sin(a0)} `
+      + `A ${rr} ${rr} 0 0 1 ${cx + rr * Math.cos(a1)} ${cy + rr * Math.sin(a1)} Z`;
+  })();
   return (
     <svg width={size} height={size} style={{ flexShrink: 0,
       background: "white", borderRadius: 8, border: `1px solid ${TEAL.border}` }}>
+      <defs>
+        <marker id="mvArrow" markerWidth="6" markerHeight="6" refX="4" refY="3"
+          orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="#0d9488" /></marker>
+      </defs>
+      {/* hydrophobic-face wedge */}
+      {wedge && <path d={wedge} fill="rgba(234,88,12,0.10)" stroke="none" />}
       {/* guide circle */}
       <circle cx={cx} cy={cy} r={R} fill="none" stroke="rgba(0,0,0,0.08)" strokeWidth={1} />
       {/* connecting backbone path */}
@@ -266,13 +299,19 @@ function HelicalWheel({ residues }: { residues: WheelResidue[] }) {
           return `${cx + R * Math.cos(a)},${cy + R * Math.sin(a)}`;
         }).join(" ")}
         fill="none" stroke="rgba(13,148,136,0.25)" strokeWidth={1.5} />
+      {/* hydrophobic-moment vector — points to the hydrophobic face */}
+      {moment && moment.magnitude > 0.02 && (
+        <line x1={cx} y1={cy} x2={mx} y2={my} stroke="#0d9488" strokeWidth={2}
+          markerEnd="url(#mvArrow)" />
+      )}
       {residues.map((r) => {
         const a = (r.angle - 90) * Math.PI / 180;
         const x = cx + R * Math.cos(a), y = cy + R * Math.sin(a);
         const col = residueColor(r);
         return (
           <g key={r.idx}>
-            <circle cx={x} cy={y} r={9} fill={col} opacity={0.9}>
+            <circle cx={x} cy={y} r={9} fill={col} opacity={0.92}
+              stroke="white" strokeWidth={1}>
               <title>{`#${r.idx + 1} ${r.aa} · KD ${r.kd}`}</title>
             </circle>
             <text x={x} y={y + 3.2} textAnchor="middle" fontSize={9}
@@ -281,11 +320,63 @@ function HelicalWheel({ residues }: { residues: WheelResidue[] }) {
           </g>
         );
       })}
-      <text x={cx} y={cy - 2} textAnchor="middle" fontSize={7}
-        fill="var(--lys-text-faint)" fontFamily="var(--lys-font-mono)">helical</text>
-      <text x={cx} y={cy + 7} textAnchor="middle" fontSize={7}
-        fill="var(--lys-text-faint)" fontFamily="var(--lys-font-mono)">wheel</text>
+      {/* moment magnitude label at center */}
+      <text x={cx} y={cy - 1} textAnchor="middle" fontSize={7.5}
+        fill="var(--lys-text-faint)" fontFamily="var(--lys-font-mono)">µH</text>
+      <text x={cx} y={cy + 8} textAnchor="middle" fontSize={9} fontWeight={800}
+        fill="#0d9488" fontFamily="var(--lys-font-mono)">
+        {moment ? moment.magnitude.toFixed(2) : ""}</text>
     </svg>
+  );
+}
+
+// Kyte-Doolittle hydrophobicity → colour. Hydrophilic (−) blue · neutral
+// grey · hydrophobic (+) orange. The standard sequence-track palette.
+function kdColor(kd: number): string {
+  const t = Math.max(-4.5, Math.min(4.5, kd)) / 4.5;  // -1..1
+  if (t >= 0) {  // hydrophobic → orange/red
+    const f = t;
+    return `rgb(${Math.round(245 - 10 * f)},${Math.round(158 - 70 * f)},${Math.round(66 - 40 * f)})`;
+  }
+  const f = -t;  // hydrophilic → blue
+  return `rgb(${Math.round(96 - 40 * f)},${Math.round(140 - 20 * f)},${Math.round(220 + 20 * f)})`;
+}
+
+function PerResidueTrack({ residues }:
+  { residues: { idx: number; aa: string; kd: number; charge: number; face: string }[] }) {
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between",
+        fontSize: 8, fontFamily: "var(--lys-font-mono)",
+        color: "var(--lys-text-faint)", textTransform: "uppercase",
+        letterSpacing: "0.05em", marginBottom: 3 }}>
+        <span>per-residue · hydrophobicity · charge · face</span>
+        <span style={{ display: "inline-flex", gap: 6 }}>
+          <span style={{ color: "#3b82f6" }}>● hydrophilic</span>
+          <span style={{ color: "#ea580c" }}>● hydrophobic</span>
+        </span>
+      </div>
+      <div style={{ display: "flex", gap: 1.5, overflowX: "auto", paddingBottom: 2 }}>
+        {residues.map((r) => (
+          <div key={r.idx} title={`#${r.idx + 1} ${r.aa} · KD ${r.kd}${r.charge ? ` · ${r.charge > 0 ? "+" : "−"}` : ""} · ${r.face} face`}
+            style={{ flex: "1 0 14px", minWidth: 14, display: "flex",
+              flexDirection: "column", alignItems: "center", gap: 1 }}>
+            {/* charge marker */}
+            <span style={{ fontSize: 7, height: 8, fontWeight: 800,
+              color: r.charge > 0 ? "#2563eb" : r.charge < 0 ? "#dc2626" : "transparent" }}>
+              {r.charge > 0 ? "+" : r.charge < 0 ? "−" : "·"}</span>
+            {/* hydrophobicity cell */}
+            <div style={{ width: "100%", height: 16, borderRadius: 2,
+              background: kdColor(r.kd), display: "flex", alignItems: "center",
+              justifyContent: "center", fontSize: 8, fontWeight: 800, color: "#fff",
+              fontFamily: "var(--lys-font-mono)" }}>{r.aa}</div>
+            {/* face accent */}
+            <div style={{ width: "100%", height: 3, borderRadius: 1,
+              background: r.face === "hydrophobic" ? "#ea580c" : "#94a3b8" }} />
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
